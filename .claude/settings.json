@@ -1,0 +1,16 @@
+{
+  "env": {
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUTF8": "1"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Read(./**/.env)",
+      "Edit(./**/.env)",
+      "Bash(cat .env*)",
+      "Bash(type .env*)"
+    ]
+  }
+}

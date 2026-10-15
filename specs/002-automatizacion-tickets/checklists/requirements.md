@@ -44,3 +44,8 @@
   desde dónde se ejecuta (por ejemplo, al arrancar el ticket siguiente) se decide en el
   plan; queda en Assumptions.
 - Validación: una iteración, todos los ítems pasan.
+- Revalidación (2026-10-15) tras añadir FR-022 (comentario de lo especificado después de
+  `/speckit-specify` y actualización tras `/speckit-clarify`) y subir SC-003 a seis
+  comentarios: FR-022 es comprobable con los escenarios 1 y 2 de la User Story 3; SC-003
+  sigue siendo medible (recuento de comentarios por tipo); el alcance sigue acotado. Todos
+  los ítems pasan.

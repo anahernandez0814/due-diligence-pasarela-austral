@@ -86,24 +86,32 @@ comprobar el PR con `Closes #N`, el Status "In review" y el comentario del issue
 
 Mientras el ticket recorre el ciclo de Spec Kit (specify → clarify si quedan marcadores de
 aclaración → plan → tasks → analyze → implement → converge si quedan brechas), el issue
-recibe comentarios en los puntos de decisión: después de `/speckit-plan` (lo decidido) y
-después de `/speckit-analyze` (las inconsistencias encontradas y cómo se resolvieron). Un
-evaluador que solo mire GitHub reconstruye qué se hizo y por qué.
+recibe comentarios en los puntos de decisión: después de `/speckit-specify` y de
+`/speckit-clarify` (lo especificado), después de `/speckit-plan` (lo decidido) y después
+de `/speckit-analyze` (las inconsistencias encontradas y cómo se resolvieron). Un
+evaluador que solo mire GitHub reconstruye qué se especificó, qué se decidió y qué quedó
+pendiente, sin esperar a que se abra el PR.
 
 **Why this priority**: es lo que hace auditable el ciclo; puede probarse con un solo ticket
 y no depende de que el PR exista.
 
-**Independent Test**: recorrer plan y analyze de un ticket y comprobar que el issue tiene
-los dos comentarios con su contenido.
+**Independent Test**: recorrer specify, plan y analyze de un ticket y comprobar que el
+issue tiene los tres comentarios con su contenido.
 
 **Acceptance Scenarios**:
 
-1. **Given** un ticket arrancado, **When** se completa `/speckit-plan`, **Then** el issue
+1. **Given** un ticket arrancado, **When** se completa `/speckit-specify`, **Then** el
+   issue recibe un comentario con el resumen de lo especificado: historias, requisitos
+   clave y supuestos.
+2. **Given** un ticket con el comentario de lo especificado, **When** se completa
+   `/speckit-clarify`, **Then** ese mismo comentario se actualiza con las aclaraciones, sin
+   crear otro.
+3. **Given** un ticket especificado, **When** se completa `/speckit-plan`, **Then** el issue
    recibe un comentario con las decisiones del plan y su verificación de la constitución.
-2. **Given** un ticket con tareas generadas, **When** se completa `/speckit-analyze`,
+4. **Given** un ticket con tareas generadas, **When** se completa `/speckit-analyze`,
    **Then** el issue recibe un comentario con las inconsistencias encontradas y cómo se
    resolvieron (o la constancia de que no hubo).
-3. **Given** la secuencia del ticket, **When** la spec tiene marcadores de aclaración o el
+5. **Given** la secuencia del ticket, **When** la spec tiene marcadores de aclaración o el
    implement deja brechas, **Then** la secuencia incluye `/speckit-clarify` o
    `/speckit-converge` respectivamente; si no, se omiten.
 
@@ -190,6 +198,11 @@ merge.
   decidido.
 - **FR-009**: Después de `/speckit-analyze`, el issue DEBE recibir un comentario con las
   inconsistencias encontradas y cómo se resolvieron.
+- **FR-022**: Después de `/speckit-specify`, el issue DEBE recibir un comentario con el
+  resumen de lo especificado (historias, requisitos clave y supuestos). Si después se
+  ejecuta `/speckit-clarify`, ese comentario DEBE actualizarse con las aclaraciones en
+  lugar de publicar otro. (Se numera FR-022 para no renumerar los requisitos que ya citan
+  el plan y sus artefactos.)
 
 **Apertura del PR (comando `/abrir-pr`)**
 
@@ -233,8 +246,8 @@ merge.
   con tres dígitos.
 - **Carpeta de specs del ticket**: `specs/NNN-*` con `spec.md`, `plan.md` y `tasks.md`.
 - **Pull request del ticket**: de la rama del ticket hacia `main`, con `Closes #N`.
-- **Comentario de avance**: comentario del issue en cada punto del ciclo (inicio, plan,
-  analyze, PR, cierre).
+- **Comentario de avance**: comentario del issue en cada punto del ciclo (inicio,
+  especificado, plan, analyze, PR, cierre).
 
 ## Success Criteria *(mandatory)*
 
@@ -244,8 +257,8 @@ merge.
   rama y spec) requiere una sola invocación de la persona del equipo.
 - **SC-002**: En los tickets que usan este flujo, el 100 % de los cambios de Status (In
   Progress, In review, Done) ocurren sin mover tarjetas a mano.
-- **SC-003**: Cada ticket cerrado con este flujo tiene en su issue al menos cinco
-  comentarios de avance: inicio, plan, analyze, apertura del PR y cierre.
+- **SC-003**: Cada ticket cerrado con este flujo tiene en su issue al menos seis
+  comentarios de avance: inicio, especificado, plan, analyze, apertura del PR y cierre.
 - **SC-004**: Un evaluador que solo mira GitHub puede responder, para cualquier ticket
   cerrado, qué se especificó, qué se decidió, qué quedó pendiente y cuándo cambió de
   estado, sin abrir el repositorio local.

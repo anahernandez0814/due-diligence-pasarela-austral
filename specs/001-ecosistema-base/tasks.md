@@ -88,7 +88,7 @@ Done (quickstart, paso 3).
   - Invariante: ningún valor de token, solo `${GITHUB_PAT}`.
 - [X] T008 [P] [US2] Añadir `"enabledMcpjsonServers": ["github"]` en `.claude/settings.json`, conservando sin cambios el bloque `env` (`PYTHONIOENCODING`, `PYTHONUTF8`) y el bloque `permissions.deny` existentes (research R3)
 - [X] T009 [US2] Buscar credenciales en los archivos versionados y en los nuevos aún no versionados (los ignorados quedan fuera) con `git grep --untracked -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"`; el resultado debe estar vacío (SC-003, FR-004)
-- [ ] T010 [US2] Verificación manual de la analista en una sesión nueva de Claude Code (Claude no puede abrirla por sí mismo):
+- [X] T010 [US2] Verificación manual de la analista en una sesión nueva de Claude Code (Claude no puede abrirla por sí mismo):
   - `/mcp` muestra `github` conectado y al menos una herramienta de cada toolset: repos, issues, pull_requests y projects.
   - Leer el GitHub Project "Due Diligence - Pasarela Austral" devuelve sus tickets y las opciones del campo Status.
   - Si falla con 401/403, sustituir `.mcp.json` por la alternativa stdio de [contracts/mcp-json.md](contracts/mcp-json.md), que requiere el binario `github-mcp-server` en el PATH, y repetir la verificación.
@@ -108,20 +108,20 @@ código 0 y `--collect-only` lista los dos `test_humo.py`.
 
 ### Implementation for User Story 3
 
-- [ ] T011 [P] [US3] Crear `.python-version` en la raíz con el contenido `3.12`
-- [ ] T012 [P] [US3] Crear `pyproject.toml` en la raíz exactamente según [contracts/pyproject.md](contracts/pyproject.md):
+- [X] T011 [P] [US3] Crear `.python-version` en la raíz con el contenido `3.12`
+- [X] T012 [P] [US3] Crear `pyproject.toml` en la raíz exactamente según [contracts/pyproject.md](contracts/pyproject.md):
   - `[project]`: `name = "due-diligence-pasarela-austral"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
   - `[dependency-groups] dev = ["pytest", "ruff"]`.
   - `[build-system]` con `requires = ["uv_build>=0.12,<0.13"]` y `build-backend = "uv_build"`, y `[tool.uv.build-backend] module-name = ["due_diligence", "servidor_mcp"]`.
   - `[tool.ruff]` con `target-version = "py312"`, `line-length = 100` y `extend-exclude = [".specify"]` (no formatear ni revisar los scripts de Spec Kit); `[tool.ruff.lint] select = ["E", "F", "I", "UP", "B"]`.
   - `[tool.pytest.ini_options]` con `testpaths = ["src"]`, `python_files = ["test_*.py"]` y `addopts = ["--import-mode=importlib"]`.
-- [ ] T013 [P] [US3] Crear `src/due_diligence/__init__.py` con un docstring en español: "Sistema multi-agente de due diligence de comercios de Pasarela Austral." Sin otra lógica
-- [ ] T014 [P] [US3] Crear `src/servidor_mcp/__init__.py` con un docstring en español: "Servidor MCP propio que simula las fuentes de Pasarela Austral con datos ficticios locales." Sin otra lógica
-- [ ] T015 [P] [US3] Crear `src/due_diligence/test_humo.py` con un test que importe `due_diligence` y compruebe que se carga desde `src/due_diligence/` y que `sys.version_info[:2] == (3, 12)`; sin datos de personas ni comercios (principio VII)
-- [ ] T016 [P] [US3] Crear `src/servidor_mcp/test_humo.py` (mismo nombre a propósito, research R5) con un test equivalente para `servidor_mcp`
-- [ ] T017 [US3] Ejecutar `uv sync`, que genera `uv.lock` y `.venv/`; comprobar que `.venv/` sigue ignorado y que `uv.lock` se versiona (research R4). Plan B si `uv_build` no acepta varios módulos: añadir `pythonpath = ["src"]` en pytest y documentarlo en [research.md](research.md), R4
-- [ ] T018 [US3] Ejecutar `uv run ruff format .` y `uv run ruff check .`, y corregir lo que reporten hasta que ambos terminen con código 0
-- [ ] T019 [US3] Ejecutar `uv run pytest --collect-only -q` y `uv run pytest`: deben aparecer `src/due_diligence/test_humo.py` y `src/servidor_mcp/test_humo.py` sin error de módulo duplicado, y la suite debe terminar con código 0 (FR-006, FR-007)
+- [X] T013 [P] [US3] Crear `src/due_diligence/__init__.py` con un docstring en español: "Sistema multi-agente de due diligence de comercios de Pasarela Austral." Sin otra lógica
+- [X] T014 [P] [US3] Crear `src/servidor_mcp/__init__.py` con un docstring en español: "Servidor MCP propio que simula las fuentes de Pasarela Austral con datos ficticios locales." Sin otra lógica
+- [X] T015 [P] [US3] Crear `src/due_diligence/test_humo.py` con un test que importe `due_diligence` y compruebe que se carga desde `src/due_diligence/` y que `sys.version_info[:2] == (3, 12)`; sin datos de personas ni comercios (principio VII)
+- [X] T016 [P] [US3] Crear `src/servidor_mcp/test_humo.py` (mismo nombre a propósito, research R5) con un test equivalente para `servidor_mcp`
+- [X] T017 [US3] Ejecutar `uv sync`, que genera `uv.lock` y `.venv/`; comprobar que `.venv/` sigue ignorado y que `uv.lock` se versiona (research R4). Plan B si `uv_build` no acepta varios módulos: añadir `pythonpath = ["src"]` en pytest y documentarlo en [research.md](research.md), R4
+- [X] T018 [US3] Ejecutar `uv run ruff format .` y `uv run ruff check .`, y corregir lo que reporten hasta que ambos terminen con código 0
+- [X] T019 [US3] Ejecutar `uv run pytest --collect-only -q` y `uv run pytest`: deben aparecer `src/due_diligence/test_humo.py` y `src/servidor_mcp/test_humo.py` sin error de módulo duplicado, y la suite debe terminar con código 0 (FR-006, FR-007)
 
 **Checkpoint**: US3 verificable por separado; base lista para los tickets de código.
 

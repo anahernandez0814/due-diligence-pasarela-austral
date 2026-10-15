@@ -19,8 +19,8 @@ mover tarjetas a mano:
   comentario de lo especificado lo publica el hook `after_specify`, no la skill.
 - **Comando `/abrir-pr`**:
   - Verifica que spec, plan y tareas están commiteados.
-  - Ejecuta la revisión previa como paso aislado (subagente de solo lectura en contexto
-    separado; se detiene si hay bloqueantes).
+  - Ejecuta la revisión previa como paso aislado (FR-023): un subagente de solo lectura en
+    contexto separado; se detiene si hay bloqueantes.
   - Sube la rama, abre el PR con `Closes #N` y el veredicto de la revisión, mueve el
     ticket a "In review" y comenta.
 - **Done** por los workflows nativos del Project. La verificación posterior al merge se
@@ -157,7 +157,10 @@ extensión que ya leen las skills de Spec Kit.
 
 ### Cambios en la documentación
 
-- **`DECISIONES.md`, nueva entrada 3, "Ciclo de tickets automatizado"**:
+- **`DECISIONES.md`, nueva entrada 3, "Ciclo de tickets automatizado"**: breve, de unas
+  15 líneas, con una línea por decisión y el detalle remitido a `research.md`. El
+  enunciado limita `DECISIONES.md` a dos páginas para las 11 necesidades, y el ticket #14
+  todavía tiene que completarlo. Decisiones que recoge:
   - Done por los workflows nativos "Item closed" y "Pull request merged" (FR-016).
   - Comentarios de lo especificado, del plan y del análisis con hooks obligatorios de Spec
     Kit (`after_specify`, `after_clarify`, `after_plan`, `after_analyze`) en lugar de
@@ -186,7 +189,8 @@ extensión que ya leen las skills de Spec Kit.
   abrir el PR" se sustituye por "Cada ticket se arranca con `/siguiente-ticket` y se
   cierra con `/abrir-pr`; no se mueven tarjetas a mano". Se queda en 37 líneas.
 - **`README.md`**: sección breve "Ciclo de un ticket", con la secuencia y los tres
-  comandos. La ampliación completa es del ticket #14.
+  comandos. Incluye que, tras el merge del último ticket, `/siguiente-ticket` se ejecuta
+  una vez más para registrar su cierre. La ampliación completa es del ticket #14.
 
 ### Tareas fuera de los archivos (MCP), antes del PR
 

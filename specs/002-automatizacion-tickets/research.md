@@ -114,6 +114,14 @@ uno de los hallazgos (a)–(i) del analista.
     para que la siguiente ejecución lo vuelva a revisar.
   Luego sigue con el arranque. Con el Todo vacío (después de #14) hace el paso 0 y después
   informa que no quedan tickets.
+- **Último ticket**: después del merge de #14 no hay arranque que dispare el paso 0, así
+  que hace falta una ejecución más de `/siguiente-ticket` para registrar su cierre. Lo
+  recuerdan la salida de `/abrir-pr` ("tras el merge, el próximo `/siguiente-ticket`
+  registra el cierre; si era el último ticket, ejecútalo una vez más") y la sección "Ciclo
+  de un ticket" del README.
+- **Fallo del MCP en el paso 0**: si `list_project_items` o `get_comments` fallan, la skill
+  se detiene e informa (FR-021). No sigue con el arranque, porque el resto también
+  depende del MCP.
 - **Motivo**: es el primer momento en que alguien vuelve a trabajar después de un merge,
   y no necesita archivos del repositorio. Cumple FR-017 y FR-018: nada de lo posterior al
   merge vive en `tasks.md`.
@@ -135,8 +143,9 @@ uno de los hallazgos (a)–(i) del analista.
   - Detectar los existentes con `issue_read` (`get_comments`).
   - No duplicar: `inicio`, `pr` y `cierre` no se repiten. `especificado`, `plan` y
     `analyze` se actualizan si ya existen (clarify tras specify, o analyze repetido tras
-    corregir), editando el comentario con `update_issue_comment` y añadiendo una línea
-    "Actualizado: <fecha>".
+    corregir). Se editan con `update_issue_comment` **añadiendo** al final una sección
+    "Actualización <fecha>" con lo nuevo y **conservando** el cuerpo anterior. Reemplazarlo
+    borraría del issue los hallazgos previos y cómo se resolvieron (SC-004).
   - Contar SC-003 (seis marcadores distintos por ticket cerrado).
 - **Alternativa descartada**: reconocer los comentarios por su encabezado visible. Es
   frágil ante cambios de redacción.

@@ -57,9 +57,11 @@ Repetir con un número explícito.
 
 Terminada la implementación, la persona del equipo ejecuta `/abrir-pr`. El comando
 comprueba que la especificación, el plan y las tareas del ticket están commiteados en la
-rama; si falta alguno, se detiene y dice cuál. Si están, sube la rama, abre el pull request
-hacia `main` con `Closes #N`, mueve el ticket a "In review" y comenta en el issue lo
-especificado, lo decidido y lo pendiente.
+rama; si falta alguno, se detiene y dice cuál. Si están, ejecuta una revisión
+independiente previa del cambio frente a `main` y se detiene si encuentra bloqueantes. Si
+no los hay, sube la rama, abre el pull request hacia `main` con `Closes #N` y el veredicto
+de la revisión, mueve el ticket a "In review" y comenta en el issue lo especificado, lo
+decidido y lo pendiente.
 
 **Why this priority**: es la salida del ciclo y la que garantiza que el merge cierre el
 issue; depende de que el ticket se haya arrancado con la convención de P1.
@@ -79,6 +81,9 @@ comprobar el PR con `Closes #N`, el Status "In review" y el comentario del issue
 3. **Given** el PR abierto, **When** termina el comando, **Then** el ticket está en
    "In review" y el issue tiene un comentario con lo especificado, lo decidido y lo
    pendiente, con enlace al PR.
+4. **Given** una rama de ticket con los tres artefactos commiteados, **When** la revisión
+   previa devuelve algún hallazgo bloqueante, **Then** `/abrir-pr` se detiene, muestra los
+   hallazgos y no sube la rama ni abre PR ni cambia el estado del ticket.
 
 ---
 
@@ -152,6 +157,12 @@ merge.
 ### Edge Cases
 
 - No hay ningún ítem en Todo: la skill lo informa y no crea rama ni carpeta.
+- Tras el merge del último ticket no hay ticket siguiente que arrancar. Aun así, su
+  verificación posterior al merge tiene que poder registrarse, aunque no quede nada en
+  Todo.
+- Un comentario de avance se actualiza (por ejemplo, analyze repetido tras corregir): lo
+  publicado antes se conserva, para que el issue siga mostrando qué se encontró y cómo se
+  resolvió.
 - El número indicado no existe, no está en el Project, está cerrado o no está en Todo (por
   ejemplo, ya en "In Progress"): la skill lo informa y se detiene sin cambiar su estado; no
   retoma un ticket en curso sin que la persona lo pida.
@@ -201,7 +212,7 @@ merge.
 - **FR-022**: Después de `/speckit-specify`, el issue DEBE recibir un comentario con el
   resumen de lo especificado (historias, requisitos clave y supuestos). Si después se
   ejecuta `/speckit-clarify`, ese comentario DEBE actualizarse con las aclaraciones en
-  lugar de publicar otro. (Se numera FR-022 para no renumerar los requisitos que ya citan
+  lugar de publicar otro, sin borrar lo publicado antes. (Se numera FR-022 para no renumerar los requisitos que ya citan
   el plan y sus artefactos.)
 
 **Apertura del PR (comando `/abrir-pr`)**
@@ -214,8 +225,12 @@ merge.
   `Closes #N` en la descripción.
 - **FR-013**: El comando DEBE mover el ticket a "In review" y comentar en el issue lo
   especificado, lo decidido y lo pendiente.
-- **FR-014**: Si la verificación o la subida fallan, el comando NO DEBE abrir PR ni cambiar
-  el estado del ticket.
+- **FR-014**: Si la verificación o la subida fallan, o la revisión previa tiene hallazgos
+  bloqueantes, el comando NO DEBE abrir PR ni cambiar el estado del ticket.
+- **FR-023**: Antes de subir la rama, el comando DEBE ejecutar una revisión independiente
+  del cambio frente a `main`, en un contexto separado de la sesión que lo generó, y
+  registrar su veredicto en la descripción del PR. Es de transición hasta el ticket #4, y
+  ese paso DEBE estar aislado del resto del comando para que el #4 pueda reemplazarlo.
 
 **Cierre**
 
@@ -279,8 +294,9 @@ merge.
   siguiente ticket.
 - La verificación posterior al merge se ejecuta en una sesión posterior al merge, por
   ejemplo al arrancar el ticket siguiente; el mecanismo concreto se decide en el plan.
-- La revisión independiente previa al PR es del ticket #4; mientras no exista, aplica la
-  transición del ticket #1 (subagente genérico de solo lectura en contexto separado).
+- La revisión independiente formal previa al PR es del ticket #4. Mientras no exista,
+  `/abrir-pr` ejecuta una revisión de transición (FR-023) con un subagente de solo
+  lectura en contexto separado, como en el ticket #1.
 - Las guardas con hooks (exigencia de spec previa, protección de secretos) son del ticket
   #3; este ticket no las implementa.
 - El propio ticket #2 se construye con la transición descrita en #1.

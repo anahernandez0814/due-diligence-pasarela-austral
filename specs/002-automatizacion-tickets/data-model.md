@@ -55,7 +55,8 @@ Project #1 "Due Diligence - Pasarela Austral" del usuario `anahernandez0814`.
   plan, analyze, pr, cierre}.
 - Contenido por tipo en [contracts/comentarios.md](contracts/comentarios.md).
 - Duplicados: `inicio`, `pr` y `cierre` no se repiten; `especificado`, `plan` y `analyze`
-  se actualizan sobre el existente (clarify actualiza el de specify).
+  se amplían sobre el existente con una sección "Actualización <fecha>" que conserva el
+  cuerpo anterior (clarify amplía el de specify).
 
 ## Transiciones del Status
 

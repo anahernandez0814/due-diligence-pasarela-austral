@@ -93,7 +93,9 @@ se haga la revisión, solo de su veredicto.
 
 ## Salida
 
-Enlace al PR, veredicto de la revisión, Status nuevo y enlace al comentario.
+Enlace al PR, veredicto de la revisión, Status nuevo y enlace al comentario. Termina con
+este recordatorio: "Tras el merge, el próximo `/siguiente-ticket` registra el cierre en el
+issue. Si era el último ticket, ejecútalo una vez más para registrarlo."
 
 ## Lo que no hace
 

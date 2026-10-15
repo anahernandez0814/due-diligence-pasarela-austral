@@ -49,3 +49,11 @@
   comentarios: FR-022 es comprobable con los escenarios 1 y 2 de la User Story 3; SC-003
   sigue siendo medible (recuento de comentarios por tipo); el alcance sigue acotado. Todos
   los ítems pasan.
+- Revalidación tras `/speckit-analyze`:
+  - **FR-023**: revisión previa en `/abrir-pr`, comprobable con el escenario 4 de la User
+    Story 2.
+  - **FR-014**: ampliado a los bloqueantes de la revisión.
+  - **FR-022**: conserva lo publicado antes.
+  - **Edge cases nuevos**: el último ticket y las actualizaciones de comentarios.
+
+  Todos los ítems pasan.

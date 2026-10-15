@@ -6,9 +6,9 @@ Ningún comentario incluye tokens, datos reales ni contenido de `.env`.
 | Tipo | Lo publica | Duplicados | Contenido mínimo |
 |------|------------|------------|------------------|
 | `inicio` | `siguiente-ticket` | No se repite | Rama, carpeta de specs y siguiente paso. |
-| `especificado` | `/comentar-avance especificado`, desde los hooks `after_specify` y `after_clarify` | Se actualiza (clarify actualiza el de specify) | Historias con prioridad, requisitos clave, supuestos y aclaraciones, si las hay. |
-| `plan` | `/comentar-avance plan`, desde el hook `after_plan` | Se actualiza | Decisiones técnicas, Constitution Check y pendientes. |
-| `analyze` | `/comentar-avance analyze`, desde el hook `after_analyze` | Se actualiza | Hallazgos con severidad y cómo se resuelve cada uno, o "sin hallazgos". |
+| `especificado` | `/comentar-avance especificado`, desde los hooks `after_specify` y `after_clarify` | Se amplía con una sección "Actualización" que conserva lo anterior (clarify amplía el de specify) | Historias con prioridad, requisitos clave, supuestos y aclaraciones, si las hay. |
+| `plan` | `/comentar-avance plan`, desde el hook `after_plan` | Se amplía, conservando lo anterior | Decisiones técnicas, Constitution Check y pendientes. |
+| `analyze` | `/comentar-avance analyze`, desde el hook `after_analyze` | Se amplía, conservando lo anterior | Hallazgos con severidad y cómo se resuelve cada uno, o "sin hallazgos". |
 | `pr` | `/abrir-pr` | No se repite | Enlace al PR; lo especificado, lo decidido y lo pendiente; veredicto de la revisión previa; Status "In review". |
 | `cierre` | Paso 0 de `siguiente-ticket` | No se repite | PR que lo cerró, `closed_at`, Status Done y `updated_at` del ítem; pendientes que pasan a otros tickets. |
 

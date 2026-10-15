@@ -110,8 +110,9 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
 
 ## Phase 4: User Story 2 - Abrir el pull request del ticket (Priority: P2)
 
-**Goal**: `/abrir-pr` se detiene si faltan los artefactos o hay bloqueantes en la revisión
-previa. Si no, abre el PR con `Closes #N`, pasa el ticket a "In review" y comenta.
+**Goal**: `/abrir-pr` se detiene si faltan los artefactos o si la revisión previa
+(FR-023) tiene bloqueantes. Si no, abre el PR con `Closes #N`, pasa el ticket a
+"In review" y comenta.
 
 **Independent Test**: Q8 (caso negativo con la rama temporal `999-prueba-abrir-pr`) y Q9
 (PR real del ticket #2).
@@ -139,6 +140,7 @@ previa. Si no, abre el PR con `Closes #N`, pasa el ticket a "In review" y coment
   2. `create_pull_request` con título `<título del issue> (#N)` y descripción en español con: resumen, criterios de aceptación verificados, "Revisión previa" (veredicto y hallazgos no bloqueantes), desviaciones y pendientes, `Closes #N` y la línea final exacta `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
   3. `update_project_item` a "In review".
   4. Comentario `<!-- ciclo-tickets:pr -->` con lo especificado, lo decidido y lo pendiente, y el enlace al PR. No se publica si ya existe uno con ese marcador.
+  5. Salida con el recordatorio del contrato: "Tras el merge, el próximo `/siguiente-ticket` registra el cierre en el issue. Si era el último ticket, ejecútalo una vez más para registrarlo."
 
 **Checkpoint**: `/abrir-pr` completo y aislado de cómo se haga la revisión.
 
@@ -159,7 +161,7 @@ encontrado, sin editar sus skills.
   - Con un argumento distinto de esos tres, incluido el vacío, se detiene diciendo que "el argumento no llegó".
   - N sale de `.specify/feature.json` y debe coincidir con la rama actual.
   - Contenido por tipo, según el contrato.
-  - Si existe un comentario con el mismo marcador, se actualiza con `update_issue_comment` añadiendo "Actualizado: <fecha>"; si no, se crea.
+  - Si existe un comentario con el mismo marcador, se actualiza con `update_issue_comment`: conserva el cuerpo anterior completo y añade al final una sección `### Actualización <fecha>` con lo nuevo. Si no existe, se crea.
 - [ ] T013 [P] [US3] Crear `.specify/extensions.yml` con el contenido exacto de [contracts/comentar-avance.md](contracts/comentar-avance.md): `installed: []` y los hooks `after_specify` y `after_clarify` (`comentar-avance especificado`), `after_plan` (`comentar-avance plan`) y `after_analyze` (`comentar-avance analyze`), todos con `extension: ciclo-tickets`, `enabled: true`, `optional: false`, `priority: 10` y `condition: null`. Validar que el YAML se lee: `"/c/Users/ana.hernandez/AppData/Roaming/uv/tools/specify-cli/Scripts/python.exe" -c "import yaml,sys; print(yaml.safe_load(open('.specify/extensions.yml', encoding='utf-8'))['hooks'].keys())"` debe listar las cuatro claves.
 
 **Checkpoint**: desde este momento, los comandos de Spec Kit de esta rama disparan los hooks.
@@ -183,8 +185,9 @@ después del merge.
     - Con otro Status: anotarlo para el informe, sin mover la tarjeta y sin comentar.
   - Se excluyen los cerrados como `not_planned`.
   - Con el Todo vacío, hacer el paso 0 y luego informar que no quedan tickets.
+  - Si `list_project_items` o `get_comments` fallan, detenerse e informarlo (FR-021), sin seguir con el arranque.
 - [ ] T015 [P] [US4] En `DECISIONES.md`:
-  - Añadir la entrada 3, "Ciclo de tickets automatizado", con los puntos de plan.md, sección "Cambios en la documentación":
+  - Añadir la entrada 3, "Ciclo de tickets automatizado", **breve: unas 15 líneas, una por decisión, con el detalle remitido a `research.md`** (R1, R4, R5, R6, R9). El enunciado limita `DECISIONES.md` a dos páginas para las 11 necesidades, y el ticket #14 todavía tiene que completarlo. Recoge los puntos de plan.md, sección "Cambios en la documentación":
     - Done por "Item closed" y "Pull request merged" (FR-016).
     - Hooks de Spec Kit en `after_specify`, `after_clarify`, `after_plan` y `after_analyze`, y su alcance real: instrucciones que el modelo ejecuta, no hooks de Claude Code; sugerido, no garantizado, aceptable porque los comentarios no están en las garantías de II.
     - Paso 0 en lugar de tareas posteriores al merge.
@@ -192,7 +195,8 @@ después del merge.
     - Por qué `siguiente-ticket` no usa `context: fork`.
     - Revisión previa aislada en `/abrir-pr`, con subagente `Plan`.
     - Marcadores.
-    - Alternativas descartadas.
+    - Alternativas descartadas: una línea que remite a `research.md`.
+  - Comprobar que la entrada 3 no pasa de unas 15 líneas.
   - Ajustar la entrada 2: desde #3 el ciclo usa `/siguiente-ticket`, los hooks y `/abrir-pr`; la revisión sigue de transición hasta #4; la desviación de II y X sigue hasta #3.
 
 **Checkpoint**: las cuatro historias implementadas.
@@ -205,7 +209,7 @@ después del merge.
 que exige el paso 0, y apertura del PR.
 
 - [ ] T016 [P] En `CLAUDE.md`, sustituir la línea "Mueve el ticket a In Progress al empezar y a In review al abrir el PR." por "Cada ticket se arranca con `/siguiente-ticket` y se cierra con `/abrir-pr`; no se mueven tarjetas a mano." Comprobar que `wc -l CLAUDE.md` da 40 como máximo (hoy 37) y que la importación `@.specify/memory/constitution.md` sigue presente una vez.
-- [ ] T017 [P] En `README.md`, añadir una sección breve "Ciclo de un ticket", con la secuencia `/siguiente-ticket` → specify → (clarify) → plan → tasks → analyze → implement → (converge) → `/abrir-pr` → merge, y una línea por pieza: skill, hooks de `.specify/extensions.yml` y `/abrir-pr`. Sin repetir `DECISIONES.md`; la ampliación es del ticket #14.
+- [ ] T017 [P] En `README.md`, añadir una sección breve "Ciclo de un ticket", con la secuencia `/siguiente-ticket` → specify → (clarify) → plan → tasks → analyze → implement → (converge) → `/abrir-pr` → merge, y una línea por pieza: skill, hooks de `.specify/extensions.yml` y `/abrir-pr`. Incluir que el cierre de cada ticket lo registra el siguiente `/siguiente-ticket` y que, tras el merge del último ticket, se ejecuta una vez más. Sin repetir `DECISIONES.md`; la ampliación es del ticket #14.
 - [ ] T018 Puertas de calidad:
   - `uv run ruff check .`, `uv run ruff format --check .` y `uv run pytest` en verde.
   - `git grep -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"` sin resultados (principio VIII).
@@ -213,23 +217,26 @@ que exige el paso 0, y apertura del PR.
 - [ ] T019 Hacer commit de la implementación por partes lógicas, con mensajes en español: skill, comandos, `extensions.yml`, documentación. `git status --porcelain` debe quedar vacío.
 - [ ] T020 **Requisito previo de Q1.** Con `mcp__github__update_issue_comment`, editar el comentario de cierre del issue #1 (id `6191823695`) y añadir `<!-- ciclo-tickets:cierre -->` como primera línea, sin cambiar el resto del texto. Comprobar con `issue_read get_comments` que el marcador está.
 - [ ] T021 **Requisito previo de Q1.** Con `mcp__github__update_issue_comment`, editar el comentario de inicio del issue #2 (id `6192325009`) y añadir `<!-- ciclo-tickets:inicio -->` como primera línea, sin cambiar el resto. Comprobar que el issue #2 tiene ya los marcadores `inicio`, `especificado`, `plan` y `analyze`; este último lo publica a mano `/speckit-analyze` antes de implementar.
-- [ ] T022 Abrir una sesión nueva de Claude Code en la rama, para que se carguen la skill y los comandos nuevos. Comprobar en `/mcp` que `github` está conectado y que `/siguiente-ticket`, `/abrir-pr` y `/comentar-avance` aparecen en la lista de comandos.
+- [ ] T022 Abrir una sesión nueva de Claude Code en la rama, para que se carguen la skill y los comandos nuevos.
+  - La primera instrucción en esa sesión es exactamente: "continúa tasks.md del ticket #2 desde T023". Así la sesión retoma desde este archivo, sin depender de la conversación anterior.
+  - Antes de T023, comprobar en `/mcp` que `github` está conectado y que `/siguiente-ticket`, `/abrir-pr` y `/comentar-avance` aparecen en la lista de comandos.
 - [ ] T023 Ejecutar Q1, Q2, Q3, Q4, Q4b y Q5 del [quickstart](quickstart.md) en ese orden (depende de T020 y T021) y anotar el resultado de cada uno en esta tarea. En todos, el paso 0 debe informar que no hay issues cerrados por verificar, y #1 no debe recibir comentarios nuevos. Después de Q1, restaurar el archivo modificado.
 - [ ] T024 Ejecutar Q6: repetir `/speckit-analyze` y comprobar que emite `EXECUTE_COMMAND: comentar-avance analyze`, que `/comentar-avance` recibe `analyze` y que el comentario `analyze` de #2 se actualiza sin duplicarse. **Si el argumento no llega**, aplicar el plan B:
   - Crear `.claude/commands/comentar-especificado.md`, `comentar-plan.md` y `comentar-analyze.md`, sin argumento y con la misma lógica.
   - Cambiar los `command` de `.specify/extensions.yml`.
   - Actualizar contracts/comentar-avance.md, `DECISIONES.md` y el comentario del plan del issue.
   - Hacer commit y repetir Q6.
-- [ ] T025 Ejecutar Q7: `/comentar-avance especificado` actualiza el comentario `especificado` de #2, con "Actualizado: <fecha>" y sin crear otro.
+- [ ] T025 Ejecutar Q7: `/comentar-avance especificado` amplía el comentario `especificado` de #2 con una sección "Actualización <fecha>", conserva el texto anterior y no crea otro.
 - [ ] T026 Ejecutar Q8:
   1. `git switch -c 999-prueba-abrir-pr` y `/abrir-pr`. Debe detenerse por no existir `specs/999-*`, sin revisión, sin push y sin PR.
-  2. `git switch 002-automatizacion-tickets` y `git branch -D 999-prueba-abrir-pr`.
+  2. `git switch 002-automatizacion-tickets` y `git branch -d 999-prueba-abrir-pr`. Basta el borrado seguro, porque la rama no tiene commits propios.
   3. Comprobar con `git ls-remote --heads origin 999-prueba-abrir-pr` que no se subió.
 - [ ] T027 Anotar en T023–T026 los resultados, marcar T001–T026 y hacer commit (`docs(specs): validación del quickstart del ticket #2`), para que el árbol quede limpio antes de `/abrir-pr`.
 - [ ] T028 Ejecutar Q9: `/abrir-pr` en `002-automatizacion-tickets`.
   - Si la revisión previa devuelve bloqueantes, corregirlos, hacer commit y repetir.
   - Comprobar el PR hacia `main` con `Closes #2`, la sección "Revisión previa" y la línea de atribución exacta.
   - Comprobar que #2 está en "In review" y tiene el comentario `pr`.
+  - Comprobar que la salida termina con el recordatorio del cierre tras el merge.
 - [ ] T029 Marcar T028 y T029 en este archivo, hacer commit (`docs(specs): marca T028 y T029 del ticket #2`) y `git push` a la rama del PR, **antes del merge**. Después del merge no queda ninguna tarea pendiente (FR-018).
 
 ---

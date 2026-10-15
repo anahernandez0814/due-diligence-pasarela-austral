@@ -38,6 +38,8 @@ allowed-tools:
 2. Para cada issue con `state_reason: completed` sin comentario `ciclo-tickets:cierre`:
    - Status Done → comentario `cierre` ([comentarios.md](comentarios.md)).
    - Otro Status → se anota para el informe final; no se mueve ni se comenta.
+3. Si `list_project_items` o `get_comments` fallan, se detiene e informa (FR-021), sin
+   seguir con el arranque.
 
 **Paso 1, comprobaciones** (si alguna falla, se detiene sin mover el ticket). Las
 comprobaciones remotas y del ticket van antes de cambiar de rama, para que un ticket

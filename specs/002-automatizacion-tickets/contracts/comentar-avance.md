@@ -36,9 +36,11 @@ escenarios Q6 y Q7 del [quickstart](../quickstart.md).
    - `analyze`: hallazgos del informe de `/speckit-analyze` de esta conversación, con su
      severidad, y cómo se resuelve cada uno. Si no hubo hallazgos, lo hace constar.
 3. Lee los comentarios con `get_comments`:
-   - Si existe uno con el mismo marcador, lo actualiza con `update_issue_comment` y añade
-     "Actualizado: <fecha>". Así, `/speckit-clarify` actualiza el comentario
-     `especificado` en vez de publicar otro.
+   - Si existe uno con el mismo marcador, lo actualiza con `update_issue_comment`:
+     conserva el cuerpo anterior completo y añade al final una sección
+     `### Actualización <fecha>` con lo nuevo. Así, `/speckit-clarify` amplía el
+     comentario `especificado` en vez de publicar otro, y un analyze repetido no borra los
+     hallazgos anteriores ni cómo se resolvieron.
    - Si no existe, lo crea con `add_issue_comment`.
 
 ### Salida

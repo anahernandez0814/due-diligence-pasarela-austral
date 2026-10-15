@@ -158,12 +158,18 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
 
 **Purpose**: validación final, revisión independiente y cierre trazable del ticket.
 
-- [ ] T023 Ejecutar los pasos 1, 2, 4, 5 y 6 de [quickstart.md](quickstart.md) y anotar el resultado de cada uno (el paso 3 es T010). Además, para SC-001:
+- [X] T023 Ejecutar los pasos 1, 2, 4, 5 y 6 de [quickstart.md](quickstart.md) y anotar el resultado de cada uno (el paso 3 es T010). Además, para SC-001:
   - Hacer un clon limpio de la rama en una carpeta temporal fuera del repositorio.
   - Seguir solo el README y cronometrar desde el clonado hasta tener `uv sync`, `uv run ruff check .` y `uv run pytest` en verde.
   - El tiempo debe ser menor de 5 minutos; anotarlo y borrar después la carpeta temporal.
-- [ ] T024 Repetir la búsqueda de credenciales sobre todo el contenido preparado con `git grep --cached -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"` (resultado vacío) y confirmar que `.env` no está en `git ls-files` (principio VIII)
-- [ ] T025 Hacer commit de la implementación por partes lógicas, con mensajes en español y sin incluir `.env`, `.venv/` ni archivos personales
+  - **Resultado (2026-10-15)**:
+    - Pasos 1 y 2: ruff check, ruff format --check y pytest en verde; 4 tests recogidos en `src/due_diligence/` y `src/servidor_mcp/`.
+    - Paso 4: sin credenciales.
+    - Paso 5: `CLAUDE.md` con 37 líneas, la importación una vez y los tres archivos personales ignorados.
+    - Paso 6: todo en LF.
+    - Clon limpio con caché de uv vacía: 20 s hasta tener los tres comandos en verde (Python 3.12 ya instalado en la máquina).
+- [X] T024 Repetir la búsqueda de credenciales sobre todo el contenido preparado con `git grep --cached -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"` (resultado vacío) y confirmar que `.env` no está en `git ls-files` (principio VIII)
+- [X] T025 Hacer commit de la implementación por partes lógicas, con mensajes en español y sin incluir `.env`, `.venv/` ni archivos personales
 - [ ] T026 Revisión independiente antes del PR: lanzar un subagente genérico de solo lectura, en contexto separado, que revise el diff `main...001-ecosistema-base` frente a la spec, el plan y los 5 criterios de aceptación del issue #1. Aplicar las correcciones que proponga. La revisión de cumplimiento de reglas de negocio (principio X) no aplica porque el ticket no implementa los principios I a V; se deja anotado en el PR
 - [ ] T027 Subir la rama con `git push -u origin 001-ecosistema-base` y abrir el PR hacia `main` con la descripción en español, la lista de criterios de aceptación verificados y `Closes #1`
 - [ ] T028 Mover el issue #1 a "In review" en el GitHub Project y comentar en el issue lo implementado, lo decidido y lo pendiente. El comentario debe aclarar que `GITHUB_PAT` puede ser el token de `gh auth token` o un PAT clásico, ambos con los scopes `repo` y `project`, y corregir así el comentario del plan, que decía solo "PAT clásico". Usar el MCP de GitHub si T010 pasó; si no, `gh`

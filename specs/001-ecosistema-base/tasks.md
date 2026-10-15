@@ -137,15 +137,15 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
 
 ### Implementation for User Story 4
 
-- [ ] T020 [P] [US4] Incorporar `docs/enunciado.md`, que ya existe sin versionar, sin modificar su contenido: es copia literal del enunciado entregado por el equipo (FR-009, Assumptions). Solo se añade a git
-- [ ] T021 [P] [US4] Crear `README.md` en la raíz, en español, con:
+- [X] T020 [P] [US4] Incorporar `docs/enunciado.md`, que ya existe sin versionar, sin modificar su contenido: es copia literal del enunciado entregado por el equipo (FR-009, Assumptions). Solo se añade a git
+- [X] T021 [P] [US4] Crear `README.md` en la raíz, en español, con:
   - Propósito del proyecto.
   - Requisitos: uv y gh.
   - Cómo definir `GITHUB_PAT` como variable de entorno del usuario: token de `gh auth token` o PAT clásico, en ambos casos con los scopes `repo` y `project`; `gh auth status` muestra los scopes (research R2).
   - Verificación del entorno: `uv sync`, `uv run ruff check .`, `uv run pytest` y `/mcp` en Claude Code.
   - Alternativa stdio si el servidor remoto da 401/403.
   - Enlace al GitHub Project https://github.com/users/anahernandez0814/projects/1 y un apartado "Video de funcionamiento" con el enlace pendiente.
-- [ ] T022 [P] [US4] Crear `DECISIONES.md` en la raíz, breve y en español. Cada entrada tiene **Necesidad o tema**, **Decisión**, **Motivo** y **Alternativas descartadas** (data-model, "Registro de decisiones"). Entradas:
+- [X] T022 [P] [US4] Crear `DECISIONES.md` en la raíz, breve y en español. Cada entrada tiene **Necesidad o tema**, **Decisión**, **Motivo** y **Alternativas descartadas** (data-model, "Registro de decisiones"). Entradas:
   - (1) Cargar la constitución en cada sesión con `@.specify/memory/constitution.md` desde `CLAUDE.md` (research R8).
   - (2) Ciclo manual de tickets durante la transición hasta fusionar #2 y #4: rama propia desde `main`, spec, plan y tareas en `specs/`, PR con `Closes #N`, revisión con un subagente genérico de solo lectura en contexto separado. Incluye la desviación temporal de los principios II y X: el formateo tras cada edición y las garantías con hooks llegan en el ticket #3; mientras tanto el formateo es manual (T018).
   - Nota: el documento se completa en el ticket #14.

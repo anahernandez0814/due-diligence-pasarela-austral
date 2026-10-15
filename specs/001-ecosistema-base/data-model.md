@@ -13,7 +13,7 @@ del ecosistema, sus campos obligatorios y las reglas que deben cumplir.
 | Mapa | Dónde viven `src/`, `specs/`, `docs/`, `.specify/`, `.claude/`. |
 | Constitución | Línea `@.specify/memory/constitution.md`; ningún principio copiado. |
 
-Validación: unas 40 líneas como máximo (FR-001, FR-002, SC-005).
+Validación: 40 líneas como máximo (FR-001, FR-002, SC-005).
 
 ## Preferencias personales
 

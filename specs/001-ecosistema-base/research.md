@@ -104,7 +104,7 @@ alternativas evaluadas.
 ## R8. CLAUDE.md, README y DECISIONES.md
 
 - **Decision**:
-  - **`CLAUDE.md`**: unas 40 líneas como máximo. Idioma, flujo de rama por ticket con PR a
+  - **`CLAUDE.md`**: 40 líneas como máximo. Idioma, flujo de rama por ticket con PR a
     `main`, comandos uv, dónde vive cada cosa y la línea `@.specify/memory/constitution.md`.
   - **README**: propósito, requisitos (uv, gh), cómo definir `GITHUB_PAT` y sus scopes,
     verificación del entorno, enlace al GitHub Project y un hueco para el enlace al video.

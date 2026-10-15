@@ -42,10 +42,17 @@ uno de los hallazgos (a)–(i) del analista.
   orden en el que un fallo deja el menor estado incoherente posible.
   1. Paso 0: verificación posterior al merge de tickets anteriores (R5). Solo lee el
      Project y comenta issues cerrados.
-  2. Comprobaciones: árbol de trabajo limpio; `git switch main` y `git pull --ff-only`;
-     ticket elegido existe, está abierto y en Todo; la rama `NNN-*` no existe ni local ni
-     en `origin`; no existe `specs/NNN-*`; el MCP responde; el campo Status tiene la opción
-     exacta "In Progress".
+  2. Comprobaciones, en este orden:
+     1. Árbol de trabajo limpio; se guarda la rama actual.
+     2. El MCP responde y el campo Status tiene la opción exacta "In Progress".
+     3. El ticket elegido existe en el Project, está abierto y en Todo.
+     4. Nombre corto, NNN y rama.
+     5. La rama no existe en `origin`.
+     6. `git switch main` y `git pull --ff-only`.
+     7. Ya sobre `main` actualizado: la rama no existe en local ni hay `specs/NNN-*`.
+     Todo lo que puede rechazar el ticket va antes de cambiar de rama, así que un rechazo
+     (Q2, Q3, Q4) deja la sesión donde estaba. Si fallan 6 o 7, la skill vuelve a la rama
+     guardada y lo informa.
   3. Acciones: mover a "In Progress" → comentario de inicio → `git switch -c` →
      `/speckit-specify` → comprobación de `feature.json`.
 - **Motivo**: ningún fallo previsible deja el ticket en "In Progress" sin rama. Si una
@@ -187,8 +194,14 @@ busca la opción por su nombre exacto y se detiene si no existe.
   las skills de revisión del ticket #4, que sí deben aislarse de la sesión que generó el
   código.
 - **Revisión previa dentro de `/abrir-pr`**: es un paso aislado del comando. Hasta el
-  ticket #4, lanza un subagente genérico de solo lectura, en contexto separado, sobre el
-  diff contra `main`. Si hay hallazgos bloqueantes, se detiene; si no, registra el
+  ticket #4, lanza un subagente de tipo `Plan`, en contexto separado, sobre el diff contra
+  `main`.
+  - Se elige `Plan` y no `general-purpose` porque no tiene Edit, Write ni NotebookEdit:
+    el "solo lectura" lo limitan las herramientas y no solo la instrucción.
+  - La limitación es parcial, porque `Plan` conserva Bash; la instrucción sigue
+    prohibiendo comandos con efectos.
+  - La restricción completa, con un agente definido solo con Read, Grep y Glob, queda para
+    las skills de revisión del #4. Si hay hallazgos bloqueantes, se detiene; si no, registra el
   veredicto en la descripción del PR. El #4 lo reemplaza por `revisar-codigo`,
   `auditar-cumplimiento` y su puerta mecánica sin tocar el resto del comando.
 - **Motivo**: es la forma que exige el enunciado; las dos variantes se versionan y llegan

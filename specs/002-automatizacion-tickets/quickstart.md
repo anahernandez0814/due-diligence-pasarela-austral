@@ -13,6 +13,14 @@ Guía para comprobar que el flujo funciona.
   `002-automatizacion-tickets`, con el MCP `github` conectado (`/mcp`).
 - `GITHUB_PAT` con los scopes `repo` y `project`.
 - `/siguiente-ticket`, `/abrir-pr` y `/comentar-avance` aparecen en la lista de comandos.
+- **Requisito previo de Q1**: los comentarios existentes ya tienen su marcador. Se añaden
+  con `update_issue_comment`:
+  - el comentario de cierre del issue #1, con `<!-- ciclo-tickets:cierre -->`;
+  - el comentario de inicio del issue #2, con `<!-- ciclo-tickets:inicio -->`.
+
+  El paso 0 corre en **cada** `/siguiente-ticket`, incluidas las pruebas negativas Q1 a
+  Q4. Sin el marcador, la primera prueba publicaría un comentario de cierre duplicado en
+  #1.
 
 ## Antes del PR
 
@@ -22,7 +30,8 @@ Guía para comprobar que el flujo funciona.
 | Q2 | Ticket que no está en Todo | `/siguiente-ticket 2` (#2 está en In Progress). | Se detiene diciendo que #2 no está en Todo; no cambia nada. |
 | Q3 | Issue cerrado | `/siguiente-ticket 1`. | Se detiene diciendo que #1 está cerrado; no cambia nada. |
 | Q4 | Argumento inválido | `/siguiente-ticket abc`. | Muestra el uso y se detiene. |
-| Q5 | Paso 0 sin pendientes | Con el marcador `cierre` ya añadido al comentario de cierre de #1, ejecutar Q2 o Q3. | El informe dice que no hay issues cerrados por verificar; #1 no recibe un comentario nuevo. |
+| Q5 | Paso 0 sin pendientes | Revisar el informe del paso 0 en Q1–Q4, que ya corren con el requisito previo cumplido. | En cada ejecución, el informe dice que no hay issues cerrados por verificar; #1 no recibe un comentario nuevo. |
+| Q4b | Sesión intacta tras un rechazo | Después de Q2, Q3 y Q4, `git branch --show-current`. | Sigue en `002-automatizacion-tickets`: el ticket se rechaza antes de `git switch main`. |
 | Q6 | Hook `after_analyze` con argumento | Repetir `/speckit-analyze`, que es de solo lectura. | Al final aparece `EXECUTE_COMMAND: comentar-avance analyze` y se ejecuta `/comentar-avance analyze`. El comentario `analyze` del issue #2 se actualiza, sin crear uno nuevo. **Si el comando dice que el argumento no llegó, aplicar el plan B** ([contracts/comentar-avance.md](contracts/comentar-avance.md)). |
 | Q7 | `/comentar-avance especificado` | Invocarlo directamente en la rama del ticket. | Se actualiza el comentario `especificado` manual del issue #2 con "Actualizado: <fecha>"; no se crea uno nuevo. |
 | Q8 | `/abrir-pr` sin artefactos | En una rama temporal `999-prueba-abrir-pr`, creada desde la rama del ticket, ejecutar `/abrir-pr`. | Se detiene porque no existe `specs/999-*`; no lanza la revisión, no hace push y no abre PR. Borrar la rama temporal. |

@@ -54,9 +54,15 @@ El ticket #4 reemplazará esta sección por las skills `revisar-codigo` y
 se haga la revisión, solo de su veredicto.
 
 1. `git fetch origin main` y `git diff origin/main...HEAD`.
-2. Lanza un subagente genérico (`general-purpose`) en contexto separado, con la
-   instrucción de no modificar archivos ni ejecutar acciones con efectos. El subagente
-   recibe:
+2. Lanza un subagente de tipo `Plan` en contexto separado.
+   - Ese tipo no tiene Edit, Write ni NotebookEdit, así que no puede editar archivos con
+     sus herramientas: el "solo lectura" lo limitan las herramientas, no solo la
+     instrucción.
+   - Conserva Bash, así que la instrucción sigue prohibiéndole comandos con efectos (git,
+     redirecciones, borrados). La restricción completa, con un agente definido solo con
+     Read, Grep y Glob, llega con las skills de revisión del ticket #4.
+
+   El subagente recibe:
    - el diff;
    - `spec.md`, `plan.md` y `tasks.md`;
    - los criterios de aceptación del issue #N;
@@ -80,7 +86,8 @@ se haga la revisión, solo de su veredicto.
    - Revisión previa: veredicto y hallazgos no bloqueantes.
    - Desviaciones o pendientes.
    - `Closes #N`.
-   - La línea de atribución del proyecto.
+   - Al final, la línea de atribución exacta que usó el PR #15:
+     `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 3. `update_project_item` con `updated_field {"name": "Status", "value": "In review"}`.
 4. Comentario `pr` en el issue ([comentarios.md](comentarios.md)).
 

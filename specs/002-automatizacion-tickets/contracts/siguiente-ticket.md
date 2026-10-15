@@ -39,18 +39,25 @@ allowed-tools:
    - Status Done → comentario `cierre` ([comentarios.md](comentarios.md)).
    - Otro Status → se anota para el informe final; no se mueve ni se comenta.
 
-**Paso 1, comprobaciones sin efectos** (si alguna falla, se detiene sin tocar nada):
+**Paso 1, comprobaciones** (si alguna falla, se detiene sin mover el ticket). Las
+comprobaciones remotas y del ticket van antes de cambiar de rama, para que un ticket
+rechazado (por ejemplo, Q2: `/siguiente-ticket 2`) deje la sesión en la rama donde estaba:
 
-1. `git status --porcelain` vacío.
-2. `git switch main` y `git pull --ff-only` sin error.
-3. `list_project_fields`: el campo Status tiene la opción exacta "In Progress". Esta
+1. `git status --porcelain` vacío. Antes, guarda la rama actual
+   (`git branch --show-current`).
+2. `list_project_fields`: el campo Status tiene la opción exacta "In Progress". Esta
    llamada sirve también para comprobar que el MCP está disponible.
-4. Ticket elegido: con argumento, el ítem de #N existe en el Project, el issue está
+3. Ticket elegido: con argumento, el ítem de #N existe en el Project, el issue está
    abierto y su Status es Todo; sin argumento, existe al menos un ítem abierto en Todo
    (si no, informa "no quedan tickets en Todo" y termina, después del paso 0).
-5. Nombre corto según R7, NNN con tres dígitos y rama `NNN-<nombre-corto>`.
-6. No existe la rama ni en local (`git branch --list`) ni en `origin`
-   (`git ls-remote --heads origin`), y no existe ninguna carpeta `specs/NNN-*`.
+4. Nombre corto según R7, NNN con tres dígitos y rama `NNN-<nombre-corto>`.
+5. La rama no existe en `origin` (`git ls-remote --heads origin NNN-<nombre-corto>`).
+6. `git switch main` y `git pull --ff-only` sin error.
+7. Ya sobre `main` actualizado: la rama no existe en local (`git branch --list`) y no hay
+   ninguna carpeta `specs/NNN-*`.
+
+Si fallan los pasos 6 o 7, vuelve a la rama guardada en el paso 1 (`git switch <rama>`) y
+lo informa. Hasta aquí no se ha movido el ticket ni se ha comentado nada.
 
 **Paso 2, acciones**:
 

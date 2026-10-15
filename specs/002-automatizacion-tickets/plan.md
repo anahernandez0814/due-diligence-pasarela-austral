@@ -79,7 +79,7 @@ técnicas se resolvieron en [research.md](research.md).
 | VII. Solo datos ficticios | Sí | Los comentarios solo contienen números de issue, ramas, rutas y decisiones; nada de personas ni comercios. | Cumple |
 | VIII. Sin credenciales | Sí | El MCP usa `${GITHUB_PAT}` (ticket #1). Ni la skill ni los comandos leen `.env` ni escriben tokens en comentarios o archivos. | Cumple |
 | IX. Spec first y trazabilidad | Sí | Es el objeto del ticket. Rama por ticket desde `main`, `specs/NNN-*` antes de implementar, PR con `Closes #N`, Status sincronizado sin mover tarjetas a mano, y comentarios de lo especificado, lo decidido y lo pendiente en cada punto del ciclo. Las piezas se versionan en `.claude/` y `.specify/`. | Cumple |
-| X. Calidad y pruebas | Parcial | El ticket no añade Python, así que no hay tests pytest nuevos. La validación es el quickstart más `ruff check`, `ruff format --check` y `pytest` en verde. La revisión independiente previa al PR pasa a ser un paso aislado de `/abrir-pr`: un subagente genérico de solo lectura en contexto separado, de transición hasta el ticket #4. La revisión de cumplimiento de reglas de negocio no aplica. | Cumple con desviación temporal (ver abajo) |
+| X. Calidad y pruebas | Parcial | El ticket no añade Python, así que no hay tests pytest nuevos. La validación es el quickstart más `ruff check`, `ruff format --check` y `pytest` en verde. La revisión independiente previa al PR pasa a ser un paso aislado de `/abrir-pr`, de transición hasta el ticket #4. Usa un subagente de tipo `Plan` en contexto separado: sin Edit, Write ni NotebookEdit, el "solo lectura" lo limitan sus herramientas. Conserva Bash, así que la instrucción sigue cubriendo los comandos con efectos. La revisión de cumplimiento de reglas de negocio no aplica. | Cumple con desviación temporal (ver abajo) |
 | Restricciones técnicas | Sí | Sin dependencias nuevas; documentación en español. | Cumple |
 
 **Desviación temporal del principio II**: la constitución exige que la exigencia de
@@ -96,7 +96,7 @@ de GitHub (comentario en el issue #3).
 
 **Desviación temporal del principio X**: siguen vigentes las del ticket #1. El formateo con
 ruff es manual y se ejecuta antes de cada commit. La revisión previa al PR es con un
-subagente genérico, ahora dentro de `/abrir-pr`, hasta el ticket #4.
+subagente de tipo `Plan`, ahora dentro de `/abrir-pr`, hasta el ticket #4.
 
 **Resultado de la puerta**: cumple, con las desviaciones temporales declaradas.
 
@@ -179,7 +179,7 @@ extensión que ya leen las skills de Spec Kit.
 - **`DECISIONES.md`, entrada 2 (transición)**:
   - Desde #3, el arranque, los comentarios y el PR pasan a `siguiente-ticket`, a los hooks
     y a `/abrir-pr`.
-  - La revisión previa sigue siendo de transición (subagente genérico), pero ahora la lanza
+  - La revisión previa sigue siendo de transición (subagente de tipo `Plan`), pero ahora la lanza
     `/abrir-pr`, hasta #4.
   - La desviación temporal de II y X sigue hasta #3.
 - **`CLAUDE.md`**: la línea "Mueve el ticket a In Progress al empezar y a In review al
@@ -190,11 +190,18 @@ extensión que ya leen las skills de Spec Kit.
 
 ### Tareas fuera de los archivos (MCP), antes del PR
 
-- Editar el comentario de cierre del issue #1 para añadir `<!-- ciclo-tickets:cierre -->`
-  (R5).
-- Editar el comentario de inicio del issue #2 para añadir `<!-- ciclo-tickets:inicio -->`.
-  Los comentarios manuales de lo especificado, del plan y del análisis de #2 ya llevan su
-  marcador.
+Son **requisito previo de Q1** y de cualquier ejecución de `/siguiente-ticket`. El paso 0
+corre en cada invocación, incluidas las pruebas negativas Q1 a Q4. Sin el marcador, la
+primera prueba publicaría un comentario de cierre duplicado en #1.
+
+- Editar el comentario de cierre del issue #1 con `update_issue_comment` para añadir
+  `<!-- ciclo-tickets:cierre -->` (R5).
+- Editar el comentario de inicio del issue #2 con `update_issue_comment` para añadir
+  `<!-- ciclo-tickets:inicio -->`. Los comentarios manuales de lo especificado, del plan y
+  del análisis de #2 ya llevan su marcador.
+
+Orden en `tasks.md`: implementación de la skill y los comandos → estas dos ediciones →
+Q1–Q9.
 
 ### Lo que no entra en `tasks.md`
 

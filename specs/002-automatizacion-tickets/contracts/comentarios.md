@@ -18,6 +18,9 @@ Ningún comentario incluye tokens, datos reales ni contenido de `.env`.
 <!-- ciclo-tickets:inicio -->
 Se inicia el ticket. Rama `NNN-nombre-corto`, creada desde `main` actualizado; se ejecuta
 `/speckit-specify` para generar la especificación en `specs/NNN-nombre-corto/`.
+
+Siguiente: `/speckit-clarify` si la spec queda con marcadores de aclaración; si no,
+`/speckit-plan` cuando la spec esté lista.
 ```
 
 ```markdown

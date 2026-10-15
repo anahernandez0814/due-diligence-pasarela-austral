@@ -87,16 +87,21 @@ donde estaba.
 2. `mcp__github__projects_list` con `method: list_project_fields`. El campo `Status` debe
    tener la opción exacta `In Progress`. Esta llamada comprueba también que el MCP de
    GitHub está disponible; si falla, se detiene.
-3. Ticket elegido. Usa `mcp__github__projects_list` con `method: list_project_items`,
-   `field_names: ["Status"]` y `query: "is:issue state:open"`, y recorre todas las páginas
-   (`after` con `pageInfo.nextCursor` mientras `hasNextPage` sea `true`).
-   - Sin argumento: el ítem con Status `Todo` y menor `content.number`. Si no hay
-     ninguno, informa "No quedan tickets en Todo" y termina.
-   - Con argumento N: el ítem cuyo `content.number` es N. Se detiene si no está en el
-     Project, si el issue está cerrado (compruébalo con `mcp__github__issue_read`,
-     `method: get`) o si su Status no es `Todo`. Un ticket ya en `In Progress` no se
-     retoma sin que la persona lo pida.
-   - Lee el issue con `mcp__github__issue_read` (`method: get`) para tener título y cuerpo.
+3. Ticket elegido. En `list_project_items` usa siempre `field_names: ["Status"]` y recorre
+   todas las páginas (`after` con `pageInfo.nextCursor` mientras `hasNextPage` sea
+   `true`).
+   - **Sin argumento**: `list_project_items` con `query: "is:issue state:open"`. Elige el
+     ítem con Status `Todo` y menor `content.number`. Si no hay ninguno, informa "No quedan
+     tickets en Todo" y termina. Después lee el issue con `mcp__github__issue_read`
+     (`method: get`) para tener título y cuerpo.
+   - **Con argumento N**, en este orden:
+     1. `mcp__github__issue_read` (`method: get`) del issue #N. Si no existe, informa que
+        el issue #N no existe. Si está cerrado, informa que está cerrado (con su
+        `state_reason`). En los dos casos se detiene.
+     2. `list_project_items` con `query: "is:issue"`, sin filtro de estado. Busca el ítem
+        cuyo `content.number` es N. Si no aparece, informa que #N no está en el Project.
+        Si su Status no es `Todo`, informa el Status actual. En los dos casos se detiene.
+        Un ticket ya en `In Progress` no se retoma sin que la persona lo pida.
 4. Calcula el nombre corto, NNN y la rama (ver "Nombre corto" más abajo). La rama es
    `NNN-<nombre-corto>`.
 5. `git ls-remote --heads origin NNN-<nombre-corto>` no devuelve nada. Si la rama existe

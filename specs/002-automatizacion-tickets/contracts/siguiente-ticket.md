@@ -49,9 +49,18 @@ rechazado (por ejemplo, Q2: `/siguiente-ticket 2`) deje la sesión en la rama do
    (`git branch --show-current`).
 2. `list_project_fields`: el campo Status tiene la opción exacta "In Progress". Esta
    llamada sirve también para comprobar que el MCP está disponible.
-3. Ticket elegido: con argumento, el ítem de #N existe en el Project, el issue está
-   abierto y su Status es Todo; sin argumento, existe al menos un ítem abierto en Todo
-   (si no, informa "no quedan tickets en Todo" y termina, después del paso 0).
+3. Ticket elegido:
+   - **Sin argumento**: `list_project_items` con `query: "is:issue state:open"`. Debe haber
+     al menos un ítem en Todo; si no, informa "no quedan tickets en Todo" y termina,
+     después del paso 0.
+   - **Con argumento N**:
+     1. `issue_read get` del issue #N: si no existe, informa que no existe; si está
+        cerrado, informa que está cerrado.
+     2. `list_project_items` con `query: "is:issue"`, sin filtro de estado: el ítem existe
+        en el Project y su Status es Todo.
+
+     Con el filtro `state:open`, un issue cerrado (Q3: `/siguiente-ticket 1`) no aparece, y
+     la skill diría "no está en el Project" en vez de "está cerrado".
 4. Nombre corto según R7, NNN con tres dígitos y rama `NNN-<nombre-corto>`.
 5. La rama no existe en `origin` (`git ls-remote --heads origin NNN-<nombre-corto>`).
 6. `git switch main` y `git pull --ff-only` sin error.

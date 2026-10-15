@@ -8,7 +8,8 @@ alternativas evaluadas.
 - **Decision**: usar el servidor remoto oficial `https://api.githubcopilot.com/mcp/`, de tipo
   `http`, declarado en `.mcp.json` con las cabeceras `Authorization: Bearer ${GITHUB_PAT}` y
   `X-MCP-Toolsets: repos,issues,pull_requests,projects`.
-- **Verificación temprana (2026-10-15)**: con el PAT clásico del equipo, `initialize`
+- **Verificación temprana (2026-10-15)**: con el token de la CLI de GitHub (prefijo `gho_`,
+  obtenido con `gh auth token`) en `GITHUB_PAT`, `initialize`
   respondió HTTP 200 y `tools/list` devolvió 42 herramientas, entre ellas `projects_list`,
   `projects_get` y `projects_write`. Con este token el servidor remoto no exigió suscripción
   de Copilot. La comprobación se repite en una sesión nueva de Claude Code durante la
@@ -33,8 +34,10 @@ alternativas evaluadas.
 
 ## R2. Permisos de `GITHUB_PAT`
 
-- **Decision**: PAT clásico con scopes `repo` y `project`, definido como variable de entorno
-  del usuario en el sistema operativo; nunca en `.env` ni en el repositorio.
+- **Decision**: `GITHUB_PAT` puede contener el token de la CLI de GitHub (`gh auth token`,
+  prefijo `gho_`) o un PAT clásico. En ambos casos necesita los scopes `repo` y `project`.
+  Se define como variable de entorno del usuario en el sistema operativo; nunca en `.env`
+  ni en el repositorio.
 - **Rationale**: `repo` cubre repositorios, issues y pull requests; `project` permite leer y
   escribir el Project v2 (mover tickets). Con una variable de usuario, Claude Code y gh la
   heredan sin archivos.

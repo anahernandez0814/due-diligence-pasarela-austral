@@ -6,8 +6,10 @@ de aceptación del issue #1 y SC-001 a SC-005.
 ## Requisitos previos
 
 - uv y gh instalados.
-- `GITHUB_PAT` definida como variable de entorno del usuario (PAT clásico, scopes `repo` y
-  `project`). Ver [research.md](research.md), R2.
+- `GITHUB_PAT` definida como variable de entorno del usuario, con el token de la CLI de
+  GitHub (`gh auth token`) o con un PAT clásico. En ambos casos necesita los scopes `repo` y
+  `project`; con la CLI, `gh auth status` muestra los scopes del token. Ver
+  [research.md](research.md), R2.
 
 ## 1. Entorno Python (criterio 3, SC-001)
 

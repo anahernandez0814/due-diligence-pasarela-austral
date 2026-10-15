@@ -42,7 +42,7 @@ Claude Code versionada.
 **Performance Goals**: preparar el entorno y verificarlo en menos de 5 minutos con el
 README (SC-001).
 
-**Constraints**: ninguna credencial versionada (principio VIII). `CLAUDE.md` de unas 40
+**Constraints**: ninguna credencial versionada (principio VIII). `CLAUDE.md` de 40
 líneas como máximo, sin repetir la constitución. Documentación en español.
 
 **Scale/Scope**: equipo pequeño y un solo GitHub Project ("Due Diligence - Pasarela
@@ -58,7 +58,7 @@ No quedan NEEDS CLARIFICATION: todas las incógnitas se resolvieron en
 | Principio | Aplica | Verificación en este plan | Estado |
 |-----------|--------|---------------------------|--------|
 | I. Reglas de negocio | No | El ticket no implementa lógica de due diligence. | N/A |
-| II. Garantizado vs. sugerido | Parcial | `CLAUDE.md` solo guía estilo y convenciones. Ninguna regla obligatoria depende de él; las guardas con hooks son del ticket #3. | Cumple |
+| II. Garantizado vs. sugerido | Parcial | `CLAUDE.md` solo guía estilo y convenciones. Ninguna regla obligatoria depende de él; las guardas con hooks son del ticket #3. | Cumple con desviación temporal (ver abajo) |
 | III. Arquitectura de agentes | No | Fuera de alcance. | N/A |
 | IV. Herramientas y servidor MCP | No | El servidor MCP propio llega en un ticket posterior. Aquí solo se reserva su paquete `src/servidor_mcp/`. | N/A |
 | V. Escalamiento | No | Fuera de alcance. | N/A |
@@ -66,10 +66,20 @@ No quedan NEEDS CLARIFICATION: todas las incógnitas se resolvieron en
 | VII. Solo datos ficticios | Sí | Los tests de humo y la documentación no contienen datos de personas ni de comercios. | Cumple |
 | VIII. Sin credenciales | Sí | `.mcp.json` solo referencia `${GITHUB_PAT}`. Se mantienen `.env` en `.gitignore` y la denegación de lectura y edición de `.env` en `.claude/settings.json`. Antes del commit se busca que no haya tokens. | Cumple |
 | IX. Spec first y trazabilidad | Sí | spec, plan y tareas en `specs/001-ecosistema-base/`, rama propia, PR con `Closes #1`, ticket en In Progress, comentarios en el issue. Convenciones en `CLAUDE.md` versionado; lo personal en `CLAUDE.local.md` y `.claude/settings.local.json`, ignorados. | Cumple |
-| X. Calidad y pruebas | Sí | pytest con tests junto al código y ruff (check y format) configurados. Revisión previa al PR con un subagente de solo lectura en contexto separado (transición, ver DECISIONES.md). | Cumple |
+| X. Calidad y pruebas | Sí | pytest con tests junto al código y ruff (check y format) configurados. Revisión previa al PR con un subagente de solo lectura en contexto separado (transición, ver DECISIONES.md). | Cumple con desviación temporal (ver abajo) |
 | Restricciones técnicas | Sí | Python 3.12 con uv, pytest, ruff, documentación en español. | Cumple |
 
-**Resultado de la puerta**: cumple. No hay violaciones que justificar.
+**Desviación temporal de los principios II y X**: el formateo con ruff tras cada edición (X)
+y las garantías con hooks de Claude Code (II: protección de secretos, bloqueo de datos con
+forma real y exigencia de especificación previa) llegan en el ticket #3. Mientras tanto:
+
+- El formateo es manual (T018) y se ejecuta antes de cada commit.
+- La protección de `.env` se apoya en la denegación de lectura y edición que ya existe en
+  `.claude/settings.json`.
+
+Esta desviación se recoge también en la entrada de transición de `DECISIONES.md` (T022).
+
+**Resultado de la puerta**: cumple, con la desviación temporal declarada arriba.
 
 **Re-evaluación tras la fase 1**: el diseño (contratos de `.mcp.json` y `pyproject.toml`,
 `CLAUDE.md`) no introduce credenciales, datos reales ni reglas obligatorias apoyadas solo en
@@ -126,4 +136,5 @@ choque de nombres. No hay carpeta `tests/`.
 
 ## Complexity Tracking
 
-Sin violaciones de la constitución; no aplica.
+Sin violaciones permanentes de la constitución. La única desviación es temporal (II y X,
+hasta el ticket #3) y está declarada en la verificación de la constitución.

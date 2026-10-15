@@ -13,7 +13,7 @@ dependencies = []
 dev = ["pytest", "ruff"]
 
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -22,6 +22,7 @@ module-name = ["due_diligence", "servidor_mcp"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+extend-exclude = [".specify"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

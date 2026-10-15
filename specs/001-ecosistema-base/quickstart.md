@@ -46,7 +46,7 @@ Si el paso 2 falla con 401/403, aplicar la alternativa stdio de
 ## 4. Sin credenciales (criterio 2, SC-003)
 
 ```bash
-git grep -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"
+git grep --untracked -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"
 ```
 
 Esperado: sin resultados. `.mcp.json` solo contiene `${GITHUB_PAT}`.
@@ -59,14 +59,14 @@ wc -l CLAUDE.md
 git check-ignore -v CLAUDE.local.md .claude/settings.local.json .env
 ```
 
-Esperado: la importación aparece una vez, `CLAUDE.md` tiene unas 40 líneas como máximo y
+Esperado: la importación aparece una vez, `CLAUDE.md` tiene 40 líneas como máximo y
 los tres archivos personales están ignorados. Ningún principio de la constitución está
 copiado en `CLAUDE.md`.
 
 ## 6. Finales de línea
 
 ```bash
-git ls-files --eol | grep -v "i/lf" | grep -v "i/none"
+git ls-files --eol | grep -v "i/lf" | grep -v "i/none" | grep -v "i/-text"
 ```
 
 Esperado: sin resultados; todos los archivos de texto están en LF en el índice.

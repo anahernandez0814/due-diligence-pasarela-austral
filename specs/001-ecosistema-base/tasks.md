@@ -31,7 +31,7 @@ verificable por separado.
 
 - [ ] T001 Confirmar que la rama activa es `001-ecosistema-base`, que contiene los commits de spec, plan y tasks, y que el issue #1 está en "In Progress" en el GitHub Project (`gh project item-list 1 --owner anahernandez0814`)
 - [ ] T002 Crear `.gitattributes` en la raíz con la línea exacta `* text=auto eol=lf` (research R7)
-- [ ] T003 Normalizar los archivos ya versionados con `git add --renormalize .` y hacer commit de `.gitattributes` y los archivos normalizados (mensaje `chore: finales de línea LF con .gitattributes`); comprobar después que `git ls-files --eol | grep -v "i/lf" | grep -v "i/none"` no devuelve nada
+- [ ] T003 Normalizar los archivos ya versionados con `git add --renormalize .` y hacer commit de `.gitattributes` y los archivos normalizados (mensaje `chore: finales de línea LF con .gitattributes`); comprobar después que `git ls-files --eol | grep -v "i/lf" | grep -v "i/none" | grep -v "i/-text"` no devuelve nada
 
 **Checkpoint**: el índice está en LF; los archivos nuevos entran ya normalizados.
 
@@ -53,19 +53,19 @@ verificable por separado.
 sin configuración manual.
 
 **Independent Test**: `grep -n "@.specify/memory/constitution.md" CLAUDE.md` devuelve una línea,
-`wc -l CLAUDE.md` da unas 40 líneas como máximo y ningún principio de la constitución aparece
+`wc -l CLAUDE.md` da 40 líneas como máximo y ningún principio de la constitución aparece
 copiado.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Crear `CLAUDE.md` en la raíz, en español y de unas 40 líneas como máximo, con estas secciones (data-model, "Convenciones del equipo"):
+- [ ] T005 [US1] Crear `CLAUDE.md` en la raíz, en español y de 40 líneas como máximo, con estas secciones (data-model, "Convenciones del equipo"):
   - **Idioma**: español en mensajes y documentación.
   - **Flujo**: "Una rama `NNN-nombre-corto` por ticket desde `main`; PR hacia `main` con `Closes #N`", y spec, plan y tareas en `specs/` antes de escribir código.
   - **Comandos**: `uv sync`, `uv run ruff check .`, `uv run ruff format .`, `uv run pytest`.
   - **Mapa del repositorio**: `src/`, `specs/`, `docs/`, `.specify/`, `.claude/`.
   - **Personal**: las preferencias van en `CLAUDE.local.md` y `.claude/settings.local.json`, que no se versionan.
   - **Constitución**: la línea `@.specify/memory/constitution.md`, sin copiar ningún principio.
-- [ ] T006 [US1] Validar `CLAUDE.md`: la importación aparece exactamente una vez, el archivo tiene unas 40 líneas como máximo y no contiene el texto de ningún principio de `.specify/memory/constitution.md` (SC-005)
+- [ ] T006 [US1] Validar `CLAUDE.md`: la importación aparece exactamente una vez, el archivo tiene 40 líneas como máximo y no contiene el texto de ningún principio de `.specify/memory/constitution.md` (SC-005)
 
 **Checkpoint**: US1 verificable por separado; el MVP del ticket queda entregado.
 
@@ -87,9 +87,9 @@ Done (quickstart, paso 3).
   - Cabeceras `"Authorization": "Bearer ${GITHUB_PAT}"` y `"X-MCP-Toolsets": "repos,issues,pull_requests,projects"`.
   - Invariante: ningún valor de token, solo `${GITHUB_PAT}`.
 - [ ] T008 [P] [US2] Añadir `"enabledMcpjsonServers": ["github"]` en `.claude/settings.json`, conservando sin cambios el bloque `env` (`PYTHONIOENCODING`, `PYTHONUTF8`) y el bloque `permissions.deny` existentes (research R3)
-- [ ] T009 [US2] Buscar credenciales en todos los archivos versionados y preparados con `git grep -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"`; el resultado debe estar vacío (SC-003, FR-004)
+- [ ] T009 [US2] Buscar credenciales en los archivos versionados y en los nuevos aún no versionados (los ignorados quedan fuera) con `git grep --untracked -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"`; el resultado debe estar vacío (SC-003, FR-004)
 - [ ] T010 [US2] Verificación manual de la analista en una sesión nueva de Claude Code (Claude no puede abrirla por sí mismo):
-  - `/mcp` muestra `github` conectado.
+  - `/mcp` muestra `github` conectado y al menos una herramienta de cada toolset: repos, issues, pull_requests y projects.
   - Leer el GitHub Project "Due Diligence - Pasarela Austral" devuelve sus tickets y las opciones del campo Status.
   - Si falla con 401/403, sustituir `.mcp.json` por la alternativa stdio de [contracts/mcp-json.md](contracts/mcp-json.md), que requiere el binario `github-mcp-server` en el PATH, y repetir la verificación.
 
@@ -112,8 +112,8 @@ código 0 y `--collect-only` lista los dos `test_humo.py`.
 - [ ] T012 [P] [US3] Crear `pyproject.toml` en la raíz exactamente según [contracts/pyproject.md](contracts/pyproject.md):
   - `[project]`: `name = "due-diligence-pasarela-austral"`, `version = "0.1.0"`, `requires-python = ">=3.12,<3.13"`, `dependencies = []`.
   - `[dependency-groups] dev = ["pytest", "ruff"]`.
-  - `[build-system]` con `uv_build` y `[tool.uv.build-backend] module-name = ["due_diligence", "servidor_mcp"]`.
-  - `[tool.ruff]` con `target-version = "py312"` y `line-length = 100`; `[tool.ruff.lint] select = ["E", "F", "I", "UP", "B"]`.
+  - `[build-system]` con `requires = ["uv_build>=0.12,<0.13"]` y `build-backend = "uv_build"`, y `[tool.uv.build-backend] module-name = ["due_diligence", "servidor_mcp"]`.
+  - `[tool.ruff]` con `target-version = "py312"`, `line-length = 100` y `extend-exclude = [".specify"]` (no formatear ni revisar los scripts de Spec Kit); `[tool.ruff.lint] select = ["E", "F", "I", "UP", "B"]`.
   - `[tool.pytest.ini_options]` con `testpaths = ["src"]`, `python_files = ["test_*.py"]` y `addopts = ["--import-mode=importlib"]`.
 - [ ] T013 [P] [US3] Crear `src/due_diligence/__init__.py` con un docstring en español: "Sistema multi-agente de due diligence de comercios de Pasarela Austral." Sin otra lógica
 - [ ] T014 [P] [US3] Crear `src/servidor_mcp/__init__.py` con un docstring en español: "Servidor MCP propio que simula las fuentes de Pasarela Austral con datos ficticios locales." Sin otra lógica
@@ -147,7 +147,7 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
   - Enlace al GitHub Project https://github.com/users/anahernandez0814/projects/1 y un apartado "Video de funcionamiento" con el enlace pendiente.
 - [ ] T022 [P] [US4] Crear `DECISIONES.md` en la raíz, breve y en español. Cada entrada tiene **Necesidad o tema**, **Decisión**, **Motivo** y **Alternativas descartadas** (data-model, "Registro de decisiones"). Entradas:
   - (1) Cargar la constitución en cada sesión con `@.specify/memory/constitution.md` desde `CLAUDE.md` (research R8).
-  - (2) Ciclo manual de tickets durante la transición hasta fusionar #2 y #4: rama propia desde `main`, spec, plan y tareas en `specs/`, PR con `Closes #N`, revisión con un subagente genérico de solo lectura en contexto separado.
+  - (2) Ciclo manual de tickets durante la transición hasta fusionar #2 y #4: rama propia desde `main`, spec, plan y tareas en `specs/`, PR con `Closes #N`, revisión con un subagente genérico de solo lectura en contexto separado. Incluye la desviación temporal de los principios II y X: el formateo tras cada edición y las garantías con hooks llegan en el ticket #3; mientras tanto el formateo es manual (T018).
   - Nota: el documento se completa en el ticket #14.
 
 **Checkpoint**: las cuatro historias están completas y son verificables por separado.
@@ -158,12 +158,16 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
 
 **Purpose**: validación final, revisión independiente y cierre trazable del ticket.
 
-- [ ] T023 Ejecutar los pasos 1, 2, 4, 5 y 6 de [quickstart.md](quickstart.md) y anotar el resultado de cada uno (el paso 3 es T010)
-- [ ] T024 Repetir la búsqueda de credenciales de T009 sobre todo el contenido preparado y confirmar que `.env` no está en `git ls-files` (principio VIII)
+- [ ] T023 Ejecutar los pasos 1, 2, 4, 5 y 6 de [quickstart.md](quickstart.md) y anotar el resultado de cada uno (el paso 3 es T010). Además, para SC-001:
+  - Hacer un clon limpio de la rama en una carpeta temporal fuera del repositorio.
+  - Seguir solo el README y cronometrar desde el clonado hasta tener `uv sync`, `uv run ruff check .` y `uv run pytest` en verde.
+  - El tiempo debe ser menor de 5 minutos; anotarlo y borrar después la carpeta temporal.
+- [ ] T024 Repetir la búsqueda de credenciales sobre todo el contenido preparado con `git grep --cached -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"` (resultado vacío) y confirmar que `.env` no está en `git ls-files` (principio VIII)
 - [ ] T025 Hacer commit de la implementación por partes lógicas, con mensajes en español y sin incluir `.env`, `.venv/` ni archivos personales
-- [ ] T026 Revisión independiente antes del PR: lanzar un subagente genérico de solo lectura, en contexto separado, que revise el diff `main...001-ecosistema-base` frente a la spec, el plan y los 5 criterios de aceptación del issue #1. Aplicar las correcciones que proponga
+- [ ] T026 Revisión independiente antes del PR: lanzar un subagente genérico de solo lectura, en contexto separado, que revise el diff `main...001-ecosistema-base` frente a la spec, el plan y los 5 criterios de aceptación del issue #1. Aplicar las correcciones que proponga. La revisión de cumplimiento de reglas de negocio (principio X) no aplica porque el ticket no implementa los principios I a V; se deja anotado en el PR
 - [ ] T027 Subir la rama con `git push -u origin 001-ecosistema-base` y abrir el PR hacia `main` con la descripción en español, la lista de criterios de aceptación verificados y `Closes #1`
-- [ ] T028 Mover el issue #1 a "In review" en el GitHub Project y comentar en el issue lo implementado, lo decidido y lo pendiente. Usar el MCP de GitHub si T010 pasó; si no, `gh`
+- [ ] T028 Mover el issue #1 a "In review" en el GitHub Project y comentar en el issue lo implementado, lo decidido y lo pendiente. El comentario debe aclarar que `GITHUB_PAT` puede ser el token de `gh auth token` o un PAT clásico, ambos con los scopes `repo` y `project`, y corregir así el comentario del plan, que decía solo "PAT clásico". Usar el MCP de GitHub si T010 pasó; si no, `gh`
+- [ ] T029 Después del merge del PR: VERIFICAR, sin mover a mano, que el workflow "Item closed" del GitHub Project pasó el issue #1 a "Done" al cerrarse con `Closes #1`, y comentar el cierre en el issue. Si no ocurrió, reportarlo en vez de moverlo manualmente
 
 ---
 
@@ -175,7 +179,7 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
 - **Foundational (Phase 2)**: depende de Setup y bloquea todas las historias.
 - **User Stories (Phases 3 a 6)**: dependen de Foundational; son independientes entre sí.
 - **Polish (Phase 7)**: depende de las cuatro historias. Orden T023 → T024 → T025 → T026 →
-  T027 → T028.
+  T027 → T028 → T029 (T029 después del merge).
 
 ### User Story Dependencies
 

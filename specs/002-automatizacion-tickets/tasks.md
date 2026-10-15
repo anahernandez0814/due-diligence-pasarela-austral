@@ -221,18 +221,28 @@ que exige el paso 0, y apertura del PR.
   - **Desviación (2026-10-15)**: verificado en la misma sesión; las piezas se cargaron sin reiniciar. La analista comprobó que `/siguiente-ticket`, `/abrir-pr` y `/comentar-avance` aparecen en la lista de comandos y que el MCP `github` está conectado, así que no se abrió sesión nueva.
   - La primera instrucción en esa sesión es exactamente: "continúa tasks.md del ticket #2 desde T023". Así la sesión retoma desde este archivo, sin depender de la conversación anterior.
   - Antes de T023, comprobar en `/mcp` que `github` está conectado y que `/siguiente-ticket`, `/abrir-pr` y `/comentar-avance` aparecen en la lista de comandos.
-- [ ] T023 Ejecutar Q1, Q2, Q3, Q4, Q4b y Q5 del [quickstart](quickstart.md) en ese orden (depende de T020 y T021) y anotar el resultado de cada uno en esta tarea. En todos, el paso 0 debe informar que no hay issues cerrados por verificar, y #1 no debe recibir comentarios nuevos. Después de Q1, restaurar el archivo modificado.
-- [ ] T024 Ejecutar Q6: repetir `/speckit-analyze` y comprobar que emite `EXECUTE_COMMAND: comentar-avance analyze`, que `/comentar-avance` recibe `analyze` y que el comentario `analyze` de #2 se actualiza sin duplicarse. **Si el argumento no llega**, aplicar el plan B:
+- [X] T023 Ejecutar Q1, Q2, Q3, Q4, Q4b y Q5 del [quickstart](quickstart.md) en ese orden (depende de T020 y T021) y anotar el resultado de cada uno en esta tarea. En Q1–Q3, el paso 0 debe informar que no hay issues cerrados por verificar, y #1 no debe recibir comentarios nuevos. En Q4 el paso 0 no corre, porque la entrada inválida se rechaza antes (`0e8e1cb`). Después de Q1, restaurar el archivo modificado.
+  - **Resultado (2026-10-15)**:
+    - **Q1** (`/siguiente-ticket 3` con `README.md` modificado): el paso 0 no encontró nada que registrar y la skill se detuvo en la comprobación 1.1, árbol sucio. #3 siguió en Todo con 1 comentario, sin rama `003-*` local ni remota. Se restauró el README.
+    - **Q2** (`/siguiente-ticket 2`): se detuvo porque el Status de #2 es `In Progress`, no `Todo`. Sin cambios.
+    - **Q3** (`/siguiente-ticket 1`): la primera ejecución reveló el defecto de que, con `state:open`, decía "no está en el Project". Se corrigió en `dc7ede6`. Ahora se detiene con "#1 está cerrado (`completed`)".
+    - **Q4** (`/siguiente-ticket abc`): muestra el uso y se detiene sin efectos. Reveló una ambigüedad entre "Entrada" y el paso 0, corregida en `0e8e1cb` y `c76d497`: la entrada se valida antes del paso 0.
+    - **Q4b**: tras Q2, Q3 y Q4, la sesión siguió en `002-automatizacion-tickets`.
+    - **Q5**: el paso 0 de Q1–Q3 no tuvo nada que registrar, y #1 siguió con 4 comentarios, sin duplicar el cierre.
+- [X] T024 Ejecutar Q6: repetir `/speckit-analyze` y comprobar que emite `EXECUTE_COMMAND: comentar-avance analyze`, que `/comentar-avance` recibe `analyze` y que el comentario `analyze` de #2 se actualiza sin duplicarse. **Si el argumento no llega**, aplicar el plan B:
   - Crear `.claude/commands/comentar-especificado.md`, `comentar-plan.md` y `comentar-analyze.md`, sin argumento y con la misma lógica.
   - Cambiar los `command` de `.specify/extensions.yml`.
   - Actualizar contracts/comentar-avance.md, `DECISIONES.md` y el comentario del plan del issue.
   - Hacer commit y repetir Q6.
-- [ ] T025 Ejecutar Q7: `/comentar-avance especificado` amplía el comentario `especificado` de #2 con una sección "Actualización <fecha>", conserva el texto anterior y no crea otro.
-- [ ] T026 Ejecutar Q8:
+  - **Resultado (2026-10-15)**: `/speckit-analyze` terminó emitiendo `EXECUTE_COMMAND: comentar-avance analyze`, y `/comentar-avance` recibió `analyze`, así que el argumento llega y **no hace falta el plan B**. El comentario `analyze` de #2 (id `6196776121`) se amplió con "Actualización 2026-10-15", conservando completo lo anterior, y no se creó otro. El análisis dio 0 críticos, altos y medios, y 2 bajos: I2, la redacción de T023, corregida en esta anotación, y U2, el caso límite de argumento no numérico, en `a9aa629`.
+- [X] T025 Ejecutar Q7: `/comentar-avance especificado` amplía el comentario `especificado` de #2 con una sección "Actualización <fecha>", conserva el texto anterior y no crea otro.
+  - **Resultado (2026-10-15)**: el comentario `especificado` (id `6195609150`) se amplió con "Actualización 2026-10-15", con FR-023, FR-014, FR-022, los casos límite y el supuesto ajustado. Conservó su texto y no se creó otro.
+- [X] T026 Ejecutar Q8:
   1. `git switch -c 999-prueba-abrir-pr` y `/abrir-pr`. Debe detenerse por no existir `specs/999-*`, sin revisión, sin push y sin PR.
   2. `git switch 002-automatizacion-tickets` y `git branch -d 999-prueba-abrir-pr`. Basta el borrado seguro, porque la rama no tiene commits propios.
   3. Comprobar con `git ls-remote --heads origin 999-prueba-abrir-pr` que no se subió.
-- [ ] T027 Anotar en T023–T026 los resultados, marcar T001–T026 y hacer commit (`docs(specs): validación del quickstart del ticket #2`), para que el árbol quede limpio antes de `/abrir-pr`.
+  - **Resultado (2026-10-15)**: `/abrir-pr` pasó las comprobaciones 1 (formato de rama) y 2 (árbol limpio) y se detuvo en la 3: no existe `specs/999-*`. No lanzó revisión, no hizo push y no abrió PR. `git branch -d` borró la rama sin error, y `git ls-remote` confirma que nunca se subió.
+- [X] T027 Anotar en T023–T026 los resultados, marcar T001–T026 y hacer commit (`docs(specs): validación del quickstart del ticket #2`), para que el árbol quede limpio antes de `/abrir-pr`.
 - [ ] T028 Ejecutar Q9: `/abrir-pr` en `002-automatizacion-tickets`.
   - Si la revisión previa devuelve bloqueantes, corregirlos, hacer commit y repetir.
   - Comprobar el PR hacia `main` con `Closes #2`, la sección "Revisión previa" y la línea de atribución exacta.

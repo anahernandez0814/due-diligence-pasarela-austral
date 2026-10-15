@@ -57,3 +57,5 @@
   - **Edge cases nuevos**: el último ticket y las actualizaciones de comentarios.
 
   Todos los ítems pasan.
+- Revalidación tras el análisis posterior a la implementación (hallazgo U2): nuevo caso
+  límite para un argumento no numérico, comprobable con Q4. Todos los ítems pasan.

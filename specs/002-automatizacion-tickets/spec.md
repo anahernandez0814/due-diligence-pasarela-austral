@@ -157,6 +157,8 @@ merge.
 ### Edge Cases
 
 - No hay ningún ítem en Todo: la skill lo informa y no crea rama ni carpeta.
+- El argumento no es un número de issue (por ejemplo, `abc`): la skill muestra el uso y se
+  detiene sin ningún efecto, ni siquiera la verificación posterior al merge.
 - Tras el merge del último ticket no hay ticket siguiente que arrancar. Aun así, su
   verificación posterior al merge tiene que poder registrarse, aunque no quede nada en
   Todo.

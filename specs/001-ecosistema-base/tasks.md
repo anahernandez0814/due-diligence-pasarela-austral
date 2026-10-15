@@ -82,12 +82,12 @@ Done (quickstart, paso 3).
 
 ### Implementation for User Story 2
 
-- [ ] T007 [P] [US2] Crear `.mcp.json` en la raíz con la configuración principal de [contracts/mcp-json.md](contracts/mcp-json.md):
+- [X] T007 [P] [US2] Crear `.mcp.json` en la raíz con la configuración principal de [contracts/mcp-json.md](contracts/mcp-json.md):
   - Servidor `github`, `"type": "http"`, `"url": "https://api.githubcopilot.com/mcp/"`.
   - Cabeceras `"Authorization": "Bearer ${GITHUB_PAT}"` y `"X-MCP-Toolsets": "repos,issues,pull_requests,projects"`.
   - Invariante: ningún valor de token, solo `${GITHUB_PAT}`.
-- [ ] T008 [P] [US2] Añadir `"enabledMcpjsonServers": ["github"]` en `.claude/settings.json`, conservando sin cambios el bloque `env` (`PYTHONIOENCODING`, `PYTHONUTF8`) y el bloque `permissions.deny` existentes (research R3)
-- [ ] T009 [US2] Buscar credenciales en los archivos versionados y en los nuevos aún no versionados (los ignorados quedan fuera) con `git grep --untracked -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"`; el resultado debe estar vacío (SC-003, FR-004)
+- [X] T008 [P] [US2] Añadir `"enabledMcpjsonServers": ["github"]` en `.claude/settings.json`, conservando sin cambios el bloque `env` (`PYTHONIOENCODING`, `PYTHONUTF8`) y el bloque `permissions.deny` existentes (research R3)
+- [X] T009 [US2] Buscar credenciales en los archivos versionados y en los nuevos aún no versionados (los ignorados quedan fuera) con `git grep --untracked -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"`; el resultado debe estar vacío (SC-003, FR-004)
 - [ ] T010 [US2] Verificación manual de la analista en una sesión nueva de Claude Code (Claude no puede abrirla por sí mismo):
   - `/mcp` muestra `github` conectado y al menos una herramienta de cada toolset: repos, issues, pull_requests y projects.
   - Leer el GitHub Project "Due Diligence - Pasarela Austral" devuelve sus tickets y las opciones del campo Status.

@@ -3,6 +3,7 @@
     "PYTHONIOENCODING": "utf-8",
     "PYTHONUTF8": "1"
   },
+  "enabledMcpjsonServers": ["github"],
   "permissions": {
     "deny": [
       "Read(./.env)",

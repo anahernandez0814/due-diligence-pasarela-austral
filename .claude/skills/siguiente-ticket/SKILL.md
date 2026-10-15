@@ -45,8 +45,9 @@ Contrato: `specs/002-automatizacion-tickets/contracts/siguiente-ticket.md`.
 
 ## Paso 0, verificación posterior al merge
 
-Corre en **cada** invocación, antes de todo lo demás, también cuando el ticket pedido se
-vaya a rechazar o no quede nada en Todo. Registra en el issue el cierre de los tickets ya
+Corre en **cada** invocación con una entrada válida (vacía o un entero), antes de todo lo
+demás, también cuando el ticket pedido se vaya a rechazar o no quede nada en Todo. Con una
+entrada inválida no corre: solo se muestra el uso. Registra en el issue el cierre de los tickets ya
 fusionados. No modifica archivos del repositorio y nunca mueve tarjetas.
 
 1. `mcp__github__projects_list` con `method: list_project_items`,

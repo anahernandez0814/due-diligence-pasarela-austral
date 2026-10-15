@@ -28,7 +28,8 @@ allowed-tools:
 
 - Sin argumento: el ítem del Project en Todo con el menor número de issue.
 - Con argumento `N` (entero): el issue #N.
-- Cualquier otro argumento: se detiene y muestra el uso.
+- Cualquier otro argumento: muestra el uso y se detiene **sin ejecutar nada más**, ni
+  siquiera el paso 0. La entrada se valida antes que cualquier acción con efectos.
 
 ## Pasos (en este orden)
 

@@ -195,7 +195,7 @@ extensión que ya leen las skills de Spec Kit.
 ### Tareas fuera de los archivos (MCP), antes del PR
 
 Son **requisito previo de Q1** y de cualquier ejecución de `/siguiente-ticket`. El paso 0
-corre en cada invocación, incluidas las pruebas negativas Q1 a Q4. Sin el marcador, la
+corre en cada invocación, incluidas las pruebas negativas Q1 a Q3 (Q4 se rechaza antes por entrada inválida). Sin el marcador, la
 primera prueba publicaría un comentario de cierre duplicado en #1.
 
 - Editar el comentario de cierre del issue #1 con `update_issue_comment` para añadir

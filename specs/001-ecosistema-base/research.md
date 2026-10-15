@@ -42,8 +42,8 @@ alternativas evaluadas.
   escribir el Project v2 (mover tickets). Con una variable de usuario, Claude Code y gh la
   heredan sin archivos.
 - **Alternatives considered**: PAT fine-grained. Los Projects de usuario no siempre se
-  pueden otorgar con un PAT fine-grained, así que se descarta por ahora. Se documenta en el
-  README como posible mejora.
+  pueden otorgar con un PAT fine-grained, así que se descarta por ahora. El README lo menciona
+  como posible mejora.
 
 ## R3. Habilitar el servidor del proyecto sin pasos manuales
 
@@ -75,10 +75,16 @@ alternativas evaluadas.
   `python_files = ["test_*.py"]` y `addopts = ["--import-mode=importlib"]`. Dos
   `test_humo.py`, uno en cada paquete.
 - **Rationale**: `testpaths` acota la búsqueda a donde vive el código y la recorre de forma
-  recursiva por todas sus carpetas. Con `importlib` no se exigen nombres de archivo únicos
-  ni `__init__.py` en las carpetas de tests. Los dos archivos con el mismo nombre son la
-  prueba de ambas cosas: con el modo `prepend` por defecto, pytest fallaría con un error de
-  módulo duplicado.
+  recursiva por todas sus carpetas. Los dos `test_humo.py` en paquetes distintos demuestran
+  el descubrimiento en varias carpetas sin choque de nombres. Como viven en paquetes con
+  `__init__.py`, ese choque tampoco ocurriría con el modo `prepend`: se comprobó que los 4
+  tests pasan en ambos modos.
+
+  `importlib` se elige por dos motivos:
+  - No modifica `sys.path`, así que los tests importan el paquete instalado.
+  - Protege las carpetas de tests que no tengan `__init__.py`. En una prueba aparte, dos
+    `test_x.py` en carpetas sin `__init__.py` fallan con `prepend` y pasan con
+    `importlib`.
 - **Alternatives considered**: carpeta `tests/` espejo, que contradice la constitución
   (principio X) y la necesidad 3. `rootdir_conftest` con rutas, innecesario.
 

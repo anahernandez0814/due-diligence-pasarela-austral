@@ -1,4 +1,4 @@
-"""Test de humo: mismo nombre de archivo que en due_diligence, para probar importlib."""
+"""Test de humo: mismo nombre de archivo que en due_diligence, descubierto sin choque."""
 
 import sys
 from pathlib import Path

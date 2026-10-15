@@ -55,9 +55,11 @@ gh auth status               # muestra los scopes del token
 ```
 
 **Opción B: PAT clásico.** Créalo en GitHub, en *Settings → Developer settings → Personal
-access tokens (classic)*, con los scopes `repo` y `project`.
+access tokens (classic)*, con los scopes `repo` y `project`. Un PAT fine-grained queda como
+posible mejora: no siempre permite dar acceso a los Projects de usuario.
 
 **Definir la variable** a nivel de usuario y reiniciar la terminal, VS Code o Claude Code.
+No escribas el token en la línea de comandos: quedaría en el historial del shell.
 
 En Windows (PowerShell), con la opción A:
 
@@ -65,12 +67,39 @@ En Windows (PowerShell), con la opción A:
 [Environment]::SetEnvironmentVariable("GITHUB_PAT", (gh auth token), "User")
 ```
 
-Con un PAT clásico, sustituye `(gh auth token)` por el token entre comillas.
+Con esta opción la variable guarda una copia del token. Si vuelves a ejecutar
+`gh auth login` o `gh auth refresh`, repite el comando.
 
-En macOS o Linux, añade esta línea al perfil del shell (`~/.bashrc`, `~/.zshrc`):
+En Windows con un PAT clásico, pégalo cuando lo pida `Read-Host`, que no lo muestra ni lo
+guarda en el historial:
+
+```powershell
+$s = Read-Host "PAT" -AsSecureString
+[Environment]::SetEnvironmentVariable("GITHUB_PAT", [System.Net.NetworkCredential]::new('', $s).Password, "User")
+```
+
+En macOS o Linux con la opción A, añade esta línea al perfil del shell (`~/.bashrc`,
+`~/.zshrc`). El token se lee en cada sesión, así que no se desactualiza:
 
 ```bash
 export GITHUB_PAT="$(gh auth token)"
+```
+
+En macOS o Linux con un PAT clásico, guárdalo en el llavero del sistema y léelo desde el
+perfil, en vez de dejarlo en texto plano.
+
+En macOS, `-w` sin valor pide el token sin mostrarlo:
+
+```bash
+security add-generic-password -a "$USER" -s GITHUB_PAT -w
+export GITHUB_PAT="$(security find-generic-password -s GITHUB_PAT -w)"   # en el perfil
+```
+
+En Linux, con libsecret:
+
+```bash
+secret-tool store --label=GITHUB_PAT service github_pat
+export GITHUB_PAT="$(secret-tool lookup service github_pat)"   # en el perfil
 ```
 
 **Comprobarlo.** En una sesión nueva de Claude Code en la raíz del repositorio, ejecuta
@@ -78,7 +107,9 @@ export GITHUB_PAT="$(gh auth token)"
 
 **Si `github` falla con 401/403**, aplica la alternativa local por stdio descrita en
 [specs/001-ecosistema-base/contracts/mcp-json.md](specs/001-ecosistema-base/contracts/mcp-json.md).
-Necesita el binario `github-mcp-server` en el PATH.
+Necesita el binario `github-mcp-server` en el PATH. Configúrala solo para ti, en ámbito
+local (`claude mcp add-json github '<json>' --scope local`); no modifiques ni commitees el
+`.mcp.json` del equipo.
 
 ## Cómo se trabaja
 

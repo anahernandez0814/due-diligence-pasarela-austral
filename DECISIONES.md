@@ -38,7 +38,10 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   garantías con hooks (protección de secretos, bloqueo de datos con forma real, exigencia de
   especificación previa) llegan en el ticket #3. Mientras tanto:
   - El formateo con ruff es manual y se ejecuta antes de cada commit.
-  - `.env` se protege con la denegación de lectura y edición de `.claude/settings.json`.
+  - La protección de `.env` es parcial. La denegación de `.claude/settings.json` bloquea
+    Read y Edit sobre `.env` y los comandos `cat .env*` y `type .env*`. Otros comandos de
+    Bash (`head`, `grep`, `Get-Content`, `cp`) y variantes como `.env.local` quedan sin
+    cubrir hasta los hooks del ticket #3.
 - **Motivo**: el proyecto necesita trazabilidad desde el primer ticket, y las piezas que la
   automatizan son, a su vez, tickets del backlog.
 - **Alternativas descartadas**: esperar a tener la automatización para empezar, lo que

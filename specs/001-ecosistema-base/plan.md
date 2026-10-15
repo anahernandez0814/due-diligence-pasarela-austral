@@ -74,8 +74,10 @@ y las garantías con hooks de Claude Code (II: protección de secretos, bloqueo 
 forma real y exigencia de especificación previa) llegan en el ticket #3. Mientras tanto:
 
 - El formateo es manual (T018) y se ejecuta antes de cada commit.
-- La protección de `.env` se apoya en la denegación de lectura y edición que ya existe en
-  `.claude/settings.json`.
+- La protección de `.env` es parcial. La denegación de `.claude/settings.json` bloquea las
+  herramientas Read y Edit sobre `.env` y los comandos `cat .env*` y `type .env*`. Otros
+  comandos de Bash (`head`, `grep`, `Get-Content`, `cp`) y variantes como `.env.local`
+  siguen sin cubrir hasta los hooks del ticket #3.
 
 Esta desviación se recoge también en la entrada de transición de `DECISIONES.md` (T022).
 
@@ -130,9 +132,15 @@ specs/001-ecosistema-base/
 
 **Structure Decision**: un solo proyecto Python con src layout y dos paquetes, que son las
 dos piezas que exige la constitución: el sistema multi-agente y el servidor MCP propio.
-Cada paquete tiene su `test_humo.py`. Que los dos archivos se llamen igual demuestra a la
-vez que pytest descubre tests en varias carpetas y que `--import-mode=importlib` evita el
-choque de nombres. No hay carpeta `tests/`.
+Cada paquete tiene su `test_humo.py`. Que los dos archivos se llamen igual demuestra que
+pytest descubre tests en varias carpetas sin choque de nombres. `--import-mode=importlib`
+no modifica `sys.path` y protege las futuras carpetas de tests sin `__init__.py`
+([research.md](research.md), R5). No hay carpeta `tests/`.
+
+**Idioma de los encabezados**: los encabezados que vienen de las plantillas de Spec Kit
+("User Scenarios & Testing", "Decision", "Rationale", el checklist de calidad) se dejan en
+inglés para no romper los comandos de Spec Kit. Todo el contenido está en español
+(FR-013).
 
 ## Complexity Tracking
 

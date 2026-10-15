@@ -61,10 +61,13 @@ especificado, plan o analyze. Recibido: «$ARGUMENTS»". No publica nada.
 
      Nunca reemplaza ni recorta lo publicado antes.
    - Si no existe, `mcp__github__add_issue_comment` con el marcador como primera línea y
-     un encabezado según el argumento:
-     - `especificado`: `## Lo especificado (`/speckit-specify`)`;
-     - `plan`: `## Plan del ticket (`/speckit-plan`)`;
-     - `analyze`: `## Análisis de consistencia (`/speckit-analyze`)`.
+     el encabezado exacto según el argumento:
+
+     ```markdown
+     especificado → ## Lo especificado (`/speckit-specify`)
+     plan         → ## Plan del ticket (`/speckit-plan`)
+     analyze      → ## Análisis de consistencia (`/speckit-analyze`)
+     ```
 
 ## Salida
 

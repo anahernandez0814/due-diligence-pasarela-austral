@@ -53,8 +53,10 @@ fusionados. No modifica archivos del repositorio y nunca mueve tarjetas.
 1. `mcp__github__projects_list` con `method: list_project_items`,
    `field_names: ["Status"]` y `query: "is:issue state:closed"`, recorriendo todas las
    páginas.
-2. Para cada issue con `state_reason: completed`, se excluyen los `not_planned`. Revisa sus
-   comentarios con `mcp__github__issue_read` (`method: get_comments`). Si ya hay uno con
+2. Para cada issue con `content.state_reason: completed` (viene en cada ítem de
+   `list_project_items`), se excluyen los `not_planned`. Revisa sus comentarios con
+   `mcp__github__issue_read` (`method: get_comments`), recorriendo todas las páginas. Si ya
+   hay uno con
    `<!-- ciclo-tickets:cierre -->`, no hace nada con ese issue. Si no:
    - **Status `Done`**: lee el issue (`method: get`) y publica con
      `mcp__github__add_issue_comment`:
@@ -70,8 +72,9 @@ fusionados. No modifica archivos del repositorio y nunca mueve tarjetas.
      Verificado sin mover tarjetas a mano.
      ```
 
-     El PR sale de `closed_by_pull_requests`. Si quedan pendientes que pasan a otros
-     tickets, se añaden en una sección "Lo pendiente".
+     El PR sale de `closed_by_pull_requests`. Si viene vacío, porque el issue se cerró sin
+     PR, la línea dice "cerrado sin PR asociado" y se anota en el informe final. Si quedan
+     pendientes que pasan a otros tickets, se añaden en una sección "Lo pendiente".
    - **Otro Status**: lo anota para el informe final. No mueve la tarjeta y no comenta,
      para que la siguiente ejecución lo vuelva a revisar.
 3. Si `list_project_items` o `get_comments` fallan, se detiene e informa: el MCP no está
@@ -105,13 +108,14 @@ donde estaba.
         Un ticket ya en `In Progress` no se retoma sin que la persona lo pida.
 4. Calcula el nombre corto, NNN y la rama (ver "Nombre corto" más abajo). La rama es
    `NNN-<nombre-corto>`.
-5. `git ls-remote --heads origin NNN-<nombre-corto>` no devuelve nada. Si la rama existe
-   en `origin`, se detiene.
+5. `git ls-remote --heads origin 'refs/heads/NNN-*'` no devuelve nada. Si existe en
+   `origin` cualquier rama con ese NNN, aunque tenga otro nombre corto, se detiene.
 6. `git switch main` y después `git pull --ff-only`.
 7. Ya sobre `main` actualizado:
-   - `git branch --list NNN-<nombre-corto>` no devuelve nada.
-   - Con Glob, no existe ninguna carpeta `specs/NNN-*` (con el mismo NNN, sea cual sea el
-     nombre).
+   - `git branch --list 'NNN-*'` no devuelve nada.
+   - No existe ninguna carpeta `specs/NNN-*`, con el mismo NNN y cualquier nombre. Glob
+     no devuelve carpetas, así que usa Glob con `specs/NNN-*/**`: si devuelve algún
+     archivo, la carpeta existe y la skill se detiene.
 
 Si fallan los pasos 6 o 7, vuelve con `git switch <rama guardada>` e informa. Hasta aquí no
 se ha movido el ticket ni se ha comentado nada.
@@ -141,8 +145,8 @@ En este orden:
 1. `mcp__github__projects_write` con `method: update_project_item`, `owner:
    anahernandez0814`, `project_number: 1`, el `item_id` del ítem y `updated_field:
    {"name": "Status", "value": "In Progress"}`.
-2. Comentario de inicio. Antes, `mcp__github__issue_read` con `method: get_comments`: si ya
-   hay un comentario que contiene `<!-- ciclo-tickets:inicio -->`, no publica otro. Si no,
+2. Comentario de inicio. Antes, `mcp__github__issue_read` con `method: get_comments`,
+   recorriendo todas las páginas: si ya hay un comentario que contiene `<!-- ciclo-tickets:inicio -->`, no publica otro. Si no,
    `mcp__github__add_issue_comment` con este cuerpo:
 
    ```markdown
@@ -169,7 +173,8 @@ En este orden:
    `specs/NNN-<nombre-corto>/spec.md`. Si no, lo informa como error.
 6. El comentario de lo especificado lo publica el hook `after_specify` de
    `.specify/extensions.yml`, al terminar `/speckit-specify`. La skill **no** lo publica.
-   Comprueba con `get_comments` que existe un comentario con
+   Comprueba con `mcp__github__issue_read` (`method: get_comments`, todas las páginas) que
+   existe un comentario con
    `<!-- ciclo-tickets:especificado -->`. Si falta, informa que el hook no se ejecutó y
    sugiere `/comentar-avance especificado`.
 

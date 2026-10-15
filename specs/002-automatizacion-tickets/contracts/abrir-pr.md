@@ -41,11 +41,15 @@ ticket.
 1. La rama actual no es `main` y cumple `^(\d{3})-[a-z0-9-]+$`; N = `int(NNN)`.
 2. `git status --porcelain` está vacío.
 3. Existe exactamente una carpeta `specs/NNN-*`, y `spec.md`, `plan.md` y `tasks.md`
-   están en `HEAD` (`git cat-file -e HEAD:<ruta>`). Si falta alguno, lo nombra.
+   están en `HEAD` (`git cat-file -e HEAD:<ruta>`). Si falta alguno, lo nombra. Glob no
+   devuelve carpetas, así que la carpeta se deduce de Glob `specs/NNN-*/*`.
 4. El issue #N existe y está abierto.
 5. `list_pull_requests` con `head: anahernandez0814:<rama>` y `state: open` no devuelve
    ninguno. Si hay uno, lo enlaza y termina.
 6. El campo Status tiene la opción exacta "In review".
+7. El ítem de #N está en el Project. Se busca con `list_project_items` y
+   `query: "is:issue"`, recorriendo todas las páginas, y se guarda su `item_id` para la
+   acción 3. Así, que el ticket no esté en el Project se detecta antes del push.
 
 ### 2. Revisión previa (paso aislado, de transición)
 
@@ -81,7 +85,7 @@ se haga la revisión, solo de su veredicto.
 1. `git push -u origin <rama>`. Si falla, se detiene.
 2. `create_pull_request` con `head: <rama>`, `base: main`, título
    `<título del issue> (#N)` y descripción en español:
-   - Resumen de lo implementado, a partir de `spec.md`, `plan.md` y `git log main..HEAD`.
+   - Resumen de lo implementado, a partir de `spec.md`, `plan.md` y `git log origin/main..HEAD`.
    - Criterios de aceptación del issue y cómo se verificaron.
    - Revisión previa: veredicto y hallazgos no bloqueantes.
    - Desviaciones o pendientes.

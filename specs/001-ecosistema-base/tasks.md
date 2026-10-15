@@ -173,7 +173,7 @@ de 5 minutos (SC-001), y `DECISIONES.md` contiene las dos decisiones exigidas (F
 - [X] T026 Revisión independiente antes del PR: lanzar un subagente genérico de solo lectura, en contexto separado, que revise el diff `main...001-ecosistema-base` frente a la spec, el plan y los 5 criterios de aceptación del issue #1. Aplicar las correcciones que proponga. La revisión de cumplimiento de reglas de negocio (principio X) no aplica porque el ticket no implementa los principios I a V; se deja anotado en el PR
 - [X] T027 Subir la rama con `git push -u origin 001-ecosistema-base` y abrir el PR hacia `main` con la descripción en español, la lista de criterios de aceptación verificados y `Closes #1`
 - [X] T028 Mover el issue #1 a "In review" en el GitHub Project y comentar en el issue lo implementado, lo decidido y lo pendiente. El comentario debe aclarar que `GITHUB_PAT` puede ser el token de `gh auth token` o un PAT clásico, ambos con los scopes `repo` y `project`, y corregir así el comentario del plan, que decía solo "PAT clásico". Usar el MCP de GitHub si T010 pasó; si no, `gh`
-- [x] T029 Después del merge del PR: VERIFICAR, sin mover a mano, que el workflow "Item closed" del GitHub Project pasó el issue #1 a "Done" al cerrarse con `Closes #1`, y comentar el cierre en el issue. Si no ocurrió, reportarlo en vez de moverlo manualmente
+- [X] T029 Después del merge del PR: VERIFICAR, sin mover a mano, que el workflow "Item closed" del GitHub Project pasó el issue #1 a "Done" al cerrarse con `Closes #1`, y comentar el cierre en el issue. Si no ocurrió, reportarlo en vez de moverlo manualmente
 
 ---
 

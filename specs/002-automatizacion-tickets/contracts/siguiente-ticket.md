@@ -63,10 +63,10 @@ rechazado (por ejemplo, Q2: `/siguiente-ticket 2`) deje la sesión en la rama do
      Con el filtro `state:open`, un issue cerrado (Q3: `/siguiente-ticket 1`) no aparece, y
      la skill diría "no está en el Project" en vez de "está cerrado".
 4. Nombre corto según R7, NNN con tres dígitos y rama `NNN-<nombre-corto>`.
-5. La rama no existe en `origin` (`git ls-remote --heads origin NNN-<nombre-corto>`).
+5. No existe en `origin` ninguna rama con ese NNN (`git ls-remote --heads origin 'refs/heads/NNN-*'`).
 6. `git switch main` y `git pull --ff-only` sin error.
-7. Ya sobre `main` actualizado: la rama no existe en local (`git branch --list`) y no hay
-   ninguna carpeta `specs/NNN-*`.
+7. Ya sobre `main` actualizado: no existe en local ninguna rama `NNN-*` (`git branch --list 'NNN-*'`) y no hay
+   ninguna carpeta `specs/NNN-*` (Glob `specs/NNN-*/**` sin resultados; Glob no devuelve carpetas).
 
 Si fallan los pasos 6 o 7, vuelve a la rama guardada en el paso 1 (`git switch <rama>`) y
 lo informa. Hasta aquí no se ha movido el ticket ni se ha comentado nada.

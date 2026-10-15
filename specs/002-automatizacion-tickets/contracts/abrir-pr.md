@@ -5,7 +5,7 @@ Archivo: `.claude/commands/abrir-pr.md`.
 ## Frontmatter
 
 ```yaml
-description: Verifica spec, plan y tareas del ticket, ejecuta la revisión previa, sube la rama, abre el PR hacia main con Closes #N, mueve el ticket a In review y comenta en el issue.
+description: "Verifica spec, plan y tareas del ticket, ejecuta la revisión previa, sube la rama, abre el PR hacia main con Closes #N, mueve el ticket a In review y comenta en el issue."
 argument-hint: ""
 allowed-tools:
   - Bash(git branch:*)

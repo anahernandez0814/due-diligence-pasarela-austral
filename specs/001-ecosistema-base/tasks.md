@@ -29,9 +29,9 @@ verificable por separado.
 
 **Purpose**: preparar la rama y los finales de línea antes de crear archivos nuevos.
 
-- [ ] T001 Confirmar que la rama activa es `001-ecosistema-base`, que contiene los commits de spec, plan y tasks, y que el issue #1 está en "In Progress" en el GitHub Project (`gh project item-list 1 --owner anahernandez0814`)
-- [ ] T002 Crear `.gitattributes` en la raíz con la línea exacta `* text=auto eol=lf` (research R7)
-- [ ] T003 Normalizar los archivos ya versionados con `git add --renormalize .` y hacer commit de `.gitattributes` y los archivos normalizados (mensaje `chore: finales de línea LF con .gitattributes`); comprobar después que `git ls-files --eol | grep -v "i/lf" | grep -v "i/none" | grep -v "i/-text"` no devuelve nada
+- [X] T001 Confirmar que la rama activa es `001-ecosistema-base`, que contiene los commits de spec, plan y tasks, y que el issue #1 está en "In Progress" en el GitHub Project (`gh project item-list 1 --owner anahernandez0814`)
+- [X] T002 Crear `.gitattributes` en la raíz con la línea exacta `* text=auto eol=lf` (research R7)
+- [X] T003 Normalizar los archivos ya versionados con `git add --renormalize .` y hacer commit de `.gitattributes` y los archivos normalizados (mensaje `chore: finales de línea LF con .gitattributes`); comprobar después que `git ls-files --eol | grep -v "i/lf" | grep -v "i/none" | grep -v "i/-text"` no devuelve nada
 
 **Checkpoint**: el índice está en LF; los archivos nuevos entran ya normalizados.
 
@@ -41,7 +41,7 @@ verificable por separado.
 
 **Purpose**: comprobar las exclusiones de git de las que dependen todas las historias.
 
-- [ ] T004 Verificar con `git check-ignore -v CLAUDE.local.md .claude/settings.local.json .env` que los tres archivos están ignorados por `.gitignore` (FR-012). Si falta alguno, añadir la regla en `.gitignore` sin quitar las existentes
+- [X] T004 Verificar con `git check-ignore -v CLAUDE.local.md .claude/settings.local.json .env` que los tres archivos están ignorados por `.gitignore` (FR-012). Si falta alguno, añadir la regla en `.gitignore` sin quitar las existentes
 
 **Checkpoint**: los archivos personales y de secretos no pueden entrar al repositorio.
 
@@ -58,14 +58,14 @@ copiado.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Crear `CLAUDE.md` en la raíz, en español y de 40 líneas como máximo, con estas secciones (data-model, "Convenciones del equipo"):
+- [X] T005 [US1] Crear `CLAUDE.md` en la raíz, en español y de 40 líneas como máximo, con estas secciones (data-model, "Convenciones del equipo"):
   - **Idioma**: español en mensajes y documentación.
   - **Flujo**: "Una rama `NNN-nombre-corto` por ticket desde `main`; PR hacia `main` con `Closes #N`", y spec, plan y tareas en `specs/` antes de escribir código.
   - **Comandos**: `uv sync`, `uv run ruff check .`, `uv run ruff format .`, `uv run pytest`.
   - **Mapa del repositorio**: `src/`, `specs/`, `docs/`, `.specify/`, `.claude/`.
   - **Personal**: las preferencias van en `CLAUDE.local.md` y `.claude/settings.local.json`, que no se versionan.
   - **Constitución**: la línea `@.specify/memory/constitution.md`, sin copiar ningún principio.
-- [ ] T006 [US1] Validar `CLAUDE.md`: la importación aparece exactamente una vez, el archivo tiene 40 líneas como máximo y no contiene el texto de ningún principio de `.specify/memory/constitution.md` (SC-005)
+- [X] T006 [US1] Validar `CLAUDE.md`: la importación aparece exactamente una vez, el archivo tiene 40 líneas como máximo y no contiene el texto de ningún principio de `.specify/memory/constitution.md` (SC-005)
 
 **Checkpoint**: US1 verificable por separado; el MVP del ticket queda entregado.
 

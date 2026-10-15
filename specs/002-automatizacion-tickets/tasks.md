@@ -35,12 +35,12 @@ de los issues #2 y #3.
 
 **Purpose**: confirmar el punto de partida del ticket.
 
-- [ ] T001 Confirmar el punto de partida:
+- [X] T001 Confirmar el punto de partida:
   - La rama activa es `002-automatizacion-tickets`.
   - `git log --oneline main..HEAD` contiene los commits de spec, plan, ajustes del plan y tareas.
   - `git status --porcelain` está vacío.
   - El issue #2 está en "In Progress": `mcp__github__projects_list`, `list_project_items`, `field_names: ["Status"]`.
-- [ ] T002 Confirmar que no existen `.specify/extensions.yml`, `.claude/commands/` ni `.claude/skills/siguiente-ticket/`. Confirmar también que `git diff --stat main -- .claude/skills/speckit-*` está vacío: las skills de Spec Kit no se editan en este ticket.
+- [X] T002 Confirmar que no existen `.specify/extensions.yml`, `.claude/commands/` ni `.claude/skills/siguiente-ticket/`. Confirmar también que `git diff --stat main -- .claude/skills/speckit-*` está vacío: las skills de Spec Kit no se editan en este ticket.
 
 **Checkpoint**: rama limpia y ninguna pieza del flujo creada aún.
 
@@ -50,7 +50,7 @@ de los issues #2 y #3.
 
 **Purpose**: confirmar los nombres reales de los que dependen la skill y los comandos.
 
-- [ ] T003 Leer con `mcp__github__projects_list` (`list_project_fields`, Project #1 de `anahernandez0814`) el campo Status. Confirmar que tiene exactamente las opciones `Todo`, `In Progress`, `In review` y `Done`, sin variantes de mayúsculas ni espacios (data-model: "La opción de Status se busca por nombre exacto en `list_project_fields`; si no está, el flujo se detiene"). Si difieren, detenerse y reportarlo antes de escribir nada.
+- [X] T003 Leer con `mcp__github__projects_list` (`list_project_fields`, Project #1 de `anahernandez0814`) el campo Status. Confirmar que tiene exactamente las opciones `Todo`, `In Progress`, `In review` y `Done`, sin variantes de mayúsculas ni espacios (data-model: "La opción de Status se busca por nombre exacto en `list_project_fields`; si no está, el flujo se detiene"). Si difieren, detenerse y reportarlo antes de escribir nada.
 
 **Checkpoint**: los nombres que escribirán la skill y los comandos coinciden con el Project.
 
@@ -66,11 +66,11 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Crear `.claude/skills/siguiente-ticket/SKILL.md`:
+- [X] T004 [US1] Crear `.claude/skills/siguiente-ticket/SKILL.md`:
   - Frontmatter exacto de [contracts/siguiente-ticket.md](contracts/siguiente-ticket.md): `name`, `description`, `argument-hint: "[número de issue]"` y la lista de `allowed-tools` (git status/switch/pull/branch/ls-remote, Read, Glob, Skill y las cinco herramientas `mcp__github__*`).
   - Sin `context: fork` (research R9).
   - Sección "Entrada": sin argumento, el menor número en Todo; con un entero N, el issue #N; con cualquier otro argumento, muestra el uso y se detiene.
-- [ ] T005 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir el "Paso 1, comprobaciones" en el orden exacto del contrato:
+- [X] T005 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir el "Paso 1, comprobaciones" en el orden exacto del contrato:
   1. `git status --porcelain` vacío, guardando antes la rama actual con `git branch --show-current`.
   2. `list_project_fields` con la opción exacta "In Progress".
   3. Ticket abierto, en el Project y en Todo. Si no queda ninguno en Todo, lo informa y termina.
@@ -80,14 +80,14 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
   7. Sobre `main`: `git branch --list NNN-<nombre-corto>` vacío y ninguna carpeta `specs/NNN-*`.
 
   Si fallan 6 o 7, `git switch <rama guardada>` y lo informa. Dejar escrito que hasta aquí no se mueve ni se comenta nada.
-- [ ] T006 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir la regla del nombre corto (research R7):
+- [X] T006 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir la regla del nombre corto (research R7):
   - Quitar tildes y diacríticos y pasar a minúsculas.
   - Cambiar lo que no sea `a-z0-9` por espacios.
   - Quitar las palabras vacías: a, al, con, de, del, el, en, la, las, los, para, por, un, una, y.
   - Tomar las tres primeras palabras y unirlas con `-`.
   - NNN es el número del issue con tres dígitos.
   - Incluir los ejemplos: "Guardas de Claude Code: hooks, permisos y reglas por ruta" → `guardas-claude-code`; "Interfaz de chat" → `interfaz-chat`.
-- [ ] T007 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir el "Paso 2, acciones", en este orden:
+- [X] T007 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir el "Paso 2, acciones", en este orden:
   1. `mcp__github__projects_write` `update_project_item` con `updated_field {"name": "Status", "value": "In Progress"}`.
   2. Comentario `inicio` con la plantilla de [contracts/comentarios.md](contracts/comentarios.md), que empieza con `<!-- ciclo-tickets:inicio -->` e incluye la línea "Siguiente: …". Antes de publicarlo, `get_comments` comprueba que no exista ya uno con ese marcador.
   3. `git switch -c NNN-<nombre-corto>`.
@@ -96,7 +96,7 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
   6. Comprobar que el issue tiene el comentario `especificado`. Si falta, informarlo y sugerir `/comentar-avance especificado`, **sin publicarlo**.
 
   Si algo falla después del paso 1, decir el paso exacto y que el ticket quedó en "In Progress", sin revertir en silencio.
-- [ ] T008 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir:
+- [X] T008 [US1] En `.claude/skills/siguiente-ticket/SKILL.md`, escribir:
   - La "Secuencia del ticket": specify → clarify (solo con marcadores `[NEEDS CLARIFICATION]`) → plan → tasks → analyze → implement → converge (solo si quedan brechas) → `/abrir-pr`.
   - Los recordatorios:
     - Los hooks de `.specify/extensions.yml` publican los comentarios.
@@ -119,7 +119,7 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
 
 ### Implementation for User Story 2
 
-- [ ] T009 [P] [US2] Crear `.claude/commands/abrir-pr.md` con:
+- [X] T009 [P] [US2] Crear `.claude/commands/abrir-pr.md` con:
   - El frontmatter exacto de [contracts/abrir-pr.md](contracts/abrir-pr.md), incluidos `Agent`, `Bash(git fetch:*)` y `Bash(git diff:*)`.
   - La sección "1. Comprobaciones":
     1. Rama distinta de `main` que cumple `^(\d{3})-[a-z0-9-]+$`.
@@ -130,12 +130,12 @@ comentario de inicio y tiene rama y carpeta de specs con el número del issue.
     6. Opción exacta "In review".
 
   Si alguna falla: sin push, sin PR y sin cambio de estado.
-- [ ] T010 [US2] En `.claude/commands/abrir-pr.md`, escribir la sección "2. Revisión previa" como bloque aislado, con un encabezado que diga que el ticket #4 la reemplaza por `revisar-codigo`, `auditar-cumplimiento` y su puerta mecánica:
+- [X] T010 [US2] En `.claude/commands/abrir-pr.md`, escribir la sección "2. Revisión previa" como bloque aislado, con un encabezado que diga que el ticket #4 la reemplaza por `revisar-codigo`, `auditar-cumplimiento` y su puerta mecánica:
   1. `git fetch origin main` y `git diff origin/main...HEAD`.
   2. Subagente de tipo `Plan` en contexto separado, con la instrucción de no ejecutar comandos con efectos. Recibe el diff, `spec.md`, `plan.md`, `tasks.md`, los criterios de aceptación del issue y la constitución.
   3. Devuelve un veredicto (aprobado, aprobado con cambios o bloqueado) y los hallazgos con severidad (bloqueante, importante o menor), archivo y motivo.
   4. Con algún bloqueante, se detiene sin push.
-- [ ] T011 [US2] En `.claude/commands/abrir-pr.md`, escribir la sección "3. Acciones":
+- [X] T011 [US2] En `.claude/commands/abrir-pr.md`, escribir la sección "3. Acciones":
   1. `git push -u origin <rama>`.
   2. `create_pull_request` con título `<título del issue> (#N)` y descripción en español con: resumen, criterios de aceptación verificados, "Revisión previa" (veredicto y hallazgos no bloqueantes), desviaciones y pendientes, `Closes #N` y la línea final exacta `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
   3. `update_project_item` a "In review".
@@ -156,13 +156,13 @@ encontrado, sin editar sus skills.
 
 ### Implementation for User Story 3
 
-- [ ] T012 [P] [US3] Crear `.claude/commands/comentar-avance.md` según [contracts/comentar-avance.md](contracts/comentar-avance.md):
+- [X] T012 [P] [US3] Crear `.claude/commands/comentar-avance.md` según [contracts/comentar-avance.md](contracts/comentar-avance.md):
   - Frontmatter con `argument-hint: "especificado | plan | analyze"` y `allowed-tools` (Read, `Bash(git branch:*)`, `issue_read`, `add_issue_comment`, `update_issue_comment`).
   - Con un argumento distinto de esos tres, incluido el vacío, se detiene diciendo que "el argumento no llegó".
   - N sale de `.specify/feature.json` y debe coincidir con la rama actual.
   - Contenido por tipo, según el contrato.
   - Si existe un comentario con el mismo marcador, se actualiza con `update_issue_comment`: conserva el cuerpo anterior completo y añade al final una sección `### Actualización <fecha>` con lo nuevo. Si no existe, se crea.
-- [ ] T013 [P] [US3] Crear `.specify/extensions.yml` con el contenido exacto de [contracts/comentar-avance.md](contracts/comentar-avance.md): `installed: []` y los hooks `after_specify` y `after_clarify` (`comentar-avance especificado`), `after_plan` (`comentar-avance plan`) y `after_analyze` (`comentar-avance analyze`), todos con `extension: ciclo-tickets`, `enabled: true`, `optional: false`, `priority: 10` y `condition: null`. Validar que el YAML se lee: `"/c/Users/ana.hernandez/AppData/Roaming/uv/tools/specify-cli/Scripts/python.exe" -c "import yaml,sys; print(yaml.safe_load(open('.specify/extensions.yml', encoding='utf-8'))['hooks'].keys())"` debe listar las cuatro claves.
+- [X] T013 [P] [US3] Crear `.specify/extensions.yml` con el contenido exacto de [contracts/comentar-avance.md](contracts/comentar-avance.md): `installed: []` y los hooks `after_specify` y `after_clarify` (`comentar-avance especificado`), `after_plan` (`comentar-avance plan`) y `after_analyze` (`comentar-avance analyze`), todos con `extension: ciclo-tickets`, `enabled: true`, `optional: false`, `priority: 10` y `condition: null`. Validar que el YAML se lee: `"/c/Users/ana.hernandez/AppData/Roaming/uv/tools/specify-cli/Scripts/python.exe" -c "import yaml,sys; print(yaml.safe_load(open('.specify/extensions.yml', encoding='utf-8'))['hooks'].keys())"` debe listar las cuatro claves.
 
 **Checkpoint**: desde este momento, los comandos de Spec Kit de esta rama disparan los hooks.
 
@@ -178,7 +178,7 @@ después del merge.
 
 ### Implementation for User Story 4
 
-- [ ] T014 [US4] En `.claude/skills/siguiente-ticket/SKILL.md` (depende de T004–T008), escribir el "Paso 0, verificación posterior al merge" antes del paso 1:
+- [X] T014 [US4] En `.claude/skills/siguiente-ticket/SKILL.md` (depende de T004–T008), escribir el "Paso 0, verificación posterior al merge" antes del paso 1:
   - `list_project_items` con `query: "is:issue state:closed"` y `field_names: ["Status"]`.
   - Para cada issue con `state_reason: completed` sin comentario `<!-- ciclo-tickets:cierre -->`:
     - Con Status Done: comentario `cierre` con la plantilla de [contracts/comentarios.md](contracts/comentarios.md) (PR que lo cerró, `closed_at`, `updated_at` del ítem).
@@ -186,7 +186,7 @@ después del merge.
   - Se excluyen los cerrados como `not_planned`.
   - Con el Todo vacío, hacer el paso 0 y luego informar que no quedan tickets.
   - Si `list_project_items` o `get_comments` fallan, detenerse e informarlo (FR-021), sin seguir con el arranque.
-- [ ] T015 [P] [US4] En `DECISIONES.md`:
+- [X] T015 [P] [US4] En `DECISIONES.md`:
   - Añadir la entrada 3, "Ciclo de tickets automatizado", **breve: unas 15 líneas, una por decisión, con el detalle remitido a `research.md`** (R1, R4, R5, R6, R9). El enunciado limita `DECISIONES.md` a dos páginas para las 11 necesidades, y el ticket #14 todavía tiene que completarlo. Recoge los puntos de plan.md, sección "Cambios en la documentación":
     - Done por "Item closed" y "Pull request merged" (FR-016).
     - Hooks de Spec Kit en `after_specify`, `after_clarify`, `after_plan` y `after_analyze`, y su alcance real: instrucciones que el modelo ejecuta, no hooks de Claude Code; sugerido, no garantizado, aceptable porque los comentarios no están en las garantías de II.
@@ -208,13 +208,13 @@ después del merge.
 **Purpose**: documentación breve, puertas de calidad, marcadores y validación en el orden
 que exige el paso 0, y apertura del PR.
 
-- [ ] T016 [P] En `CLAUDE.md`, sustituir la línea "Mueve el ticket a In Progress al empezar y a In review al abrir el PR." por "Cada ticket se arranca con `/siguiente-ticket` y se cierra con `/abrir-pr`; no se mueven tarjetas a mano." Comprobar que `wc -l CLAUDE.md` da 40 como máximo (hoy 37) y que la importación `@.specify/memory/constitution.md` sigue presente una vez.
-- [ ] T017 [P] En `README.md`, añadir una sección breve "Ciclo de un ticket", con la secuencia `/siguiente-ticket` → specify → (clarify) → plan → tasks → analyze → implement → (converge) → `/abrir-pr` → merge, y una línea por pieza: skill, hooks de `.specify/extensions.yml` y `/abrir-pr`. Incluir que el cierre de cada ticket lo registra el siguiente `/siguiente-ticket` y que, tras el merge del último ticket, se ejecuta una vez más. Sin repetir `DECISIONES.md`; la ampliación es del ticket #14.
-- [ ] T018 Puertas de calidad:
+- [X] T016 [P] En `CLAUDE.md`, sustituir la línea "Mueve el ticket a In Progress al empezar y a In review al abrir el PR." por "Cada ticket se arranca con `/siguiente-ticket` y se cierra con `/abrir-pr`; no se mueven tarjetas a mano." Comprobar que `wc -l CLAUDE.md` da 40 como máximo (hoy 37) y que la importación `@.specify/memory/constitution.md` sigue presente una vez.
+- [X] T017 [P] En `README.md`, añadir una sección breve "Ciclo de un ticket", con la secuencia `/siguiente-ticket` → specify → (clarify) → plan → tasks → analyze → implement → (converge) → `/abrir-pr` → merge, y una línea por pieza: skill, hooks de `.specify/extensions.yml` y `/abrir-pr`. Incluir que el cierre de cada ticket lo registra el siguiente `/siguiente-ticket` y que, tras el merge del último ticket, se ejecuta una vez más. Sin repetir `DECISIONES.md`; la ampliación es del ticket #14.
+- [X] T018 Puertas de calidad:
   - `uv run ruff check .`, `uv run ruff format --check .` y `uv run pytest` en verde.
   - `git grep -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9-]{20,}"` sin resultados (principio VIII).
   - `git diff --stat main -- .claude/skills/speckit-*` vacío.
-- [ ] T019 Hacer commit de la implementación por partes lógicas, con mensajes en español: skill, comandos, `extensions.yml`, documentación. `git status --porcelain` debe quedar vacío.
+- [X] T019 Hacer commit de la implementación por partes lógicas, con mensajes en español: skill, comandos, `extensions.yml`, documentación. `git status --porcelain` debe quedar vacío.
 - [ ] T020 **Requisito previo de Q1.** Con `mcp__github__update_issue_comment`, editar el comentario de cierre del issue #1 (id `6191823695`) y añadir `<!-- ciclo-tickets:cierre -->` como primera línea, sin cambiar el resto del texto. Comprobar con `issue_read get_comments` que el marcador está.
 - [ ] T021 **Requisito previo de Q1.** Con `mcp__github__update_issue_comment`, editar el comentario de inicio del issue #2 (id `6192325009`) y añadir `<!-- ciclo-tickets:inicio -->` como primera línea, sin cambiar el resto. Comprobar que el issue #2 tiene ya los marcadores `inicio`, `especificado`, `plan` y `analyze`; este último lo publica a mano `/speckit-analyze` antes de implementar.
 - [ ] T022 Abrir una sesión nueva de Claude Code en la rama, para que se carguen la skill y los comandos nuevos.

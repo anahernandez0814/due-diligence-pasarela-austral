@@ -24,7 +24,10 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 
 - **Necesidad o tema**: trazabilidad de cada ticket (constitución IX) antes de que exista la
   automatización del ciclo (#2) y la revisión previa al PR (#4).
-- **Decisión**: hasta fusionar #2 y #4, cada ticket, incluido #1, sigue el ciclo a mano:
+- **Decisión**: #1 y #2 siguen el ciclo a mano. Desde #3, el arranque, los comentarios y el
+  PR pasan a `/siguiente-ticket`, los hooks de Spec Kit y `/abrir-pr` (entrada 3). La
+  revisión previa sigue siendo de transición hasta #4, pero ahora la lanza `/abrir-pr`. El
+  ciclo manual era:
   - Rama propia `NNN-nombre-corto` creada desde `main` actualizado; nunca se commitea en
     `main`.
   - `/speckit-specify` con el cuerpo del issue y `--number N`, luego `/speckit-plan` y
@@ -46,3 +49,17 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   automatizan son, a su vez, tickets del backlog.
 - **Alternativas descartadas**: esperar a tener la automatización para empezar, lo que
   dejaría los primeros tickets sin historial en GitHub.
+
+## 3. Ciclo de tickets automatizado
+
+- **Necesidad o tema**: estado del Project sincronizado y avance visible en el issue sin mover tarjetas (necesidad 10, constitución IX). Detalle en `specs/002-automatizacion-tickets/research.md`.
+- **Arranque**: skill `siguiente-ticket`. Comprueba todo antes de mover el ticket y luego mueve → comenta → rama → `/speckit-specify` (R3).
+- **Número exacto**: `--number` no es estricto, así que la skill pasa `SPECIFY_FEATURE_DIRECTORY=specs/NNN-<nombre>` y verifica `.specify/feature.json` (R1).
+- **Sin `context: fork`**: `/speckit-specify` puede preguntar y su resultado debe quedar en la conversación principal; `context: fork` se usará en las revisiones de #4 (R9).
+- **Comentarios de avance**: hooks obligatorios de Spec Kit en `.specify/extensions.yml` (`after_specify`, `after_clarify`, `after_plan`, `after_analyze`) que ejecutan `/comentar-avance`. No se editan las skills de Spec Kit, que se sobrescriben al actualizar (R4).
+- **Alcance de esos hooks**: son instrucciones que el modelo ejecuta al terminar el comando, no hooks de Claude Code. Mejoran la constancia, pero no la garantizan. Se acepta porque los comentarios no están entre las garantías del principio II (R4).
+- **Marcadores**: cada comentario lleva `<!-- ciclo-tickets:<tipo> -->` para no duplicarse. Las actualizaciones amplían el comentario y conservan lo anterior (R6).
+- **PR**: `/abrir-pr` comprueba spec, plan y tareas, ejecuta una revisión previa aislada (subagente `Plan`, de transición hasta #4), abre el PR con `Closes #N` y mueve el ticket a In review (R9).
+- **Done**: lo hacen los workflows nativos del Project, "Item closed" y "Pull request merged"; nadie mueve tarjetas (FR-016).
+- **Verificación posterior al merge**: es el paso 0 de cada `/siguiente-ticket`, que comenta el cierre o lo reporta sin mover la tarjeta. Nunca es una tarea de `tasks.md`, para no dejar cambios en una rama fusionada (R5).
+- **Alternativas descartadas**: confiar en `--number`, editar las skills de Spec Kit, una GitHub Action para el cierre y un issue de prueba para validar (R1, R4, R5, R10).

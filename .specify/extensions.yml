@@ -1,0 +1,42 @@
+# Hooks locales del ciclo de tickets (ticket #2). Los comandos de Spec Kit leen este
+# archivo al terminar y ejecutan los hooks con optional: false. Son instrucciones que el
+# modelo ejecuta, no hooks de Claude Code: mejoran la constancia, no la garantizan.
+# Detalle: specs/002-automatizacion-tickets/research.md (R4).
+installed: []
+hooks:
+  after_specify:
+    - extension: ciclo-tickets
+      command: comentar-avance especificado
+      enabled: true
+      optional: false
+      priority: 10
+      prompt: "Comentar en el issue lo especificado"
+      description: "Comentario de lo especificado tras /speckit-specify (FR-022)"
+      condition: null
+  after_clarify:
+    - extension: ciclo-tickets
+      command: comentar-avance especificado
+      enabled: true
+      optional: false
+      priority: 10
+      prompt: "Actualizar en el issue lo especificado con las aclaraciones"
+      description: "Actualiza el comentario de lo especificado tras /speckit-clarify (FR-022)"
+      condition: null
+  after_plan:
+    - extension: ciclo-tickets
+      command: comentar-avance plan
+      enabled: true
+      optional: false
+      priority: 10
+      prompt: "Comentar en el issue lo decidido en el plan"
+      description: "Comentario de avance tras /speckit-plan (FR-008)"
+      condition: null
+  after_analyze:
+    - extension: ciclo-tickets
+      command: comentar-avance analyze
+      enabled: true
+      optional: false
+      priority: 10
+      prompt: "Comentar en el issue los hallazgos del análisis"
+      description: "Comentario de avance tras /speckit-analyze (FR-009)"
+      condition: null

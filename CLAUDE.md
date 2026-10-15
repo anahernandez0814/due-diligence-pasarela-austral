@@ -9,7 +9,8 @@ Mensajes al analista, documentación, commits y comentarios de issues en españo
 - Un ticket = un issue de GitHub = una rama `NNN-nombre-corto` creada desde `main`.
 - Antes de escribir código: `spec.md`, `plan.md` y `tasks.md` del ticket en `specs/`.
 - Nunca se commitea en `main`; el cambio entra por PR hacia `main` con `Closes #N`.
-- Mueve el ticket a In Progress al empezar y a In review al abrir el PR.
+- Cada ticket se arranca con `/siguiente-ticket` y se cierra con `/abrir-pr`; no se mueven
+  tarjetas a mano.
 
 ## Comandos
 

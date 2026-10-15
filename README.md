@@ -117,3 +117,23 @@ Las convenciones del equipo están en [CLAUDE.md](CLAUDE.md) y se cargan solas e
 de Claude Code. Cada ticket es un issue del Project, con su propia rama, su especificación,
 plan y tareas en [specs/](specs/), y un pull request que cierra el issue. Las preferencias
 personales van en `CLAUDE.local.md` y `.claude/settings.local.json`, que git ignora.
+
+### Ciclo de un ticket
+
+```text
+/siguiente-ticket → specify → (clarify) → plan → tasks → analyze → implement → (converge) → /abrir-pr → merge
+```
+
+- **`/siguiente-ticket [N]`**: hace tres cosas.
+  - Registra el cierre de los tickets ya fusionados.
+  - Toma el siguiente ticket en Todo, o el #N, y lo pasa a In Progress.
+  - Comenta el inicio en el issue y crea la rama `NNN-nombre-corto` y `specs/NNN-*`.
+- **Hooks de `.specify/extensions.yml`**: al terminar specify, clarify, plan y analyze,
+  `/comentar-avance` deja en el issue lo especificado, lo decidido y lo encontrado.
+- **`/abrir-pr`**:
+  - Comprueba que la spec, el plan y las tareas están commiteados.
+  - Ejecuta la revisión previa.
+  - Abre el PR con `Closes #N` y pasa el ticket a In review.
+- **Done**: lo hace el workflow "Item closed" del Project al fusionar. El siguiente
+  `/siguiente-ticket` registra ese cierre en el issue. Tras el merge del último ticket,
+  ejecútalo una vez más para registrarlo.

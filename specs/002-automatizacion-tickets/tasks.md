@@ -243,12 +243,16 @@ que exige el paso 0, y apertura del PR.
   3. Comprobar con `git ls-remote --heads origin 999-prueba-abrir-pr` que no se subió.
   - **Resultado (2026-10-15)**: `/abrir-pr` pasó las comprobaciones 1 (formato de rama) y 2 (árbol limpio) y se detuvo en la 3: no existe `specs/999-*`. No lanzó revisión, no hizo push y no abrió PR. `git branch -d` borró la rama sin error, y `git ls-remote` confirma que nunca se subió.
 - [X] T027 Anotar en T023–T026 los resultados, marcar T001–T026 y hacer commit (`docs(specs): validación del quickstart del ticket #2`), para que el árbol quede limpio antes de `/abrir-pr`.
-- [ ] T028 Ejecutar Q9: `/abrir-pr` en `002-automatizacion-tickets`.
+- [X] T028 Ejecutar Q9: `/abrir-pr` en `002-automatizacion-tickets`.
   - Si la revisión previa devuelve bloqueantes, corregirlos, hacer commit y repetir.
   - Comprobar el PR hacia `main` con `Closes #2`, la sección "Revisión previa" y la línea de atribución exacta.
   - Comprobar que #2 está en "In review" y tiene el comentario `pr`.
   - Comprobar que la salida termina con el recordatorio del cierre tras el merge.
-- [ ] T029 Marcar T028 y T029 en este archivo, hacer commit (`docs(specs): marca T028 y T029 del ticket #2`) y `git push` a la rama del PR, **antes del merge**. Después del merge no queda ninguna tarea pendiente (FR-018).
+  - **Resultado (2026-10-15)**:
+    - Las comprobaciones 1–7 pasaron.
+    - La revisión previa (subagente `Plan`, contexto separado) dio **aprobado con cambios**, sin bloqueantes. Hubo 3 hallazgos importantes y 8 menores, atendidos con commits nuevos antes del push (`9bccb56`, `bb5f28f`). Uno menor no se aplicó, el ajuste de líneas de la entrada 3 de `DECISIONES.md`, por indicación de la analista.
+    - Hechos: push de la rama, [PR #16](https://github.com/anahernandez0814/due-diligence-pasarela-austral/pull/16) hacia `main` con `Closes #2`, sección "Revisión previa" y la línea de atribución exacta. #2 pasó a "In review" y tiene el [comentario `pr`](https://github.com/anahernandez0814/due-diligence-pasarela-austral/issues/2#issuecomment-6197921840). La salida incluyó el recordatorio del cierre.
+- [X] T029 Marcar T028 y T029 en este archivo, hacer commit (`docs(specs): marca T028 y T029 del ticket #2`) y `git push` a la rama del PR, **antes del merge**. Después del merge no queda ninguna tarea pendiente (FR-018).
 
 ---
 

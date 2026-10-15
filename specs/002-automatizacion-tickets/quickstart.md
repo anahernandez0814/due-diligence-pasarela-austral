@@ -18,8 +18,8 @@ Guía para comprobar que el flujo funciona.
   - el comentario de cierre del issue #1, con `<!-- ciclo-tickets:cierre -->`;
   - el comentario de inicio del issue #2, con `<!-- ciclo-tickets:inicio -->`.
 
-  El paso 0 corre en **cada** `/siguiente-ticket`, incluidas las pruebas negativas Q1 a
-  Q4. Sin el marcador, la primera prueba publicaría un comentario de cierre duplicado en
+  El paso 0 corre en **cada** `/siguiente-ticket` con entrada válida, incluidas las pruebas
+  negativas Q1 a Q3; Q4 se rechaza antes por entrada inválida. Sin el marcador, la primera prueba publicaría un comentario de cierre duplicado en
   #1.
 
 ## Antes del PR

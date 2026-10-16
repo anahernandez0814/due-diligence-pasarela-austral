@@ -569,7 +569,7 @@ escenarios son los de [quickstart.md](quickstart.md).
   - **Q18**: R2 y el quickstart se corrigieron para separar Q18a y Q18b (commit `docs(specs): Q18 en dos partes y R2 con el script inexistente`).
 
   T048 no se marca aquí: se marca después de abrir el PR, en un commit nuevo de la misma rama, que se suma al PR.
-- [ ] T048 Ejecutar `/abrir-pr`. Abre el PR con `Closes #3`, mueve el ticket a "In review" y comenta; la revisión previa sigue siendo la de transición hasta #4. Detenerse sin fusionar.
+- [X] T048 Ejecutar `/abrir-pr`. Abre el PR con `Closes #3`, mueve el ticket a "In review" y comenta; la revisión previa sigue siendo la de transición hasta #4. Detenerse sin fusionar.
 
   Al ejecutarse en la sesión nueva, valida FR-017 para las herramientas de escritura: `projects_write` con `update_project_item`, `add_issue_comment` y `create_pull_request` pasan por `guarda_datos` y `guarda_mcp_github` sin bloquearse.
 

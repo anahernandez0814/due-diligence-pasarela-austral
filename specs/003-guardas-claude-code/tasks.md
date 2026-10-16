@@ -411,7 +411,7 @@ las guardas y las denegaciones.
     [contracts/detector-datos.md](contracts/detector-datos.md).
 
   Nunca se editan a mano `uv.lock` ni archivos de `.specify/`.
-- [ ] T026 Actualizar `.claude/settings.json` exactamente según [contracts/settings-json.md](contracts/settings-json.md):
+- [X] T026 Actualizar `.claude/settings.json` exactamente según [contracts/settings-json.md](contracts/settings-json.md):
   - conserva `env` y `enabledMcpjsonServers`;
   - añade `hooks`, con cuatro entradas `PreToolUse` y una `PostToolUse`, en forma exec y con `onFailure`;
   - sustituye `permissions.deny` por las **58 entradas** del contrato, en ese orden, con `Read(!**/.env.example)` y `Edit(!**/.env.example)` detrás de las reglas de `**/.env.*`.
@@ -423,7 +423,7 @@ las guardas y las denegaciones.
     el reinicio de T036 se mantiene.
   - **Si desde aquí aparece un bloqueo `[guarda_…]` inesperado**, detenerse e informar;
     nunca desactivar las guardas ni buscar un rodeo.
-- [ ] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14. Comprueba que las reglas de la **capa de permisos** existen y están bien formadas; su efecto se ve en la sesión, en Q1 y Q13. La guarda se prueba en los tests por stdin (I6, I9).
+- [X] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14. Comprueba que las reglas de la **capa de permisos** existen y están bien formadas; su efecto se ve en la sesión, en Q1 y Q13. La guarda se prueba en los tests por stdin (I6, I9).
   - **Hooks**:
     - cada matcher solo contiene `[A-Za-z0-9_|]`;
     - las 4 guardas llevan `onFailure: "block"` y `timeout` ≤ 10, y el formato,
@@ -439,7 +439,7 @@ las guardas y las denegaciones.
   - **FR-017**: ninguna herramienta `mcp__github__*` mencionada en
     `.claude/skills/siguiente-ticket/SKILL.md`, `.claude/commands/abrir-pr.md` o
     `.claude/commands/comentar-avance.md` está denegada.
-- [ ] T028 Ejecutar `uv run pytest`, `uv run ruff check .` y `uv run ruff format --check .`, todo en verde. Commits:
+- [X] T028 Ejecutar `uv run pytest`, `uv run ruff check .` y `uv run ruff format --check .`, todo en verde. Commits:
   - `test(hooks): revisión del repositorio en la suite`, con T024 y T025;
   - `feat(config): registra las guardas y amplía permissions.deny`, con T026 y T027.
 

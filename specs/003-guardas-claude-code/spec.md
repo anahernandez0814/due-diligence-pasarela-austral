@@ -131,7 +131,8 @@ creación se permite. En `main`, se bloquea siempre.
    plan y tareas, **Then** se bloquea como código protegido.
 5. **Given** una rama sin spec, **When** un comando de terminal escribe de forma
    reconocible en código protegido (redirección, copia o movimiento con destino
-   protegido), **Then** se bloquea.
+   protegido) o nombra código protegido en el código en línea de un intérprete o de un
+   shell, **Then** se bloquea.
 
 ---
 
@@ -306,7 +307,8 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 - **FR-012**: El hook DEBE cubrir las herramientas de escritura y edición de archivos y
   los comandos de terminal, de Bash y de PowerShell, que escriben de forma reconocible en
   una ruta protegida (redirección, `tee`, `Set-Content`, `Out-File`, copia o movimiento
-  con destino protegido).
+  con destino protegido), incluidos los que van dentro de otro shell (`bash -c`, `eval`)
+  y el código en línea de un intérprete que nombra una ruta protegida.
 - **FR-013**: El mensaje de bloqueo DEBE decir qué documento falta, o por qué la rama no
   permite código.
 

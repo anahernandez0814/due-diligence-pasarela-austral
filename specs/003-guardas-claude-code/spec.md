@@ -123,9 +123,10 @@ creación se permite. En `main`, se bloquea siempre.
 3. **Given** la rama `main` o una rama sin el patrón `NNN-*`, **When** se escribe código
    protegido, **Then** se bloquea.
 4. **Given** cualquier rama, **When** se escribe un archivo exento (`docs/`, `specs/`,
-   `.specify/`, un Markdown o JSON de `.claude/` distinto de `.claude/settings.json`, o
-   un `test_*.py`), **Then** se permite; **When** se escribe `.claude/settings.json` o
-   `.mcp.json` sin spec, plan y tareas, **Then** se bloquea como código protegido.
+   `.specify/`, un Markdown o JSON de `.claude/` distinto de `.claude/settings.json` y
+   `.claude/settings.local.json`, o un `test_*.py`), **Then** se permite; **When** se
+   escribe `.claude/settings.json`, `.claude/settings.local.json` o `.mcp.json` sin spec,
+   plan y tareas, **Then** se bloquea como código protegido.
 5. **Given** una rama sin spec, **When** un comando de terminal escribe de forma
    reconocible en código protegido (redirección, copia o movimiento con destino
    protegido), **Then** se bloquea.
@@ -160,7 +161,9 @@ al terminar la edición, el comprobador de formato no encuentra diferencias.
 El MCP de GitHub expone herramientas marcadas como destructivas, como borrar un
 repositorio o borrar un archivo. Por mínimo privilegio, las que el proyecto nunca
 necesita quedan denegadas en la configuración compartida, con sus nombres exactos tal
-como aparecen en la lista del MCP. Las que usa el ciclo de tickets siguen permitidas.
+como aparecen en la lista del MCP. Las que usa el ciclo de tickets siguen permitidas, y
+la de escritura del Project, que también puede borrar, queda limitada a actualizar
+ítems.
 
 **Why this priority**: aprendizaje del ticket #1 (comentario del issue). Reduce el daño
 posible de un error del modelo sin afectar al flujo.
@@ -176,6 +179,11 @@ rechaza y comprobar que sus herramientas de lectura siguen funcionando.
 2. **Given** las herramientas que usan `siguiente-ticket`, `/abrir-pr` y
    `/comentar-avance`, **When** se revisa la lista de denegaciones, **Then** ninguna
    aparece.
+3. **Given** la herramienta de escritura del Project, que no se deniega porque el ciclo
+   de tickets mueve tarjetas con ella, **When** se invoca con un método distinto de
+   actualizar un ítem (por ejemplo, borrar un ítem o una vista), **Then** se bloquea
+   antes de llegar al servidor; **When** se invoca para actualizar el Status de un ítem,
+   **Then** se permite.
 
 ---
 
@@ -209,7 +217,8 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   GitHub, hashes, marcas de tiempo en milisegundos de 13 dígitos que empiezan por 1) no
   se bloquea si no cumple todas las condiciones de su patrón (longitud, prefijo de
   emisor, separadores, dígito de verificación o palabra de contexto).
-- Las guardas tratan igual los comandos de terminal de Bash y de PowerShell: un
+- La herramienta PowerShell está desactivada por las denegaciones de Bash; si alguien la
+  activa, las guardas tratan igual los comandos de terminal de Bash y de PowerShell: un
   `Get-Content .env.local` se bloquea igual que un `head .env.local`, y un
   `Set-Content` hacia código protegido igual que una redirección.
 - Un monto con signo de pesos y separador de miles (`$80.000.000`) no se bloquea, aunque
@@ -241,9 +250,9 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   secretos, NO DEBE bloquearse.
 - **FR-003**: La lista de denegaciones de la configuración compartida DEBE incluir los
   mismos patrones de secretos que el hook, para todas las herramientas de archivo y para
-  los comandos de terminal más comunes de lectura y copia en Bash. Si Claude Code admite
-  reglas de permiso para la herramienta PowerShell, la lista DEBE incluirlas también; si
-  no las admite, el hook es la garantía para PowerShell y el plan lo deja anotado.
+  los comandos de terminal más comunes de lectura y copia. Las denegaciones cubren Bash;
+  la herramienta PowerShell queda desactivada por esas denegaciones y, si se activa, las
+  guardas son la garantía.
 
 **Datos con forma real y credenciales**
 
@@ -251,8 +260,8 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   encuentra un dato con forma real o una credencial:
   - el contenido nuevo de cada escritura o edición de archivo;
   - el texto de cada comando de terminal (Bash y PowerShell);
-  - el texto que se publica por el MCP de GitHub: el cuerpo de `add_issue_comment`,
-    `update_issue_comment` y `create_pull_request`.
+  - el texto que se publica por el MCP de GitHub: como mínimo, el cuerpo de
+    `add_issue_comment`, `update_issue_comment` y `create_pull_request`.
 - **FR-005**: El detector DEBE reconocer, con estas definiciones:
   - **Tarjeta**: 13 a 19 dígitos, seguidos o en grupos separados por un espacio o un
     guion, cuyo primer dígito es 2, 3, 4, 5 o 6 (prefijo de emisor), que pasan la
@@ -285,8 +294,9 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 - **FR-010**: En `main`, en una rama sin el patrón `NNN-*` o con más de una carpeta
   `specs/NNN-*`, el hook DEBE bloquear todo código protegido.
 - **FR-011**: Código protegido: `src/**/*.py` (excepto `test_*.py`), `.claude/hooks/**`,
-  `.claude/settings.json` y `.mcp.json` (registran las guardas y los servidores MCP) y el
-  directorio del plugin. Exentos: `docs/`, `specs/`, `.specify/`, el resto de los Markdown
+  `.claude/settings.json` y `.mcp.json` (registran las guardas y los servidores MCP),
+  `.claude/settings.local.json` (puede desactivar todas las guardas) y el directorio del
+  plugin. Exentos: `docs/`, `specs/`, `.specify/`, el resto de los Markdown
   y JSON de `.claude/` y los `test_*.py`.
 - **FR-012**: El hook DEBE cubrir las herramientas de escritura y edición de archivos y
   los comandos de terminal, de Bash y de PowerShell, que escriben de forma reconocible en
@@ -309,6 +319,10 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   el proyecto no usa, como mínimo borrar un repositorio y borrar un archivo.
 - **FR-017**: NO DEBE denegarse ninguna herramienta que usen `siguiente-ticket`,
   `/abrir-pr` o `/comentar-avance`.
+- **FR-024**: Un hook previo a la ejecución DEBE limitar la herramienta de escritura del
+  Project del MCP de GitHub (`projects_write`, que el ciclo de tickets necesita) al único
+  método que usa el proyecto, actualizar un ítem (`update_project_item`), y bloquear
+  cualquier otro método, incluidos los de borrado.
 
 **Reglas por ruta**
 
@@ -323,8 +337,9 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 
 **Transversales**
 
-- **FR-020**: Las guardas de secretos, datos y spec previa DEBEN fallar cerradas: si el
-  propio hook falla, la acción se bloquea con un mensaje que lo explica.
+- **FR-020**: Las guardas de secretos, datos, spec previa y Project (FR-024) DEBEN
+  fallar cerradas: si el propio hook falla, la acción se bloquea con un mensaje que lo
+  explica.
 - **FR-021**: Los hooks DEBEN tener pruebas automáticas que se ejecuten con la suite del
   proyecto y pasen.
 - **FR-022**: Los hooks y la configuración DEBEN estar en la configuración compartida
@@ -343,7 +358,7 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   (excepto `.env.example`), `*.key` o `secrets/`.
 - **Código protegido**: archivo que solo se puede crear o modificar con spec, plan y
   tareas del ticket en curso: el código de `src/`, los hooks, `.claude/settings.json`,
-  `.mcp.json` y el plugin.
+  `.claude/settings.local.json`, `.mcp.json` y el plugin.
 - **Ticket en curso**: el que indica el prefijo `NNN` de la rama actual, con su carpeta
   `specs/NNN-*/`.
 - **Regla por ruta**: archivo de `.claude/rules/` con `paths` que limita a qué archivos

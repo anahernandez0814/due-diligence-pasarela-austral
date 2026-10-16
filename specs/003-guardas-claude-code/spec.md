@@ -234,6 +234,9 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   `find … -exec`, `Get-ChildItem -Recurse`) se bloquea solo si su raíz contiene archivos
   de secretos. `grep -rn ".env" src/` se permite, porque `src/` no tiene secretos (FR-002);
   `grep -r TOKEN .` se bloquea, porque la raíz del repositorio tiene `.env`.
+- Shells anidados (`bash -c`, `sh -c`, `eval`, `pwsh -Command`): el comando exterior es
+  el nivel 0 y cuentan solo los shells interiores. Con más de 3 se bloquea por
+  precaución.
 - La rama tiene el patrón `NNN-*` pero existen dos carpetas `specs/NNN-*`: se bloquea el
   código protegido, porque el ticket en curso es ambiguo.
 - Se edita `.claude/hooks/**` en el propio ticket que crea los hooks: aplica la misma

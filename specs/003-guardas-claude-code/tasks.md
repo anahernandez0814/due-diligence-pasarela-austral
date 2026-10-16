@@ -184,7 +184,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 **Independent Test**: los tests de extremo a extremo de `guarda_secretos` bloquean `.env`,
 `.env.local` y `secrets/` por Read, Grep, Bash y PowerShell, y permiten `.env.example`.
 
-- [ ] T009 [P] [US1] Escribir `.claude/hooks/test_guarda_secretos.py` (FR-001, FR-002, R9, contracts/guardas.md).
+- [X] T009 [P] [US1] Escribir `.claude/hooks/test_guarda_secretos.py` (FR-001, FR-002, R9, contracts/guardas.md).
   - **Montaje**: unitarios de la función de decisión y de extremo a extremo, que lanzan
     el script con `sys.executable`, un JSON por stdin y `CLAUDE_PROJECT_DIR=tmp_path`. Los
     archivos de secretos se crean en `tmp_path`, con contenido ficticio y un marcador.
@@ -224,7 +224,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
       `.env`, porque el heredoc no alimenta a un intérprete.
   - **Tiempo**: el recorrido de la raíz de `tmp_path` termina en menos de 1 s (SC-004).
   - **Mensajes**: stderr nunca contiene el marcador y sigue los formatos del contrato.
-- [ ] T010 [US1] Implementar `.claude/hooks/guarda_secretos.py` con `comun` hasta que pase `test_guarda_secretos.py`. Debe:
+- [X] T010 [US1] Implementar `.claude/hooks/guarda_secretos.py` con `comun` hasta que pase `test_guarda_secretos.py`. Debe:
   - revisar por herramienta según la tabla del contrato;
   - excluir el patrón de búsqueda de `grep`, `egrep`, `fgrep`, `rg`, `git grep`, `Select-String` y `findstr`;
   - expandir los comodines contra la raíz;
@@ -233,7 +233,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
   - bloquear las búsquedas recursivas solo si su raíz, resuelta contra el `cwd` del JSON y recorrida con `os.walk` podando solo `.git`, contiene archivos de secretos (R9, decisión 2).
 
   Origen: FR-001, FR-002, FR-020, FR-023, R9.
-- [ ] T011 [US1] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de secretos`.
+- [X] T011 [US1] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de secretos`.
 
 **Checkpoint**: la guarda de secretos funciona por stdin; todavía no está registrada.
 

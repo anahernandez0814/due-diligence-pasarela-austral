@@ -405,3 +405,84 @@ def test_mensaje_de_un_borrado_en_main(crear):
         ".claude/settings.json es código protegido y la rama 'main' no es de un ticket "
         "(NNN-nombre). Crea la rama con /siguiente-ticket."
     )
+
+
+# --- Carpetas, git checkout, git mv, cd y truncate (T017b) ----------------------------
+
+AMPLIACION = [
+    ("Bash", "rm -rf .claude"),
+    ("Bash", "rm -rf ."),
+    ("Bash", "git restore ."),
+    ("Bash", "git checkout -- ."),
+    ("Bash", "git checkout 003-x -- .claude"),
+    ("Bash", "mv .claude .claude-viejo"),
+    ("PowerShell", "Remove-Item -Recurse .claude"),
+    ("Bash", "rm -rf src/app/"),
+    ("Bash", "git checkout 003-x .claude/settings.json"),
+    ("Bash", "git checkout HEAD src/app/a.py"),
+    ("Bash", "git checkout src/app/a.py"),
+    ("Bash", "git mv src/app/a.py docs/a.py"),
+    ("Bash", "git -C src rm app/a.py"),
+    ("Bash", "cd src && echo x > app/b.py"),
+    ("Bash", "cd src/app; cp /tmp/x.py b.py"),
+    ("Bash", "pushd .claude && rm settings.json"),
+    ("PowerShell", "Set-Location src; Set-Content app/b.py x"),
+    ("Bash", "truncate -s 0 src/app/a.py"),
+    ("Bash", "truncate --size=0 .mcp.json"),
+]
+
+
+@pytest.fixture
+def con_app(crear):
+    """Repositorio con `src/app/a.py` en disco, para `git checkout <ruta>`."""
+
+    def _crear(**opciones):
+        repo = crear(**opciones)
+        (repo / "src" / "app").mkdir(parents=True, exist_ok=True)
+        (repo / "src" / "app" / "a.py").write_text("x = 1\n", encoding="utf-8")
+        (repo / "docs").mkdir(exist_ok=True)
+        return repo
+
+    return _crear
+
+
+@pytest.mark.parametrize(("herramienta", "comando"), AMPLIACION)
+def test_ampliacion_en_main(con_app, herramienta, comando):
+    repo = con_app(rama="main")
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+
+
+@pytest.mark.parametrize(("herramienta", "comando"), AMPLIACION)
+def test_ampliacion_con_documentos(con_app, herramienta, comando):
+    repo = con_app()
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) is None
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "rm -rf docs",
+        "git checkout 003-x",
+        "git checkout main",
+        "git checkout -b 004-y main",
+        "git checkout -B 004-y 003-x",
+        "git mv docs/a.md docs/b.md",
+        "git -C docs rm a.md",
+        "cd docs && echo x > b.py",
+        "cd src && cat app/a.py",
+        "truncate -s 0 docs/a.md",
+        "truncate -r src/app/a.py docs/a.md",
+    ],
+)
+def test_ampliacion_que_se_permite_en_main(con_app, comando):
+    assert bash(con_app(rama="main"), comando) is None
+
+
+@pytest.mark.parametrize("ruta", ["", ".claude", "src", "src/app", "plugins/p"])
+def test_carpetas_que_contienen_codigo_protegido(ruta):
+    assert guarda_spec_previa.contiene_protegido(ruta)
+
+
+@pytest.mark.parametrize("ruta", ["docs", "specs/003-x", ".specify", "../otro"])
+def test_carpetas_sin_codigo_protegido(ruta):
+    assert not guarda_spec_previa.contiene_protegido(ruta)

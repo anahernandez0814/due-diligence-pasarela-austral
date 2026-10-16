@@ -73,6 +73,26 @@ def _es_carpeta_protegida(ruta: str) -> bool:
     )
 
 
+_RAICES_PROTEGIDAS = ("src", *_ARCHIVOS_PROTEGIDOS, *_CARPETAS_PROTEGIDAS)
+
+
+def contiene_protegido(ruta: str, carpeta: bool = True) -> bool:
+    """Borrar, restaurar o mover `ruta` alcanza código protegido (revisión de la parada E).
+
+    Cuenta la raíz (relativa vacía), un ancestro de algo protegido (`.claude`) y, si
+    `ruta` es una carpeta, una carpeta dentro de una zona protegida (`src/app`). Una ruta
+    fuera de la raíz no cuenta.
+    """
+    relativa = _relativa(ruta)
+    if relativa is None or relativa.split("/")[0] == "..":
+        return False
+    if relativa == "":
+        return True
+    if any(r.startswith(relativa + "/") for r in _RAICES_PROTEGIDAS):
+        return True
+    return carpeta and _es_carpeta_protegida(relativa)
+
+
 # --- Código protegido en el texto (U4) ------------------------------------------------
 
 _SEPARADOR = r"(?:\\\\|\\|/)"
@@ -190,81 +210,132 @@ def _escritura_powershell(nombre: str, args: list[str]) -> Iterator[str]:
     yield from rutas
 
 
-def _rutas_de_git(args: list[str]) -> list[str]:
-    """Rutas que modifican `git rm`, `git checkout … -- <rutas>` y `git restore <rutas>`.
+def _posicionales(args: list[str], con_valor: tuple[str, ...] = ()) -> list[str]:
+    """Argumentos que no son opciones, saltando el valor de las opciones `con_valor`."""
+    omitir = {i + 1 for i, a in enumerate(args) if a in con_valor}
+    return [a for i, a in enumerate(args) if i not in omitir and not a.startswith("-")]
 
-    Un `git checkout <rama>` sin `--` no modifica archivos con nombre y no cuenta.
+
+def _rutas_de_git(args: list[str], cwd: Path) -> tuple[list[str], Path]:
+    """Rutas que modifican `git rm`, `git mv`, `git checkout` y `git restore`, y la
+    carpeta respecto a la que se resuelven (la de `git -C <dir>`, si la hay).
+
+    En `git checkout` sin `--`, los posicionales a partir del segundo son rutas, y el
+    primero solo si existe en disco: `git checkout 003-x` no cuenta.
     """
-    i = 0
+    i, carpeta = 0, cwd
     while i < len(args) and args[i].startswith("-"):
+        if args[i] == "-C" and i + 1 < len(args):
+            carpeta = Path(os.path.join(carpeta, args[i + 1]))
         i += 2 if args[i] in _GIT_CON_VALOR else 1
     if i >= len(args):
-        return []
+        return [], carpeta
     subcomando, resto = args[i], args[i + 1 :]
     if subcomando == "checkout":
-        return resto[resto.index("--") + 1 :] if "--" in resto else []
-    if subcomando not in ("rm", "restore"):
-        return []
-    omitir = {k + 1 for k, a in enumerate(resto) if a in ("-s", "--source", "--pathspec-from-file")}
-    return [a for k, a in enumerate(resto) if k not in omitir and not a.startswith("-")]
+        if "--" in resto:
+            return resto[resto.index("--") + 1 :], carpeta
+        posicionales = _posicionales(resto, ("-b", "-B", "--orphan"))
+        primero = posicionales[:1]
+        if primero and not os.path.exists(os.path.join(carpeta, primero[0])):
+            primero = []
+        return primero + posicionales[1:], carpeta
+    if subcomando in ("rm", "mv"):
+        return _posicionales(resto), carpeta
+    if subcomando == "restore":
+        return _posicionales(resto, ("-s", "--source", "--pathspec-from-file")), carpeta
+    return [], carpeta
 
 
-def destinos(texto: str, powershell: bool, cwd: Path) -> Iterator[tuple[str, bool]]:
-    """`(ruta, es carpeta)` de cada ruta que el comando escribe, borra, restaura o mueve.
+_CAMBIO_DE_CARPETA = {"cd", "pushd", "chdir", "set-location", "sl"}
 
-    Borrar, restaurar o mover también es modificar (revisión de la parada D).
+
+def _nueva_carpeta(args: list[str], base: Path, cwd: Path) -> Path:
+    """Carpeta tras `cd`, `pushd`, `Set-Location`, `sl` o `chdir` con argumento literal.
+
+    `cd -`, `cd ~`, `cd $X` y `cd` sin argumento dejan la carpeta como estaba (residual
+    declarado en R10).
     """
+    destino = None
+    for i, arg in enumerate(args):
+        if _parametro(arg, ("-path", "-literalpath")):
+            destino = args[i + 1] if i + 1 < len(args) else None
+            break
+        if not arg.startswith("-"):
+            destino = arg
+            break
+    if not destino or destino.startswith("~") or any(c in destino for c in "$%`"):
+        return cwd
+    ruta = comun.normalizar_ruta(destino, base, cwd)
+    return Path(ruta) if os.path.isabs(ruta) else base / ruta
 
-    def es_carpeta(ruta: str) -> bool:
-        return ruta.endswith(("/", "\\")) or os.path.isdir(os.path.join(cwd, ruta))
+
+def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tuple[str, str]]:
+    """`(ruta normalizada, tipo)` de cada ruta que el comando escribe, borra, restaura o
+    mueve. Tipos:
+
+    - `archivo`: se escribe en la ruta;
+    - `copia`: la ruta es la carpeta de destino de una copia o un movimiento;
+    - `borrado`: se borra, se restaura desde git o es la fuente de un movimiento;
+    - `borrado_carpeta`: lo mismo, y la ruta es una carpeta.
+
+    Las rutas se resuelven tras los `cd` del propio comando (revisiones D y E).
+    """
+    actual = cwd
+
+    def resolver(ruta: str, carpeta: Path | None = None) -> str:
+        return comun.normalizar_ruta(ruta, base, carpeta or actual)
+
+    def es_carpeta(ruta: str, carpeta: Path | None = None) -> bool:
+        return ruta.endswith(("/", "\\")) or os.path.isdir(os.path.join(carpeta or actual, ruta))
+
+    def borrado(ruta: str, carpeta: Path | None = None) -> tuple[str, str]:
+        tipo = "borrado_carpeta" if es_carpeta(ruta, carpeta) else "borrado"
+        return resolver(ruta, carpeta), tipo
 
     for sub in comun.dividir_comando(texto, powershell=powershell):
         for ruta in _redirecciones(sub):
-            yield ruta, False
+            yield resolver(ruta), "archivo"
         programa = comun.quitar_envoltorios(sub)
         if not programa:
             continue
         nombre, args = _nombre(programa[0]), programa[1:]
-        if nombre == "tee":
-            yield from ((a, False) for a in args if not a.startswith("-"))
+        if nombre in _CAMBIO_DE_CARPETA:
+            actual = _nueva_carpeta(args, base, actual)
+        elif nombre == "tee":
+            yield from ((resolver(a), "archivo") for a in _posicionales(args))
         elif nombre in ("cp", "mv", "install") or (powershell and nombre in _COPIA_POWERSHELL):
             destino, carpeta, fuentes = _copia(args, powershell)
             if nombre in _MOVIMIENTO:
-                yield from ((f, es_carpeta(f)) for f in fuentes)  # mover también borra
+                yield from (borrado(f) for f in fuentes)  # mover también borra la fuente
             if destino is None:
                 continue
-            carpeta = carpeta or es_carpeta(destino)
-            yield destino, carpeta
-            if carpeta:
+            if carpeta or es_carpeta(destino):
+                yield resolver(destino), "copia"
                 for fuente in fuentes:
-                    base = fuente.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
-                    yield destino.rstrip("/\\") + "/" + base, False
+                    nombre_fuente = fuente.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+                    yield resolver(destino.rstrip("/\\") + "/" + nombre_fuente), "archivo"
+            else:
+                yield resolver(destino), "archivo"
         elif nombre == "sed" and any(
             a.startswith("--in-place") or re.fullmatch(r"-[a-zA-Z]*i\S*", a) for a in args
         ):
-            omitir = {
-                i + 1 for i, a in enumerate(args) if a in ("-e", "-f", "--expression", "--file")
-            }
-            yield from (
-                (a, False) for i, a in enumerate(args) if i not in omitir and not a.startswith("-")
-            )
+            rutas = _posicionales(args, ("-e", "-f", "--expression", "--file"))
+            yield from ((resolver(a), "archivo") for a in rutas)
         elif nombre == "touch":
-            omitir = {
-                i + 1
-                for i, a in enumerate(args)
-                if a in ("-d", "-t", "-r", "--date", "--reference")
-            }
-            yield from (
-                (a, False) for i, a in enumerate(args) if i not in omitir and not a.startswith("-")
-            )
+            rutas = _posicionales(args, ("-d", "-t", "-r", "--date", "--reference"))
+            yield from ((resolver(a), "archivo") for a in rutas)
+        elif nombre == "truncate":
+            rutas = _posicionales(args, ("-s", "-r", "--size", "--reference"))
+            yield from ((resolver(a), "archivo") for a in rutas)
         elif nombre in ("rm", "unlink"):
-            yield from ((a, es_carpeta(a)) for a in args if not a.startswith("-"))
+            yield from (borrado(a) for a in _posicionales(args))
         elif nombre == "git":
-            yield from ((r, es_carpeta(r)) for r in _rutas_de_git(args))
+            rutas, carpeta = _rutas_de_git(args, actual)
+            yield from (borrado(r, carpeta) for r in rutas)
         elif powershell and nombre in _ESCRITURA_POWERSHELL:
-            yield from ((r, False) for r in _escritura_powershell(nombre, args))
+            yield from ((resolver(r), "archivo") for r in _escritura_powershell(nombre, args))
         elif powershell and nombre in _BORRADO_POWERSHELL:
-            yield from ((r, es_carpeta(r)) for r in _escritura_powershell(nombre, args))
+            yield from (borrado(r) for r in _escritura_powershell(nombre, args))
 
 
 # --- Ticket en curso (data-model) -----------------------------------------------------
@@ -287,7 +358,7 @@ def _ticket(base: Path, ruta: str) -> str | None:
     rama = _rama(base)
     m = re.match(r"^(\d{3})-", rama)
     if not m:
-        return SIN_TICKET.format(ruta=ruta, rama=rama or "(HEAD separado)")
+        return SIN_TICKET.format(ruta=ruta or ".", rama=rama or "(HEAD separado)")
     nnn = m.group(1)
     specs = base / "specs"
     carpetas = (
@@ -316,9 +387,15 @@ def _protegidas_en_terminal(
     rutas = []
     textos = [(comando, powershell)] + [(c.texto, c.powershell) for c in extraccion.comandos]
     for texto, sin_escapes in textos:
-        for destino, carpeta in destinos(texto, sin_escapes, cwd):
-            ruta = comun.normalizar_ruta(destino, base, cwd)
-            if es_protegido(ruta) or (carpeta and _es_carpeta_protegida(ruta)):
+        for ruta, tipo in destinos(texto, sin_escapes, base, cwd):
+            if (
+                es_protegido(ruta)
+                or (tipo == "copia" and _es_carpeta_protegida(ruta))
+                or (
+                    tipo.startswith("borrado")
+                    and contiene_protegido(ruta, tipo.endswith("carpeta"))
+                )
+            ):
                 rutas.append(ruta)
     for codigo in extraccion.codigos:
         for nombrada in rutas_en_texto(codigo):

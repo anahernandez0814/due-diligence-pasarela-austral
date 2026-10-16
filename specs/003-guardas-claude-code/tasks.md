@@ -528,7 +528,7 @@ escenarios son los de [quickstart.md](quickstart.md).
 - [X] T042 [US5] Quickstart Q13–Q15:
   - `delete_file` sobre `no-existe.txt`, denegado;
   - `projects_write` con `delete_project_item` y un `item_id` inexistente, bloqueado por la guarda, y con `update_project_item` del Status de #3 a "In Progress", permitido sin cambios;
-  - `/siguiente-ticket abc` funciona: su paso 0 usa las herramientas MCP de lectura. No se ejecuta `/comentar-avance plan`, que añadiría una actualización de prueba al comentario "plan" de #3.
+  - `/siguiente-ticket abc` muestra el uso y se detiene sin llamar al MCP; las herramientas de lectura quedan probadas en Q14 (`projects_list`) y las de escritura en T048 (`/abrir-pr`). No se ejecuta `/comentar-avance plan`, que añadiría una actualización de prueba al comentario "plan" de #3.
 - [X] T043 [US6] Quickstart Q16–Q17. Las reglas aparecen al abrir sus archivos. Una guarda tarda menos de 1 s medida en caliente, desde la segunda llamada de la sesión (tres llamadas seguidas); la primera puede tardar más, ≈ 1,1 s, porque `uv` prepara el entorno (SC-004).
 - [X] T044 [MANUAL] Quickstart Q18, fallo cerrado. La analista renombra `.claude/hooks/guarda_secretos.py` desde fuera de Claude Code; Claude intenta leer `README.md` y debe quedar bloqueado por `onFailure: "block"`; la analista restaura el nombre desde fuera.
 - [X] T045 [MANUAL] Desde fuera de Claude Code, borrar `.env.local` y la carpeta `secrets/`.
@@ -554,9 +554,10 @@ escenarios son los de [quickstart.md](quickstart.md).
   | Q9 | formateado; `ruff format --check` sin diferencias | — (hook de formato) |
   | Q10 | edición conservada; "No se pudo formatear" | — |
   | Q11 | `docs/` y `specs/` permitidos en `prueba-sin-ticket`, y borrados | — |
+  | Q12 | hecho en T003 (fase 1): 42 herramientas; destructivas `delete_file` y `projects_write`; existen las 6 denegadas; `delete_repository` no aparece | — |
   | Q13 | `delete_file` no está en la sesión | permisos (la denegación retira la herramienta) |
   | Q14 | `delete_project_item` bloqueado; `update_project_item` permitido sin cambios | `[guarda_mcp_github]` |
-  | Q15 | `/siguiente-ticket abc` muestra el uso y se detiene | — |
+  | Q15 | muestra el uso y se detiene sin llamar al MCP; las herramientas de lectura quedan probadas en Q14 (`projects_list`) y las de escritura en T048 (`/abrir-pr`) | — |
   | Q16 | `herramientas-mcp.md` cargada al abrir `src/servidor_mcp/__init__.py`; `tests.md` ya estaba cargada desde la fase 9 | — |
   | Q17 | 3 llamadas seguidas: 331, 342 y 328 ms, salida 0 | — |
   | Q18a | script inexistente: bloqueado | salida 2 de `uv` ("Failed to spawn"), no `onFailure` |

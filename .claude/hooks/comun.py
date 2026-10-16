@@ -75,67 +75,204 @@ def normalizar_ruta(ruta: str, base: Path, cwd: Path | None = None) -> str:
 
 # --- División de comandos -----------------------------------------------------------
 
-_HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
-_MARCA = "__heredoc_{}__"
+_HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
+# Marca que ocupa el lugar de un heredoc quitado. Usa un carácter de uso privado de
+# Unicode para que un comando escrito a mano no la contenga por casualidad.
+_MARCA = "{}"
+_ES_MARCA = re.compile("(\\d+)")
 _SEPARADORES = set(";&|\n()")
+_ANTES_DE_PALABRA = set(" \t\r\n;&|()<>")
 
 
 @dataclass
 class _Cuerpo:
     texto: str
     expande: bool  # delimitador sin comillas: bash expande $(…) y `…` en el cuerpo
+    operador: str = ""  # texto original del operador, por ejemplo <<'FIN'
+    quitado: str = ""  # texto original quitado: el cuerpo y la línea de cierre
+
+
+@dataclass
+class _Superficie:
+    texto: str  # el comando sin los cuerpos de los heredocs, con una marca en su lugar
+    cuerpos: list[_Cuerpo]
+    sustituciones: list[str]  # texto original de cada `$(…)` y `…` de primer nivel
+
+
+@dataclass
+class _Marco:
+    """Contexto del recorrido: el comando o el interior de un `$(…)`."""
+
+    comillas: str | None = None  # None, "'", '"' o "cuerpo" (las comillas son literales)
+    inicio: int = 0  # dónde empieza el texto de un `$(…)`
+    parentesis: int = 0
+
+
+def _quitar_cuerpos(
+    texto: str, inicio: int, pendientes: list[tuple[int, re.Match, bool]]
+) -> tuple[int, list[tuple[int, _Cuerpo]], list[str]]:
+    """Quita, desde `inicio`, los cuerpos de los heredocs pendientes de la línea.
+
+    Devuelve dónde sigue el recorrido, cada cuerpo con la posición de su operador en la
+    salida, y las sustituciones de los cuerpos que expanden. Un heredoc cuyo delimitador
+    de cierre no aparece no se quita, ni los que le siguen: sus líneas se analizan como
+    comandos.
+    """
+    cuerpos: list[tuple[int, _Cuerpo]] = []
+    sustituciones: list[str] = []
+    pos = inicio
+    for indice, m, primer_nivel in pendientes:
+        quitar_tabs, delimitador = m.group(1) == "-", m.group(3)
+        lineas: list[str] = []
+        cierre = None
+        j = pos
+        while True:
+            fin = texto.find("\n", j)
+            linea = texto[j:] if fin == -1 else texto[j:fin]
+            linea = linea.lstrip("\t") if quitar_tabs else linea
+            if linea == delimitador:
+                cierre = len(texto) if fin == -1 else fin + 1
+                break
+            lineas.append(linea)
+            if fin == -1:
+                break
+            j = fin + 1
+        if cierre is None:
+            break
+        cuerpo = _Cuerpo("\n".join(lineas), not m.group(2), m.group(0), texto[pos:cierre])
+        cuerpos.append((indice, cuerpo))
+        if cuerpo.expande and primer_nivel:
+            sustituciones += _escanear(cuerpo.texto, cuerpo=True).sustituciones
+        pos = cierre
+    return pos, cuerpos, sustituciones
+
+
+def _escanear(texto: str, powershell: bool = False, cuerpo: bool = False) -> _Superficie:
+    """Recorre el comando una vez, sabiendo de comillas, comentarios y `$(…)`.
+
+    - Quita los cuerpos de heredoc, a cualquier profundidad, y deja una marca. Un `<<`
+      entre comillas o en un comentario no abre heredoc; dentro de `$(…)` empieza un
+      contexto nuevo, aunque vaya entre comillas dobles.
+    - Devuelve el texto original de cada `$(…)` y `…` de primer nivel, con sus heredocs
+      completos: el cuerpo viaja con su comando.
+    - Con `cuerpo=True`, `texto` es el cuerpo de un heredoc que expande: sus comillas
+      son literales. En PowerShell no hay heredocs y el escape es la comilla invertida.
+    """
+    escape = "`" if powershell else "\\"
+    salida: list[str] = []
+    cuerpos: list[_Cuerpo] = []
+    sustituciones: list[str] = []
+    pendientes: list[tuple[int, re.Match, bool]] = []
+    pila = [_Marco("cuerpo" if cuerpo else None)]
+    i, n = 0, len(texto)
+    while i < n:
+        c, marco = texto[i], pila[-1]
+        if marco.comillas == "'":
+            marco.comillas = None if c == "'" else "'"
+            salida.append(c)
+            i += 1
+            continue
+        if c == escape:
+            salida.append(texto[i : i + 2])
+            i += 2
+            continue
+        if c == '"' and marco.comillas in (None, '"'):
+            marco.comillas = None if marco.comillas else '"'
+        elif c == "'" and marco.comillas is None:
+            marco.comillas = "'"
+        elif c == "$" and texto[i + 1 : i + 2] == "(" and texto[i + 2 : i + 3] != "(":
+            pila.append(_Marco(inicio=i + 2))
+            salida.append("$(")
+            i += 2
+            continue
+        elif c == "`" and not powershell:
+            fin = i + 1
+            while fin < n and texto[fin] != "`":
+                fin += 2 if texto[fin] == "\\" else 1
+            if len(pila) == 1:
+                sustituciones.append(texto[i + 1 : min(fin, n)])
+            salida.append(texto[i : fin + 1])
+            i = fin + 1
+            continue
+        elif marco.comillas is None:
+            if c == "(" and len(pila) > 1:
+                marco.parentesis += 1
+            elif c == ")" and len(pila) > 1:
+                if marco.parentesis:
+                    marco.parentesis -= 1
+                else:
+                    pila.pop()
+                    if len(pila) == 1:
+                        sustituciones.append(texto[marco.inicio : i])
+            elif c == "#" and not powershell and (i == 0 or texto[i - 1] in _ANTES_DE_PALABRA):
+                fin = texto.find("\n", i)
+                fin = n if fin == -1 else fin
+                salida.append(texto[i:fin])
+                i = fin
+                continue
+            elif texto.startswith("<<<", i):
+                salida.append("<<<")
+                i += 3
+                continue
+            elif texto.startswith("<<", i) and not powershell:
+                m = _HEREDOC.match(texto, i)
+                if m:
+                    pendientes.append((len(salida), m, len(pila) == 1))
+                    salida.append(m.group(0))
+                    i = m.end()
+                    continue
+                salida.append("<<")
+                i += 2
+                continue
+            elif c == "\n" and pendientes:
+                salida.append("\n")
+                i, quitados, interiores = _quitar_cuerpos(texto, i + 1, pendientes)
+                for indice, quitado in quitados:
+                    cuerpos.append(quitado)
+                    salida[indice] = "<< " + _MARCA.format(len(cuerpos) - 1)
+                sustituciones += interiores
+                pendientes = []
+                continue
+        salida.append(c)
+        i += 1
+    if len(pila) > 1:
+        sustituciones.append(texto[pila[1].inicio :])
+    return _Superficie("".join(salida), cuerpos, sustituciones)
+
+
+def _restaurar(palabra: str, cuerpos: list[_Cuerpo]) -> str:
+    """Devuelve a una palabra los heredocs que se le quitaron, con cuerpo y cierre."""
+    for numero in range(len(cuerpos) - 1, -1, -1):
+        marca = "<< " + _MARCA.format(numero)
+        pos = palabra.find(marca)
+        if pos == -1:
+            continue
+        cuerpo = cuerpos[numero]
+        palabra = palabra[:pos] + cuerpo.operador + palabra[pos + len(marca) :]
+        salto = palabra.find("\n", pos + len(cuerpo.operador))
+        if salto == -1:
+            palabra += "\n" + cuerpo.quitado
+        else:
+            palabra = palabra[: salto + 1] + cuerpo.quitado + palabra[salto + 1 :]
+    return palabra
 
 
 @dataclass
 class _Tokens:
-    texto: str  # el comando sin los cuerpos de los heredocs
     subcomandos: list[list[str]]
     cuerpos: list[list[_Cuerpo]]  # cuerpos de heredoc de cada subcomando, en orden
     tuberia: list[bool]  # True si el subcomando recibe la salida del anterior por `|`
-
-
-def _separar_heredocs(comando: str) -> tuple[str, list[_Cuerpo]]:
-    """Quita los cuerpos de los heredocs y deja una marca en su lugar.
-
-    Un heredoc cuyo delimitador de cierre no aparece no se quita: sus líneas se
-    analizan como comandos.
-    """
-    lineas = comando.split("\n")
-    salida: list[str] = []
-    cuerpos: list[_Cuerpo] = []
-    i = 0
-    while i < len(lineas):
-        linea = lineas[i]
-        i += 1
-        partes: list[str] = []
-        ultimo = 0
-        for m in _HEREDOC.finditer(linea):
-            delimitador, quitar_tabs = m.group(3), m.group(1) == "-"
-            for j in range(i, len(lineas)):
-                actual = lineas[j].lstrip("\t") if quitar_tabs else lineas[j]
-                if actual == delimitador:
-                    cuerpo = [(x.lstrip("\t") if quitar_tabs else x) for x in lineas[i:j]]
-                    cuerpos.append(_Cuerpo("\n".join(cuerpo), expande=not m.group(2)))
-                    partes.append(linea[ultimo : m.start()])
-                    partes.append("<< " + _MARCA.format(len(cuerpos) - 1))
-                    ultimo = m.end()
-                    i = j + 1
-                    break
-        partes.append(linea[ultimo:])
-        salida.append("".join(partes))
-    return "\n".join(salida), cuerpos
+    sustituciones: list[str]  # texto original de cada `$(…)` y `…` de primer nivel
 
 
 def _tokenizar(comando: str, powershell: bool) -> _Tokens:
-    if powershell:
-        texto, cuerpos = comando, []
-    else:
-        texto, cuerpos = _separar_heredocs(comando)
-    lex = shlex.shlex(texto, posix=not powershell, punctuation_chars=";&|<>()\n")
+    superficie = _escanear(comando, powershell)
+    cuerpos = superficie.cuerpos
+    lex = shlex.shlex(superficie.texto, posix=not powershell, punctuation_chars=";&|<>()\n")
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
     lex.commenters = "" if powershell else "#"
-    resultado = _Tokens(texto, [], [], [])
+    resultado = _Tokens([], [], [], superficie.sustituciones)
     actual: list[str] = []
     actual_cuerpos: list[_Cuerpo] = []
     tuberia_actual = False
@@ -143,6 +280,7 @@ def _tokenizar(comando: str, powershell: bool) -> _Tokens:
     i = 0
     while i < len(tokens):
         token = tokens[i]
+        marca = _ES_MARCA.fullmatch(tokens[i + 1]) if i + 1 < len(tokens) else None
         if token and all(c in _SEPARADORES for c in token):
             if actual:
                 resultado.subcomandos.append(actual)
@@ -150,13 +288,17 @@ def _tokenizar(comando: str, powershell: bool) -> _Tokens:
                 resultado.tuberia.append(tuberia_actual)
             actual, actual_cuerpos = [], []
             tuberia_actual = token.strip("\n") in ("|", "|&")
-        elif token == "<<" and i + 1 < len(tokens) and tokens[i + 1].startswith("__heredoc_"):
-            indice = int(tokens[i + 1].removeprefix("__heredoc_").removesuffix("__"))
+        elif token == "<<" and marca:
+            indice = int(marca.group(1))
+            if indice >= len(cuerpos):
+                raise ValueError("marca de heredoc sin cuerpo")
             actual_cuerpos.append(cuerpos[indice])
             i += 1
         else:
             if powershell and len(token) >= 2 and token[0] == token[-1] and token[0] in "'\"":
                 token = token[1:-1]
+            if "" in token:
+                token = _restaurar(token, cuerpos)
             actual.append(token)
         i += 1
     if actual:
@@ -170,8 +312,10 @@ def dividir_comando(comando: str, powershell: bool = False) -> list[list[str]]:
     """Subcomandos separados por `;`, `&&`, `||`, `|`, `&`, paréntesis o saltos de línea.
 
     Las redirecciones quedan como palabras (`<`, `>`, `>>`, `<<<`). Los cuerpos de los
-    heredocs se quitan; el extractor de texto ejecutable los recupera cuando hace falta.
-    Con `powershell=True` la barra invertida no es un escape (PowerShell y `cmd`).
+    heredocs se quitan de los subcomandos; una palabra que contenía un heredoc, como el
+    `"$(cat <<'EOF' … EOF)"` de un commit, lo conserva completo. Con `powershell=True` la
+    barra invertida no es un escape (PowerShell y `cmd`). Lanza ValueError si el
+    comando no se puede analizar.
     """
     return _tokenizar(comando, powershell).subcomandos
 
@@ -357,63 +501,6 @@ def _lee_de_stdin(palabras: list[str]) -> bool:
     return True
 
 
-def _cierre_parentesis(texto: str, i: int) -> int:
-    """Índice del `)` que cierra el `$(` abierto justo antes de `i`, o len(texto)."""
-    profundidad, simple, doble = 1, False, False
-    while i < len(texto):
-        c = texto[i]
-        if c == "\\" and not simple:
-            i += 2
-            continue
-        if c == "'" and not doble:
-            simple = not simple
-        elif c == '"' and not simple:
-            doble = not doble
-        elif not simple and not doble:
-            if c == "(":
-                profundidad += 1
-            elif c == ")":
-                profundidad -= 1
-                if profundidad == 0:
-                    return i
-        i += 1
-    return len(texto)
-
-
-def _sustituciones(texto: str, powershell: bool) -> list[str]:
-    """Comandos de `$(…)` y de comillas invertidas fuera de comillas simples."""
-    encontradas: list[str] = []
-    simple = doble = False
-    i = 0
-    while i < len(texto):
-        c = texto[i]
-        if not powershell and c == "\\" and not simple:
-            i += 2
-            continue
-        if powershell and c == "`":
-            i += 2  # en PowerShell, la comilla invertida es el carácter de escape
-            continue
-        if c == "'" and not doble:
-            simple = not simple
-        elif c == '"' and not simple:
-            doble = not doble
-        elif not simple:
-            if c == "$" and texto[i + 1 : i + 2] == "(" and texto[i + 2 : i + 3] != "(":
-                fin = _cierre_parentesis(texto, i + 2)
-                encontradas.append(texto[i + 2 : fin])
-                i = fin + 1
-                continue
-            if c == "`" and not powershell:
-                fin = texto.find("`", i + 1)
-                if fin == -1:
-                    break
-                encontradas.append(texto[i + 1 : fin])
-                i = fin + 1
-                continue
-        i += 1
-    return encontradas
-
-
 def extraer_texto_ejecutable(comando: str, powershell: bool = False) -> Extraccion:
     """Comandos interiores de shells y código en línea de intérpretes de `comando`.
 
@@ -443,10 +530,7 @@ def _extraer(
     interiores: list[tuple[str, bool, bool]] = []
 
     if not es_cmd:
-        textos = [tokens.texto]
-        textos += [c.texto for grupo in tokens.cuerpos for c in grupo if c.expande]
-        for texto in textos:
-            interiores += [(s, powershell, False) for s in _sustituciones(texto, powershell)]
+        interiores += [(s, powershell, False) for s in tokens.sustituciones]
 
     etapas: list[tuple[list[str], list[_Cuerpo]]] = []
     for originales, cuerpos, en_tuberia in zip(

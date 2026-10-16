@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import re
 import shlex
 from pathlib import Path
 
@@ -370,3 +371,92 @@ def test_ruta_de_git_bash_desde_tmp_path(tmp_path):
     unidad, resto = str(tmp_path).replace("\\", "/").split(":", 1)
     ruta = f"/{unidad.lower()}{resto}/src/x.py"
     assert comun.normalizar_ruta(ruta, tmp_path) == "src/x.py"
+
+
+# --- Correcciones de la revisión de la parada B2 (T008b) ----------------------------
+
+# Nombres de secretos, como el patrón de texto de guarda_secretos (contrato).
+_SECRETO = re.compile(
+    r"(?<![\w.-])(?:\.env(?![\w])(?!\.example)|secrets[/\\]|[\w-]+\.key(?=[\"' ]|$))"
+)
+
+_COMMIT_R1 = "git commit -m \"$(cat <<'EOF'\nfix(hooks): mensaje\nEOF\n)\""
+
+
+def test_commit_con_heredoc_en_sustitucion_no_falla():
+    extraccion = comun.extraer_texto_ejecutable(_COMMIT_R1)
+    assert extraccion.codigos == []
+    assert [comun.dividir_comando(c.texto) for c in extraccion.comandos] == [[["cat"]]]
+
+
+def test_heredoc_de_interprete_en_sustitucion_es_codigo():
+    comando = "git commit -m \"$(python3 <<'EOF'\nimport sys\nprint(sys.argv)\nEOF\n)\""
+    assert comun.extraer_texto_ejecutable(comando).codigos == ["import sys\nprint(sys.argv)"]
+
+
+@pytest.mark.parametrize("comillas", ['"', "'"])
+def test_heredoc_entre_comillas_es_texto(comillas):
+    comando = f"echo {comillas}<<X{comillas}\ncat .env\nX"
+    assert comun.dividir_comando(comando) == [["echo", "<<X"], ["cat", ".env"], ["X"]]
+
+
+def test_heredoc_en_un_comentario_es_texto():
+    # Solo se comprueba que el cuerpo no se quita. Que la línea siguiente al comentario
+    # quede en el mismo subcomando es otro hallazgo, pendiente de la revisión de la B3.
+    palabras = [p for s in comun.dividir_comando("echo hola # <<X\ncat .env\nX") for p in s]
+    assert palabras[-3:] == ["cat", ".env", "X"]
+
+
+def test_el_cuerpo_viaja_con_la_palabra_de_bash_c():
+    sustitucion = "$(python3 <<'EOF'\nX\nEOF\n)"
+    extraccion = comun.extraer_texto_ejecutable(f'bash -c "{sustitucion}"')
+    assert sustitucion in [c.texto for c in extraccion.comandos]
+    assert "X" in extraccion.codigos
+
+
+def test_cuerpo_con_comillas_y_parentesis_no_rompe_la_sustitucion():
+    comando = (
+        'echo "$(cat <<\'FIN\'\nfix(x): dice "hola" y it\'s (o no\nFIN\n)"\necho "$(cat .env)"'
+    )
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert "cat .env" in [c.texto for c in extraccion.comandos]
+
+
+def test_marca_sin_cuerpo_lanza_value_error():
+    with pytest.raises(ValueError):
+        comun.dividir_comando("cat << " + comun._MARCA.format(0))
+
+
+def test_marca_sin_cuerpo_en_comando_interior_vuelve_a_texto():
+    texto = "cat << " + comun._MARCA.format(0)
+    assert texto in comun.extraer_texto_ejecutable(f'bash -c "{texto}"').codigos
+
+
+def test_delimitador_con_forma_de_marca_antigua_no_falla():
+    assert comun.dividir_comando("cat << __heredoc_0__") == [["cat", "<<", "__heredoc_0__"]]
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        _COMMIT_R1,
+        "git commit -m \"$(cat <<'EOF'\nfix(hooks): protege .env y secrets/\n\n"
+        'Co-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)"',
+        'git commit -m "$(cat <<\'EOF\'\nfix(x): dice "hola" y it\'s\nEOF\n)"',
+        "git commit -q -F - <<'EOF'\nprotege .env y secrets/\nEOF",
+        'git commit -m "protege .env"',
+        "git log --format='%h %s' -3",
+        "gh api repos/x/y/issues --jq '.[] | .title'",
+        "uv run pytest -q",
+        "uv run ruff check .",
+        "git switch main",
+    ],
+)
+def test_corpus_de_comandos_legitimos(comando):
+    comun.dividir_comando(comando)
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert not extraccion.anidamiento_excesivo
+    assert [c for c in extraccion.codigos if _SECRETO.search(c)] == []
+    for interior in extraccion.comandos:
+        for palabras in comun.dividir_comando(interior.texto, powershell=interior.powershell):
+            assert [p for p in palabras if _SECRETO.search(p)] == [], interior.texto

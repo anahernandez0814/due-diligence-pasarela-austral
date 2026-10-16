@@ -591,7 +591,7 @@ Criterio de la analista: se corrige lo que un PR no vería; se declara lo que es
   - `guarda_spec_previa` bloquea en `main` sus equivalentes que escriben `src/app/b.py`;
   - siguen permitidos `echo x | xargs echo`, `sudo -u otro ls` y `env -S 'echo hola'`.
 - [X] T051 Documentación (FR-025, R9, R10): README, con `.claude/settings.local.json` en la lista de lo protegido; `DECISIONES.md`, entrada 4, con los residuales nuevos y el residual (2) agrupado por categorías, terminando en "lista completa en R10".
-- [ ] T052 pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, `ruff check .` y `ruff format --check .` en verde; push; actualizar la descripción del PR #17 y ampliar la sección "Revisión previa" del comentario de #3 con lo decidido para los nueve hallazgos. Sin fusionar.
+- [X] T052 pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, `ruff check .` y `ruff format --check .` en verde; push; actualizar la descripción del PR #17 y ampliar la sección "Revisión previa" del comentario de #3 con lo decidido para los nueve hallazgos. Sin fusionar.
 
 ---
 

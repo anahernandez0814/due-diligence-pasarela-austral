@@ -313,8 +313,10 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   con destino protegido), incluidos los que van dentro de otro shell (`bash -c`, `eval`)
   y el código en línea de un intérprete que nombra una ruta protegida. Borrar, restaurar
   o mover código protegido también es modificarlo: cuentan el borrado (`rm`, `git rm`,
-  `Remove-Item`), la restauración desde git (`git checkout … -- <ruta>`,
-  `git restore <ruta>`) y la fuente de un movimiento (`mv`, `Move-Item`).
+  `Remove-Item`, `truncate`), la restauración desde git (`git checkout`, con o sin `--`,
+  y `git restore`), la fuente de un movimiento (`mv`, `git mv`, `Move-Item`) y las
+  carpetas que contienen código protegido (`rm -rf .claude`, `git restore .`). Las rutas
+  se resuelven tras los `cd` del propio comando y respecto al `-C` de git.
 - **FR-013**: El mensaje de bloqueo DEBE decir qué documento falta, o por qué la rama no
   permite código.
 

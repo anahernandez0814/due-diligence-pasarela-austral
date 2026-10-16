@@ -195,6 +195,13 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 - **Hallazgo**:
   - Las reglas `Read(...)` también se aplican a Grep, Glob y LSP. Las reglas `Edit(...)`
     se aplican a Edit, Write y NotebookEdit.
+  - **Corrección (I6 de la segunda pasada del análisis)**: además, según la
+    documentación de permisos, "Read and Edit deny rules apply to Claude's built-in file
+    tools, to file commands Claude Code recognizes in Bash, such as `cat`, `head`, `tail`,
+    `sed`, and `tee`, and to the targets of Bash redirections such as `> file` and
+    `< file`. They don't apply to a command that reads files without naming them, such
+    as `grep -r pattern .` […], or to arbitrary subprocesses that read or write files
+    indirectly, like a Python or Node script that opens files itself."
   - Un `allow` no puede rescatar `.env.example` de un `Read(**/.env.*)`, porque se
     evalúa deny, luego ask, luego allow.
   - Las reglas de archivo de deny **sí admiten excepciones** (corrección del analista;
@@ -218,6 +225,13 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     alcanza. Además, `Edit(/.claude/settings.local.json)` (R14).
   - **Bash**: los lectores y copiadores más comunes (`cat`, `head`, `tail`, `less`,
     `more`, `cp`, `mv` y `source`) sobre `.env`, `.env.local`, `secrets/` y `*.key`.
+    - Se mantienen como **defensa adicional** para los comandos que Claude Code no
+      reconoce como de archivo, como `cp`, `mv` o `source`.
+    - Las de `cat`, `head` y `tail` son en parte redundantes con las reglas `Read`, sin
+      daño.
+    - Por eso, en la sesión, un bloqueo de esos comandos puede venir de la capa de
+      permisos o de la guarda, y cualquiera de las dos es un resultado válido. La capa de
+      permisos se verifica en `test_configuracion.py`, y la guarda en los tests por stdin.
   - **Sin `grep`**: una regla como `Bash(grep *.env *)` bloquearía
     `grep -n .env README.md`, una búsqueda del texto ".env" en un archivo normal, que
     FR-002 y SC-001 obligan a permitir. Una regla de permiso no distingue el patrón del
@@ -294,24 +308,52 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     (C1).
   - Medido: recorrer la raíz del repositorio podando solo `.git` tarda ≈ 3 ms (813
     archivos).
-- **Decisión 1, texto ejecutable (C1)**:
-  - En Bash, y en PowerShell como respaldo (R5), `guarda_secretos` revisa además **como
-    texto**, buscando nombres de archivos de secretos:
-    - el código en línea de `python`, `python3`, `py`, `node`, `ruby` y `perl` con `-c`
-      o `-e`, también detrás de `uv run` (con o sin opciones de `uv`);
-    - el argumento de `bash -c` y `sh -c`;
-    - el argumento de `powershell` y `pwsh` con `-Command` o `-c`;
-    - los argumentos de `eval`;
-    - el cuerpo de los heredocs (`<<`, `<<-`, `<<'FIN'`) cuyo comando es uno de esos
-      intérpretes o shells.
-  - **Heredocs, acotación**: los que alimentan a otro comando, como `git commit -F - <<…`
-    o `cat > archivo <<…`, no se revisan como código. Un mensaje de commit que menciona
-    ".env" no lee nada.
-  - **Búsqueda en el texto**: una expresión regular encuentra `.env` o `.env.<sufijo>`
-    (salvo `.env.example`), un nombre que termina en `.key` seguido de comilla, espacio
-    o fin de texto, y `secrets/` o `secrets\`. Siempre exige que no haya una letra, un
-    dígito, `.`, `_` o `-` pegado delante. Así, `x.keys()`, `obj.key)` y el módulo
-    `secrets.token_hex` no coinciden.
+- **Decisión 1, texto ejecutable (C1; U2, U3, C2 y D1 de la segunda pasada)**:
+  - **Extractor compartido**: `comun.py` tiene un único extractor de texto ejecutable.
+    Lo usan `guarda_secretos`, que busca nombres de secretos, y `guarda_spec_previa`, que
+    busca código protegido (R10). Trata dos casos.
+  - **Shells: análisis recursivo (U3)**. El comando interior de `bash -c`, `sh -c`,
+    `eval`, `powershell` o `pwsh` con `-Command` o `-c`, y el cuerpo de un heredoc que
+    alimenta a `bash` o `sh`, se analizan con **las mismas reglas que el comando
+    exterior**: rutas, exclusión del patrón de búsqueda (FR-002) y raíz de las búsquedas
+    recursivas. Así:
+    - `bash -c "grep -r TOKEN ."` se bloquea, porque la raíz tiene `.env`;
+    - `bash -c "grep '.env' src/"` se permite, porque `.env` es el patrón.
+
+    Salvaguardas:
+    - si el comando interior no se puede analizar (por ejemplo, `shlex` falla por
+      comillas sin cerrar), se vuelve a la revisión como texto;
+    - el anidamiento máximo es de **3 niveles**; uno más profundo se bloquea por
+      precaución, con un mensaje que lo explica.
+  - **Intérpretes de lenguaje: revisión como texto**. Se reconocen por patrón (C2), también
+    detrás de `uv run [opciones]`:
+
+    | Intérprete | Patrón del ejecutable | Opciones de código en línea |
+    |------------|-----------------------|-----------------------------|
+    | Python | `python` con versión opcional (`python3`, `python3.12`) | `-c` |
+    | Lanzador de Python | `py`, con opciones de versión opcionales (`-3`, `-3.12`) antes de `-c` | `-c` |
+    | Node | `node` | `-e`, `--eval`, `-p`, `--print` |
+    | Perl | `perl` | `-e`, `-E` |
+    | Ruby | `ruby` | `-e` |
+
+    Se revisa como texto el argumento de esas opciones y el cuerpo de un heredoc que
+    alimenta a uno de esos intérpretes (por ejemplo, `python - <<'FIN'`).
+  - **Heredocs, acotación confirmada por la analista (D1)**: solo se analizan los que
+    alimentan a un intérprete o a un shell. Los que alimentan a otro comando
+    (`git commit -F - <<…`, `cat > archivo <<…`) no se revisan como código: un mensaje
+    de commit que menciona ".env" no lee nada. Las otras guardas los cubren por su lado:
+    - `guarda_datos` revisa el texto **completo** del comando, heredoc incluido, así que
+      un dato con forma real en un mensaje de commit o en `cat > archivo <<…` se bloquea;
+    - `guarda_spec_previa` revisa el destino de `cat > archivo`, como cualquier
+      redirección (R10).
+  - **Búsqueda de secretos en el texto (U2)**: una expresión regular encuentra:
+    - `.env` sin una letra, un dígito ni `_` detrás. Sí puede seguir `.<sufijo>`, que
+      cuenta salvo `.env.example`. Así, `os.environ` y `.environment` no coinciden.
+    - un nombre que termina en `.key` seguido de comilla, espacio o fin de texto;
+    - `secrets/` o `secrets\`.
+
+    Delante de cualquiera de ellos no puede haber una letra, un dígito, `.`, `_` ni `-`
+    pegado. Así, `x.keys()`, `obj.key)` y el módulo `secrets.token_hex` tampoco coinciden.
 - **Decisión 2, búsquedas recursivas (I1)**: se bloquean **solo si su raíz contiene
   archivos de secretos** (FR-002: la búsqueda "no apunta a archivos de secretos").
   - Se aplica a:
@@ -358,9 +400,18 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     (`-Destination` o segundo posicional).
   - El comando se divide por `;`, `&&`, `||` y `|`, y se separa en palabras con `shlex`
     (modo POSIX en Bash; en PowerShell, comillas simples y dobles).
-- **Riesgo residual declarado**: `git apply`, `patch`, `git checkout -- <ruta>`,
-  intérpretes que escriben archivos (`python -c`), y rutas en variables. Se anota en
-  `DECISIONES.md`.
+- **Texto ejecutable (I7 de la segunda pasada)**: la guarda usa el mismo extractor de
+  `comun.py` que `guarda_secretos` (R9, decisión 1):
+  - los shells anidados (`bash -c`, `sh -c`, `eval`, `pwsh -Command`, y los heredocs que
+    alimentan a `bash` o `sh`) se analizan con estas mismas reglas de destinos;
+  - en el código en línea de `python`, `node`, `perl` y `ruby` se buscan como texto
+    nombres de código protegido (data-model).
+  - No se distingue entre lectura y escritura: la guarda solo bloquea cuando faltan spec,
+    plan o tareas, o cuando la rama no es de un ticket. En la rama de un ticket con los
+    tres documentos, un `python -c` que nombra `src/x.py` se permite igual.
+- **Riesgo residual declarado**: `git apply`, `patch`, `git checkout -- <ruta>` y rutas
+  en variables o construidas al ejecutar. Se anota en `DECISIONES.md`. Los intérpretes y
+  shells que nombran código protegido ya no son residuales.
 
 ## R11. Detector de datos con forma real (FR-005, FR-006)
 

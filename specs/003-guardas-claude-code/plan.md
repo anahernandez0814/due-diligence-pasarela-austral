@@ -154,7 +154,10 @@ transición hasta #4.
    alimentan a un intérprete y las búsquedas recursivas cuya raíz contiene secretos ya
    **no** son residuales: los cubre la guarda.
 2. Escrituras en código protegido que no son reconocibles: `git apply`, `patch`,
-   intérpretes, rutas en variables (R10).
+   `git checkout -- <ruta>` y rutas en variables o construidas al ejecutar (R10). El
+   código en línea de intérpretes y shells que nombra código protegido ya **no** es
+   residual: `guarda_spec_previa` usa el mismo extractor de texto ejecutable que
+   `guarda_secretos`.
 3. Un `.py` escrito por comando de terminal no se formatea al momento; lo detecta
    `ruff format --check` (R12).
 4. Cambiar a una rama sin `.claude/hooks/` bloquea todas las acciones vigiladas, por el
@@ -281,7 +284,8 @@ specs/003-guardas-claude-code/
 5. Reglas por ruta.
 6. Documentación.
 7. Commit, sesión nueva y quickstart Q1–Q18, con las ramas temporales creadas desde la
-   del ticket.
+   del ticket. Q12, la comprobación manual de `/mcp`, se adelanta a la fase 1 (T003),
+   antes de escribir código.
 
 Mientras no exista `tasks.md`, la guarda de spec previa bloquearía los pasos 1 y 2. No es
 un problema, porque los hooks se registran en el paso 4, cuando `tasks.md` ya existe.

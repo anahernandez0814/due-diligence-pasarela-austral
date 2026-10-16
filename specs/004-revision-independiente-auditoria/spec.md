@@ -141,14 +141,15 @@ comprobar que se permite.
 
 ### Casos límite
 
-- Rama sin cambios frente a `main`: la revisión lo declara y no hay nada que aprobar; no se
-  registra veredicto aprobado.
+- Rama sin cambios frente a la base: lo comprueba el registro del veredicto con git, no el
+  reporte, y el veredicto es "con bloqueantes (sin cambios)" diga lo que diga el reporte; no
+  hay nada que aprobar. Si el registro no puede calcular la base de comparación, también es
+  "con bloqueantes".
 - Diff muy grande: la revisión siempre recibe la lista de archivos cambiados con sus
   estadísticas, y el diff completo solo si cabe en un umbral. Si no cabe, lee los archivos de
   la lista con sus herramientas de lectura. Solo si no puede leer algún archivo de la lista
-  declara que no cubrió el cambio, y entonces el veredicto no puede ser "aprobado". Los
-  documentos del propio ticket no cuentan para la cobertura, y un PR grande con spec, plan y
-  tareas extensos debe poder aprobarse.
+  declara que no cubrió el cambio, y entonces el veredicto no puede ser "aprobado". Un PR
+  grande con spec, plan y tareas extensos debe poder aprobarse (FR-005).
 - Revisión que no recibe su contexto preparado (marca ausente): declara la cobertura como
   incompleta y el veredicto no puede ser "aprobado".
 - Commit aprobado que no es el último publicado de la rama (no se ha subido, o la rama remota
@@ -205,8 +206,9 @@ comprobar que se permite.
   implementa. Si no aplica, figura como "no aplica" con esa razón; si aplica y no hay
   evidencia, es bloqueante.
 - **FR-008**: El flujo de apertura del PR ejecuta ambas revisiones y consolida un veredicto:
-  "aprobado" solo si ninguna tiene bloqueantes y ambas devolvieron un reporte utilizable;
-  en cualquier otro caso, "con bloqueantes".
+  "aprobado" solo si ninguna tiene bloqueantes, ambas devolvieron un reporte utilizable y el
+  cambio frente a la base no está vacío; en cualquier otro caso, "con bloqueantes". Que el
+  cambio no esté vacío lo comprueba el registro con git, no el reporte.
 - **FR-009**: Con veredicto "con bloqueantes" no se abre el PR ni se cambia el estado del
   ticket; se muestran los hallazgos.
 - **FR-010**: Cada veredicto, "aprobado" o "con bloqueantes", se registra para el commit
@@ -225,7 +227,9 @@ comprobar que se permite.
 - **FR-015**: La guarda y la lógica de registro y lectura del veredicto tienen tests
   automáticos, junto al código, incluidos los casos de bloqueo y de permiso.
 - **FR-016**: La configuración de la guarda se versiona en la configuración compartida del
-  proyecto y funciona en Windows, macOS y Linux.
+  proyecto y está diseñada para funcionar en Windows, macOS y Linux. La validación manual es
+  solo en Windows, el sistema del equipo; los otros dos los respalda el diseño (sin shell,
+  rutas normalizadas y solo la biblioteca estándar).
 - **FR-017**: Los mensajes y reportes al usuario están en español.
 - **FR-018**: El límite del mecanismo (el hook verifica que exista un veredicto aprobado del
   commit actual, no lo genera ni comprueba que los resúmenes registrados vengan de una
@@ -258,9 +262,11 @@ comprobar que se permite.
   repositorio es idéntico al previo.
 - **SC-003**: En un cambio con un defecto y una regla de negocio incumplida sembrados, ambas
   revisiones los reportan como bloqueantes con su ubicación.
-- **SC-004**: La comprobación de la puerta tarda menos de 1 segundo en uso normal.
+- **SC-004**: La comprobación de la puerta tarda menos de 1 segundo, medida en caliente,
+  desde la segunda llamada de la sesión.
 - **SC-005**: Una persona que no conoce el código entiende a partir del reporte qué impide
-  abrir el PR y dónde está cada problema.
+  abrir el PR y dónde está cada problema. La analista lo valida leyendo los reportes de una
+  revisión y de una auditoría, sin abrir el código.
 - **SC-006**: Se cierra la desviación temporal del principio X declarada en #2 (revisión
   previa de transición) y se cumplen los criterios de aceptación del issue #4.
 

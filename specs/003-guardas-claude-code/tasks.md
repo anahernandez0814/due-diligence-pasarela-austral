@@ -346,13 +346,16 @@ patrón y sin documentos, y permite en una rama con los tres.
 **Independent Test**: un `.py` mal formateado queda limpio para `ruff format --check`; uno
 con un error de sintaxis se conserva y se informa.
 
-- [ ] T018 [P] [US4] Escribir `.claude/hooks/test_formatear_python.py` (FR-014, FR-015, R12), con un proyecto temporal con `pyproject.toml` y el script lanzado con `sys.executable` del `.venv`:
+- [ ] T018 [P] [US4] Escribir `.claude/hooks/test_formatear_python.py` (FR-014, FR-015, R12), con los archivos en un proyecto temporal con `pyproject.toml` (su configuración de ruff, con `extend-exclude`), el script lanzado con `sys.executable` y la raíz del repositorio en `CLAUDE_PROJECT_DIR`, de la que `uv run` toma el ruff del `uv.lock` (revisión de la parada E):
   - un `.py` mal formateado queda limpio para `ruff format --check`;
   - un `.md` no se toca;
   - un `.py` con un error de sintaxis devuelve salida 0 y en stdout el JSON `hookSpecificOutput.additionalContext` con "No se pudo formatear", y el archivo queda igual;
+  - un `.py` en una carpeta de `extend-exclude` no se toca;
+  - el script lanzado con el cwd fuera del repositorio formatea igual;
+  - sin uv o sin ruff disponibles, `additionalContext` y salida 0;
   - un archivo inexistente devuelve salida 0;
   - nunca sale con 2.
-- [ ] T019 [US4] Implementar `.claude/hooks/formatear_python.py`, que ejecuta `sys.executable -m ruff format <archivo>` con la raíz como directorio de trabajo, hasta que pase `test_formatear_python.py`. Origen: FR-014, FR-015, FR-023, R12.
+- [ ] T019 [US4] Implementar `.claude/hooks/formatear_python.py`, que ejecuta `uv run --project <raíz> --frozen --quiet ruff format --force-exclude <archivo>` con la raíz como directorio de trabajo y decide el éxito solo por el código de salida, hasta que pase `test_formatear_python.py`. Origen: FR-014, FR-015, FR-023, R12.
 - [ ] T020 [US4] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): formato con ruff tras cada edición`.
 
 **Checkpoint**: el formato funciona por stdin.

@@ -311,7 +311,10 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   los comandos de terminal, de Bash y de PowerShell, que escriben de forma reconocible en
   una ruta protegida (redirección, `tee`, `Set-Content`, `Out-File`, copia o movimiento
   con destino protegido), incluidos los que van dentro de otro shell (`bash -c`, `eval`)
-  y el código en línea de un intérprete que nombra una ruta protegida.
+  y el código en línea de un intérprete que nombra una ruta protegida. Borrar, restaurar
+  o mover código protegido también es modificarlo: cuentan el borrado (`rm`, `git rm`,
+  `Remove-Item`), la restauración desde git (`git checkout … -- <ruta>`,
+  `git restore <ruta>`) y la fuente de un movimiento (`mv`, `Move-Item`).
 - **FR-013**: El mensaje de bloqueo DEBE decir qué documento falta, o por qué la rama no
   permite código.
 

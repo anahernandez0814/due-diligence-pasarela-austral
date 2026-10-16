@@ -84,7 +84,14 @@ Módulos compartidos:
   - **Delante del programa** se saltan:
     - las asignaciones `NOMBRE=valor`;
     - los envoltorios `env [opciones] [NOMBRE=valor…]`, `exec`, `command`, `nohup`,
-      `time`, `nice [-n N]` y `timeout [opciones] N`.
+      `time`, `nice [-n N]` y `timeout [opciones] N`;
+    - los lanzadores `xargs [opciones]` (con `-a`, `-I`, `-n`, `-0` y las demás opciones
+      con valor), `sudo [opciones]` y `doas [opciones]` (saltando, por ejemplo,
+      `-u <usuario>`), cuyo comando se analiza como programa (revisión previa del PR #17,
+      FR-026).
+  - **Lanzadores con un comando en una cadena**: `env -S "<cadena>"`, `script -c "<cmd>"`
+    y `watch "<cmd>"` (o `watch <cmd…>`, saltando `-n N` y las demás opciones) dan un
+    comando interior, nivel + 1, con las mismas reglas que `bash -c`.
   - **`uv run`**: se saltan sus opciones y se toma como programa la primera palabra que
     sea un intérprete o un shell. No se usa una lista fija de opciones con valor.
 - **Rutas de Git Bash** (`normalizar_ruta`): en Windows, una ruta `/<letra>/…` se
@@ -229,7 +236,13 @@ Rutas que revisa:
     - `truncate`: sus posicionales, saltando el valor de `-s`, `-r`, `--size` y
       `--reference`;
   - residuales declarados: `git apply`, `patch`, `git reset`, `git stash`,
-    `find … -delete`, `find … -exec rm`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`;
+    `find … -delete`, `find … -exec rm`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`; y las
+    escrituras que la guarda no reconoce, porque el diff del PR las ve: `perl -pi`,
+    `dd of=`, `curl -o`, `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`,
+    `git clean`, `uv run ruff check --fix` y `ruff format` (R10);
+  - **`.claude/settings.local.json` en cualquier rama** (FR-025, R14): si el comando lo
+    escribe, lo borra, lo mueve o lo restaura, o si el código en línea lo nombra, se
+    bloquea aunque la rama tenga spec, plan y tareas. Leerlo sigue permitido;
   - con el extractor de `comun.py`:
     - los comandos interiores de shells y heredocs se analizan con estas mismas reglas,
       hasta 3 niveles;
@@ -267,6 +280,7 @@ Si ninguna ruta es código protegido, permite. Si alguna lo es, deduce el ticket
 | Más de una carpeta | `[guarda_spec_previa] Hay varias carpetas specs/NNN-*/ (<lista>); el ticket en curso es ambiguo.` |
 | Faltan documentos | `[guarda_spec_previa] Falta <lista de spec.md, plan.md, tasks.md> en specs/NNN-<nombre>/. Completa /speckit-plan o /speckit-tasks antes de escribir código.` |
 | Más de 3 niveles de shells anidados (en cualquier rama) | `[guarda_spec_previa] Comando bloqueado por precaución: tiene más de 3 niveles de shells anidados.` |
+| Se modifica `.claude/settings.local.json` (en cualquier rama) | `[guarda_spec_previa] .claude/settings.local.json no se modifica desde Claude Code en ninguna rama: puede desactivar las guardas. Edítalo fuera de Claude Code.` |
 
 La rama se lee con `git -C <raíz> branch --show-current`. Si git falla, se aplica el fallo
 cerrado.

@@ -392,6 +392,11 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - **Envoltorios**: se saltan las asignaciones `NOMBRE=valor` y `env`, `exec`,
       `command`, `nohup`, `time`, `nice` y `timeout`. En `uv run` se toma la primera
       palabra que sea un intérprete o un shell, sin lista fija de opciones.
+    - **Lanzadores** (revisión previa del PR #17, FR-026): `xargs [opciones] <cmd…>`
+      (con `-a`, `-I`, `-n`, `-0` y las demás opciones con valor), `sudo` y `doas`
+      (saltando opciones como `-u <usuario>`) se saltan como envoltorios, y el comando que
+      lanzan se analiza como programa. `env -S "<cadena>"`, `script -c "<cmd>"` y
+      `watch "<cmd>"` (o `watch <cmd…>`) dan un comando interior.
     - **`cmd /c`** y `cmd //c`, también con `/k`, son un shell interior, analizado sin `\`
       como escape.
     - **Rutas de Git Bash**: `/<letra>/…` se convierte en `<LETRA>:/…` en Windows.
@@ -447,11 +452,14 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 - **Se permiten siempre**: la herramienta Grep, `rg` sin esas opciones y `git grep`.
 - **Comodines**: un comodín que se expande a un secreto (`cat .e*`, `Get-Content *.local`)
   se bloquea, porque la guarda expande cada argumento con comodines contra la raíz.
-- **Riesgo que se acepta y se declara** en `DECISIONES.md`: solo rodeos deliberados.
+- **Riesgo que se acepta y se declara** en `DECISIONES.md`:
   - Rutas construidas al ejecutar (variables, concatenaciones, subshells que generan el
     nombre).
   - Nombres codificados, por ejemplo en base64.
   - Scripts escritos en un archivo y ejecutados después.
+  - **Lectores de archivos completos** (revisión previa del PR #17): `tar c`, `zip -r` y
+    `git show <rev>:<ruta>`. Leen todo un árbol o una revisión sin nombrar el secreto;
+    `.env` nunca se versionó, así que `git show` no lo alcanza.
 
   Las reglas de Bash no son una frontera de seguridad. Las guardas reconocen todas las
   formas en que se nombra un secreto, pero no las que lo ocultan a propósito.
@@ -530,7 +538,11 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     tres documentos, un `python -c` que nombra `src/x.py` se permite igual.
 - **Riesgo residual declarado**: `git apply`, `patch`, `git reset`, `git stash`,
   `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`, `cd ~` y `cd $X`, y las
-  rutas en variables o construidas al ejecutar. Se anota en `DECISIONES.md`. Los
+  rutas en variables o construidas al ejecutar. Desde la revisión previa del PR #17,
+  también las escrituras que la guarda no reconoce: `perl -pi`, `dd of=`, `curl -o`,
+  `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`,
+  `uv run ruff check --fix` y `ruff format`. Motivo: escriben en código versionado, que
+  el diff del PR y la revisión previa ven. Se anota en `DECISIONES.md`. Los
   intérpretes y shells que nombran código protegido ya no son residuales, ni
   `git checkout` (con o sin `--`), `git restore` y `git mv`, que se vigilan desde las
   revisiones de las paradas D y E.
@@ -610,6 +622,12 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - `.claude/settings.local.json` pasa a ser código protegido (FR-011), así que la
     guarda de spec previa también vigila las escrituras por terminal que lo tengan como
     destino.
+  - **En cualquier rama** (revisión previa del PR #17, FR-025): escribir, borrar, mover
+    o restaurar `.claude/settings.local.json`, por terminal o con código en línea que lo
+    nombra, se bloquea aunque la rama tenga spec, plan y tareas. El archivo no se
+    versiona, así que ningún PR vería el cambio. Leerlo sigue permitido. El mensaje es
+    propio: `[guarda_spec_previa] .claude/settings.local.json no se modifica desde Claude
+    Code en ninguna rama: puede desactivar las guardas. Edítalo fuera de Claude Code.`
   - Las personas siguen pudiendo editarlo fuera de Claude Code, que es su función.
   - Las pruebas "sin ticket" del quickstart no se hacen en `main`, sino en una rama
     temporal `prueba-sin-ticket` creada desde `003-guardas-claude-code`, que sí tiene los

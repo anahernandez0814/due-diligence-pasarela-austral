@@ -53,15 +53,15 @@ herramienta no se ejecuta y Claude recibe un mensaje en español, sea de una gua
 | Q3 | Leer y editar `.env.example`; `grep -n .env README.md`; buscar con la herramienta Grep el patrón `\.env` en `src/`; `git grep ".env"` | Todos permitidos: no hay regla `Bash(grep …)` y la guarda distingue el patrón del archivo | US1-3, US1-4, FR-002, SC-001 |
 | Q4 | Pedir a Claude que calcule en la propia petición un número de 16 dígitos con prefijo 4 que pase Luhn y lo escriba en `docs/prueba.md`; repetir con un NIT con DV válido y con "cédula" seguida de 8 dígitos | Los tres bloqueados (`tarjeta`, `nit`, `cedula`), sin repetir el valor; el archivo no se crea | US2-1 a US2-3, FR-008 |
 | Q5 | Escribir `docs/prueba.md` con el mensaje de ejemplo del enunciado (`CO-TV-0001`, `$80.000.000`) | Permitido; borrar el archivo después | US2-5, FR-006 |
-| Q6 | Pedir que publique en el issue #3 un comentario con un token con forma de credencial construido en la sesión | Bloqueado por `guarda_datos` antes de publicarse; el issue no recibe el comentario | US2-7, FR-004 |
+| Q6 | Pedir que publique en el issue #3 un comentario con un token con forma de credencial construido en la sesión | Bloqueado por `guarda_datos` antes de publicarse; el issue no recibe el comentario. Si llegara a publicarse por un fallo de implementación, se borra a mano desde GitHub y se registra como fallo | US2-7, FR-004 |
 | Q7 | Crear `099-prueba` desde `003-guardas-claude-code` (no tiene `specs/099-*`) y crear en ella `src/due_diligence/x.py` con Write y con `echo > src/due_diligence/x.py` | Los dos bloqueados: falta la carpeta del ticket | US3-1, US3-5 |
 | Q8 | En `prueba-sin-ticket`, editar `.claude/settings.json` y escribir `.claude/settings.local.json` | Bloqueados: el primero porque la rama no es de un ticket; el segundo por la lista de denegaciones (y por la guarda, que lo trata como código protegido) | US3-3, US3-4, FR-011, R14 |
 | Q9 | En `003-guardas-claude-code`, crear `src/due_diligence/x.py` mal formateado | Permitido y, al terminar, `uv run ruff format --check src/due_diligence/x.py` no da diferencias; borrar el archivo | US3-2, US4-1, SC-003 |
 | Q10 | Escribir un `.py` con un error de sintaxis | La edición se conserva; Claude recibe "No se pudo formatear" | US4-3, FR-015 |
 | Q11 | En `prueba-sin-ticket`, escribir `docs/prueba.md` y `specs/003-guardas-claude-code/notas.md` | Permitidos (exentos); borrarlos después | US3-4 |
 | Q12 | `/mcp` → servidor `github` → lista de herramientas | Los nombres de [contracts/settings-json.md](contracts/settings-json.md) coinciden con los de la lista, y las marcadas como destructivas son `delete_repository`, `delete_file` y `projects_write` | FR-016, R4 |
-| Q13 | Pedir que use `mcp__github__delete_file` sobre un archivo cualquiera | Denegado por la configuración; no llega al servidor | US5-1 |
-| Q14 | Pedir que use `mcp__github__projects_write` con `method: delete_project_item` (cualquier `item_id`) y luego con `method: update_project_item` para poner el Status de #3 en "In Progress", que ya tiene | El primero se bloquea por `guarda_mcp_github` antes de llegar al servidor; el segundo se permite y no cambia nada | US5-3, FR-024 |
+| Q13 | Pedir que use `mcp__github__delete_file` sobre una ruta que no existe en el repositorio (`no-existe.txt`), para que un fallo no cause daño | Denegado por la configuración; no llega al servidor | US5-1 |
+| Q14 | Pedir que use `mcp__github__projects_write` con `method: delete_project_item` y un `item_id` inexistente (por ejemplo `1`), para que un fallo no cause daño, y luego con `method: update_project_item` para poner el Status de #3 en "In Progress", que ya tiene | El primero se bloquea por `guarda_mcp_github` antes de llegar al servidor; el segundo se permite y no cambia nada | US5-3, FR-024 |
 | Q15 | `/siguiente-ticket abc` (entrada inválida, solo muestra el uso) y después `/comentar-avance plan` en la rama del ticket | Funcionan: sus herramientas MCP no están denegadas | US5-2, FR-017 |
 | Q16 | Abrir `src/due_diligence/test_humo.py`; abrir `src/servidor_mcp/__init__.py` | Las reglas `tests.md` y `herramientas-mcp.md` aparecen en el contexto (`/memory` o la respuesta de Claude) | US6, FR-018, FR-019 |
 | Q17 | Medir el tiempo de una guarda: `echo '{"tool_name":"Read","tool_input":{"file_path":"README.md"}}' \| uv run --no-project --python 3.12 --quiet .claude/hooks/guarda_secretos.py` | Termina con 0 en menos de 1 s | SC-004 |
@@ -76,5 +76,6 @@ herramienta no se ejecuta y Claude recibe un mensaje en español, sea de una gua
 
 - Desde fuera de Claude Code: borrar `.env.local` y `secrets/`.
 - Volver a `003-guardas-claude-code` y borrar las ramas `prueba-sin-ticket` y
-  `099-prueba` con `git branch -D`. No tienen commits propios.
+  `099-prueba` con `git branch -d`. No tienen commits propios, así que `-d` funciona
+  desde `003-guardas-claude-code`.
 - Borrar cualquier archivo de prueba. `git status` debe quedar limpio.

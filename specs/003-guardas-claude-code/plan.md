@@ -23,9 +23,12 @@ hooks y permisos de Claude Code versionados en `.claude/`:
 - **PowerShell desactivada**, por mínimo privilegio: las denegaciones de Bash la mantienen
   apagada. Las guardas la cubren como respaldo si alguien la activa (R5).
 - **Un hook `PostToolUse`**, `formatear_python`, que formatea con ruff y nunca bloquea.
-- **`permissions.deny` ampliado** como primera barrera, con 64 entradas:
-  - secretos para las herramientas de archivo, y `.claude/settings.local.json`, que
-    podría desactivar todas las guardas (R14);
+- **`permissions.deny` ampliado** como primera barrera, con 58 entradas:
+  - secretos para las herramientas de archivo, con las mismas familias que la guarda
+    (`.env`, `.env.*`, `*.key` y `secrets/`) y la excepción `!**/.env.example` detrás
+    (R6);
+  - `Edit(/.claude/settings.local.json)`, anclada a la raíz, porque ese archivo podría
+    desactivar todas las guardas (R14);
   - lectores y copiadores de Bash sobre secretos, sin `grep`, para no bloquear búsquedas
     del texto ".env" (R6);
   - siete herramientas del MCP de GitHub, dos de ellas destructivas.
@@ -78,7 +81,7 @@ con `uv run --no-project`, y las guardas que coinciden corren en paralelo.
 - `CLAUDE.md` no cambia (38 líneas).
 
 **Scale/Scope**: 5 scripts de hook, 2 módulos compartidos, unos 9 archivos de test, 2
-reglas y 64 entradas de denegación.
+reglas y 58 entradas de denegación.
 
 No quedan NEEDS CLARIFICATION. Los puntos (a)–(f) del analista y FR-003 se resolvieron en
 [research.md](research.md):
@@ -187,7 +190,7 @@ specs/003-guardas-claude-code/
 ```text
 .
 ├── .claude/
-│   ├── settings.json                  # + hooks; permissions.deny ampliado (64 entradas)
+│   ├── settings.json                  # + hooks; permissions.deny ampliado (58 entradas)
 │   ├── hooks/                         # Nuevo
 │   │   ├── comun.py                   # stdin, raíz, rutas, shlex, fallo cerrado, bloquear()
 │   │   ├── detector_datos.py          # tarjeta, NIT, cédula, credenciales

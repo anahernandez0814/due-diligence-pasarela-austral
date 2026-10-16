@@ -89,9 +89,12 @@ Archivo de `.claude/rules/` con frontmatter YAML:
 
 ## Entrada de denegación
 
-Cadena de `permissions.deny` en `.claude/settings.json`. 64 entradas, en tres familias:
+Cadena de `permissions.deny` en `.claude/settings.json`. 58 entradas, en tres familias:
 
-- **Herramientas de archivo** (17): secretos más `Edit(./.claude/settings.local.json)`.
+- **Herramientas de archivo** (11): `Read` y `Edit` sobre `**/.env`, `**/.env.*`,
+  `**/*.key` y `**/secrets/**` (8). Después, las excepciones `Read(!**/.env.example)` y
+  `Edit(!**/.env.example)` (2), que solo recortan las reglas anteriores. Por último,
+  `Edit(/.claude/settings.local.json)` (1), anclada a la raíz del proyecto (R6, R14).
 - **Bash** (40): lectores y copiadores sobre secretos, sin `grep` (R6).
 - **MCP de GitHub** (7): por nombre exacto.
 

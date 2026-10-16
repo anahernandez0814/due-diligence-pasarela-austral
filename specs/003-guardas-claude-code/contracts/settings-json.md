@@ -98,33 +98,34 @@ Invariantes que verifica `test_configuracion.py`:
 
 Sustituye a la lista del ticket #1. Primera barrera; la garantía es el hook (R6).
 
-### Herramientas de archivo (17)
+### Herramientas de archivo (11)
 
 `Read(...)` cubre Read, Grep, Glob y LSP; `Edit(...)` cubre Edit, Write y NotebookEdit.
-Para cada objetivo de esta tabla hay una regla `Read(<objetivo>)` y otra
-`Edit(<objetivo>)` (16):
-
-| Objetivo |
-|----------|
-| `**/.env` |
-| `**/.env.local` |
-| `**/.env.*.local` |
-| `**/.env.development` |
-| `**/.env.production` |
-| `**/.env.test` |
-| `**/*.key` |
-| `**/secrets/**` |
-
-`.env.example` no coincide con ninguno.
-
-Más una regla de solo escritura (1):
+El orden importa: la excepción con `!` solo recorta las reglas `path` o `./path`
+**anteriores** de la misma lista (R6).
 
 ```text
-Edit(./.claude/settings.local.json)
+Read(**/.env)
+Edit(**/.env)
+Read(**/.env.*)
+Edit(**/.env.*)
+Read(**/*.key)
+Edit(**/*.key)
+Read(**/secrets/**)
+Edit(**/secrets/**)
+Read(!**/.env.example)
+Edit(!**/.env.example)
+Edit(/.claude/settings.local.json)
 ```
 
-Impide que Claude Code escriba `"disableAllHooks": true` u otra configuración que
-desactive las guardas (R14). Las personas lo siguen editando fuera de Claude Code.
+- Las 8 primeras cubren las mismas familias que la guarda: `.env`, todas las variantes
+  `.env.*`, `*.key` y `secrets/` (FR-003).
+- Las 2 excepciones van detrás de `**/.env.*` y devuelven el acceso a `.env.example`.
+- La última, de solo escritura, impide que Claude Code escriba
+  `"disableAllHooks": true` u otra configuración que desactive las guardas (R14). Las
+  personas lo siguen editando fuera de Claude Code. Con `/`, la ruta se resuelve desde
+  la raíz del proyecto, porque la regla está en la configuración del proyecto. Con `./`
+  sería relativa al directorio actual, que cambia con los `cd`.
 
 ### Comandos de Bash (40)
 
@@ -166,8 +167,13 @@ Las dos primeras son las expuestas con `destructiveHint: true` que el proyecto n
 
 Invariantes que verifica `test_configuracion.py`:
 
-- Están exactamente las 64 entradas: 17 + 40 + 0 + 7.
+- Están exactamente las 58 entradas: 11 + 40 + 0 + 7.
 - Ninguna entrada empieza por `PowerShell(` ni por `Bash(grep`.
+- `Read(!**/.env.example)` aparece después de `Read(**/.env.*)`, y
+  `Edit(!**/.env.example)` después de `Edit(**/.env.*)`.
+- Ninguna regla de Bash coincide con `cat .env.example`. El test interpreta el `*` de
+  cada regla como "cualquier secuencia de caracteres" y la compara con el comando
+  completo.
 - Ninguna herramienta `mcp__github__*` que aparezca en
   `.claude/skills/siguiente-ticket/SKILL.md`, `.claude/commands/abrir-pr.md` o
   `.claude/commands/comentar-avance.md` está en la lista (FR-017).

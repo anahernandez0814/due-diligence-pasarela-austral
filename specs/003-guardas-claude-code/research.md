@@ -195,19 +195,27 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 - **Hallazgo**:
   - Las reglas `Read(...)` también se aplican a Grep, Glob y LSP. Las reglas `Edit(...)`
     se aplican a Edit, Write y NotebookEdit.
-  - Las reglas de denegación **no admiten excepciones**: se evalúa deny, luego ask,
-    luego allow, así que un `allow` no puede rescatar `.env.example` de un
-    `Read(**/.env.*)`.
-  - Las reglas de Bash comparan el texto del comando y "aren't a security boundary".
+  - Un `allow` no puede rescatar `.env.example` de un `Read(**/.env.*)`, porque se
+    evalúa deny, luego ask, luego allow.
+  - Las reglas de archivo de deny **sí admiten excepciones** (corrección del analista;
+    la primera versión de este hallazgo decía lo contrario). La documentación de permisos
+    dice: "A deny or ask pattern that starts with `!` is a gitignore negation. It carves
+    the paths it matches out of the `path` or `./path` rules listed before it." Límites:
+    - solo recorta reglas **anteriores** de la misma lista; un `!` puesto primero no
+      recorta nada;
+    - no alcanza reglas ancladas con `/`, `~/` o `//`;
+    - no reabre un archivo dentro de un directorio bloqueado entero.
+  - Las reglas de Bash no admiten `!`. Comparan el texto del comando y "aren't a
+    security boundary".
   - Las dos reglas actuales, `Bash(cat .env*)` y `Bash(type .env*)`, también bloquean
     `cat .env.example`.
 - **Decisión**: la lista de denegaciones es la **primera barrera**; el hook es la
   garantía.
-  - **Herramientas de archivo**: `Read` y `Edit` sobre `.env`, `.env.local`,
-    `.env.*.local`, `.env.development`, `.env.production`, `.env.test`, `*.key` y
-    `secrets/**`, a cualquier profundidad (`**/`). El resto de variantes `.env.*` las
-    cubre el hook, que sí puede exceptuar `.env.example`. Además,
-    `Edit(./.claude/settings.local.json)` (R14).
+  - **Herramientas de archivo**: `Read` y `Edit` sobre `**/.env`, `**/.env.*`,
+    `**/*.key` y `**/secrets/**`, es decir, las mismas familias que la guarda (FR-003).
+    Les siguen `Read(!**/.env.example)` y `Edit(!**/.env.example)`, **detrás** de las
+    reglas que recortan. Ninguna de esas reglas está anclada, así que la excepción las
+    alcanza. Además, `Edit(/.claude/settings.local.json)` (R14).
   - **Bash**: los lectores y copiadores más comunes (`cat`, `head`, `tail`, `less`,
     `more`, `cp`, `mv` y `source`) sobre `.env`, `.env.local`, `secrets/` y `*.key`.
   - **Sin `grep`**: una regla como `Bash(grep *.env *)` bloquearía
@@ -216,7 +224,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     archivo; la guarda sí (R9 y el contrato de `guarda_secretos`). Por eso `grep` queda
     solo a cargo de la guarda.
   - **Sin PowerShell** (R5).
-  - Se sustituyen las dos reglas actuales por otras que no alcanzan `.env.example`.
+  - Se sustituyen las dos reglas actuales por otras que no alcanzan `.env.example`. En
+    Bash no hay `!`, así que la excepción se consigue con los objetivos (`*.env`,
+    `*.env *`, `*.env.local*`), que no coinciden con `cat .env.example`.
+  - Total: 58 entradas (11 de archivo, 40 de Bash y 7 del MCP).
 
   Lista exacta en [contracts/settings-json.md](contracts/settings-json.md).
 
@@ -368,8 +379,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     cada guarda falla al arrancar y `onFailure: "block"` bloquea todas las acciones que
     vigila. Si se recarga el `settings.json` de esa rama, las guardas desaparecen.
 - **Decisión**:
-  - `Edit(./.claude/settings.local.json)` en `permissions.deny`. Esta regla cubre Edit,
-    Write y NotebookEdit.
+  - `Edit(/.claude/settings.local.json)` en `permissions.deny`. Esta regla cubre Edit,
+    Write y NotebookEdit. Va anclada con `/`: en la configuración del proyecto, `/path`
+    se resuelve desde la raíz del proyecto, mientras que `./path` sería relativa al
+    directorio actual, que cambia con los `cd`.
   - `.claude/settings.local.json` pasa a ser código protegido (FR-011), así que la
     guarda de spec previa también vigila las escrituras por terminal que lo tengan como
     destino.

@@ -47,9 +47,12 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
   contenidos como `VARIABLE_FICTICIA=valor-de-prueba`.
 - **Commits** por partes lógicas en la rama `003-guardas-claude-code`, nunca en `main`, y
   sin `git commit --amend`: cada corrección va en un commit nuevo.
-- **Formato manual hasta la sesión nueva**: el hook de formato solo actúa desde que se
-  reinicia la sesión (T035). Hasta entonces, cada fase termina con
-  `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks`.
+- **Formato manual hasta T035**: según la documentación de hooks, "Direct edits to hooks
+  in settings files are normally picked up automatically by the file watcher". Por eso es
+  probable que las guardas y el formato se activen en esta misma sesión al guardar
+  `settings.json` en T025, no solo al reiniciar. Aun así, cada fase termina con
+  `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks` hasta T035, por
+  si el formato no se activa. El reinicio de T035 se mantiene.
 - **Tests antes de T023**, mientras `pyproject.toml` no incluye `.claude/hooks`:
   `uv run pytest .claude/hooks -o pythonpath=.claude/hooks`.
 
@@ -280,14 +283,26 @@ las guardas y las denegaciones.
   - **Test 2, muestra generada**: la misma función de recorrido, aplicada a archivos de
     `tmp_path` con una muestra generada de cada tipo, detecta el 100 %.
 
-  Si el test 1 encuentra algo en el repositorio, se corrige el archivo afectado y no el
-  detector, y se informa a la analista.
+  Si el test 1 encuentra algo en el repositorio, **no se corrige nada por cuenta propia**:
+  detenerse e informar `archivo:línea:tipo`. La analista decide:
+  - si es un dato real, se corrige el archivo;
+  - si es un falso positivo, se ajusta el detector, con su test en
+    `test_detector_datos.py` y una nota en
+    [contracts/detector-datos.md](contracts/detector-datos.md).
+
+  Nunca se editan a mano `uv.lock` ni archivos de `.specify/`.
 - [ ] T025 Actualizar `.claude/settings.json` exactamente según [contracts/settings-json.md](contracts/settings-json.md):
   - conserva `env` y `enabledMcpjsonServers`;
   - añade `hooks`, con cuatro entradas `PreToolUse` y una `PostToolUse`, en forma exec y con `onFailure`;
   - sustituye `permissions.deny` por las **58 entradas** del contrato, en ese orden, con `Read(!**/.env.example)` y `Edit(!**/.env.example)` detrás de las reglas de `**/.env.*`.
 
-  Origen: FR-003, FR-016, FR-017, FR-022, R1 a R6, R14. Los hooks de esta sesión no se recargan: se activan al reiniciar (T035).
+  Origen: FR-003, FR-016, FR-017, FR-022, R1 a R6, R14.
+  - **Activación**: el observador de archivos suele recoger los hooks en esta misma
+    sesión al guardar el archivo, así que es probable que las guardas actúen desde aquí.
+    El formato manual con ruff se mantiene hasta T035 por si el formato no se activa, y
+    el reinicio de T035 se mantiene.
+  - **Si desde aquí aparece un bloqueo `[guarda_…]` inesperado**, detenerse e informar;
+    nunca desactivar las guardas ni buscar un rodeo.
 - [ ] T026 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14.
   - **Hooks**:
     - cada matcher solo contiene `[A-Za-z0-9_|]`;
@@ -350,6 +365,8 @@ sesión.
   - riesgos residuales 1–4 del plan.
 
   En la entrada 2, la desviación temporal de II y X queda cerrada por la entrada 4, salvo la revisión previa, que sigue hasta #4.
+
+  Comprobar que `DECISIONES.md` completo sigue cabiendo en dos páginas, el límite del enunciado que debe respetar el ticket #14; si no, resumir las entradas.
 - [ ] T032 [P] `README.md`, nueva sección breve "Guardas del entorno" (plan, "Cambios en la documentación"; R14):
   - qué bloquea cada guarda;
   - que requieren `uv` en el `PATH` y se cargan al iniciar la sesión;
@@ -389,7 +406,7 @@ escenarios son los de [quickstart.md](quickstart.md).
 - [ ] T042 [US5] Quickstart Q13–Q15:
   - `delete_file` sobre `no-existe.txt`, denegado;
   - `projects_write` con `delete_project_item` y un `item_id` inexistente, bloqueado por la guarda, y con `update_project_item` del Status de #3 a "In Progress", permitido sin cambios;
-  - `/siguiente-ticket abc` y `/comentar-avance plan` funcionan.
+  - `/siguiente-ticket abc` funciona: su paso 0 usa las herramientas MCP de lectura. No se ejecuta `/comentar-avance plan`, que añadiría una actualización de prueba al comentario "plan" de #3.
 - [ ] T043 [US6] Quickstart Q16–Q17: las reglas aparecen al abrir sus archivos, y una guarda tarda menos de 1 s (SC-004).
 - [ ] T044 [MANUAL] Quickstart Q18, fallo cerrado. La analista renombra `.claude/hooks/guarda_secretos.py` desde fuera de Claude Code; Claude intenta leer `README.md` y debe quedar bloqueado por `onFailure: "block"`; la analista restaura el nombre desde fuera.
 - [ ] T045 [MANUAL] Desde fuera de Claude Code, borrar `.env.local` y la carpeta `secrets/`.
@@ -400,6 +417,8 @@ escenarios son los de [quickstart.md](quickstart.md).
 
   Commit: `docs(specs): validación del quickstart del ticket #3`.
 - [ ] T048 Ejecutar `/abrir-pr`. Abre el PR con `Closes #3`, mueve el ticket a "In review" y comenta; la revisión previa sigue siendo la de transición hasta #4. Detenerse sin fusionar.
+
+  Al ejecutarse en la sesión nueva, valida FR-017 para las herramientas de escritura: `projects_write` con `update_project_item`, `add_issue_comment` y `create_pull_request` pasan por `guarda_datos` y `guarda_mcp_github` sin bloquearse.
 
 ---
 
@@ -455,8 +474,9 @@ T020 test_guarda_mcp_github.py
 ### Incremental Delivery
 
 Cada fase de guarda termina en un commit con sus tests en verde. El registro en
-`settings.json` (T025) es el único punto en que las guardas pasan a actuar, y solo desde
-la sesión nueva (T035).
+`settings.json` (T025) es el único punto en que las guardas pasan a actuar. Es probable
+que lo hagan desde ese momento, por el observador de archivos, y con seguridad desde la
+sesión nueva (T035).
 
 ## Notes
 

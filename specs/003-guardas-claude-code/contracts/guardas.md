@@ -283,9 +283,13 @@ cerrado.
 ## `formatear_python.py` (FR-014, FR-015, R12)
 
 - Actúa solo si `tool_input.file_path` termina en `.py` y el archivo existe.
-- Ejecuta `sys.executable -m ruff format <archivo>` con la raíz como directorio de
-  trabajo.
+- Ejecuta `uv run --project <raíz> --frozen --quiet ruff format --force-exclude <archivo>`
+  con la raíz como directorio de trabajo (revisión de la parada E): el ruff del
+  `uv.lock`, sin reescribir `uv.lock` y respetando el `extend-exclude` de
+  `pyproject.toml`.
+- El éxito se decide solo por el código de salida: un archivo excluido ("No Python files
+  found" en stderr, salida 0) no es un error.
 - Si funciona: salida 0 sin nada en stdout.
-- Si ruff falla: salida 0 y en stdout
+- Si ruff falla, o faltan uv o ruff: salida 0 y en stdout
   `{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "[formatear_python] No se pudo formatear <archivo>: <primera línea del error de ruff>."}}`.
 - Nunca sale con 2 ni modifica otros archivos.

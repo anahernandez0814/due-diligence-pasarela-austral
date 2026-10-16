@@ -31,7 +31,9 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
       `.venv` no exista todavía.
     - Formato: `args: ["run", "--project", "${CLAUDE_PROJECT_DIR}", "--quiet",
       "${CLAUDE_PROJECT_DIR}/.claude/hooks/formatear_python.py"]`. Necesita el grupo
-      `dev`, donde está ruff; el script lo invoca con `sys.executable -m ruff format`.
+      `dev`, donde está ruff; el script lo invoca con
+      `uv run --project <raíz> --frozen --quiet ruff format --force-exclude <archivo>`
+      (R12, revisión de la parada E).
   - **Entrada**: cada script lee el JSON de stdin (`tool_name`, `tool_input`, `cwd`,
     `hook_event_name`). La raíz del repositorio sale de la variable de entorno
     `CLAUDE_PROJECT_DIR` y, si falta, de `cwd`. No se usa el directorio actual del
@@ -536,8 +538,21 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 
 - **Decisión**:
   - Si `tool_input.file_path` termina en `.py`, ejecuta
-    `sys.executable -m ruff format <archivo>`, que respeta `pyproject.toml` (incluido
-    `extend-exclude`).
+    `uv run --project <raíz> --frozen --quiet ruff format --force-exclude <archivo>`,
+    con la raíz como directorio de trabajo (revisión de la parada E):
+    - `uv run --project <raíz>` usa el ruff del `uv.lock` (0.17.0), el mismo de
+      `ruff format --check`. `sys.executable` no sirve: con `uv run --no-project`, solo
+      es el Python del `.venv` cuando el cwd está dentro del repositorio, y desde otra
+      carpeta es un Python sin ruff ("No module named 'ruff'").
+    - `--frozen` evita que un hook reescriba `uv.lock`.
+    - `--force-exclude` hace que se respete el `extend-exclude` de `pyproject.toml`
+      aunque la ruta se pase de forma explícita. Sin él, ruff formatea igual un archivo
+      de `.specify/`, como se comprobó en la parada E.
+    - El éxito se decide solo por el código de salida: con `--force-exclude`, un
+      archivo excluido escribe "No Python files found" en stderr con salida 0, y eso no
+      es un error.
+    - Si faltan uv o ruff, se devuelve el mismo `additionalContext` que cuando ruff
+      falla.
   - Si ruff falla, por ejemplo por un error de sintaxis, devuelve en stdout
     `hookSpecificOutput.additionalContext` ("No se pudo formatear <archivo>: …") y sale
     con 0. La edición se conserva.

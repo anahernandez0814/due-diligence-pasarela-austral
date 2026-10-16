@@ -52,6 +52,8 @@ bloquean. Leer `.env.example` funciona.
    de secretos, **When** se ejecuta, **Then** se permite.
 5. **Given** la configuración compartida del equipo, **When** se revisa la lista de
    denegaciones, **Then** incluye los mismos patrones de secretos que el hook.
+6. **Given** código en línea de un intérprete que abre `.env`, **When** se ejecuta,
+   **Then** se bloquea.
 
 ---
 
@@ -225,10 +227,12 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   tenga la cantidad de dígitos de una cédula.
 - El mensaje de bloqueo no repite el valor sensible: dice el tipo y dónde, no el dato.
 - Un hook falla por un error propio (excepción, tiempo agotado): las guardas de secretos,
-  datos y spec previa bloquean la acción (fallo cerrado) y lo informan; el hook de
-  formato nunca bloquea.
-- Un comando de terminal recursivo que no nombra el archivo de secretos (por ejemplo, una
-  búsqueda recursiva sobre todo el repositorio) es un riesgo residual; ver Assumptions.
+  datos, spec previa y Project bloquean la acción (fallo cerrado) y lo informan; el hook
+  de formato nunca bloquea.
+- Una búsqueda recursiva por terminal (`grep -r`, `rg` sin respetar `.gitignore`,
+  `find … -exec`, `Get-ChildItem -Recurse`) se bloquea solo si su raíz contiene archivos
+  de secretos. `grep -rn ".env" src/` se permite, porque `src/` no tiene secretos (FR-002);
+  `grep -r TOKEN .` se bloquea, porque la raíz del repositorio tiene `.env`.
 - La rama tiene el patrón `NNN-*` pero existen dos carpetas `specs/NNN-*`: se bloquea el
   código protegido, porque el ticket en curso es ambiguo.
 - Se edita `.claude/hooks/**` en el propio ticket que crea los hooks: aplica la misma
@@ -272,8 +276,9 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   - **Cédula colombiana**: un número de 6 a 10 dígitos (con o sin puntos de miles)
     precedido, a corta distancia, de una palabra de contexto: "cédula", "cedula", "C.C.",
     "CC", "documento de identidad" o "identificación".
-  - **Credenciales**: tokens de GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` o
-    `github_pat_` seguidos de al menos 20 caracteres alfanuméricos), claves de Anthropic
+  - **Credenciales**: tokens de GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_` o `ghr_` seguidos
+    de al menos 20 caracteres alfanuméricos, o `github_pat_` seguido de 20 o más
+    caracteres `[A-Za-z0-9_]`), claves de Anthropic
     (`sk-ant-` seguido de al menos 20 caracteres), claves de acceso de AWS (`AKIA`
     seguido de 16 caracteres en mayúsculas o dígitos) y bloques de clave privada
     (`-----BEGIN … PRIVATE KEY-----`).
@@ -308,7 +313,8 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 **Formato**
 
 - **FR-014**: Un hook posterior a la edición DEBE formatear con la herramienta de formato
-  del proyecto cada archivo Python escrito o editado.
+  del proyecto cada archivo Python escrito o editado con las herramientas Write y Edit de
+  Claude Code.
 - **FR-015**: El hook de formato NO DEBE bloquear ni deshacer la edición; si no puede
   formatear, DEBE informarlo.
 
@@ -378,7 +384,8 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 - **SC-003**: Después de cualquier edición de un archivo Python con sintaxis válida, el
   comprobador de formato no encuentra diferencias en ese archivo.
 - **SC-004**: Las guardas no añaden una espera perceptible: cada comprobación termina en
-  menos de 1 segundo en una estación de desarrollo normal.
+  menos de 1 segundo, medida en caliente, desde la segunda llamada de la sesión. La
+  primera llamada puede tardar más (≈ 1,1 s medido), porque `uv` prepara el entorno.
 - **SC-005**: El 100 % de los mensajes de bloqueo dicen qué se bloqueó y por qué, en
   español, y ninguno repite un valor sensible.
 - **SC-006**: Al cerrar el ticket, la desviación temporal del principio II declarada en
@@ -394,14 +401,17 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
 - **Datos ficticios**: las pruebas que necesitan valores con forma real los generan en
   tiempo de ejecución; no hay una lista de valores permitidos ni una forma de saltarse
   las guardas.
-- **Riesgo residual**: un comando de terminal que lee secretos sin nombrarlos (por
-  ejemplo, una búsqueda recursiva sin exclusiones) puede escapar al hook. La búsqueda de
-  Claude Code respeta `.gitignore`, que excluye `.env`. El plan decide si se cubren otros
-  casos.
+- **Riesgo residual**: la guarda reconoce los secretos nombrados en rutas, en el código en
+  línea de los intérpretes y de los shells, en `eval` y en los heredocs, y las búsquedas
+  recursivas cuya raíz contiene secretos. Escapan solo los rodeos deliberados: rutas
+  construidas al ejecutar, texto codificado (por ejemplo, en base64) y scripts escritos
+  en un archivo y ejecutados después. La búsqueda de Claude Code respeta `.gitignore`,
+  que excluye `.env`.
 - **Directorio del plugin**: aún no existe (#13). El plan fija su ruta para que la guarda
   de spec previa ya la proteja.
 - **Formato**: la herramienta de formato es la del proyecto (ruff, ticket #1). El hook
-  solo formatea; no corrige reglas de lint.
+  solo formatea; no corrige reglas de lint. Un `.py` escrito por un comando de terminal
+  no pasa por el hook; lo detecta `ruff format --check` antes del PR.
 - **Herramientas destructivas**: la lista exacta se toma de la lista del MCP de GitHub en
   una sesión con el servidor conectado y se fija en el plan.
 - **Ciclo del ticket**: este ticket se construye con el ciclo automatizado de #2. La

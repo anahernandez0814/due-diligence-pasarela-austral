@@ -322,6 +322,13 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   carpeta con código protegido (salvo la raíz) cuenta como código protegido.
 - **FR-013**: El mensaje de bloqueo DEBE decir qué documento falta, o por qué la rama no
   permite código.
+- **FR-025**: Escribir, borrar, mover o restaurar `.claude/settings.local.json`, también
+  desde la terminal o desde el código en línea que lo nombra, DEBE bloquearse en
+  cualquier rama, tenga o no spec, plan y tareas: el archivo no se versiona, así que
+  ningún PR vería un cambio que desactive las guardas. Leerlo sigue permitido.
+- **FR-026**: Los lanzadores que ejecutan otro comando (`xargs`, `sudo`, `doas`,
+  `env -S`, `script -c`, `watch`) DEBEN analizarse como el comando que lanzan, con las
+  mismas reglas de secretos y de spec previa.
 
 **Formato**
 

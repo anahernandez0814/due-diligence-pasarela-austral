@@ -65,15 +65,20 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     transcript muestra el error.
   - Un hook que agota su timeout "doesn't block the tool call".
   - Desde la v2.1.295, `"onFailure": "block"` hace que un fallo actúe como la salida 2.
-    Cuenta como fallo: que el hook no arranque (por ejemplo, falta `uv` o el script),
-    una salida distinta de 0 y 2, el timeout o una salida JSON inválida.
+    Cuenta como fallo: que el hook no arranque (por ejemplo, falta `uv`), una salida
+    distinta de 0 y 2, el timeout o una salida JSON inválida.
+  - Un **script inexistente no es un hook que no arranca**: `uv` sí arranca, no encuentra
+    el script ("Failed to spawn") y sale con 2, así que bloquea por la salida 2, con o
+    sin `onFailure` (comprobado en Q18a).
 - **Decisión**: el fallo cerrado tiene dos capas.
   1. Cada guarda envuelve su lógica en un `try/except BaseException`. Ante cualquier
      excepción escribe en stderr "La guarda <nombre> falló (<tipo de error>); la acción
      se bloquea por precaución." y sale con 2.
   2. Las cuatro guardas (secretos, datos, spec previa y Project, R4) llevan
      `"onFailure": "block"`. Así se cubre lo que el script no puede atrapar: `uv`
-     ausente, script inexistente o timeout.
+     ausente, una salida distinta de 0 y 2 (comprobado en Q18b: un script que sale con
+     1 bloquea solo por esta capa) o el timeout. Un script inexistente ya lo bloquea la
+     salida 2 de `uv`.
 
   El formato lleva `"onFailure": "continue"` (FR-015).
 - **Consecuencia aceptada**: sin `uv` en el `PATH`, la guarda de secretos bloquea todas

@@ -69,9 +69,15 @@ herramienta no se ejecuta y Claude recibe un mensaje en español, sea de una gua
 
 ## Fallo cerrado
 
-- **Q18**: desde fuera de Claude Code, renombrar de forma temporal
-  `.claude/hooks/guarda_secretos.py`, y pedir en la sesión que lea `README.md`.
-  Resultado: bloqueado por `onFailure: "block"`. Restaurar el nombre desde fuera.
+- **Q18**, en dos partes. En las dos se pide en la sesión que lea `README.md` y el
+  resultado es bloqueado; después se restaura el script desde fuera
+  (`git restore .claude/hooks/guarda_secretos.py`).
+  - **Q18a, script inexistente**: desde fuera de Claude Code, renombrar de forma
+    temporal `.claude/hooks/guarda_secretos.py`. Bloquea la salida 2 de `uv`, que arranca
+    y no encuentra el script ("Failed to spawn"), no `onFailure`: no es un hook que no
+    arranca.
+  - **Q18b, salida 1**: desde fuera, sustituir el script por uno que sale con 1. Bloquea
+    solo `onFailure: "block"` ("failed; blocking because onFailure is \"block\"").
 
 ## Limpieza
 

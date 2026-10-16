@@ -326,6 +326,14 @@ patrón y sin documentos, y permite en una rama con los tres.
   - en `main` se permiten `rm docs/x.md` y `git checkout 003-x`, sin `--`.
 
   Ejecutar pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, y ruff. Commit: `fix(hooks): borrar, restaurar y mover código protegido`.
+- [ ] T017b [US3] Corrección de la revisión de la parada E (FR-012, R10, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`. Se bloquean en `main` y se permiten con los tres documentos:
+  1. **Carpetas que contienen código protegido**, al borrar, restaurar o mover (función aparte de la del destino de una copia: la raíz, un ancestro de algo protegido o una carpeta dentro de una zona protegida): `rm -rf .claude`, `rm -rf .`, `git restore .`, `git checkout -- .`, `git checkout 003-x -- .claude`, `mv .claude .claude-viejo` y `Remove-Item -Recurse .claude`. `rm -rf docs` se sigue permitiendo.
+  2. **`git checkout` sin `--`**: `git checkout 003-x .claude/settings.json`, `git checkout HEAD src/app/a.py` y `git checkout src/app/a.py` (existe en disco). Se siguen permitiendo `git checkout 003-x`, `git checkout main` y `git checkout -b 004-y main`.
+  3. **`git mv` y `git -C`**: `git mv src/app/a.py docs/a.py` y `git -C src rm app/a.py`.
+  4. **`cd` dentro del comando**: `cd src && echo x > app/b.py`, `cd src/app; cp /tmp/x.py b.py` y `pushd .claude && rm settings.json`.
+  5. **`truncate`**: `truncate -s 0 src/app/a.py`.
+
+  Ejecutar pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, y ruff. Commit: `fix(hooks): carpetas, git checkout, git mv, cd y truncate`.
 
 **Checkpoint**: la guarda de spec previa funciona en repositorios temporales.
 

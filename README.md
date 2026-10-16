@@ -123,8 +123,10 @@ Claude Code trabaja con cuatro guardas y un hook de formato, registrados en
 - **`guarda_datos`**: bloquea escribir, ejecutar o publicar en GitHub tarjetas, NIT,
   cédulas o credenciales con forma real.
 - **`guarda_spec_previa`**: bloquea escribir, borrar o restaurar código protegido
-  (`src/**/*.py`, `.claude/hooks/`, `.claude/settings.json`, `.mcp.json` y el plugin) si
-  la rama no es de un ticket o le faltan la spec, el plan o las tareas.
+  (`src/**/*.py`, `.claude/hooks/`, `.claude/settings.json`, `.claude/settings.local.json`,
+  `.mcp.json` y el plugin) si la rama no es de un ticket o le faltan la spec, el plan o
+  las tareas. `.claude/settings.local.json`, que no se versiona y puede desactivar las
+  guardas, se bloquea en cualquier rama; solo se edita fuera de Claude Code.
 - **`guarda_mcp_github`**: limita `projects_write` del MCP de GitHub a mover tarjetas
   (`update_project_item`).
 - **`formatear_python`**: formatea con ruff cada `.py` escrito o editado; nunca bloquea.

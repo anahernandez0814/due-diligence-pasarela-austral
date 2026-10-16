@@ -23,7 +23,7 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 ## 2. Ciclo manual de tickets durante la transición
 
 - **Necesidad o tema**: trazabilidad de cada ticket (constitución IX) antes de la automatización del ciclo (#2) y de la revisión previa al PR (#4).
-- **Decisión**: #1 y #2 siguieron el ciclo a mano: rama `NNN-nombre-corto` desde `main`, spec, plan y tareas con Spec Kit, ticket y comentarios con el MCP de GitHub (o `gh`), PR con `Closes #N` y revisión previa con un subagente de solo lectura. Desde #3 lo automatiza la entrada 3.
+- **Decisión**: #1 y #2 siguieron el ciclo a mano (rama desde `main`, Spec Kit, ticket y comentarios con el MCP de GitHub, PR con `Closes #N`, revisión previa con un subagente). Desde #3 lo automatiza la entrada 3.
 - **Desviación temporal de II y X**: formateo manual antes de cada commit y protección parcial de `.env` (solo Read, Edit, `cat .env*` y `type .env*`) hasta #3. La cierra la entrada 4, salvo la revisión previa, que sigue siendo de transición hasta #4.
 - **Motivo**: trazabilidad desde el primer ticket, aunque las piezas que la automatizan sean tickets del backlog.
 - **Alternativa descartada**: esperar a la automatización, lo que dejaría los primeros tickets sin historial en GitHub.
@@ -52,6 +52,6 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **PowerShell**: apagada por las denegaciones de Bash con Git Bash, sin reglas `PowerShell(...)`, que la encenderían; si se activa, la cubren las guardas (R5).
 - **Denegaciones**: primera barrera, y el hook la garantía; `!**/.env.example` va detrás de `**/.env.*`, y `grep` no se deniega para poder buscar el texto ".env" (R6).
 - **Plugin**: `plugins/<nombre>/` y `.claude-plugin/`, protegidos como código desde ya (R7).
-- **`settings.local.json`**: Claude Code no puede editarlo para desactivar las guardas (R14).
-- **Texto ejecutable**: un extractor común analiza `bash -c`, `eval`, sustituciones, heredocs, tuberías y código en línea, hasta 3 niveles (R9, R10).
-- **Riesgos residuales**: (1) secretos ocultos a propósito (R9); (2) escrituras no reconocibles: `git apply`, `patch`, `git reset`, `git stash`, `find … -delete`, `xargs rm`, `cd $X` y rutas construidas al ejecutar (R10); (3) `.py` escritos por terminal se formatean en `ruff format --check` (R12); (4) cambiar a una rama sin `.claude/hooks/` exige reiniciar la sesión (R14).
+- **`settings.local.json`**: Claude Code no puede escribirlo, borrarlo, moverlo ni restaurarlo para desactivar las guardas; se bloquea en cualquier rama porque no se versiona (R14, FR-025).
+- **Texto ejecutable**: un extractor común analiza `bash -c`, `eval`, sustituciones, heredocs, tuberías, código en línea y los lanzadores `xargs`, `sudo`, `doas`, `env -S`, `script -c` y `watch`, hasta 3 niveles (R9, R10, FR-026).
+- **Riesgos residuales**: (1) lecturas de secretos ocultas: rodeos deliberados (variables, base64, scripts) y lectores de archivos completos (`tar c`, `zip -r`, `git show <rev>:<ruta>`) (R9); (2) escrituras no reconocibles: `git apply`/`patch`/`git reset`/`git stash`, `find …`, `xargs rm`, `cd $X`, rutas construidas al ejecutar y programas que escriben en código versionado que el PR ve; lista completa en R10; (3) `.py` escritos por terminal se formatean en `ruff format --check` (R12); (4) cambiar a una rama sin `.claude/hooks/` exige reiniciar la sesión (R14).

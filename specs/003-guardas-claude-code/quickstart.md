@@ -7,9 +7,10 @@ Guía para comprobar que las guardas funcionan de extremo a extremo. Los contrat
 
 - Implementación terminada y **commiteada** en la rama `003-guardas-claude-code`.
 - `uv sync` ejecutado **antes** de abrir Claude Code.
-- **Sesión nueva** de Claude Code en la raíz: los hooks de `.claude/settings.json` se
-  cargan al iniciar la sesión. Comprobar con `/hooks` que aparecen las cinco entradas
-  (cuatro `PreToolUse` y una `PostToolUse`).
+- **Sesión nueva** de Claude Code en la raíz. El observador de archivos suele recoger los
+  cambios de hooks en `.claude/settings.json` en la misma sesión, pero la validación se
+  hace en una sesión nueva para no depender de ello. Comprobar con `/hooks` que aparecen
+  las cinco entradas (cuatro `PreToolUse` y una `PostToolUse`).
 - El MCP `github` conectado (`/mcp`).
 - Un `.env` local (ya existe y no se versiona).
 - Para las pruebas, `.env.local` y `secrets/prueba.txt` con contenido ficticio. Se crean y
@@ -62,7 +63,7 @@ herramienta no se ejecuta y Claude recibe un mensaje en español, sea de una gua
 | Q12 | `/mcp` → servidor `github` → lista de herramientas | Los nombres de [contracts/settings-json.md](contracts/settings-json.md) coinciden con los de la lista, y las marcadas como destructivas son `delete_repository`, `delete_file` y `projects_write` | FR-016, R4 |
 | Q13 | Pedir que use `mcp__github__delete_file` sobre una ruta que no existe en el repositorio (`no-existe.txt`), para que un fallo no cause daño | Denegado por la configuración; no llega al servidor | US5-1 |
 | Q14 | Pedir que use `mcp__github__projects_write` con `method: delete_project_item` y un `item_id` inexistente (por ejemplo `1`), para que un fallo no cause daño, y luego con `method: update_project_item` para poner el Status de #3 en "In Progress", que ya tiene | El primero se bloquea por `guarda_mcp_github` antes de llegar al servidor; el segundo se permite y no cambia nada | US5-3, FR-024 |
-| Q15 | `/siguiente-ticket abc` (entrada inválida, solo muestra el uso) y después `/comentar-avance plan` en la rama del ticket | Funcionan: sus herramientas MCP no están denegadas | US5-2, FR-017 |
+| Q15 | `/siguiente-ticket abc` (entrada inválida: corre el paso 0 de lectura y muestra el uso) | Funciona: sus herramientas MCP de lectura no están denegadas. Las de escritura (`projects_write` con `update_project_item`, `add_issue_comment` y `create_pull_request`) las valida `/abrir-pr` al final del ticket | US5-2, FR-017 |
 | Q16 | Abrir `src/due_diligence/test_humo.py`; abrir `src/servidor_mcp/__init__.py` | Las reglas `tests.md` y `herramientas-mcp.md` aparecen en el contexto (`/memory` o la respuesta de Claude) | US6, FR-018, FR-019 |
 | Q17 | Medir el tiempo de una guarda: `echo '{"tool_name":"Read","tool_input":{"file_path":"README.md"}}' \| uv run --no-project --python 3.12 --quiet .claude/hooks/guarda_secretos.py` | Termina con 0 en menos de 1 s | SC-004 |
 

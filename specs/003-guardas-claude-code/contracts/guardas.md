@@ -53,6 +53,21 @@ Módulos compartidos:
   - **Heredocs**: el operador `<<` solo cuenta si no forma parte de `<<<`
     (`(?<!<)<<(?!<)`). Un heredoc cuyo delimitador de cierre no aparece no se quita: sus
     líneas se analizan como comandos.
+  - **Heredocs y comillas** (revisión de la parada B2):
+    - Un `<<` dentro de comillas simples o dobles es texto literal y no abre un heredoc
+      (`echo "<<X"`). Tampoco lo abre dentro de un comentario `#`.
+    - Dentro de `$(…)` empieza un contexto nuevo, aunque `$(…)` vaya entre comillas
+      dobles: ahí sí puede haber heredocs, como en el commit
+      `git commit -m "$(cat <<'EOF' … EOF)"`.
+    - El cuerpo empieza tras el primer salto de línea que no está entre comillas.
+  - **El cuerpo viaja con su comando**: el texto de una sustitución `$(…)` y el de una
+    palabra que se analiza como comando interior o como código (`bash -c "…"`) llevan
+    sus heredocs completos, con el cuerpo y la línea de cierre. Así, al analizar
+    `$(python3 <<'EOF' … EOF)`, el cuerpo es texto de código, y en `$(cat <<'EOF' … EOF)`
+    el comando interior es `cat`, sin código.
+  - **Marcas sin cuerpo**: una marca interna de heredoc sin su cuerpo es un error de
+    análisis (`ValueError`, nunca `IndexError`); en un comando interior se aplica la
+    vuelta a texto.
   - **Delante del programa** se saltan:
     - las asignaciones `NOMBRE=valor`;
     - los envoltorios `env [opciones] [NOMBRE=valor…]`, `exec`, `command`, `nohup`,

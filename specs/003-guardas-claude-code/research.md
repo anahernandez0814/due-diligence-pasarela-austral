@@ -386,6 +386,24 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - **`cmd /c`** y `cmd //c`, también con `/k`, son un shell interior, analizado sin `\`
       como escape.
     - **Rutas de Git Bash**: `/<letra>/…` se convierte en `<LETRA>:/…` en Windows.
+  - **Correcciones de la revisión de la parada B2**: un sondeo de regresión encontró que
+    el patrón con que Claude Code escribe los commits,
+    `git commit -m "$(cat <<'EOF' … EOF)"`, hacía fallar el extractor (`IndexError`). El
+    cuerpo se quitaba del texto exterior, pero la marca del heredoc quedaba dentro de
+    `$(…)` sin su cuerpo. Con las guardas registradas, el fallo cerrado habría bloqueado
+    todos los commits. La raíz era la misma que la del residual `echo "<<X"`: el
+    reconocimiento de heredocs no sabía de comillas. Decisión:
+    - **Los heredocs conocen las comillas**: `<<` entre comillas simples o dobles, o en
+      un comentario, es texto literal. Dentro de `$(…)` empieza un contexto nuevo, aunque
+      vaya entre comillas dobles, y ahí sí puede haber heredocs.
+    - **El cuerpo viaja con su comando**: el texto de cada `$(…)` se toma del comando
+      original, con sus heredocs completos. Las palabras que se analizan como comando
+      interior o como código recuperan también los cuerpos que se les quitaron.
+    - **Una marca sin cuerpo** lanza `ValueError`, nunca `IndexError`, para que en un
+      comando interior se aplique la vuelta a texto.
+    - **Prueba de regresión**: un corpus de comandos legítimos del proyecto (commits con
+      heredoc, `git log`, `gh api … --jq`, `uv run`, `git switch`) debe analizarse sin
+      excepción y sin código ni comandos interiores que nombren secretos.
 - **Decisión 2, búsquedas recursivas (I1)**: se bloquean **solo si su raíz contiene
   archivos de secretos** (FR-002: la búsqueda "no apunta a archivos de secretos").
   - Se aplica a:

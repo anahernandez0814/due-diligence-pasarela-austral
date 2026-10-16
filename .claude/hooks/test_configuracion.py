@@ -153,3 +153,33 @@ def test_las_herramientas_que_usa_el_proyecto_no_se_deniegan(archivo):
     usadas = set(re.findall(r"mcp__github__\w+", texto))
     assert usadas, archivo
     assert usadas.isdisjoint(DENY), usadas & set(DENY)
+
+
+# --- Reglas por ruta (FR-018, FR-019, R13) --------------------------------------------
+
+
+def frontmatter_paths(archivo: Path) -> list[str]:
+    """Los elementos de `paths` del frontmatter YAML, sin dependencias externas.
+
+    Solo admite la forma del proyecto: `paths:` seguida de una lista de cadenas entre
+    comillas dobles, todo entre las dos primeras líneas `---`.
+    """
+    lineas = archivo.read_text(encoding="utf-8").splitlines()
+    assert lineas[0] == "---", f"{archivo.name}: no empieza por ---"
+    cierre = lineas.index("---", 1)
+    cabecera = lineas[1:cierre]
+    assert cabecera[0] == "paths:", f"{archivo.name}: falta paths"
+    elementos = []
+    for linea in cabecera[1:]:
+        m = re.fullmatch(r'  - "([^"]+)"', linea)
+        assert m, f"{archivo.name}: elemento de paths mal formado: {linea!r}"
+        elementos.append(m.group(1))
+    return elementos
+
+
+@pytest.mark.parametrize(
+    ("regla", "glob"),
+    [("tests.md", "**/test_*.py"), ("herramientas-mcp.md", "src/servidor_mcp/**/*.py")],
+)
+def test_reglas_declaran_exactamente_su_glob(regla, glob):
+    assert frontmatter_paths(RAIZ / ".claude" / "rules" / regla) == [glob]

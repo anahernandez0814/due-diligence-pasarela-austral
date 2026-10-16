@@ -455,17 +455,17 @@ sesión.
 **Independent Test**: el frontmatter de las dos reglas declara exactamente sus globs, y
 `test_configuracion.py` lo comprueba.
 
-- [ ] T029 [P] [US6] Crear `.claude/rules/tests.md` con frontmatter YAML `paths:` como lista y el único elemento `"**/test_*.py"` (R13). Contenido de FR-018:
+- [X] T029 [P] [US6] Crear `.claude/rules/tests.md` con frontmatter YAML `paths:` como lista y el único elemento `"**/test_*.py"` (R13). Contenido de FR-018:
   - el test va junto al módulo;
   - solo datos ficticios;
   - los valores con forma real se construyen en tiempo de ejecución;
   - los casos obligatorios (a)–(g) de la constitución.
-- [ ] T030 [P] [US6] Crear `.claude/rules/herramientas-mcp.md` con frontmatter `paths:` y el único elemento `"src/servidor_mcp/**/*.py"` (R13). Contenido de FR-019, del principio IV:
+- [X] T030 [P] [US6] Crear `.claude/rules/herramientas-mcp.md` con frontmatter `paths:` y el único elemento `"src/servidor_mcp/**/*.py"` (R13). Contenido de FR-019, del principio IV:
   - descripción inequívoca de qué hace y qué no;
   - errores estructurados que dicen si se puede reintentar;
   - contenido separado de metadatos;
   - solo datos ficticios.
-- [ ] T031 [US6] Ampliar `.claude/hooks/test_configuracion.py`: lee el frontmatter de las dos reglas sin dependencias externas (entre los dos `---`) y comprueba que `paths` contiene exactamente su glob (FR-018, FR-019, R13). Ejecutar `uv run pytest` en verde. Commit: `feat(rules): reglas por ruta para tests y herramientas MCP`.
+- [X] T031 [US6] Ampliar `.claude/hooks/test_configuracion.py`: lee el frontmatter de las dos reglas sin dependencias externas (entre los dos `---`) y comprueba que `paths` contiene exactamente su glob (FR-018, FR-019, R13). Ejecutar `uv run pytest` en verde. Commit: `feat(rules): reglas por ruta para tests y herramientas MCP`.
 
 **Checkpoint**: las seis historias quedan cubiertas por tests automáticos.
 

@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import shlex
 from pathlib import Path
 
@@ -253,3 +254,119 @@ def test_heredocs_y_comandos_sin_texto_ejecutable(comando):
     assert extraccion.comandos == []
     assert extraccion.codigos == []
     assert not extraccion.anidamiento_excesivo
+
+
+# --- Correcciones de la revisión de la parada B (T008a) -----------------------------
+
+
+def test_herestring_no_se_toma_por_heredoc():
+    comando = 'cat <<< "FIN"\npython -c "open(\'.env\')"'
+    assert comun.dividir_comando(comando)[-1] == ["python", "-c", "open('.env')"]
+    assert comun.extraer_texto_ejecutable(comando).codigos == ["open('.env')"]
+
+
+def test_heredoc_sin_cierre_no_se_quita():
+    assert comun.dividir_comando('echo "<<X"\ncat .env') == [["echo", "<<X"], ["cat", ".env"]]
+
+
+@pytest.mark.parametrize("comando", ['echo "$(cat .env)"', "echo `cat .env`", "echo $(cat .env)"])
+def test_sustitucion_de_comandos_es_comando_interior(comando):
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert [(c.texto, c.nivel) for c in extraccion.comandos] == [("cat .env", 1)]
+
+
+def test_sustitucion_entre_comillas_simples_no_cuenta():
+    assert comun.extraer_texto_ejecutable("echo '$(cat .env)'").comandos == []
+
+
+def test_sustitucion_en_heredoc_sin_comillas_cuenta():
+    comando = "cat > a.txt <<FIN\n$(cat .env)\nFIN"
+    assert [c.texto for c in comun.extraer_texto_ejecutable(comando).comandos] == ["cat .env"]
+
+
+def test_sustitucion_en_heredoc_con_comillas_no_cuenta():
+    comando = "cat > a.txt <<'FIN'\n$(cat .env)\nFIN"
+    assert comun.extraer_texto_ejecutable(comando).comandos == []
+
+
+def test_tuberia_hacia_un_interprete_es_codigo():
+    comando = "echo \"print(open('.env').read())\" | python"
+    codigos = comun.extraer_texto_ejecutable(comando).codigos
+    assert any("open('.env')" in c for c in codigos)
+
+
+def test_heredoc_por_tuberia_hacia_un_interprete_es_codigo():
+    comando = "cat <<'FIN' | python3\nprint(open('.env').read())\nFIN"
+    codigos = comun.extraer_texto_ejecutable(comando).codigos
+    assert any("print(open('.env').read())" in c for c in codigos)
+
+
+def test_tuberia_hacia_un_shell_es_comando_interior():
+    comando = 'echo "cat .env" | bash'
+    assert any("cat .env" in c.texto for c in comun.extraer_texto_ejecutable(comando).comandos)
+
+
+def test_tuberia_hacia_un_script_no_es_codigo():
+    assert comun.extraer_texto_ejecutable("echo hola | python script.py").codigos == []
+
+
+def test_herestring_con_interprete_es_codigo():
+    assert comun.extraer_texto_ejecutable('python <<< "X"').codigos == ["X"]
+
+
+def test_herestring_con_shell_es_comando_interior():
+    extraccion = comun.extraer_texto_ejecutable('bash <<< "cat a"')
+    assert [c.texto for c in extraccion.comandos] == ["cat a"]
+
+
+@pytest.mark.parametrize(
+    "prefijo",
+    [
+        "FOO=1",
+        "env -i FOO=1",
+        "exec",
+        "command",
+        "nohup",
+        "time",
+        "nice -n 5",
+        "timeout -s KILL 5",
+        "uv run --with x --python 3.12",
+        "FOO=1 nohup env BAR=2",
+    ],
+)
+def test_envoltorios_delante_del_interprete(prefijo):
+    assert comun.extraer_texto_ejecutable(f'{prefijo} python -c "X"').codigos == ["X"]
+
+
+def test_quitar_envoltorios_deja_el_programa():
+    assert comun.quitar_envoltorios(["FOO=1", "timeout", "5", "cp", "a", "b"]) == ["cp", "a", "b"]
+
+
+@pytest.mark.parametrize("opcion", ["/c", "//c", "/k", "//K"])
+def test_cmd_es_un_shell_interior(opcion):
+    extraccion = comun.extraer_texto_ejecutable(f'cmd {opcion} "type .env"')
+    assert [(c.texto, c.powershell, c.cmd) for c in extraccion.comandos] == [
+        ("type .env", True, True)
+    ]
+
+
+def test_cmd_se_analiza_sin_barra_invertida_como_escape():
+    extraccion = comun.extraer_texto_ejecutable('cmd //c "type .\\.env"')
+    interior = extraccion.comandos[0]
+    assert comun.dividir_comando(interior.texto, powershell=interior.powershell) == [
+        ["type", ".\\.env"]
+    ]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="las rutas /<letra>/ solo existen en Windows")
+def test_ruta_de_git_bash_se_convierte_en_windows():
+    base = Path("D:\\AIReadyOrquestador")
+    ruta = "/d/AIReadyOrquestador/src/due_diligence/x.py"
+    assert comun.normalizar_ruta(ruta, base) == "src/due_diligence/x.py"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="las rutas /<letra>/ solo existen en Windows")
+def test_ruta_de_git_bash_desde_tmp_path(tmp_path):
+    unidad, resto = str(tmp_path).replace("\\", "/").split(":", 1)
+    ruta = f"/{unidad.lower()}{resto}/src/x.py"
+    assert comun.normalizar_ruta(ruta, tmp_path) == "src/x.py"

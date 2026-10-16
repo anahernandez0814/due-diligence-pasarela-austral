@@ -13,7 +13,8 @@ Hallazgo = tuple[str, int]
 
 # --- Tarjeta: 13 a 19 dígitos, prefijo 2-6, separador opcional espacio o guion --------
 
-_TARJETA = re.compile(r"(?<![\w])(?<!\d[ -])[2-6]\d(?:[ -]?\d){11,17}(?![\w])(?![ -]\d)")
+# (?<!\d[.,]): la parte decimal de un número no cuenta (contrato, revisión de la parada B).
+_TARJETA = re.compile(r"(?<![\w])(?<!\d[ -])(?<!\d[.,])[2-6]\d(?:[ -]?\d){11,17}(?![\w])(?![ -]\d)")
 
 
 def _luhn(digitos: str) -> bool:

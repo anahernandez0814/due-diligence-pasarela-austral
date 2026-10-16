@@ -221,3 +221,22 @@ def test_resultado_solo_tiene_tipo_y_linea():
     hallazgos = detector_datos.buscar(f"primera línea\nsegunda {numero}\n")
     assert hallazgos == [("tarjeta", 2)]
     assert numero not in repr(hallazgos)
+
+
+# --- Correcciones de la revisión de la parada B (T008a) -----------------------------
+
+
+def test_parte_decimal_de_un_numero_no_es_tarjeta():
+    azar = random.Random(1)
+    marcados = [
+        x
+        for x in (repr(azar.random()) for _ in range(20000))
+        if detector_datos.buscar(f"puntaje: {x}")
+    ]
+    assert marcados == []
+
+
+def test_parte_decimal_con_coma_no_es_tarjeta():
+    numero = tarjeta("4", 16)
+    assert "tarjeta" not in tipos(f"0,{numero}")
+    assert "tarjeta" not in tipos(f"12.{numero}")

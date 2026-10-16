@@ -220,6 +220,12 @@ Rutas que revisa:
       respecto a `<dir>`;
     - `cd`, `pushd`, `Set-Location`, `sl` y `chdir` con argumento literal cambian la
       carpeta de las rutas siguientes del mismo comando;
+    - los comandos interiores heredan la carpeta vigente en el subcomando donde
+      aparecen, y un texto de código de intérprete cuenta como código protegido si esa
+      carpeta cuenta según la regla de carpetas, salvo la raíz (cierre de la parada E).
+      Para eso, el extractor anota en cada `ComandoInterior` y en cada texto de código
+      su `padre` (el comando interior del que sale, o -1 para el comando exterior) y su
+      `origen` (el índice del subcomando, o -1 si no se sabe);
     - `truncate`: sus posicionales, saltando el valor de `-s`, `-r`, `--size` y
       `--reference`;
   - residuales declarados: `git apply`, `patch`, `git reset`, `git stash`,

@@ -484,6 +484,20 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - **`cd` dentro del comando**: `cd`, `pushd`, `Set-Location`, `sl` y `chdir` con un
       argumento literal cambian la carpeta respecto a la que se resuelven las rutas
       siguientes del mismo comando.
+    - **Comandos interiores y código tras un `cd`** (cierre de la parada E): la
+      interpretación anterior, que analizaba cada comando interior desde el cwd de la
+      sesión, dejaba pasar `cd .claude && bash -c 'rm settings.json'`. Decisión:
+      - los comandos interiores (`bash -c`, `sh -c`, `eval`, `cmd /c`,
+        `powershell -c`, heredocs hacia un shell) heredan la carpeta vigente en el
+        subcomando donde aparecen. El extractor de `comun.py` anota, para cada comando
+        interior y cada texto de código, de qué texto y de qué subcomando sale. Si no se
+        sabe (una sustitución que no se encuentra en ninguna palabra), se prueba con
+        todas las carpetas de ese texto;
+      - un texto de código de intérprete cuenta como código protegido si la carpeta
+        vigente cuenta según la regla de carpetas, salvo la raíz: el patrón U4 no puede
+        resolver rutas relativas como `app/b.py`. Así, `cd src && python -c "…"` se
+        bloquea fuera de un ticket, y `cd docs && python -c "print(1)"` y un
+        `python -c` en la raíz se siguen permitiendo.
     - **`truncate`**: sus posicionales son rutas, saltando el valor de `-s`, `-r`,
       `--size` y `--reference`.
   - El comando se divide por `;`, `&&`, `||` y `|`, y se separa en palabras con `shlex`

@@ -23,6 +23,7 @@ extend-exclude = [".specify"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["src"]
+testpaths = ["src", ".claude/hooks"]
+pythonpath = [".claude/hooks"]
 python_files = ["test_*.py"]
 addopts = ["--import-mode=importlib"]

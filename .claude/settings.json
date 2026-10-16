@@ -4,14 +4,137 @@
     "PYTHONUTF8": "1"
   },
   "enabledMcpjsonServers": ["github"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Write|Edit|NotebookEdit|Grep|Glob|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_secretos.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell|mcp__github__add_issue_comment|mcp__github__update_issue_comment|mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write|mcp__github__add_reply_to_pull_request_comment|mcp__github__pull_request_review_write|mcp__github__add_comment_to_pending_review",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_datos.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_spec_previa.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__projects_write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_mcp_github.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/formatear_python.py"],
+            "timeout": 30,
+            "onFailure": "continue"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "deny": [
-      "Read(./.env)",
-      "Edit(./.env)",
-      "Read(./**/.env)",
-      "Edit(./**/.env)",
-      "Bash(cat .env*)",
-      "Bash(type .env*)"
+      "Read(**/.env)",
+      "Edit(**/.env)",
+      "Read(**/.env.*)",
+      "Edit(**/.env.*)",
+      "Read(**/*.key)",
+      "Edit(**/*.key)",
+      "Read(**/secrets/**)",
+      "Edit(**/secrets/**)",
+      "Read(!**/.env.example)",
+      "Edit(!**/.env.example)",
+      "Edit(/.claude/settings.local.json)",
+      "Bash(cat *.env)",
+      "Bash(cat *.env *)",
+      "Bash(cat *.env.local*)",
+      "Bash(cat *secrets/*)",
+      "Bash(cat *.key)",
+      "Bash(head *.env)",
+      "Bash(head *.env *)",
+      "Bash(head *.env.local*)",
+      "Bash(head *secrets/*)",
+      "Bash(head *.key)",
+      "Bash(tail *.env)",
+      "Bash(tail *.env *)",
+      "Bash(tail *.env.local*)",
+      "Bash(tail *secrets/*)",
+      "Bash(tail *.key)",
+      "Bash(less *.env)",
+      "Bash(less *.env *)",
+      "Bash(less *.env.local*)",
+      "Bash(less *secrets/*)",
+      "Bash(less *.key)",
+      "Bash(more *.env)",
+      "Bash(more *.env *)",
+      "Bash(more *.env.local*)",
+      "Bash(more *secrets/*)",
+      "Bash(more *.key)",
+      "Bash(cp *.env)",
+      "Bash(cp *.env *)",
+      "Bash(cp *.env.local*)",
+      "Bash(cp *secrets/*)",
+      "Bash(cp *.key)",
+      "Bash(mv *.env)",
+      "Bash(mv *.env *)",
+      "Bash(mv *.env.local*)",
+      "Bash(mv *secrets/*)",
+      "Bash(mv *.key)",
+      "Bash(source *.env)",
+      "Bash(source *.env *)",
+      "Bash(source *.env.local*)",
+      "Bash(source *secrets/*)",
+      "Bash(source *.key)",
+      "mcp__github__delete_repository",
+      "mcp__github__delete_file",
+      "mcp__github__create_or_update_file",
+      "mcp__github__push_files",
+      "mcp__github__merge_pull_request",
+      "mcp__github__create_repository",
+      "mcp__github__fork_repository"
     ]
   }
 }

@@ -62,21 +62,28 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 
 **Purpose**: confirmar el punto de partida.
 
-- [ ] T001 Confirmar el punto de partida:
+- [X] T001 Confirmar el punto de partida:
   - la rama activa es `003-guardas-claude-code`;
   - `git log --oneline main..HEAD` contiene los commits de spec, plan, correcciones,
     checklist y tareas;
   - `git status --porcelain` está vacío;
   - el issue #3 está en "In Progress" (`mcp__github__projects_list`,
     `list_project_items`, `field_names: ["Status"]`);
-  - `uv run pytest` está en verde (2 tests de humo).
-- [ ] T002 Confirmar lo que todavía no existe y la versión:
+  - `uv run pytest` está en verde (4 tests).
+- [X] T002 Confirmar lo que todavía no existe y la versión:
   - no existen `.claude/hooks/` ni `.claude/rules/`;
   - `.claude/settings.json` tiene las 6 denegaciones del ticket #1 y no tiene `hooks`;
   - `claude --version` es 2.1.295 o posterior, necesario para `onFailure` (R2).
 
   Si algo difiere, detenerse e informar.
-- [ ] T003 [MANUAL] Quickstart Q12, antes de escribir código (FR-016, R4). La analista abre `/mcp`, servidor `github`, y comprueba que los 7 nombres denegados de [contracts/settings-json.md](contracts/settings-json.md) existen tal cual y que las herramientas marcadas como destructivas son `delete_repository`, `delete_file` y `projects_write`. Comunica el resultado a Claude. Si algún nombre difiere, se corrigen el contrato y T027 antes de seguir.
+- [X] T003 [MANUAL] Quickstart Q12, antes de escribir código (FR-016, R4). La analista abre `/mcp`, servidor `github`, y comprueba:
+  - que existen tal cual `delete_file`, `create_or_update_file`, `push_files`, `merge_pull_request`, `create_repository` y `fork_repository`;
+  - que `delete_repository` **no** aparece con los toolsets actuales, porque su denegación es preventiva;
+  - que las marcadas como destructivas son `delete_file` y `projects_write`, y que `projects_write` tiene los 10 métodos de R4.
+
+  Comunica el resultado a Claude. Si algún nombre difiere, se corrigen el contrato y T027 antes de seguir.
+
+  **Resultado (2026-10-16)**: hay 42 herramientas expuestas y todo coincide con lo anterior, también con la consulta `tools/list` de la revisora con los mismos toolsets. El dato inicial de R4, que contaba `delete_repository` como expuesta, se corrigió en `c25b6f5`.
 
 **Checkpoint**: rama limpia, nombres del MCP confirmados y ninguna guarda creada todavía.
 

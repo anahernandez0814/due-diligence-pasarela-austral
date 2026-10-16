@@ -89,6 +89,9 @@ Módulos compartidos:
       con valor), `sudo [opciones]` y `doas [opciones]` (saltando, por ejemplo,
       `-u <usuario>`), cuyo comando se analiza como programa (revisión previa del PR #17,
       FR-026).
+  - **`find … -exec|-execdir|-ok|-okdir <cmd…> ;|+`**: se analiza como `xargs`. Los tokens
+    hasta `;` o `+` son el comando lanzado, y `{}` es una ruta desconocida (cierre de la
+    fase 12, FR-026).
   - **Lanzadores con un comando en una cadena**: `env -S "<cadena>"`, `script -c "<cmd>"`
     y `watch "<cmd>"` (o `watch <cmd…>`, saltando `-n N` y las demás opciones) dan un
     comando interior, nivel + 1, con las mismas reglas que `bash -c`.
@@ -236,10 +239,11 @@ Rutas que revisa:
     - `truncate`: sus posicionales, saltando el valor de `-s`, `-r`, `--size` y
       `--reference`;
   - residuales declarados: `git apply`, `patch`, `git reset`, `git stash`,
-    `find … -delete`, `find … -exec rm`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`; y las
-    escrituras que la guarda no reconoce, porque el diff del PR las ve: `perl -pi`,
-    `dd of=`, `curl -o`, `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`,
-    `git clean`, `uv run ruff check --fix` y `ruff format` (R10);
+    `find … -delete`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`; y las escrituras que la
+    guarda no reconoce, porque el diff del PR las ve: `perl -pi`, `dd of=`, `curl -o`,
+    `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`,
+    `uv run ruff check --fix`, `ruff format` y las rutas que llegan por stdin a un
+    escritor (`echo src/app/a.py | xargs rm`) (R10);
   - **`.claude/settings.local.json` en cualquier rama** (FR-025, R14): si el comando lo
     escribe, lo borra, lo mueve o lo restaura, o si el código en línea lo nombra, se
     bloquea aunque la rama tenga spec, plan y tareas. Leerlo sigue permitido;

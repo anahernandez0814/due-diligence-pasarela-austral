@@ -397,6 +397,11 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
       (saltando opciones como `-u <usuario>`) se saltan como envoltorios, y el comando que
       lanzan se analiza como programa. `env -S "<cadena>"`, `script -c "<cmd>"` y
       `watch "<cmd>"` (o `watch <cmd…>`) dan un comando interior.
+    - **`find … -exec|-execdir|-ok|-okdir <cmd…> ;|+`** (cierre de la fase 12): se analiza
+      como lanzador, igual que `xargs`. Los tokens hasta `;` o `+` son el comando
+      lanzado, con `{}` como una ruta desconocida. Antes solo se cubría cuando la raíz de
+      `find` contenía secretos. Así `find docs -exec sh -c "cat .env" \;` se bloquea, y
+      `find docs -name "*.md" -exec cat {} +` se permite.
     - **`cmd /c`** y `cmd //c`, también con `/k`, son un shell interior, analizado sin `\`
       como escape.
     - **Rutas de Git Bash**: `/<letra>/…` se convierte en `<LETRA>:/…` en Windows.
@@ -537,12 +542,14 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     plan o tareas, o cuando la rama no es de un ticket. En la rama de un ticket con los
     tres documentos, un `python -c` que nombra `src/x.py` se permite igual.
 - **Riesgo residual declarado**: `git apply`, `patch`, `git reset`, `git stash`,
-  `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`, `cd ~` y `cd $X`, y las
-  rutas en variables o construidas al ejecutar. Desde la revisión previa del PR #17,
-  también las escrituras que la guarda no reconoce: `perl -pi`, `dd of=`, `curl -o`,
-  `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`,
-  `uv run ruff check --fix` y `ruff format`. Motivo: escriben en código versionado, que
-  el diff del PR y la revisión previa ven. Se anota en `DECISIONES.md`. Los
+  `find … -delete`, `xargs rm`, los `cd -`, `cd ~` y `cd $X`, y las rutas en variables o
+  construidas al ejecutar. Desde la revisión previa del PR #17, también las escrituras
+  que la guarda no reconoce: `perl -pi`, `dd of=`, `curl -o`, `wget -O`, `ln -sf`,
+  `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`, `uv run ruff check --fix` y
+  `ruff format`; y las rutas que llegan por stdin a un escritor
+  (`echo src/app/a.py | xargs rm`). Motivo: escriben en código versionado, que el diff
+  del PR y la revisión previa ven. `find … -exec rm` ya no es residual: se analiza como
+  lanzador. Se anota en `DECISIONES.md`. Los
   intérpretes y shells que nombran código protegido ya no son residuales, ni
   `git checkout` (con o sin `--`), `git restore` y `git mv`, que se vigilan desde las
   revisiones de las paradas D y E.

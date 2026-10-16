@@ -506,38 +506,66 @@ escenarios son los de [quickstart.md](quickstart.md).
   - todo commiteado, para que las ramas temporales tengan `.claude/hooks/`.
 
   Informar del resultado y continuar con T036.
-- [ ] T036 [MANUAL] **Pausa para reiniciar la sesión**. Claude se detiene aquí y lo avisa. La analista:
+- [X] T036 [MANUAL] **Pausa para reiniciar la sesión**. Claude se detiene aquí y lo avisa. La analista:
   1. cierra la sesión;
   2. ejecuta `uv sync` en una terminal;
   3. abre una sesión nueva de Claude Code en la raíz, en `003-guardas-claude-code`;
   4. comprueba con `/hooks` que hay cinco entradas (cuatro `PreToolUse` y una `PostToolUse`);
   5. escribe "continúa tasks.md del ticket #3 desde T037".
-- [ ] T037 [MANUAL] Desde una terminal fuera de Claude Code, crear `.env.local` y `secrets/prueba.txt` con contenido ficticio (`VARIABLE_FICTICIA=valor-de-prueba`). Confirmar a Claude que están creados.
-- [ ] T038 Crear las ramas temporales desde `003-guardas-claude-code`, sin cambiar de rama: `git branch prueba-sin-ticket` y `git branch 099-prueba` (quickstart, requisitos; R14).
-- [ ] T039 [US1] Quickstart Q1–Q3. Anotar el resultado de cada escenario.
+- [X] T037 [MANUAL] Desde una terminal fuera de Claude Code, crear `.env.local` y `secrets/prueba.txt` con contenido ficticio (`VARIABLE_FICTICIA=valor-de-prueba`). Confirmar a Claude que están creados.
+- [X] T038 Crear las ramas temporales desde `003-guardas-claude-code`, sin cambiar de rama: `git branch prueba-sin-ticket` y `git branch 099-prueba` (quickstart, requisitos; R14).
+- [X] T039 [US1] Quickstart Q1–Q3. Anotar el resultado de cada escenario.
   - **Q1**: secretos bloqueados por Read y Bash, incluido `head .env.staging` (no hace falta que exista). Para cada caso se anota qué capa bloqueó, el prefijo `[guarda_secretos]` o el mensaje de permisos de Claude Code; las dos son un resultado válido (R6, I6).
   - **Q2**: bloqueados `grep -r TOKEN .` (la raíz tiene `.env`) y el código en línea que abre `.env` sin imprimirlo (`python -c` y `uv run python -c`).
   - **Q3**: permitidos `.env.example`, `grep -n .env README.md`, `grep -rn ".env" src/`, la herramienta Grep, `git grep` y `python -c "print(1)"`.
-- [ ] T040 [US2] Quickstart Q4–Q6: tarjeta, NIT y cédula calculados en la propia petición y bloqueados; mensaje de ejemplo permitido; comentario con una credencial construida en la sesión bloqueado antes de publicarse en #3. Si llegara a publicarse, la analista lo borra a mano en GitHub y se registra como fallo.
-- [ ] T041 [US3] Quickstart Q7–Q11:
+- [X] T040 [US2] Quickstart Q4–Q6: tarjeta, NIT y cédula calculados en la propia petición y bloqueados; mensaje de ejemplo permitido; comentario con una credencial construida en la sesión bloqueado antes de publicarse en #3. Si llegara a publicarse, la analista lo borra a mano en GitHub y se registra como fallo.
+- [X] T041 [US3] Quickstart Q7–Q11:
   - en `099-prueba`, Write y `echo >` hacia `src/` bloqueados, y `python -c "open('src/due_diligence/x.py','w').close()"` bloqueado por `[guarda_spec_previa]` (G4). Si el archivo llegara a crearse por un fallo, se borra en la limpieza y se registra como fallo;
   - en `prueba-sin-ticket`, una edición de `.claude/settings.json` que no cambia nada (un texto reemplazado por sí mismo) y la escritura de `.claude/settings.local.json`, bloqueadas; después, `git diff --quiet .claude/` termina con 0. `docs/` y `specs/` permitidos;
   - en `003-guardas-claude-code`, un `.py` mal formateado queda formateado y uno con un error de sintaxis se informa.
 
   Volver a `003-guardas-claude-code` y borrar los archivos de prueba.
-- [ ] T042 [US5] Quickstart Q13–Q15:
+- [X] T042 [US5] Quickstart Q13–Q15:
   - `delete_file` sobre `no-existe.txt`, denegado;
   - `projects_write` con `delete_project_item` y un `item_id` inexistente, bloqueado por la guarda, y con `update_project_item` del Status de #3 a "In Progress", permitido sin cambios;
   - `/siguiente-ticket abc` funciona: su paso 0 usa las herramientas MCP de lectura. No se ejecuta `/comentar-avance plan`, que añadiría una actualización de prueba al comentario "plan" de #3.
-- [ ] T043 [US6] Quickstart Q16–Q17. Las reglas aparecen al abrir sus archivos. Una guarda tarda menos de 1 s medida en caliente, desde la segunda llamada de la sesión (tres llamadas seguidas); la primera puede tardar más, ≈ 1,1 s, porque `uv` prepara el entorno (SC-004).
-- [ ] T044 [MANUAL] Quickstart Q18, fallo cerrado. La analista renombra `.claude/hooks/guarda_secretos.py` desde fuera de Claude Code; Claude intenta leer `README.md` y debe quedar bloqueado por `onFailure: "block"`; la analista restaura el nombre desde fuera.
-- [ ] T045 [MANUAL] Desde fuera de Claude Code, borrar `.env.local` y la carpeta `secrets/`.
-- [ ] T046 Limpieza. En `003-guardas-claude-code`, `git branch -d prueba-sin-ticket` y `git branch -d 099-prueba`; deben funcionar con `-d` porque no tienen commits propios. Borrar cualquier archivo de prueba. `git status --porcelain` vacío.
-- [ ] T047 Registrar la validación:
+- [X] T043 [US6] Quickstart Q16–Q17. Las reglas aparecen al abrir sus archivos. Una guarda tarda menos de 1 s medida en caliente, desde la segunda llamada de la sesión (tres llamadas seguidas); la primera puede tardar más, ≈ 1,1 s, porque `uv` prepara el entorno (SC-004).
+- [X] T044 [MANUAL] Quickstart Q18, fallo cerrado. La analista renombra `.claude/hooks/guarda_secretos.py` desde fuera de Claude Code; Claude intenta leer `README.md` y debe quedar bloqueado por `onFailure: "block"`; la analista restaura el nombre desde fuera.
+- [X] T045 [MANUAL] Desde fuera de Claude Code, borrar `.env.local` y la carpeta `secrets/`.
+- [X] T046 Limpieza. En `003-guardas-claude-code`, `git branch -d prueba-sin-ticket` y `git branch -d 099-prueba`; deben funcionar con `-d` porque no tienen commits propios. Borrar cualquier archivo de prueba. `git status --porcelain` vacío.
+- [X] T047 Registrar la validación:
   - marcar `[X]` las tareas hechas;
   - si algún escenario falló, corregirlo con commits nuevos, sin `--amend`, y repetir el escenario.
 
   Commit: `docs(specs): validación del quickstart del ticket #3`.
+
+  **Registro de la validación** (2026-10-16, sesión nueva tras T036, en Windows con Git Bash):
+
+  | # | Resultado | Capa que bloqueó |
+  |---|-----------|------------------|
+  | Q1 | 4/4 bloqueados, sin contenido en los mensajes | Read de `.env`: permisos; `head .env.local`, `tail .env.local` y `head .env.staging`: `[guarda_secretos]` |
+  | Q2 | 4/4 bloqueados | `[guarda_secretos]`: búsqueda recursiva (`.`), carpeta `secrets`, y código en línea (`python -c` y `uv run python -c`) |
+  | Q3 | todo permitido | — (`.env.example` leído y editado, con la edición revertida; `grep -n`, `grep -rn` en `src/`, Grep, `git grep`, `python -c "print(1)"`) |
+  | Q4 | 3/3 bloqueados sin repetir el valor; el archivo no se crea | `[guarda_datos]`: `tarjeta`, `nit`, `cedula` |
+  | Q5 | permitido y borrado | — |
+  | Q6 | bloqueado antes de publicarse en #3 | `[guarda_datos]`: `credencial en mcp__github__add_issue_comment (body)` |
+  | Q7 | 3/3 bloqueados en `099-prueba`; `x.py` no se crea | `[guarda_spec_previa]`: "No existe specs/099-*/" |
+  | Q8 | 2/2 bloqueados en `prueba-sin-ticket`; `git diff --quiet .claude/` da 0 | `settings.json`: `[guarda_spec_previa]`; `settings.local.json`: permisos |
+  | Q9 | formateado; `ruff format --check` sin diferencias | — (hook de formato) |
+  | Q10 | edición conservada; "No se pudo formatear" | — |
+  | Q11 | `docs/` y `specs/` permitidos en `prueba-sin-ticket`, y borrados | — |
+  | Q13 | `delete_file` no está en la sesión | permisos (la denegación retira la herramienta) |
+  | Q14 | `delete_project_item` bloqueado; `update_project_item` permitido sin cambios | `[guarda_mcp_github]` |
+  | Q15 | `/siguiente-ticket abc` muestra el uso y se detiene | — |
+  | Q16 | `herramientas-mcp.md` cargada al abrir `src/servidor_mcp/__init__.py`; `tests.md` ya estaba cargada desde la fase 9 | — |
+  | Q17 | 3 llamadas seguidas: 331, 342 y 328 ms, salida 0 | — |
+  | Q18a | script inexistente: bloqueado | salida 2 de `uv` ("Failed to spawn"), no `onFailure` |
+  | Q18b | script que sale con 1: bloqueado | solo `onFailure: "block"` ("failed; blocking because onFailure is \"block\"") |
+
+  Observaciones, sin fallos:
+  - **Q8**: Edit rechaza un reemplazo idéntico en su validación, antes de los hooks; la guarda se probó con un Write del contenido exacto, que no habría cambiado nada.
+  - **Q15**: con una entrada inválida, la skill no ejecuta el paso 0 (contrato de `siguiente-ticket`), al contrario de lo que dice el quickstart. Las herramientas MCP de lectura quedaron probadas en Q14 (`projects_list`).
+  - **Q18**: R2 y el quickstart se corrigieron para separar Q18a y Q18b (commit `docs(specs): Q18 en dos partes y R2 con el script inexistente`).
 
   T048 no se marca aquí: se marca después de abrir el PR, en un commit nuevo de la misma rama, que se suma al PR.
 - [ ] T048 Ejecutar `/abrir-pr`. Abre el PR con `Closes #3`, mueve el ticket a "In review" y comenta; la revisión previa sigue siendo la de transición hasta #4. Detenerse sin fusionar.

@@ -320,7 +320,7 @@ patrón y sin documentos, y permite en una rama con los tres.
 
   Origen: FR-009 a FR-013, FR-020, FR-023, R7, R10, R14.
 - [X] T017 [US3] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de spec previa`.
-- [ ] T017a [US3] Corrección de la revisión de la parada D: borrar, restaurar y mover también es modificar (FR-009, FR-012, R10, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`:
+- [X] T017a [US3] Corrección de la revisión de la parada D: borrar, restaurar y mover también es modificar (FR-009, FR-012, R10, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`:
   - destinos nuevos: las palabras que no son opciones de `rm`, `unlink` y `git rm`; las rutas de `git checkout … -- <rutas>` y de `git restore <rutas>` (con o sin `--source`); las fuentes de `mv`; en PowerShell, `Remove-Item`, `del`, `erase`, `rd`, `ri` y las fuentes de `Move-Item`;
   - en `main` se bloquean `rm .claude/settings.json`, `git checkout 003-x -- .claude/settings.json` y `mv src/app/a.py docs/a.py`; en una rama con los tres documentos, se permiten;
   - en `main` se permiten `rm docs/x.md` y `git checkout 003-x`, sin `--`.

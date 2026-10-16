@@ -99,7 +99,10 @@ _COPIA_CON_VALOR = {
     "--target-directory", "--suffix", "--mode", "--owner", "--group",
 }  # fmt: skip
 _COPIA_POWERSHELL = {"cp", "cpi", "copy", "copy-item", "mv", "mi", "move", "move-item"}
+_MOVIMIENTO = {"mv", "mi", "move", "move-item"}
 _ESCRITURA_POWERSHELL = {"set-content", "add-content", "out-file", "new-item", "ni", "tee-object"}
+_BORRADO_POWERSHELL = {"remove-item", "del", "erase", "rd", "ri", "rmdir"}
+_GIT_CON_VALOR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
 _POWERSHELL_RUTA = ("-path", "-literalpath", "-filepath")
 _POWERSHELL_OTRO_VALOR = (
     "-value", "-encoding", "-itemtype", "-type", "-inputobject", "-stream", "-width",
@@ -129,15 +132,18 @@ def _redirecciones(palabras: list[str]) -> Iterator[str]:
 
 
 def _copia(args: list[str], powershell: bool) -> tuple[str | None, bool, list[str]]:
-    """`(destino, es carpeta, fuentes)` de cp, mv, install, copy o Copy-Item."""
-    destino, carpeta, posicionales = None, False, []
+    """`(destino, es carpeta, fuentes)` de cp, mv, install, copy, Copy-Item o Move-Item."""
+    destino, carpeta, posicionales, fuentes = None, False, [], []
     i = 0
     while i < len(args):
         arg = args[i]
         if powershell and _parametro(arg, ("-destination",)):
             destino = args[i + 1] if i + 1 < len(args) else None
             i += 2
-        elif powershell and _parametro(arg, _POWERSHELL_RUTA + _POWERSHELL_OTRO_VALOR):
+        elif powershell and _parametro(arg, _POWERSHELL_RUTA):
+            fuentes += args[i + 1 : i + 2]
+            i += 2
+        elif powershell and _parametro(arg, _POWERSHELL_OTRO_VALOR):
             i += 2
         elif arg in ("-t", "--target-directory") and i + 1 < len(args):
             destino, carpeta = args[i + 1], True
@@ -152,13 +158,13 @@ def _copia(args: list[str], powershell: bool) -> tuple[str | None, bool, list[st
         else:
             posicionales.append(arg)
             i += 1
-    if destino is None and len(posicionales) >= 2:
+    if destino is None and posicionales and len(fuentes) + len(posicionales) >= 2:
         destino, posicionales = posicionales[-1], posicionales[:-1]
-    return destino, carpeta, posicionales
+    return destino, carpeta, fuentes + posicionales
 
 
 def _escritura_powershell(nombre: str, args: list[str]) -> Iterator[str]:
-    """Rutas de Set-Content, Add-Content, Out-File, New-Item y Tee-Object.
+    """Rutas de Set-Content, Add-Content, Out-File, New-Item, Tee-Object y Remove-Item.
 
     Se toman los valores de `-Path`, `-LiteralPath` y `-FilePath` y todos los argumentos
     posicionales: si un parámetro desconocido lleva valor, sobra una ruta, nunca falta.
@@ -184,8 +190,34 @@ def _escritura_powershell(nombre: str, args: list[str]) -> Iterator[str]:
     yield from rutas
 
 
+def _rutas_de_git(args: list[str]) -> list[str]:
+    """Rutas que modifican `git rm`, `git checkout … -- <rutas>` y `git restore <rutas>`.
+
+    Un `git checkout <rama>` sin `--` no modifica archivos con nombre y no cuenta.
+    """
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i] in _GIT_CON_VALOR else 1
+    if i >= len(args):
+        return []
+    subcomando, resto = args[i], args[i + 1 :]
+    if subcomando == "checkout":
+        return resto[resto.index("--") + 1 :] if "--" in resto else []
+    if subcomando not in ("rm", "restore"):
+        return []
+    omitir = {k + 1 for k, a in enumerate(resto) if a in ("-s", "--source", "--pathspec-from-file")}
+    return [a for k, a in enumerate(resto) if k not in omitir and not a.startswith("-")]
+
+
 def destinos(texto: str, powershell: bool, cwd: Path) -> Iterator[tuple[str, bool]]:
-    """`(ruta, es carpeta)` de cada destino de escritura reconocible del comando."""
+    """`(ruta, es carpeta)` de cada ruta que el comando escribe, borra, restaura o mueve.
+
+    Borrar, restaurar o mover también es modificar (revisión de la parada D).
+    """
+
+    def es_carpeta(ruta: str) -> bool:
+        return ruta.endswith(("/", "\\")) or os.path.isdir(os.path.join(cwd, ruta))
+
     for sub in comun.dividir_comando(texto, powershell=powershell):
         for ruta in _redirecciones(sub):
             yield ruta, False
@@ -197,10 +229,11 @@ def destinos(texto: str, powershell: bool, cwd: Path) -> Iterator[tuple[str, boo
             yield from ((a, False) for a in args if not a.startswith("-"))
         elif nombre in ("cp", "mv", "install") or (powershell and nombre in _COPIA_POWERSHELL):
             destino, carpeta, fuentes = _copia(args, powershell)
+            if nombre in _MOVIMIENTO:
+                yield from ((f, es_carpeta(f)) for f in fuentes)  # mover también borra
             if destino is None:
                 continue
-            carpeta = carpeta or destino.endswith(("/", "\\"))
-            carpeta = carpeta or os.path.isdir(os.path.join(cwd, destino))
+            carpeta = carpeta or es_carpeta(destino)
             yield destino, carpeta
             if carpeta:
                 for fuente in fuentes:
@@ -224,8 +257,14 @@ def destinos(texto: str, powershell: bool, cwd: Path) -> Iterator[tuple[str, boo
             yield from (
                 (a, False) for i, a in enumerate(args) if i not in omitir and not a.startswith("-")
             )
+        elif nombre in ("rm", "unlink"):
+            yield from ((a, es_carpeta(a)) for a in args if not a.startswith("-"))
+        elif nombre == "git":
+            yield from ((r, es_carpeta(r)) for r in _rutas_de_git(args))
         elif powershell and nombre in _ESCRITURA_POWERSHELL:
             yield from ((r, False) for r in _escritura_powershell(nombre, args))
+        elif powershell and nombre in _BORRADO_POWERSHELL:
+            yield from ((r, es_carpeta(r)) for r in _escritura_powershell(nombre, args))
 
 
 # --- Ticket en curso (data-model) -----------------------------------------------------

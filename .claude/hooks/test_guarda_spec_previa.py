@@ -345,3 +345,63 @@ def test_exento_no_necesita_git(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
     datos = entrada(tmp_path, "Write", file_path=str(tmp_path / "docs" / "x.md"))
     assert guarda_spec_previa.motivo(datos) is None
+
+
+# --- Borrar, restaurar y mover también es modificar (T017a) ---------------------------
+
+MODIFICACIONES = [
+    ("Bash", "rm .claude/settings.json"),
+    ("Bash", "rm -f src/a/x.py"),
+    ("Bash", "unlink .mcp.json"),
+    ("Bash", "git rm -q --cached .claude/hooks/x.py"),
+    ("Bash", "git checkout 003-x -- .claude/settings.json"),
+    ("Bash", "git checkout -- src/a/x.py"),
+    ("Bash", "git restore .claude/settings.json"),
+    ("Bash", "git restore --source=HEAD~1 src/a/x.py"),
+    ("Bash", "git restore --source HEAD~1 --staged src/a/x.py"),
+    ("Bash", "mv src/app/a.py docs/a.py"),
+    ("PowerShell", "Remove-Item .claude/settings.json"),
+    ("PowerShell", "del src/a/x.py"),
+    ("PowerShell", "erase .mcp.json"),
+    ("PowerShell", "rd plugins/p -Recurse"),
+    ("PowerShell", "ri -Path .claude/hooks/x.py"),
+    ("PowerShell", "Move-Item src/a/x.py docs/x.py"),
+    ("PowerShell", "Move-Item -Path src/a/x.py -Destination docs/x.py"),
+]
+
+
+@pytest.mark.parametrize(("herramienta", "comando"), MODIFICACIONES)
+def test_borrar_restaurar_y_mover_en_main(crear, herramienta, comando):
+    repo = crear(rama="main")
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+
+
+@pytest.mark.parametrize(("herramienta", "comando"), MODIFICACIONES)
+def test_borrar_restaurar_y_mover_con_documentos(crear, herramienta, comando):
+    repo = crear()
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) is None
+
+
+@pytest.mark.parametrize(
+    ("herramienta", "comando"),
+    [
+        ("Bash", "rm docs/x.md"),
+        ("Bash", "rm -rf build"),
+        ("Bash", "git checkout 003-x"),
+        ("Bash", "git checkout -b 004-y"),
+        ("Bash", "git restore docs/x.md"),
+        ("Bash", "mv docs/a.md docs/b.md"),
+        ("PowerShell", "Remove-Item docs/x.md"),
+        ("PowerShell", "Move-Item docs/a.md docs/b.md"),
+    ],
+)
+def test_borrar_y_mover_lo_no_protegido_en_main(crear, herramienta, comando):
+    repo = crear(rama="main")
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) is None
+
+
+def test_mensaje_de_un_borrado_en_main(crear):
+    assert bash(crear(rama="main"), "rm .claude/settings.json") == (
+        ".claude/settings.json es código protegido y la rama 'main' no es de un ticket "
+        "(NNN-nombre). Crea la rama con /siguiente-ticket."
+    )

@@ -208,8 +208,22 @@ Rutas que revisa:
     `git checkout … -- <rutas>` y de `git restore <rutas>` (con o sin `--source`; un
     `git checkout <rama>` sin `--` no cuenta); las fuentes de `mv`, además del destino; y
     en PowerShell, como respaldo, `Remove-Item`, `del`, `erase`, `rd`, `ri` y las fuentes
-    de `Move-Item`. Residuales declarados: `git apply`, `patch`, `git reset` y
-    `git stash`;
+    de `Move-Item`;
+  - ampliación de la revisión de la parada E:
+    - al borrar, restaurar o mover, cuenta también una carpeta que contiene código
+      protegido: la raíz, un ancestro de algo protegido (`.claude`) o una carpeta dentro
+      de una zona protegida. `rm -rf docs` se permite;
+    - `git checkout` sin `--`: se saltan `-b`, `-B` y `--orphan` con su valor; los
+      posicionales a partir del segundo son rutas, y el primero solo si existe en disco
+      (`git checkout 003-x` y `git checkout -b 004-y main` no cuentan);
+    - `git mv`: cada posicional es una ruta; con `git -C <dir>`, las rutas se resuelven
+      respecto a `<dir>`;
+    - `cd`, `pushd`, `Set-Location`, `sl` y `chdir` con argumento literal cambian la
+      carpeta de las rutas siguientes del mismo comando;
+    - `truncate`: sus posicionales, saltando el valor de `-s`, `-r`, `--size` y
+      `--reference`;
+  - residuales declarados: `git apply`, `patch`, `git reset`, `git stash`,
+    `find … -delete`, `find … -exec rm`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`;
   - con el extractor de `comun.py`:
     - los comandos interiores de shells y heredocs se analizan con estas mismas reglas,
       hasta 3 niveles;

@@ -469,6 +469,21 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - las **fuentes** de `mv`, además del destino;
     - PowerShell, como respaldo: `Remove-Item`, `del`, `erase`, `rd` y `ri`, y las
       fuentes de `Move-Item` (y de sus alias `mv`, `mi` y `move`).
+  - **Ampliación de la revisión de la parada E**:
+    - **Carpetas que contienen código protegido**, al borrar, restaurar o mover: cuenta
+      la raíz (`rm -rf .`, `git restore .`), una carpeta que es ancestro de algo
+      protegido (`.claude`) y una carpeta dentro de una zona protegida (`src/app/`).
+      Es una regla distinta de la del destino de una copia. `rm -rf docs` se permite.
+    - **`git checkout` sin `--`**: se saltan las opciones con valor (`-b`, `-B`,
+      `--orphan`); los posicionales a partir del segundo son rutas, y el primero solo si
+      existe en disco. `git checkout 003-x` y `git checkout -b 004-y main` no cuentan.
+    - **`git mv`**: cada posicional es una ruta. **`git -C <dir>`**: las rutas se
+      resuelven respecto a `<dir>`.
+    - **`cd` dentro del comando**: `cd`, `pushd`, `Set-Location`, `sl` y `chdir` con un
+      argumento literal cambian la carpeta respecto a la que se resuelven las rutas
+      siguientes del mismo comando.
+    - **`truncate`**: sus posicionales son rutas, saltando el valor de `-s`, `-r`,
+      `--size` y `--reference`.
   - El comando se divide por `;`, `&&`, `||` y `|`, y se separa en palabras con `shlex`
     (modo POSIX en Bash; en PowerShell, comillas simples y dobles).
 - **Texto ejecutable (I7 de la segunda pasada)**: la guarda usa el mismo extractor de
@@ -490,10 +505,12 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - No se distingue entre lectura y escritura: la guarda solo bloquea cuando faltan spec,
     plan o tareas, o cuando la rama no es de un ticket. En la rama de un ticket con los
     tres documentos, un `python -c` que nombra `src/x.py` se permite igual.
-- **Riesgo residual declarado**: `git apply`, `patch`, `git reset`, `git stash` y rutas
-  en variables o construidas al ejecutar. Se anota en `DECISIONES.md`. Los intérpretes y
-  shells que nombran código protegido ya no son residuales, ni `git checkout -- <ruta>` y
-  `git restore`, que se vigilan desde la revisión de la parada D.
+- **Riesgo residual declarado**: `git apply`, `patch`, `git reset`, `git stash`,
+  `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`, `cd ~` y `cd $X`, y las
+  rutas en variables o construidas al ejecutar. Se anota en `DECISIONES.md`. Los
+  intérpretes y shells que nombran código protegido ya no son residuales, ni
+  `git checkout` (con o sin `--`), `git restore` y `git mv`, que se vigilan desde las
+  revisiones de las paradas D y E.
 
 ## R11. Detector de datos con forma real (FR-005, FR-006)
 

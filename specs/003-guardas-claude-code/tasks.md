@@ -259,6 +259,12 @@ patrón y sin documentos, y permite en una rama con los tres.
     - en una rama con los tres documentos, los mismos tres se permiten, porque la guarda
       no distingue lectura de escritura;
     - en cualquier rama, un anidamiento de 4 niveles se bloquea por precaución.
+  - **Reconocimiento de código protegido en el texto (U4 de la tercera pasada)**:
+    - en `099-x` se bloquean `python -c "open('src/due_diligence/x.py','w')"` y un
+      `python -c` con la ruta `'.\\src\\x.py'`;
+    - en `099-x` se permiten `python -c "import due_diligence"` y
+      `python -c "open('src/due_diligence/test_x.py')"`: un módulo sin ruta y un
+      `test_*.py` no cuentan.
   - **NotebookEdit**: se revisa `notebook_path`.
   - **Fallo cerrado**: si git falla (por ejemplo, `CLAUDE_PROJECT_DIR` no es un
     repositorio), sale con 2.
@@ -349,7 +355,7 @@ las guardas y las denegaciones.
     el reinicio de T036 se mantiene.
   - **Si desde aquí aparece un bloqueo `[guarda_…]` inesperado**, detenerse e informar;
     nunca desactivar las guardas ni buscar un rodeo.
-- [ ] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14. Es la verificación de la **capa de permisos**; la de la guarda está en los tests por stdin (I6).
+- [ ] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14. Comprueba que las reglas de la **capa de permisos** existen y están bien formadas; su efecto se ve en la sesión, en Q1 y Q13. La guarda se prueba en los tests por stdin (I6, I9).
   - **Hooks**:
     - cada matcher solo contiene `[A-Za-z0-9_|]`;
     - las 4 guardas llevan `onFailure: "block"` y `timeout` ≤ 10, y el formato,
@@ -446,7 +452,7 @@ escenarios son los de [quickstart.md](quickstart.md).
   - **Q3**: permitidos `.env.example`, `grep -n .env README.md`, `grep -rn ".env" src/`, la herramienta Grep, `git grep` y `python -c "print(1)"`.
 - [ ] T040 [US2] Quickstart Q4–Q6: tarjeta, NIT y cédula calculados en la propia petición y bloqueados; mensaje de ejemplo permitido; comentario con una credencial construida en la sesión bloqueado antes de publicarse en #3. Si llegara a publicarse, la analista lo borra a mano en GitHub y se registra como fallo.
 - [ ] T041 [US3] Quickstart Q7–Q11:
-  - en `099-prueba`, Write y `echo >` hacia `src/` bloqueados;
+  - en `099-prueba`, Write y `echo >` hacia `src/` bloqueados, y `python -c "open('src/due_diligence/x.py','w').close()"` bloqueado por `[guarda_spec_previa]` (G4). Si el archivo llegara a crearse por un fallo, se borra en la limpieza y se registra como fallo;
   - en `prueba-sin-ticket`, una edición de `.claude/settings.json` que no cambia nada (un texto reemplazado por sí mismo) y la escritura de `.claude/settings.local.json`, bloqueadas; después, `git diff --quiet .claude/` termina con 0. `docs/` y `specs/` permitidos;
   - en `003-guardas-claude-code`, un `.py` mal formateado queda formateado y uno con un error de sintaxis se informa.
 

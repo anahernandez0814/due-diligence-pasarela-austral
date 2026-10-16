@@ -1,0 +1,40 @@
+# Contrato: cambios en `/abrir-pr`
+
+Contrato original: [specs/002-automatizacion-tickets/contracts/abrir-pr.md](../../002-automatizacion-tickets/contracts/abrir-pr.md).
+Este ticket reemplaza solo la **sección 2** ("Revisión previa") y ajusta las acciones; las
+comprobaciones de la sección 1 no cambian. Decisión: [research.md](../research.md), R11.
+
+## Orden nuevo
+
+| Paso | Qué | Si falla |
+|------|-----|----------|
+| 1 | Comprobaciones de la sección 1 (sin cambios) | se detiene, sin push ni PR |
+| 2 | `git fetch origin main` y `git fetch origin <rama>` (el segundo puede no existir aún) | se detiene si falla el de `main`, porque la base del diff sería la del `main` local |
+| 3 | Skills `revisar-codigo` y `auditar-cumplimiento`, con la carpeta del ticket como argumento | un reporte ausente o sin `RESUMEN` válido cuenta como bloqueante (paso 4) |
+| 4 | `veredicto.py registrar` con las dos líneas `RESUMEN` | con `con bloqueantes`: muestra los hallazgos, no hay push, ni PR, ni cambio de estado |
+| 5 | `git push -u origin <rama>` | se detiene sin PR |
+| 6 | `create_pull_request` (la guarda lo comprueba), estado `In review`, comentario | como hoy |
+
+Los pasos 3 y 4 sustituyen al subagente `Plan` de #2.
+
+## `allowed-tools` de `/abrir-pr`
+
+- Salen: `Agent` y `Bash(git diff:*)`.
+- Entran: `Skill(revisar-codigo)`, `Skill(auditar-cumplimiento)`, el comando de
+  `veredicto.py registrar` y `Bash(git rev-parse:*)`.
+- Siguen: `git branch`, `git status`, `git cat-file`, `git log`, `git fetch`, `git push`, las
+  herramientas de lectura y las del MCP de GitHub.
+
+## Descripción del PR
+
+La sección **Revisión previa** pasa a incluir:
+
+- el veredicto consolidado y el commit al que corresponde;
+- el `RESUMEN` de cada revisión;
+- los hallazgos no bloqueantes y cómo se atendió cada uno.
+
+## Salida
+
+Además de lo actual: el veredicto, los dos resúmenes y, si se detuvo, los hallazgos
+bloqueantes con su ubicación y la instrucción de corregir con commits nuevos y volver a
+ejecutar `/abrir-pr` (un commit nuevo exige una revisión nueva).

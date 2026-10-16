@@ -332,7 +332,7 @@ def bloquear(guarda: str, mensaje: str) -> NoReturn:
     sys.exit(2)
 
 
-def _flujos_utf8() -> None:
+def flujos_utf8() -> None:
     """UTF-8 en stdin, stdout y stderr, independiente de PYTHONUTF8 y PYTHONIOENCODING.
 
     Sin esas variables, Python en Windows usa cp1252 en las tuberías. Los flujos que no
@@ -347,7 +347,7 @@ def _flujos_utf8() -> None:
 def ejecutar(guarda: str, revisar: Callable[[dict], None]) -> NoReturn:
     """Lee la entrada y ejecuta la guarda; ante cualquier error propio, bloquea."""
     try:
-        _flujos_utf8()
+        flujos_utf8()
         revisar(leer_entrada())
     except SystemExit:
         raise

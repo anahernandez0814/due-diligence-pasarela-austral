@@ -29,11 +29,13 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
       "--quiet", "${CLAUDE_PROJECT_DIR}/.claude/hooks/<guarda>.py"]`. Con `--no-project`,
       `uv` no sincroniza el entorno en cada llamada, y la guarda funciona aunque el
       `.venv` no exista todavía.
-    - Formato: `args: ["run", "--project", "${CLAUDE_PROJECT_DIR}", "--quiet",
-      "${CLAUDE_PROJECT_DIR}/.claude/hooks/formatear_python.py"]`. Necesita el grupo
-      `dev`, donde está ruff; el script lo invoca con
+    - Formato: se lanza igual que las guardas, `args: ["run", "--no-project",
+      "--python", "3.12", "--quiet",
+      "${CLAUDE_PROJECT_DIR}/.claude/hooks/formatear_python.py"]`, porque el script solo
+      usa la biblioteca estándar (revisión de la parada E). Por dentro invoca
       `uv run --project <raíz> --frozen --quiet ruff format --force-exclude <archivo>`
-      (R12, revisión de la parada E).
+      (R12): es el único `uv run --project`, y `--frozen` evita que un hook reescriba
+      `uv.lock`. Necesita el grupo `dev`, donde está ruff.
   - **Entrada**: cada script lee el JSON de stdin (`tool_name`, `tool_input`, `cwd`,
     `hook_event_name`). La raíz del repositorio sale de la variable de entorno
     `CLAUDE_PROJECT_DIR` y, si falta, de `cwd`. No se usa el directorio actual del

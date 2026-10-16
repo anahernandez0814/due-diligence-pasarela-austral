@@ -6,7 +6,11 @@ R14).
 
 ## `hooks`
 
-Todas las entradas usan la forma exec (`command` + `args`), sin shell.
+Todas las entradas usan la forma exec (`command` + `args`), sin shell. Las cinco se lanzan
+igual, con `uv run --no-project --python 3.12 --quiet`: los scripts solo usan la
+biblioteca estándar. El único `uv run --project` es el que `formatear_python` ejecuta por
+dentro, con `--frozen`, para usar el ruff del `uv.lock` sin reescribirlo (R1 y R12,
+revisión de la parada E).
 
 ```json
 {
@@ -72,7 +76,7 @@ Todas las entradas usan la forma exec (`command` + `args`), sin shell.
           {
             "type": "command",
             "command": "uv",
-            "args": ["run", "--project", "${CLAUDE_PROJECT_DIR}", "--quiet",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
                      "${CLAUDE_PROJECT_DIR}/.claude/hooks/formatear_python.py"],
             "timeout": 30,
             "onFailure": "continue"

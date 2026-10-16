@@ -81,7 +81,8 @@ _HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
 _MARCA = "{}"
 _ES_MARCA = re.compile("(\\d+)")
 _SEPARADORES = set(";&|\n()")
-_ANTES_DE_PALABRA = set(" \t\r\n;&|()<>")
+# Detrás de estos caracteres empieza una palabra, y un `#` abre un comentario.
+_ANTES_DE_COMENTARIO = set(" \t\n;&|()")
 
 
 @dataclass
@@ -155,6 +156,8 @@ def _escanear(texto: str, powershell: bool = False, cuerpo: bool = False) -> _Su
       contexto nuevo, aunque vaya entre comillas dobles.
     - Devuelve el texto original de cada `$(…)` y `…` de primer nivel, con sus heredocs
       completos: el cuerpo viaja con su comando.
+    - Quita los comentarios: `#` al principio de una palabra y fuera de comillas, hasta
+      el salto de línea sin incluirlo. `a#b`, `${#x}` y `$#` no son comentarios.
     - Con `cuerpo=True`, `texto` es el cuerpo de un heredoc que expande: sus comillas
       son literales. En PowerShell no hay heredocs y el escape es la comilla invertida.
     """
@@ -204,11 +207,10 @@ def _escanear(texto: str, powershell: bool = False, cuerpo: bool = False) -> _Su
                     pila.pop()
                     if len(pila) == 1:
                         sustituciones.append(texto[marco.inicio : i])
-            elif c == "#" and not powershell and (i == 0 or texto[i - 1] in _ANTES_DE_PALABRA):
+            elif c == "#" and (i == 0 or texto[i - 1] in _ANTES_DE_COMENTARIO):
+                # Se quita hasta el salto de línea, que sigue separando comandos.
                 fin = texto.find("\n", i)
-                fin = n if fin == -1 else fin
-                salida.append(texto[i:fin])
-                i = fin
+                i = n if fin == -1 else fin
                 continue
             elif texto.startswith("<<<", i):
                 salida.append("<<<")
@@ -271,7 +273,7 @@ def _tokenizar(comando: str, powershell: bool) -> _Tokens:
     lex = shlex.shlex(superficie.texto, posix=not powershell, punctuation_chars=";&|<>()\n")
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
-    lex.commenters = "" if powershell else "#"
+    lex.commenters = ""  # el recorrido ya quitó los comentarios, con la regla de bash
     resultado = _Tokens([], [], [], superficie.sustituciones)
     actual: list[str] = []
     actual_cuerpos: list[_Cuerpo] = []

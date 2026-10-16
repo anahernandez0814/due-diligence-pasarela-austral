@@ -163,7 +163,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 
   Ejecutar pytest con `-W error` y ruff sobre `.claude/hooks`, en verde, y volver a ejecutar los 9 sondeos de la parada B y los casos nuevos. Commit: `fix(hooks): heredocs que conocen las comillas`.
 
-- [ ] T008c Correcciones de la revisión de la parada B3: comentarios con la regla de bash (contracts/guardas.md, interfaz común; R9). Tests primero, que deben fallar, en `.claude/hooks/test_comun.py`; después, el código en `comun.py`. El recorrido quita los comentarios y `shlex` no los trata (`commenters = ""`). `#` abre comentario solo al principio de una palabra (al principio del texto o de una línea, tras espacio o tabulador, o tras `;`, `&`, `|`, `(` o `)`) y fuera de comillas; llega hasta el salto de línea, sin incluirlo. En PowerShell, la misma regla como respaldo.
+- [X] T008c Correcciones de la revisión de la parada B3: comentarios con la regla de bash (contracts/guardas.md, interfaz común; R9). Tests primero, que deben fallar, en `.claude/hooks/test_comun.py`; después, el código en `comun.py`. El recorrido quita los comentarios y `shlex` no los trata (`commenters = ""`). `#` abre comentario solo al principio de una palabra (al principio del texto o de una línea, tras espacio o tabulador, o tras `;`, `&`, `|`, `(` o `)`) y fuera de comillas; llega hasta el salto de línea, sin incluirlo. En PowerShell, la misma regla como respaldo.
   1. `echo # x` y en la línea siguiente `python -c "open('.env')"`: el código se detecta.
   2. `echo a#b; cat .env`: `["cat", ".env"]` es un subcomando.
   3. `# instala` y en la línea siguiente `uv sync`, y `git log --format='#%h %s'`: sin cambios.

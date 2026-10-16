@@ -401,10 +401,8 @@ def test_heredoc_entre_comillas_es_texto(comillas):
 
 
 def test_heredoc_en_un_comentario_es_texto():
-    # Solo se comprueba que el cuerpo no se quita. Que la línea siguiente al comentario
-    # quede en el mismo subcomando es otro hallazgo, pendiente de la revisión de la B3.
-    palabras = [p for s in comun.dividir_comando("echo hola # <<X\ncat .env\nX") for p in s]
-    assert palabras[-3:] == ["cat", ".env", "X"]
+    comando = "echo hola # <<X\ncat .env\nX"
+    assert comun.dividir_comando(comando) == [["echo", "hola"], ["cat", ".env"], ["X"]]
 
 
 def test_el_cuerpo_viaja_con_la_palabra_de_bash_c():
@@ -460,3 +458,41 @@ def test_corpus_de_comandos_legitimos(comando):
     for interior in extraccion.comandos:
         for palabras in comun.dividir_comando(interior.texto, powershell=interior.powershell):
             assert [p for p in palabras if _SECRETO.search(p)] == [], interior.texto
+
+
+# --- Correcciones de la revisión de la parada B3 (T008c): comentarios ---------------
+
+
+def test_comentario_no_se_come_el_salto_de_linea():
+    comando = "echo # x\npython -c \"open('.env')\""
+    assert comun.extraer_texto_ejecutable(comando).codigos == ["open('.env')"]
+
+
+def test_almohadilla_en_mitad_de_palabra_no_es_comentario():
+    assert comun.dividir_comando("echo a#b; cat .env") == [["echo", "a#b"], ["cat", ".env"]]
+
+
+@pytest.mark.parametrize(
+    ("comando", "esperado"),
+    [
+        ("# instala\nuv sync", [["uv", "sync"]]),
+        ("git log --format='#%h %s'", [["git", "log", "--format=#%h %s"]]),
+        ("echo ${#x}", [["echo", "${#x}"]]),
+        ("echo $#", [["echo", "$#"]]),
+        ("echo a;# b\necho c", [["echo", "a"], ["echo", "c"]]),
+        ("echo a|# b\ncat", [["echo", "a"], ["cat"]]),
+        ("(echo a)#b", [["echo", "a"]]),
+        ("\t# b\necho c", [["echo", "c"]]),
+    ],
+)
+def test_comentarios_con_la_regla_de_bash(comando, esperado):
+    assert comun.dividir_comando(comando) == esperado
+
+
+def test_comentario_en_powershell_como_respaldo():
+    comando = "Get-Content a # x\nGet-Content .env\nWrite-Output a#b"
+    assert comun.dividir_comando(comando, powershell=True) == [
+        ["Get-Content", "a"],
+        ["Get-Content", ".env"],
+        ["Write-Output", "a#b"],
+    ]

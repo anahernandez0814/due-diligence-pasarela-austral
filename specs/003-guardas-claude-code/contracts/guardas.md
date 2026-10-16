@@ -68,6 +68,18 @@ Módulos compartidos:
   - **Marcas sin cuerpo**: una marca interna de heredoc sin su cuerpo es un error de
     análisis (`ValueError`, nunca `IndexError`); en un comando interior se aplica la
     vuelta a texto.
+  - **Comentarios** (revisión de la parada B3): el recorrido quita los comentarios y
+    `shlex` no los trata (`commenters = ""`). Regla de bash:
+    - `#` abre un comentario solo al principio de una palabra: al principio del texto o
+      de una línea, después de un espacio o un tabulador, o después de `;`, `&`, `|`,
+      `(` o `)`. Siempre fuera de comillas.
+    - El comentario llega hasta el salto de línea, sin incluirlo; el salto sigue
+      separando comandos.
+    - En mitad de una palabra (`a#b`), en `${#var}` y en `$#` no es comentario.
+    - En PowerShell, como respaldo, `#` al principio de una palabra cuenta igual que en
+      bash. Los bloques `<# … #>` quedan como límite declarado.
+  - **Límite declarado, comillas ANSI-C** (`$'…'`): no se reconocen. Si `shlex` falla
+    con ellas, la guarda bloquea por precaución: es un falso positivo, nunca un hueco.
   - **Delante del programa** se saltan:
     - las asignaciones `NOMBRE=valor`;
     - los envoltorios `env [opciones] [NOMBRE=valor…]`, `exec`, `command`, `nohup`,

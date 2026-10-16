@@ -404,6 +404,19 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - **Prueba de regresión**: un corpus de comandos legítimos del proyecto (commits con
       heredoc, `git log`, `gh api … --jq`, `uv run`, `git switch`) debe analizarse sin
       excepción y sin código ni comandos interiores que nombren secretos.
+  - **Correcciones de la revisión de la parada B3, comentarios**: `shlex` trataba `#`
+    como comentario también en mitad de una palabra, al contrario que bash, y al saltarse
+    el comentario se comía el salto de línea. Así, `echo a#b; cat .env` perdía
+    `cat .env`, y con `echo # x` en una línea y `python -c "…"` en la siguiente, el
+    programa pasaba a ser `echo` y el código no se detectaba. Decisión:
+    - El recorrido único quita los comentarios con la regla de bash y `shlex` no los
+      trata (`commenters = ""`).
+    - `#` abre comentario solo al principio de una palabra y fuera de comillas. No lo
+      abre en `a#b`, `${#var}` ni `$#`. El salto de línea sigue separando comandos.
+    - En PowerShell vale la misma regla como respaldo. Los bloques `<# … #>` y las
+      comillas ANSI-C de bash (`$'…'`) quedan como límites declarados. Con `$'…'`, si
+      `shlex` falla, la guarda bloquea por precaución: es un falso positivo, nunca un
+      hueco.
 - **Decisión 2, búsquedas recursivas (I1)**: se bloquean **solo si su raíz contiene
   archivos de secretos** (FR-002: la búsqueda "no apunta a archivos de secretos").
   - Se aplica a:

@@ -156,10 +156,11 @@ transición hasta #4.
    alimentan a un intérprete y las búsquedas recursivas cuya raíz contiene secretos ya
    **no** son residuales: los cubre la guarda.
 2. Escrituras en código protegido que no son reconocibles: `git apply`, `patch`,
-   `git checkout -- <ruta>` y rutas en variables o construidas al ejecutar (R10). El
-   código en línea de intérpretes y shells que nombra código protegido ya **no** es
-   residual: `guarda_spec_previa` usa el mismo extractor de texto ejecutable que
-   `guarda_secretos`.
+   `git reset`, `git stash`, `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`,
+   `cd ~` y `cd $X`, y las rutas en variables o construidas al ejecutar (R10). Los
+   intérpretes y shells que nombran código protegido ya no son residuales, ni
+   `git checkout` (con o sin `--`), `git restore` y `git mv`, que se vigilan desde las
+   revisiones de las paradas D y E.
 3. Un `.py` escrito por comando de terminal no se formatea al momento; lo detecta
    `ruff format --check` (R12).
 4. Cambiar a una rama sin `.claude/hooks/` bloquea todas las acciones vigiladas, por el

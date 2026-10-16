@@ -327,8 +327,10 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   cualquier rama, tenga o no spec, plan y tareas: el archivo no se versiona, así que
   ningún PR vería un cambio que desactive las guardas. Leerlo sigue permitido.
 - **FR-026**: Los lanzadores que ejecutan otro comando (`xargs`, `sudo`, `doas`,
-  `env -S`, `script -c`, `watch`) DEBEN analizarse como el comando que lanzan, con las
-  mismas reglas de secretos y de spec previa.
+  `env -S`, `script -c`, `watch` y `find … -exec|-execdir|-ok|-okdir <cmd> ;|+`) DEBEN
+  analizarse como el comando que lanzan, con las mismas reglas de secretos y de spec
+  previa. En `find`, el comando lanzado son los tokens hasta `;` o `+`, y `{}` es una
+  ruta desconocida.
 
 **Formato**
 

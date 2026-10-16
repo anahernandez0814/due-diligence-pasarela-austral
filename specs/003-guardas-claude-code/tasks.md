@@ -98,8 +98,24 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
   - **`bloquear()`**: sale con 2 y escribe una sola línea en stderr con el formato
     `[<guarda>] <motivo>. <qué hacer>.`;
   - **envoltorio de fallo cerrado**: ante una excepción, sale con 2 y escribe
-    `[<guarda>] La guarda falló (<TipoDeError>); la acción se bloquea por precaución.`
-- [ ] T005 Implementar `.claude/hooks/comun.py`, solo con la biblioteca estándar, hasta que pase `test_comun.py` (contracts/guardas.md, interfaz común; R1, R2, R10).
+    `[<guarda>] La guarda falló (<TipoDeError>); la acción se bloquea por precaución.`;
+  - **extractor de texto ejecutable** (R9, decisión 1; R10; U3, C2 y D1 de la segunda
+    pasada del análisis):
+    - **comandos interiores**: devuelve como comando interior el argumento de `bash -c`,
+      `sh -c`, `eval`, `powershell -Command`, `pwsh -c` y el cuerpo de un heredoc que
+      alimenta a `bash` o `sh`, también detrás de `uv run`;
+    - **anidamiento**: hasta 3 niveles de anidamiento devuelve los comandos interiores; a
+      partir del 4.º marca anidamiento excesivo;
+    - **fallo de análisis**: un comando interior con comillas sin cerrar, que `shlex` no
+      puede analizar, se devuelve como texto de código;
+    - **intérpretes, un test por variante (C2)**: devuelve como texto de código el
+      argumento de `python -c`, `python3 -c`, `python3.12 -c`, `py -c`, `py -3 -c`,
+      `py -3.12 -c`, `node -e`, `node --eval`, `node -p`, `node --print`, `perl -e`,
+      `perl -E` y `ruby -e`, el de `uv run python -c` y `uv run --no-project python -c`,
+      y el cuerpo de `python - <<'FIN'`;
+    - **heredocs que no son código**: `git commit -F - <<'FIN'` y `cat > archivo <<'FIN'`
+      no devuelven ni texto de código ni comandos interiores (D1).
+- [ ] T005 Implementar `.claude/hooks/comun.py`, solo con la biblioteca estándar, hasta que pase `test_comun.py`, incluido el extractor de texto ejecutable que comparten `guarda_secretos` y `guarda_spec_previa` (contracts/guardas.md, interfaz común; R1, R2, R9, R10).
 - [ ] T006 [P] Escribir `.claude/hooks/test_detector_datos.py` con los casos mínimos de [contracts/detector-datos.md](contracts/detector-datos.md) (FR-005, FR-006, R11). Todos los positivos se generan en la prueba:
   - **Tarjeta**:
     - coincide con prefijos 2 a 6, longitudes 13, 16 y 19, y con y sin separadores
@@ -141,7 +157,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
     - NotebookEdit con `notebook_path` en `secrets/`;
     - Grep con `path` o `glob` hacia secretos;
     - Glob con un patrón que nombra `.env`;
-    - Bash, rutas: `head .env.local`, `head .env.staging` (aunque no exista),
+    - Bash, rutas: `head .env.local`, `head .env.staging` (aunque no exista; en la sesión también lo para la regla `Read`, I6),
       `cat ./secrets/a.txt`, `cp .env.local x`, `grep TOKEN .env.local`, redirección
       `< .env` y un comodín que se expande a `.env.local` (US1-2, G2, G3);
     - Bash, búsquedas recursivas cuya raíz contiene `.env`: `grep -r TOKEN .`,
@@ -151,6 +167,10 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
       `uv run python -c` con código que abre `.env`, `node -e` con código que lee
       `.env.local`, `bash -c "cat .env"`, `eval "cat .env"` y un heredoc
       `python - <<'FIN'` cuyo cuerpo abre `.env`;
+    - Bash, shells anidados con las mismas reglas que el exterior (U3):
+      `bash -c "grep -r TOKEN ."`, porque la raíz tiene `.env`, y un anidamiento de 4
+      niveles (`bash -c` dentro de `sh -c` dentro de `bash -c` dentro de `eval`), que se
+      bloquea por precaución;
     - PowerShell, como respaldo: `Get-Content .env.local`,
       `Get-ChildItem -Recurse | Select-String TOKEN` sobre la raíz y
       `pwsh -Command "Get-Content .env"`.
@@ -159,8 +179,9 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
     - Grep con `pattern` `.env` en `src/`;
     - `grep -n .env README.md`, `grep -rn ".env" src/` (en `src/` no hay secretos),
       `git grep ".env"` y `rg TOKEN`;
-    - `python -c "print(1)"`, un `python -c` con `x.keys()` y otro con
-      `secrets.token_hex(8)`;
+    - `python -c "print(1)"`, y `python -c` con `x.keys()`, con `secrets.token_hex(8)`,
+      con `os.environ` y con el texto `.environment` (U2);
+    - `bash -c "grep '.env' src/"`, porque `.env` es el patrón de búsqueda (U3, FR-002);
     - `git commit -m "protege .env"` y un `git commit -F - <<'FIN'` cuyo mensaje menciona
       `.env`, porque el heredoc no alimenta a un intérprete.
   - **Tiempo**: el recorrido de la raíz de `tmp_path` termina en menos de 1 s (SC-004).
@@ -169,7 +190,8 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
   - revisar por herramienta según la tabla del contrato;
   - excluir el patrón de búsqueda de `grep`, `egrep`, `fgrep`, `rg`, `git grep`, `Select-String` y `findstr`;
   - expandir los comodines contra la raíz;
-  - revisar como texto el código en línea de intérpretes y shells, `eval` y los heredocs que alimentan a un intérprete (R9, decisión 1);
+  - con el extractor de `comun.py`, analizar los comandos interiores de shells, `eval` y heredocs a `bash` o `sh` con estas mismas reglas, y revisar como texto, con el patrón de nombres del contrato (U2), el código de `python`, `node`, `perl` y `ruby` (R9, decisión 1);
+  - bloquear por precaución más de 3 niveles de anidamiento;
   - bloquear las búsquedas recursivas solo si su raíz, resuelta contra el `cwd` del JSON y recorrida con `os.walk` podando solo `.git`, contiene archivos de secretos (R9, decisión 2).
 
   Origen: FR-001, FR-002, FR-020, FR-023, R9.
@@ -230,13 +252,21 @@ patrón y sin documentos, y permite en una rama con los tres.
     - PowerShell, como respaldo: `Set-Content`, `Out-File`, `New-Item` y
       `Copy-Item -Destination`.
   - **Destinos que se ignoran**: `2>&1` y `> /dev/null`.
+  - **Texto ejecutable, con el extractor de `comun.py` (I7 de la segunda pasada)**:
+    - en `099-x`, sin documentos, se bloquean
+      `python -c "open('src/a/x.py','w').write('')"`, `bash -c "echo > src/a/x.py"` y
+      `cat > src/a/x.py <<'FIN'`;
+    - en una rama con los tres documentos, los mismos tres se permiten, porque la guarda
+      no distingue lectura de escritura;
+    - en cualquier rama, un anidamiento de 4 niveles se bloquea por precaución.
   - **NotebookEdit**: se revisa `notebook_path`.
   - **Fallo cerrado**: si git falla (por ejemplo, `CLAUDE_PROJECT_DIR` no es un
     repositorio), sale con 2.
 - [ ] T016 [US3] Implementar `.claude/hooks/guarda_spec_previa.py` con `comun` hasta que pase `test_guarda_spec_previa.py`. Debe:
   - leer la rama con `git -C <raíz> branch --show-current`;
   - usar los mensajes de la tabla del contrato;
-  - tomar la lista de código protegido de data-model.
+  - tomar la lista de código protegido de data-model;
+  - usar el extractor de `comun.py`: los comandos interiores, con estas mismas reglas de destinos, y los textos de código, buscando nombres de código protegido.
 
   Origen: FR-009 a FR-013, FR-020, FR-023, R7, R10, R14.
 - [ ] T017 [US3] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de spec previa`.
@@ -319,7 +349,7 @@ las guardas y las denegaciones.
     el reinicio de T036 se mantiene.
   - **Si desde aquí aparece un bloqueo `[guarda_…]` inesperado**, detenerse e informar;
     nunca desactivar las guardas ni buscar un rodeo.
-- [ ] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14.
+- [ ] T027 Escribir `.claude/hooks/test_configuracion.py` con los invariantes de [contracts/settings-json.md](contracts/settings-json.md), leyendo `.claude/settings.json` con `json`. Origen: FR-003, FR-016, FR-017, FR-022, R3, R6, R14. Es la verificación de la **capa de permisos**; la de la guarda está en los tests por stdin (I6).
   - **Hooks**:
     - cada matcher solo contiene `[A-Za-z0-9_|]`;
     - las 4 guardas llevan `onFailure: "block"` y `timeout` ≤ 10, y el formato,
@@ -411,7 +441,7 @@ escenarios son los de [quickstart.md](quickstart.md).
 - [ ] T037 [MANUAL] Desde una terminal fuera de Claude Code, crear `.env.local` y `secrets/prueba.txt` con contenido ficticio (`VARIABLE_FICTICIA=valor-de-prueba`). Confirmar a Claude que están creados.
 - [ ] T038 Crear las ramas temporales desde `003-guardas-claude-code`, sin cambiar de rama: `git branch prueba-sin-ticket` y `git branch 099-prueba` (quickstart, requisitos; R14).
 - [ ] T039 [US1] Quickstart Q1–Q3. Anotar el resultado de cada escenario.
-  - **Q1**: secretos bloqueados por Read y Bash. `head .env.staging` queda bloqueado **solo** por la guarda, porque ninguna regla de Bash cubre `.env.staging` y no hace falta que exista.
+  - **Q1**: secretos bloqueados por Read y Bash, incluido `head .env.staging` (no hace falta que exista). Para cada caso se anota qué capa bloqueó, el prefijo `[guarda_secretos]` o el mensaje de permisos de Claude Code; las dos son un resultado válido (R6, I6).
   - **Q2**: bloqueados `grep -r TOKEN .` (la raíz tiene `.env`) y el código en línea que abre `.env` sin imprimirlo (`python -c` y `uv run python -c`).
   - **Q3**: permitidos `.env.example`, `grep -n .env README.md`, `grep -rn ".env" src/`, la herramienta Grep, `git grep` y `python -c "print(1)"`.
 - [ ] T040 [US2] Quickstart Q4–Q6: tarjeta, NIT y cédula calculados en la propia petición y bloqueados; mensaje de ejemplo permitido; comentario con una credencial construida en la sesión bloqueado antes de publicarse en #3. Si llegara a publicarse, la analista lo borra a mano en GitHub y se registra como fallo.

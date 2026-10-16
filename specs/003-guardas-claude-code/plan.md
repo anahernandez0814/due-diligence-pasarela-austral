@@ -158,10 +158,11 @@ transición hasta #4.
    lanzadores (`xargs`, `sudo`, `doas`, `env -S`, `script -c`, `watch`) y las búsquedas
    recursivas cuya raíz contiene secretos ya **no** son residuales: los cubre la guarda.
 2. Escrituras en código protegido que no son reconocibles: `git apply`, `patch`,
-   `git reset`, `git stash`, `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`,
+   `git reset`, `git stash`, `find … -delete`, `xargs rm`, los `cd -`,
    `cd ~` y `cd $X`, y las rutas en variables o construidas al ejecutar; y `perl -pi`,
    `dd of=`, `curl -o`, `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`,
-   `git clean`, `uv run ruff check --fix` y `ruff format`, que escriben en código
+   `git clean`, `uv run ruff check --fix`, `ruff format` y las rutas que llegan por stdin
+   a un escritor (`echo src/app/a.py | xargs rm`), que escriben en código
    versionado y los ve el diff del PR (R10). Los intérpretes, shells y lanzadores que
    nombran código protegido ya no son residuales, ni `git checkout` (con o sin `--`),
    `git restore` y `git mv`, que se vigilan desde las revisiones de las paradas D y E.

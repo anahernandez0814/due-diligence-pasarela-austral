@@ -54,4 +54,4 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **Plugin**: `plugins/<nombre>/` y `.claude-plugin/`, protegidos como código desde ya (R7).
 - **`settings.local.json`**: Claude Code no puede editarlo para desactivar las guardas (R14).
 - **Texto ejecutable**: un extractor común analiza `bash -c`, `eval`, sustituciones, heredocs, tuberías y código en línea, hasta 3 niveles (R9, R10).
-- **Riesgos residuales**: (1) secretos ocultos a propósito (R9); (2) escrituras no reconocibles: `git apply`, `patch`, `git reset`, `git stash`, `find … -delete`, `xargs rm`, `cd $X` (R10); (3) `.py` escritos por terminal se formatean en `ruff format --check` (R12); (4) cambiar a una rama sin `.claude/hooks/` exige reiniciar la sesión (R14).
+- **Riesgos residuales**: (1) secretos ocultos a propósito (R9); (2) escrituras no reconocibles: `git apply`, `patch`, `git reset`, `git stash`, `find … -delete`, `xargs rm`, `cd $X` y rutas construidas al ejecutar (R10); (3) `.py` escritos por terminal se formatean en `ruff format --check` (R12); (4) cambiar a una rama sin `.claude/hooks/` exige reiniciar la sesión (R14).

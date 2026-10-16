@@ -27,6 +27,9 @@ dígito o `_`.
 - La cadena de dígitos pasa la validación de Luhn.
 - Con límite a ambos lados, y sin un dígito al otro lado de un separador (no forma parte
   de un número más largo).
+- No cuenta la parte decimal de un número: no puede ir precedido de un dígito seguido de
+  `.` o `,` (`(?<!\d[.,])`). Por ejemplo, las cifras tras el punto de `0.4111…` no
+  son una tarjeta (corrección de la revisión de la parada B).
 
 ### NIT
 
@@ -75,6 +78,7 @@ dígito o `_`.
 
 Los valores positivos se generan en la prueba:
 
+- Decimales: con semilla fija, ningún `repr(random.random())` produce un hallazgo.
 - Tarjeta: se calcula el dígito de Luhn para prefijos 2–6 y longitudes 13, 16 y 19, con
   y sin separadores. Se comprueba que el mismo número con un dígito cambiado no
   coincide, ni con prefijo 1.

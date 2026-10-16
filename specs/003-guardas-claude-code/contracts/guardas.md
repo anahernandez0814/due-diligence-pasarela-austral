@@ -34,6 +34,35 @@ Módulos compartidos:
 
   Si un comando interior no se puede analizar (`shlex` falla), lo devuelve como texto de
   código.
+
+  **Reglas del extractor** (correcciones de la revisión de la parada B):
+
+  | Construcción | Resultado |
+  |--------------|-----------|
+  | `bash -c`, `sh -c`, `eval`, `powershell`/`pwsh -Command`/`-c` | comando interior, nivel + 1 |
+  | `cmd /c`, `cmd //c`, `cmd /k`, `cmd //k` (Git Bash en Windows) | comando interior, nivel + 1, analizado sin `\` como escape, como PowerShell |
+  | sustitución de comandos `$(…)`, también dentro de comillas dobles (no dentro de simples), y comillas invertidas `` `…` `` | comando interior, nivel + 1, con las mismas reglas que `bash -c` |
+  | heredoc (`<<FIN`, `<<-FIN`, `<<'FIN'`) que alimenta a `bash` o `sh` | su cuerpo es un comando interior |
+  | heredoc que alimenta a un intérprete | su cuerpo es texto de código |
+  | herestring (`<<<`) con un intérprete | la palabra siguiente es texto de código |
+  | herestring con `bash` o `sh` | la palabra siguiente es un comando interior |
+  | `python`/`py`/`node`/`perl`/`ruby` con `-c`/`-e`… | el argumento es texto de código |
+  | **tubería**: una etapa es un intérprete sin `-c`/`-e` y sin script (o con `-` como script) | las palabras y los cuerpos de heredoc de las etapas anteriores de esa tubería son texto de código |
+  | **tubería**: una etapa es `bash` o `sh` sin `-c` y sin script | las palabras y los cuerpos de heredoc de las etapas anteriores son un comando interior |
+
+  - **Heredocs**: el operador `<<` solo cuenta si no forma parte de `<<<`
+    (`(?<!<)<<(?!<)`). Un heredoc cuyo delimitador de cierre no aparece no se quita: sus
+    líneas se analizan como comandos.
+  - **Delante del programa** se saltan:
+    - las asignaciones `NOMBRE=valor`;
+    - los envoltorios `env [opciones] [NOMBRE=valor…]`, `exec`, `command`, `nohup`,
+      `time`, `nice [-n N]` y `timeout [opciones] N`.
+  - **`uv run`**: se saltan sus opciones y se toma como programa la primera palabra que
+    sea un intérprete o un shell. No se usa una lista fija de opciones con valor.
+- **Rutas de Git Bash** (`normalizar_ruta`): en Windows, una ruta `/<letra>/…` se
+  convierte en `<LETRA>:/…` antes de normalizar. Por ejemplo,
+  `/d/AIReadyOrquestador/src/due_diligence/x.py` queda `src/due_diligence/x.py` con la
+  raíz `D:\AIReadyOrquestador`.
 - `detector_datos.py`: el detector ([detector-datos.md](detector-datos.md)).
 
 ## `guarda_secretos.py` (FR-001, FR-002, R9)
@@ -67,7 +96,12 @@ PowerShell (como respaldo).
 | `perl` con `-e` o `-E`; `ruby` con `-e` | el argumento, como texto |
 | heredoc que alimenta a uno de esos intérpretes (`python - <<'FIN'`) | el cuerpo, como texto |
 
-- Todo lo anterior vale también detrás de `uv run [opciones]`.
+- Las demás construcciones del extractor (sustitución de comandos, comillas invertidas,
+  tuberías hacia un intérprete o un shell, herestrings y `cmd /c`) siguen las reglas de
+  la interfaz común: los comandos interiores, con todas las reglas de esta guarda; los
+  textos de código, como texto.
+- Todo lo anterior vale también detrás de `uv run`, de las asignaciones `NOMBRE=valor` y
+  de los envoltorios `env`, `exec`, `command`, `nohup`, `time`, `nice` y `timeout`.
 - Un comando interior que `shlex` no puede analizar se revisa como texto.
 - Más de 3 niveles de anidamiento se bloquean por precaución.
 - **Heredocs (acotación confirmada, D1)**: un heredoc que alimenta a otro comando

@@ -367,6 +367,25 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 
     Delante de cualquiera de ellos no puede haber una letra, un dígito, `.`, `_` ni `-`
     pegado. Así, `x.keys()`, `obj.key)` y el módulo `secrets.token_hex` tampoco coinciden.
+  - **Correcciones de la revisión de la parada B**: la revisora ejecutó el extractor con
+    entradas reales y encontró huecos. Las reglas completas están en el contrato de
+    guardas (interfaz común); en resumen:
+    - **Heredocs**: `<<` no cuenta si forma parte de `<<<`. Un heredoc sin delimitador
+      de cierre no se quita, y sus líneas se analizan como comandos. Antes, un `<<<`
+      seguido de otra línea hacía desaparecer esa línea.
+    - **Sustitución de comandos**: `$(…)`, también dentro de comillas dobles, y las
+      comillas invertidas son comandos interiores (nivel + 1).
+    - **Tuberías**: un intérprete o un shell que lee de una tubería recibe como código o
+      como comando interior el texto de las etapas anteriores, incluidos los cuerpos de
+      heredoc (`echo "…" | python`, `cat <<'FIN' | python3`).
+    - **Herestrings** (`<<<`): con un intérprete, la palabra siguiente es código; con
+      `bash` o `sh`, un comando interior.
+    - **Envoltorios**: se saltan las asignaciones `NOMBRE=valor` y `env`, `exec`,
+      `command`, `nohup`, `time`, `nice` y `timeout`. En `uv run` se toma la primera
+      palabra que sea un intérprete o un shell, sin lista fija de opciones.
+    - **`cmd /c`** y `cmd //c`, también con `/k`, son un shell interior, analizado sin `\`
+      como escape.
+    - **Rutas de Git Bash**: `/<letra>/…` se convierte en `<LETRA>:/…` en Windows.
 - **Decisión 2, búsquedas recursivas (I1)**: se bloquean **solo si su raíz contiene
   archivos de secretos** (FR-002: la búsqueda "no apunta a archivos de secretos").
   - Se aplica a:
@@ -446,6 +465,9 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     el DV es `s` si `s` vale 0 o 1, y `11 − s` en otro caso.
   - **Tarjeta**: prefijo 2–6 más Luhn. Una marca de tiempo en milisegundos de 13 dígitos
     empieza por 1, así que no coincide (spec, casos borde).
+  - **Decimales (revisión de la parada B)**: la parte decimal de un número no cuenta como
+    tarjeta (`(?<!\d[.,])`). Sin esa condición, 1.042 de 20.000 `repr(random.random())`
+    se marcaban como tarjeta.
   - **Límites de palabra** en todos los patrones: un número pegado a letras o dígitos
     (hashes, `uv.lock`, identificadores) no cuenta.
 - **Alternativa descartada**: bibliotecas de detección de secretos

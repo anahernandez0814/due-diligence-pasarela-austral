@@ -1,0 +1,255 @@
+"""Pruebas de comun.py: entrada, rutas, comandos, bloqueo y texto ejecutable."""
+
+import io
+import json
+import shlex
+from pathlib import Path
+
+import comun
+import pytest
+
+# --- Lectura de stdin ---------------------------------------------------------------
+
+
+def test_leer_entrada_json_valido():
+    entrada = comun.leer_entrada(io.StringIO(json.dumps({"tool_name": "Read"})))
+    assert entrada == {"tool_name": "Read"}
+
+
+@pytest.mark.parametrize("texto", ["no es json", "[1, 2]", ""])
+def test_leer_entrada_invalida_lanza_error(texto):
+    with pytest.raises(ValueError):
+        comun.leer_entrada(io.StringIO(texto))
+
+
+# --- Raíz del repositorio -----------------------------------------------------------
+
+
+def test_raiz_prioriza_claude_project_dir(monkeypatch, tmp_path):
+    otra = tmp_path / "otra"
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    assert comun.raiz({"cwd": str(otra)}) == tmp_path
+
+
+def test_raiz_usa_cwd_si_falta_la_variable(monkeypatch, tmp_path):
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    assert comun.raiz({"cwd": str(tmp_path)}) == tmp_path
+
+
+# --- Normalización de rutas ---------------------------------------------------------
+
+
+def test_normalizar_ruta_relativa_con_barras_invertidas(tmp_path):
+    assert comun.normalizar_ruta("src\\a\\b.py", tmp_path) == "src/a/b.py"
+
+
+def test_normalizar_ruta_absoluta_dentro_de_la_raiz(tmp_path):
+    ruta = str(tmp_path / "src" / "b.py")
+    assert comun.normalizar_ruta(ruta, tmp_path) == "src/b.py"
+
+
+def test_normalizar_ruta_relativa_al_cwd(tmp_path):
+    assert comun.normalizar_ruta("../x.py", tmp_path, cwd=tmp_path / "src") == "x.py"
+
+
+def test_normalizar_ruta_fuera_de_la_raiz_queda_absoluta(tmp_path):
+    fuera = tmp_path.parent / "fuera.txt"
+    resultado = comun.normalizar_ruta(str(fuera), tmp_path)
+    assert resultado.endswith("/fuera.txt")
+    assert not resultado.startswith("..")
+
+
+def test_normalizar_ruta_no_distingue_mayusculas_de_la_raiz(tmp_path):
+    ruta = str(tmp_path).upper() + "/src/B.py"
+    assert comun.normalizar_ruta(ruta, Path(str(tmp_path).lower())) == "src/B.py"
+
+
+# --- División de comandos -----------------------------------------------------------
+
+
+def test_dividir_por_separadores():
+    assert comun.dividir_comando("a 1; b 2 && c || d | e") == [
+        ["a", "1"],
+        ["b", "2"],
+        ["c"],
+        ["d"],
+        ["e"],
+    ]
+
+
+def test_dividir_por_saltos_de_linea():
+    assert comun.dividir_comando("a 1\nb 2") == [["a", "1"], ["b", "2"]]
+
+
+def test_dividir_conserva_redirecciones():
+    assert comun.dividir_comando("cat < x > y >> z") == [["cat", "<", "x", ">", "y", ">>", "z"]]
+
+
+def test_dividir_quita_comillas():
+    assert comun.dividir_comando("""echo "a b" 'c d'""") == [["echo", "a b", "c d"]]
+
+
+def test_dividir_powershell_conserva_barras_invertidas():
+    assert comun.dividir_comando("Get-Content '.\\a b.txt'", powershell=True) == [
+        ["Get-Content", ".\\a b.txt"]
+    ]
+
+
+def test_dividir_quita_el_cuerpo_de_los_heredocs():
+    comando = "git commit -F - <<'FIN'\nmensaje; con | separadores\nFIN\necho fin"
+    assert comun.dividir_comando(comando) == [
+        ["git", "commit", "-F", "-"],
+        ["echo", "fin"],
+    ]
+
+
+# --- Bloqueo y fallo cerrado --------------------------------------------------------
+
+
+def test_bloquear_sale_con_2_y_una_linea(capsys):
+    with pytest.raises(SystemExit) as salida:
+        comun.bloquear("guarda_x", "Motivo de prueba.\nOtra línea. Haz algo.")
+    assert salida.value.code == 2
+    error = capsys.readouterr().err
+    assert error.startswith("[guarda_x] Motivo de prueba.")
+    assert error.strip().count("\n") == 0
+
+
+def test_ejecutar_permite_con_salida_0(monkeypatch):
+    monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
+    with pytest.raises(SystemExit) as salida:
+        comun.ejecutar("guarda_x", lambda entrada: None)
+    assert salida.value.code == 0
+
+
+def test_ejecutar_falla_cerrado_ante_una_excepcion(monkeypatch, capsys):
+    def revisar(entrada):
+        raise KeyError("x")
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
+    with pytest.raises(SystemExit) as salida:
+        comun.ejecutar("guarda_x", revisar)
+    assert salida.value.code == 2
+    assert capsys.readouterr().err.strip() == (
+        "[guarda_x] La guarda falló (KeyError); la acción se bloquea por precaución."
+    )
+
+
+def test_ejecutar_falla_cerrado_si_el_json_es_invalido(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO("no es json"))
+    with pytest.raises(SystemExit) as salida:
+        comun.ejecutar("guarda_x", lambda entrada: None)
+    assert salida.value.code == 2
+    assert "La guarda falló" in capsys.readouterr().err
+
+
+# --- Extractor de texto ejecutable: comandos interiores ------------------------------
+
+
+def interiores(comando, powershell=False):
+    return [c.texto for c in comun.extraer_texto_ejecutable(comando, powershell).comandos]
+
+
+@pytest.mark.parametrize(
+    ("comando", "esperado"),
+    [
+        ('bash -c "cat a"', "cat a"),
+        ("sh -c 'cat a'", "cat a"),
+        ('bash -lc "cat a"', "cat a"),
+        ('eval "cat a"', "cat a"),
+        ("eval cat a", "cat a"),
+        ('uv run bash -c "cat a"', "cat a"),
+        ('uv run --no-project bash -c "cat a"', "cat a"),
+        ("bash <<'FIN'\ncat a\nFIN", "cat a"),
+        ("sh <<FIN\ncat a\nFIN", "cat a"),
+    ],
+)
+def test_comandos_interiores_de_shells(comando, esperado):
+    assert interiores(comando) == [esperado]
+
+
+@pytest.mark.parametrize(
+    "comando",
+    ['powershell -Command "Get-Content a"', 'pwsh -c "Get-Content a"'],
+)
+def test_comandos_interiores_de_powershell(comando):
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert [(c.texto, c.powershell) for c in extraccion.comandos] == [("Get-Content a", True)]
+
+
+def test_anidamiento_hasta_3_niveles():
+    comando = """eval "bash -c 'sh -c \\"cat a\\"'" """
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert [c.nivel for c in extraccion.comandos] == [1, 2, 3]
+    assert extraccion.comandos[-1].texto == "cat a"
+    assert not extraccion.anidamiento_excesivo
+
+
+def test_anidamiento_de_4_niveles_es_excesivo():
+    interior = "cat a"
+    for shell in ("bash -c", "sh -c", "bash -c", "eval"):
+        interior = f"{shell} {shlex.quote(interior)}"
+    assert comun.extraer_texto_ejecutable(interior).anidamiento_excesivo
+
+
+def test_comando_interior_que_no_se_puede_analizar_pasa_a_texto():
+    extraccion = comun.extraer_texto_ejecutable("""bash -c "echo 'sin cerrar" """)
+    assert extraccion.comandos == []
+    assert extraccion.codigos == ["echo 'sin cerrar"]
+
+
+# --- Extractor de texto ejecutable: intérpretes ------------------------------------
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        'python -c "X"',
+        'python3 -c "X"',
+        'python3.12 -c "X"',
+        'py -c "X"',
+        'py -3 -c "X"',
+        'py -3.12 -c "X"',
+        'node -e "X"',
+        'node --eval "X"',
+        'node -p "X"',
+        'node --print "X"',
+        'perl -e "X"',
+        'perl -E "X"',
+        'ruby -e "X"',
+        'uv run python -c "X"',
+        'uv run --no-project python -c "X"',
+        "python - <<'FIN'\nX\nFIN",
+    ],
+)
+def test_codigo_en_linea_de_interpretes(comando):
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert extraccion.codigos == ["X"]
+    assert extraccion.comandos == []
+
+
+def test_script_de_python_no_es_codigo_en_linea():
+    assert comun.extraer_texto_ejecutable("python script.py -c X").codigos == []
+
+
+def test_interprete_dentro_de_un_shell():
+    extraccion = comun.extraer_texto_ejecutable("""bash -c "python -c 'X'" """)
+    assert extraccion.codigos == ["X"]
+
+
+# --- Extractor de texto ejecutable: heredocs que no son código ----------------------
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "git commit -F - <<'FIN'\nmensaje\nFIN",
+        "cat > archivo <<'FIN'\ncontenido\nFIN",
+        "echo hola",
+    ],
+)
+def test_heredocs_y_comandos_sin_texto_ejecutable(comando):
+    extraccion = comun.extraer_texto_ejecutable(comando)
+    assert extraccion.comandos == []
+    assert extraccion.codigos == []
+    assert not extraccion.anidamiento_excesivo

@@ -95,7 +95,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 
 **⚠️ CRITICAL**: ninguna guarda puede empezar antes de terminar esta fase.
 
-- [ ] T004 [P] Escribir `.claude/hooks/test_comun.py`, según la interfaz común de [contracts/guardas.md](contracts/guardas.md), R1 y R2. Debe cubrir:
+- [X] T004 [P] Escribir `.claude/hooks/test_comun.py`, según la interfaz común de [contracts/guardas.md](contracts/guardas.md), R1 y R2. Debe cubrir:
   - **lectura de stdin**: JSON válido; JSON inválido, que lanza error;
   - **raíz**: `CLAUDE_PROJECT_DIR` tiene prioridad sobre `cwd`;
   - **normalización de rutas**: `\` → `/`, relativa a la raíz, rutas fuera de la raíz y
@@ -122,8 +122,8 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
       y el cuerpo de `python - <<'FIN'`;
     - **heredocs que no son código**: `git commit -F - <<'FIN'` y `cat > archivo <<'FIN'`
       no devuelven ni texto de código ni comandos interiores (D1).
-- [ ] T005 Implementar `.claude/hooks/comun.py`, solo con la biblioteca estándar, hasta que pase `test_comun.py`, incluido el extractor de texto ejecutable que comparten `guarda_secretos` y `guarda_spec_previa` (contracts/guardas.md, interfaz común; R1, R2, R9, R10).
-- [ ] T006 [P] Escribir `.claude/hooks/test_detector_datos.py` con los casos mínimos de [contracts/detector-datos.md](contracts/detector-datos.md) (FR-005, FR-006, R11). Todos los positivos se generan en la prueba:
+- [X] T005 Implementar `.claude/hooks/comun.py`, solo con la biblioteca estándar, hasta que pase `test_comun.py`, incluido el extractor de texto ejecutable que comparten `guarda_secretos` y `guarda_spec_previa` (contracts/guardas.md, interfaz común; R1, R2, R9, R10).
+- [X] T006 [P] Escribir `.claude/hooks/test_detector_datos.py` con los casos mínimos de [contracts/detector-datos.md](contracts/detector-datos.md) (FR-005, FR-006, R11). Todos los positivos se generan en la prueba:
   - **Tarjeta**:
     - coincide con prefijos 2 a 6, longitudes 13, 16 y 19, y con y sin separadores
       (espacio o guion);
@@ -138,8 +138,8 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
   - **Permitidos**: el mensaje de ejemplo, leído en tiempo de ejecución de
     `docs/enunciado.md`; `CO-TV-0001`; `$80.000.000`.
   - **Resultado**: `buscar()` devuelve solo pares `(tipo, linea)`, nunca el valor.
-- [ ] T007 Implementar `.claude/hooks/detector_datos.py` con `buscar(texto) -> list[tuple[str, int]]` y los tipos `"tarjeta"`, `"nit"`, `"cedula"` y `"credencial"`, hasta que pase `test_detector_datos.py` (FR-005, FR-006, R11). Las expresiones regulares usan clases de caracteres, de modo que no coinciden consigo mismas.
-- [ ] T008 Ejecutar `uv run pytest .claude/hooks -o pythonpath=.claude/hooks`, `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks`, todo en verde. Commit: `feat(hooks): módulos comunes y detector de datos con forma real`.
+- [X] T007 Implementar `.claude/hooks/detector_datos.py` con `buscar(texto) -> list[tuple[str, int]]` y los tipos `"tarjeta"`, `"nit"`, `"cedula"` y `"credencial"`, hasta que pase `test_detector_datos.py` (FR-005, FR-006, R11). Las expresiones regulares usan clases de caracteres, de modo que no coinciden consigo mismas.
+- [X] T008 Ejecutar `uv run pytest .claude/hooks -o pythonpath=.claude/hooks`, `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks`, todo en verde. Commit: `feat(hooks): módulos comunes y detector de datos con forma real`.
 
 **Checkpoint**: `comun` y `detector_datos` probados. Ninguna guarda registrada.
 

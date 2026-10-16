@@ -436,13 +436,20 @@ class ComandoInterior:
     powershell: bool  # True: se tokeniza sin `\` como escape (PowerShell o `cmd`)
     nivel: int
     cmd: bool = False
+    padre: int = -1  # índice en `comandos` del comando del que sale; -1, el exterior
+    origen: int = -1  # índice del subcomando del padre donde aparece; -1 si no se sabe
 
 
 @dataclass
 class Extraccion:
     comandos: list[ComandoInterior] = field(default_factory=list)
     codigos: list[str] = field(default_factory=list)
+    codigos_origen: list[tuple[int, int]] = field(default_factory=list)  # (padre, origen)
     anidamiento_excesivo: bool = False
+
+    def agregar_codigo(self, texto: str, padre: int, origen: int) -> None:
+        self.codigos.append(texto)
+        self.codigos_origen.append((padre, origen))
 
 
 def _opciones_de_codigo(palabra: str) -> set[str]:
@@ -528,9 +535,13 @@ def extraer_texto_ejecutable(comando: str, powershell: bool = False) -> Extracci
       heredoc, herestring o lo que una tubería pasa al intérprete.
     - Un comando interior que no se puede analizar se devuelve como texto.
     - Con más de MAX_NIVELES shells anidados se marca anidamiento excesivo.
+    - Cada comando interior y cada texto de código anota su `padre` (el comando
+      interior del que sale, o -1 para el exterior) y su `origen` (el índice del
+      subcomando del padre donde aparece, o -1 si no se sabe), para que una guarda
+      pueda saber en qué carpeta se ejecuta tras los `cd` (T017c).
     """
     extraccion = Extraccion()
-    _extraer(comando, powershell, False, 0, extraccion)
+    _extraer(comando, powershell, False, 0, extraccion, -1)
     return extraccion
 
 
@@ -538,18 +549,39 @@ def _texto_de_etapa(palabras: list[str], cuerpos: list[_Cuerpo]) -> str:
     return "\n".join([" ".join(palabras)] + [c.texto for c in cuerpos])
 
 
+def _origen_de_sustitucion(texto: str, subcomandos: list[list[str]]) -> int:
+    """Subcomando cuya palabra contiene la sustitución `$(texto…` o `` `texto ``.
+
+    Una sustitución sin comillas se parte en varias palabras y no se encuentra (-1).
+    """
+    agujas = ("$(" + texto, "`" + texto)
+    for k, palabras in enumerate(subcomandos):
+        if any(a in p for p in palabras for a in agujas):
+            return k
+    return -1
+
+
 def _extraer(
-    comando: str, powershell: bool, es_cmd: bool, nivel: int, extraccion: Extraccion
+    comando: str,
+    powershell: bool,
+    es_cmd: bool,
+    nivel: int,
+    extraccion: Extraccion,
+    padre: int,
 ) -> None:
     tokens = _tokenizar(comando, powershell)
-    interiores: list[tuple[str, bool, bool]] = []
+    # (texto, sin escapes, es cmd, origen)
+    interiores: list[tuple[str, bool, bool, int]] = []
 
     if not es_cmd:
-        interiores += [(s, powershell, False) for s in tokens.sustituciones]
+        interiores += [
+            (s, powershell, False, _origen_de_sustitucion(s, tokens.subcomandos))
+            for s in tokens.sustituciones
+        ]
 
     etapas: list[tuple[list[str], list[_Cuerpo]]] = []
-    for originales, cuerpos, en_tuberia in zip(
-        tokens.subcomandos, tokens.cuerpos, tokens.tuberia, strict=True
+    for origen, (originales, cuerpos, en_tuberia) in enumerate(
+        zip(tokens.subcomandos, tokens.cuerpos, tokens.tuberia, strict=True)
     ):
         anteriores = etapas if en_tuberia else []
         etapas = [*anteriores, (originales, cuerpos)]
@@ -561,38 +593,41 @@ def _extraer(
 
         interior = _interior_de_shell(palabras)
         if interior is not None:
-            interiores.append(interior)
+            interiores.append((*interior, origen))
         codigo = _codigo_de_interprete(palabras)
         if codigo is not None:
-            extraccion.codigos.append(codigo)
+            extraccion.agregar_codigo(codigo, padre, origen)
 
         for k, palabra in enumerate(palabras[:-1]):
             if palabra == "<<<":
                 if interprete:
-                    extraccion.codigos.append(palabras[k + 1])
+                    extraccion.agregar_codigo(palabras[k + 1], padre, origen)
                 elif es_shell:
-                    interiores.append((palabras[k + 1], False, False))
+                    interiores.append((palabras[k + 1], False, False, origen))
         for cuerpo in cuerpos:
             if es_shell:
-                interiores.append((cuerpo.texto, False, False))
+                interiores.append((cuerpo.texto, False, False, origen))
             elif interprete and codigo is None:
-                extraccion.codigos.append(cuerpo.texto)
+                extraccion.agregar_codigo(cuerpo.texto, padre, origen)
 
         if anteriores and _lee_de_stdin(palabras):
             texto = "\n".join(_texto_de_etapa(p, c) for p, c in anteriores)
             if interprete:
-                extraccion.codigos.append(texto)
+                extraccion.agregar_codigo(texto, padre, origen)
             else:
-                interiores.append((texto, False, False))
+                interiores.append((texto, False, False, origen))
 
-    for texto, sin_escapes, es_cmd_interior in interiores:
+    for texto, sin_escapes, es_cmd_interior, origen in interiores:
         if nivel + 1 > MAX_NIVELES:
             extraccion.anidamiento_excesivo = True
             continue
         try:
             _tokenizar(texto, sin_escapes)
         except ValueError:
-            extraccion.codigos.append(texto)
+            extraccion.agregar_codigo(texto, padre, origen)
             continue
-        extraccion.comandos.append(ComandoInterior(texto, sin_escapes, nivel + 1, es_cmd_interior))
-        _extraer(texto, sin_escapes, es_cmd_interior, nivel + 1, extraccion)
+        extraccion.comandos.append(
+            ComandoInterior(texto, sin_escapes, nivel + 1, es_cmd_interior, padre, origen)
+        )
+        indice = len(extraccion.comandos) - 1
+        _extraer(texto, sin_escapes, es_cmd_interior, nivel + 1, extraccion, indice)

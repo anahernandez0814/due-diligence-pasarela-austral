@@ -486,3 +486,46 @@ def test_carpetas_que_contienen_codigo_protegido(ruta):
 @pytest.mark.parametrize("ruta", ["docs", "specs/003-x", ".specify", "../otro"])
 def test_carpetas_sin_codigo_protegido(ruta):
     assert not guarda_spec_previa.contiene_protegido(ruta)
+
+
+# --- Comandos interiores que heredan el cwd (T017c) -----------------------------------
+
+HEREDAN = [
+    "cd .claude && bash -c 'rm settings.json'",
+    "cd .claude && eval rm settings.json",
+    "cd src/app && sh -c 'echo x > b.py'",
+    "cd src && python -c \"open('app/b.py','w')\"",
+    "cd src/app && python3 - <<'EOF'\nopen('b.py','w')\nEOF",
+    'cd .claude && echo "$(rm settings.json)"',
+]
+
+
+@pytest.mark.parametrize("comando", HEREDAN)
+def test_interiores_heredan_el_cwd_en_main(con_app, comando):
+    assert bash(con_app(rama="main"), comando)
+
+
+@pytest.mark.parametrize("comando", HEREDAN)
+def test_interiores_heredan_el_cwd_con_documentos(con_app, comando):
+    assert bash(con_app(), comando) is None
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "cd docs && bash -c 'rm -rf build'",
+        'cd docs && python -c "print(1)"',
+        'python -c "print(1)"',
+        "cd src && uv run pytest",
+        "bash -c 'rm settings.json'; cd .claude",
+    ],
+)
+def test_interiores_tras_un_cd_que_se_permiten_en_main(con_app, comando):
+    assert bash(con_app(rama="main"), comando) is None
+
+
+def test_mensaje_del_codigo_en_una_carpeta_protegida(con_app):
+    assert bash(con_app(rama="main"), 'cd src && python -c "print(1)"') == (
+        "src es código protegido y la rama 'main' no es de un ticket (NNN-nombre). "
+        "Crea la rama con /siguiente-ticket."
+    )

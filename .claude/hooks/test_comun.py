@@ -524,3 +524,40 @@ def test_comentario_en_powershell_como_respaldo():
         ["Get-Content", ".env"],
         ["Write-Output", "a#b"],
     ]
+
+
+# --- Padre y origen de cada comando interior y texto de código (T017c) --------------
+
+
+def test_origen_de_un_comando_interior():
+    extraccion = comun.extraer_texto_ejecutable('cd x && bash -c "cat a"')
+    assert [(c.texto, c.padre, c.origen) for c in extraccion.comandos] == [("cat a", -1, 1)]
+
+
+def test_origen_de_un_texto_de_codigo():
+    extraccion = comun.extraer_texto_ejecutable('cd x && python -c "X"')
+    assert extraccion.codigos == ["X"]
+    assert extraccion.codigos_origen == [(-1, 1)]
+
+
+def test_origen_de_un_heredoc_hacia_un_interprete():
+    extraccion = comun.extraer_texto_ejecutable("cd x && python3 - <<'EOF'\nY\nEOF")
+    assert list(zip(extraccion.codigos, extraccion.codigos_origen, strict=True)) == [("Y", (-1, 1))]
+
+
+def test_padre_de_un_comando_anidado():
+    extraccion = comun.extraer_texto_ejecutable("bash -c \"cd y && sh -c 'cat a'\"")
+    assert [(c.texto, c.padre, c.origen) for c in extraccion.comandos] == [
+        ("cd y && sh -c 'cat a'", -1, 0),
+        ("cat a", 0, 1),
+    ]
+
+
+def test_origen_de_una_sustitucion_entre_comillas():
+    extraccion = comun.extraer_texto_ejecutable('cd x; echo "$(cat a)"')
+    assert [(c.texto, c.origen) for c in extraccion.comandos] == [("cat a", 1)]
+
+
+def test_codigo_de_un_comando_anidado_tiene_su_padre():
+    extraccion = comun.extraer_texto_ejecutable("bash -c \"cd y && python -c 'Z'\"")
+    assert list(zip(extraccion.codigos, extraccion.codigos_origen, strict=True)) == [("Z", (0, 1))]

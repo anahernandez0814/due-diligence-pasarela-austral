@@ -377,31 +377,73 @@ def _ticket(base: Path, ruta: str) -> str | None:
 # --- Decisión -------------------------------------------------------------------------
 
 
+def carpetas_por_subcomando(texto: str, powershell: bool, base: Path, cwd: Path) -> list[Path]:
+    """Carpeta vigente al empezar cada subcomando de `texto`, tras los `cd` anteriores.
+
+    Los índices coinciden con el `origen` que anota el extractor de `comun.py`.
+    """
+    actual, carpetas = cwd, []
+    for sub in comun.dividir_comando(texto, powershell=powershell):
+        carpetas.append(actual)
+        programa = comun.quitar_envoltorios(sub)
+        if programa and _nombre(programa[0]) in _CAMBIO_DE_CARPETA:
+            actual = _nueva_carpeta(programa[1:], base, actual)
+    return carpetas
+
+
 def _protegidas_en_terminal(
     comando: str, powershell: bool, base: Path, cwd: Path
 ) -> list[str] | str:
-    """Rutas de código protegido del comando, o el mensaje de anidamiento excesivo."""
+    """Rutas de código protegido del comando, o el mensaje de anidamiento excesivo.
+
+    Cada comando interior y cada texto de código heredan la carpeta vigente en el
+    subcomando donde aparecen (T017c). Si el extractor no sabe de qué subcomando salen,
+    se prueba con todas las carpetas de su padre.
+    """
     extraccion = comun.extraer_texto_ejecutable(comando, powershell=powershell)
     if extraccion.anidamiento_excesivo:
         return ANIDAMIENTO
-    rutas = []
-    textos = [(comando, powershell)] + [(c.texto, c.powershell) for c in extraccion.comandos]
-    for texto, sin_escapes in textos:
-        for ruta, tipo in destinos(texto, sin_escapes, base, cwd):
-            if (
-                es_protegido(ruta)
-                or (tipo == "copia" and _es_carpeta_protegida(ruta))
-                or (
-                    tipo.startswith("borrado")
-                    and contiene_protegido(ruta, tipo.endswith("carpeta"))
-                )
-            ):
-                rutas.append(ruta)
-    for codigo in extraccion.codigos:
-        for nombrada in rutas_en_texto(codigo):
-            ruta = comun.normalizar_ruta(nombrada, base, cwd)
-            if es_protegido(ruta):
-                rutas.append(ruta)
+
+    # Para el texto 0 (el comando) y cada comando interior (1, 2, …): la tabla de
+    # carpetas por subcomando de cada carpeta de inicio posible.
+    tablas: list[list[list[Path]]] = []
+
+    def heredadas(padre: int, origen: int) -> list[Path]:
+        candidatas: list[Path] = []
+        for tabla in tablas[padre + 1]:
+            elegidas = [tabla[origen]] if 0 <= origen < len(tabla) else tabla
+            candidatas += [c for c in elegidas if c not in candidatas]
+        return candidatas or [cwd]
+
+    rutas: list[str] = []
+    textos = [(comando, powershell, -1, -1)]
+    textos += [(c.texto, c.powershell, c.padre, c.origen) for c in extraccion.comandos]
+    for indice, (texto, sin_escapes, padre, origen) in enumerate(textos):
+        inicios = [cwd] if indice == 0 else heredadas(padre, origen)
+        tablas.append([carpetas_por_subcomando(texto, sin_escapes, base, i) for i in inicios])
+        for inicio in inicios:
+            for ruta, tipo in destinos(texto, sin_escapes, base, inicio):
+                if (
+                    es_protegido(ruta)
+                    or (tipo == "copia" and _es_carpeta_protegida(ruta))
+                    or (
+                        tipo.startswith("borrado")
+                        and contiene_protegido(ruta, tipo.endswith("carpeta"))
+                    )
+                ):
+                    rutas.append(ruta)
+
+    for codigo, (padre, origen) in zip(extraccion.codigos, extraccion.codigos_origen, strict=True):
+        for carpeta in heredadas(padre, origen):
+            # El código que se ejecuta dentro de una carpeta con código protegido cuenta,
+            # salvo en la raíz: U4 no puede resolver rutas relativas como `app/b.py`.
+            relativa = comun.normalizar_ruta(str(carpeta), base)
+            if relativa and contiene_protegido(relativa):
+                rutas.append(relativa)
+            for nombrada in rutas_en_texto(codigo):
+                ruta = comun.normalizar_ruta(nombrada, base, carpeta)
+                if es_protegido(ruta):
+                    rutas.append(ruta)
     return rutas
 
 

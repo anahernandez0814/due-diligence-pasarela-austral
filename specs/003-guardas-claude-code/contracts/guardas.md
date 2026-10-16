@@ -14,6 +14,7 @@ Interfaz común y comportamiento de cada hook. Las entidades están en
 | Bloquear | salida 2 y una sola línea en stderr: `[<guarda>] <motivo>. <qué hacer>.` |
 | Error propio | salida 2: `[<guarda>] La guarda falló (<TipoDeError>); la acción se bloquea por precaución.` |
 | Idioma | español |
+| Codificación | UTF-8 en stdin, stdout y stderr, independiente del entorno: `comun.ejecutar` reconfigura los tres flujos antes de leer la entrada, sin depender de `PYTHONUTF8` ni `PYTHONIOENCODING` (revisión de la parada C) |
 | Valores sensibles | nunca aparecen en stderr ni en stdout |
 | Dependencias | solo la biblioteca estándar; `formatear_python` también usa ruff |
 | PowerShell | la herramienta está desactivada en la sesión (research R5); las guardas la tratan igual que Bash como respaldo, y esa rama se prueba con JSON por stdin |

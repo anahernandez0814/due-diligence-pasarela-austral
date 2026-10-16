@@ -461,6 +461,14 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - **PowerShell** (respaldo, R5): redirecciones `>` y `>>`; `Set-Content`, `Add-Content`, `Out-File` y
     `New-Item` (`-Path`, `-FilePath` o primer posicional); `Copy-Item` y `Move-Item`
     (`-Destination` o segundo posicional).
+  - **Borrar, restaurar y mover también es modificar** (revisión de la parada D, FR-009 y
+    FR-012):
+    - Bash: `rm`, `unlink` y `git rm`, con todas las palabras que no son opciones;
+    - `git checkout … -- <rutas>` y `git restore <rutas>`, con o sin `--source`. Un
+      `git checkout <rama>` sin `--` no cuenta;
+    - las **fuentes** de `mv`, además del destino;
+    - PowerShell, como respaldo: `Remove-Item`, `del`, `erase`, `rd` y `ri`, y las
+      fuentes de `Move-Item` (y de sus alias `mv`, `mi` y `move`).
   - El comando se divide por `;`, `&&`, `||` y `|`, y se separa en palabras con `shlex`
     (modo POSIX en Bash; en PowerShell, comillas simples y dobles).
 - **Texto ejecutable (I7 de la segunda pasada)**: la guarda usa el mismo extractor de
@@ -482,9 +490,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - No se distingue entre lectura y escritura: la guarda solo bloquea cuando faltan spec,
     plan o tareas, o cuando la rama no es de un ticket. En la rama de un ticket con los
     tres documentos, un `python -c` que nombra `src/x.py` se permite igual.
-- **Riesgo residual declarado**: `git apply`, `patch`, `git checkout -- <ruta>` y rutas
+- **Riesgo residual declarado**: `git apply`, `patch`, `git reset`, `git stash` y rutas
   en variables o construidas al ejecutar. Se anota en `DECISIONES.md`. Los intérpretes y
-  shells que nombran código protegido ya no son residuales.
+  shells que nombran código protegido ya no son residuales, ni `git checkout -- <ruta>` y
+  `git restore`, que se vigilan desde la revisión de la parada D.
 
 ## R11. Detector de datos con forma real (FR-005, FR-006)
 

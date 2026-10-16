@@ -203,6 +203,13 @@ Rutas que revisa:
 - Write y Edit: `file_path`. NotebookEdit: `notebook_path`.
 - Bash y PowerShell:
   - los destinos de escritura reconocibles de R10, incluido el de `cat > archivo <<…`;
+  - borrar, restaurar o mover también es modificar (revisión de la parada D): las
+    palabras que no son opciones de `rm`, `unlink` y `git rm`; las rutas de
+    `git checkout … -- <rutas>` y de `git restore <rutas>` (con o sin `--source`; un
+    `git checkout <rama>` sin `--` no cuenta); las fuentes de `mv`, además del destino; y
+    en PowerShell, como respaldo, `Remove-Item`, `del`, `erase`, `rd`, `ri` y las fuentes
+    de `Move-Item`. Residuales declarados: `git apply`, `patch`, `git reset` y
+    `git stash`;
   - con el extractor de `comun.py`:
     - los comandos interiores de shells y heredocs se analizan con estas mismas reglas,
       hasta 3 niveles;

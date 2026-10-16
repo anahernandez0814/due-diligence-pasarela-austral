@@ -146,6 +146,19 @@ Rutas que revisa:
       hasta 3 niveles;
     - en el código en línea de `python`, `node`, `perl` y `ruby` se buscan como texto
       nombres de código protegido.
+- **Código protegido en el texto (U4 de la tercera pasada)**:
+  - cuenta una **ruta**, con `/`, `\` o `\\` como separador (la doble barra es como se
+    escribe `\` dentro de un literal de Python) y opcionalmente `./`, `.\` o `.\\`
+    delante, que coincida con la lista del data-model: `src/…/*.py`,
+    `.claude/hooks/…`, `.claude/settings.json`, `.claude/settings.local.json`,
+    `.mcp.json`, `plugins/…` y `.claude-plugin/…`;
+  - delante de la ruta no puede haber una letra, un dígito, `_`, `.` ni `-` pegados;
+  - una ruta cuyo nombre de archivo es `test_*.py` no cuenta;
+  - un nombre de módulo sin ruta (`import due_diligence`, `due_diligence.config`) no
+    cuenta.
+  - Ejemplos en una rama sin documentos:
+    - se bloquean `open('src/due_diligence/x.py','w')` y `'.\\src\\x.py'`;
+    - se permiten `import due_diligence` y `open('src/due_diligence/test_x.py')`.
 - No se distingue entre lectura y escritura: el bloqueo solo depende de que falten
   documentos o de que la rama no sea de un ticket. En la rama de un ticket con spec, plan
   y tareas, `python -c` y `bash -c "echo > src/x.py"` se permiten.

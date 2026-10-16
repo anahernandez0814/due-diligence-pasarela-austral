@@ -231,7 +231,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
       daño.
     - Por eso, en la sesión, un bloqueo de esos comandos puede venir de la capa de
       permisos o de la guarda, y cualquiera de las dos es un resultado válido. La capa de
-      permisos se verifica en `test_configuracion.py`, y la guarda en los tests por stdin.
+      permisos y la guarda se comprueban por separado (I9):
+      - `test_configuracion.py` comprueba que las reglas existen y están bien formadas;
+      - su efecto se ve en la sesión, en Q1 y Q13;
+      - la guarda se prueba en los tests por stdin.
   - **Sin `grep`**: una regla como `Bash(grep *.env *)` bloquearía
     `grep -n .env README.md`, una búsqueda del texto ".env" en un archivo normal, que
     FR-002 y SC-001 obligan a permitir. Una regla de permiso no distingue el patrón del
@@ -405,7 +408,17 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - los shells anidados (`bash -c`, `sh -c`, `eval`, `pwsh -Command`, y los heredocs que
     alimentan a `bash` o `sh`) se analizan con estas mismas reglas de destinos;
   - en el código en línea de `python`, `node`, `perl` y `ruby` se buscan como texto
-    nombres de código protegido (data-model).
+    nombres de código protegido (data-model), con este criterio:
+    **Código protegido en el texto (U4 de la tercera pasada)**:
+      - cuenta una **ruta**, con `/`, `\` o `\\` como separador (la doble barra es como
+        se escribe `\` dentro de un literal de Python) y opcionalmente `./`, `.\` o `.\\`
+        delante, que coincida con la lista del data-model: `src/…/*.py`,
+        `.claude/hooks/…`, `.claude/settings.json`, `.claude/settings.local.json`,
+        `.mcp.json`, `plugins/…` y `.claude-plugin/…`;
+      - delante de la ruta no puede haber una letra, un dígito, `_`, `.` ni `-` pegados;
+      - una ruta cuyo nombre de archivo es `test_*.py` no cuenta;
+      - un nombre de módulo sin ruta (`import due_diligence`, `due_diligence.config`) no
+        cuenta.
   - No se distingue entre lectura y escritura: la guarda solo bloquea cuando faltan spec,
     plan o tareas, o cuando la rama no es de un ticket. En la rama de un ticket con los
     tres documentos, un `python -c` que nombra `src/x.py` se permite igual.

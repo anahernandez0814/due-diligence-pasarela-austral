@@ -561,3 +561,46 @@ def test_origen_de_una_sustitucion_entre_comillas():
 def test_codigo_de_un_comando_anidado_tiene_su_padre():
     extraccion = comun.extraer_texto_ejecutable("bash -c \"cd y && python -c 'Z'\"")
     assert list(zip(extraccion.codigos, extraccion.codigos_origen, strict=True)) == [("Z", (0, 1))]
+
+
+# --- Lanzadores (T050, FR-026) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "prefijo",
+    [
+        "xargs",
+        "xargs -n1",
+        "xargs -I{}",
+        "xargs -0",
+        "xargs -a lista.txt",
+        "sudo",
+        "sudo -u otro",
+        "doas",
+        "doas -u otro",
+        "echo x | xargs",
+    ],
+)
+def test_xargs_sudo_doas_se_saltan_como_envoltorios(prefijo):
+    extraccion = comun.extraer_texto_ejecutable(f'{prefijo} python -c "X"')
+    assert "X" in extraccion.codigos
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        'env -S "cat a"',
+        'script -c "cat a" /dev/null',
+        'watch "cat a"',
+        "watch cat a",
+        "watch -n1 cat a",
+    ],
+)
+def test_env_s_script_watch_dan_comando_interior(comando):
+    textos = [c.texto for c in comun.extraer_texto_ejecutable(comando).comandos]
+    assert any("cat a" in t for t in textos)
+
+
+def test_xargs_con_shell_interior():
+    extraccion = comun.extraer_texto_ejecutable('echo x | xargs sh -c "cat a"')
+    assert [c.texto for c in extraccion.comandos] == ["cat a"]

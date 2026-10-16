@@ -373,7 +373,16 @@ _OPCIONES_CON_VALOR = {
     "time": {"-f", "--format", "-o", "--output"},
     "nice": {"-n", "--adjustment"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
-}
+    # Lanzadores que ejecutan el resto como programa (FR-026). Se saltan sus opciones con
+    # valor y el programa queda en su sitio, como con `uv run`.
+    "xargs": {
+        "-a", "--arg-file", "-E", "-I", "-i", "--replace", "-L", "-l", "--max-lines",
+        "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "-d", "--delimiter",
+    },
+    "sudo": {"-u", "--user", "-g", "--group", "-C", "--close-from", "-h", "--host",
+             "-p", "--prompt", "-r", "--role", "-t", "--type", "-U", "--other-user"},
+    "doas": {"-u", "-C", "-a"},
+}  # fmt: skip
 
 
 def _nombre(palabra: str) -> str:
@@ -509,6 +518,43 @@ def _interior_de_shell(palabras: list[str]) -> tuple[str, bool, bool] | None:
     return None
 
 
+def _cadena_de_lanzador(palabras: list[str]) -> str | None:
+    """Comando en una cadena de `env -S`, `script -c` o `watch` (FR-026).
+
+    A diferencia de `xargs`, `sudo` y `doas`, que lanzan un programa con sus argumentos
+    (los trata `quitar_envoltorios`), estos reciben el comando como una cadena que se
+    vuelve a analizar.
+    """
+    i = 0
+    while i < len(palabras) and _ASIGNACION.match(palabras[i]):
+        i += 1
+    if i >= len(palabras):
+        return None
+    nombre, args = _nombre(palabras[i]), palabras[i + 1 :]
+    if nombre == "env":
+        for j, arg in enumerate(args):
+            if arg in ("-S", "--split-string"):
+                return args[j + 1] if j + 1 < len(args) else None
+            if arg.startswith("--split-string="):
+                return arg.split("=", 1)[1]
+            if not arg.startswith("-"):
+                return None  # env como envoltorio normal, sin -S
+        return None
+    if nombre == "script":
+        for j, arg in enumerate(args):
+            if arg in ("-c", "--command"):
+                return args[j + 1] if j + 1 < len(args) else None
+            if arg.startswith("--command="):
+                return arg.split("=", 1)[1]
+        return None
+    if nombre == "watch":
+        j = 0
+        while j < len(args) and args[j].startswith("-"):
+            j += 2 if args[j] in ("-n", "--interval") else 1
+        return " ".join(args[j:]) or None
+    return None
+
+
 def _lee_de_stdin(palabras: list[str]) -> bool:
     """Intérprete o shell sin código en línea ni script: lee el programa de stdin."""
     if not (_es_interprete(palabras[0]) or _nombre(palabras[0]) in _SHELLS):
@@ -585,6 +631,10 @@ def _extraer(
     ):
         anteriores = etapas if en_tuberia else []
         etapas = [*anteriores, (originales, cuerpos)]
+        cadena = _cadena_de_lanzador(originales)
+        if cadena is not None:
+            interiores.append((cadena, False, False, origen))
+            continue
         palabras = quitar_envoltorios(originales)
         if not palabras:
             continue

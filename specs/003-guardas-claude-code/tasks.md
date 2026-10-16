@@ -584,7 +584,7 @@ Criterio de la analista: se corrige lo que un PR no vería; se declara lo que es
   - en `main`, los mismos casos se bloquean con ese mismo mensaje;
   - leerlo (`cat .claude/settings.local.json`) sigue permitido;
   - `.claude/settings.json` sigue la regla normal (permitido con los tres documentos).
-- [ ] T050 [US1] [US3] Lanzadores en `comun.py` (FR-026, R9, contracts/guardas.md). Tests primero, que deben fallar, en `test_comun.py`, `test_guarda_secretos.py` y `test_guarda_spec_previa.py`; después, el código:
+- [X] T050 [US1] [US3] Lanzadores en `comun.py` (FR-026, R9, contracts/guardas.md). Tests primero, que deben fallar, en `test_comun.py`, `test_guarda_secretos.py` y `test_guarda_spec_previa.py`; después, el código:
   - `xargs [opciones] <cmd…>` (incluidas `-a`, `-I`, `-n` y `-0`), `sudo` y `doas` (saltando opciones como `-u <usuario>`) se saltan como envoltorios;
   - `env -S "<cadena>"`, `script -c "<cmd>"` y `watch "<cmd>"` (o `watch <cmd…>`) dan un comando interior;
   - `guarda_secretos` bloquea `echo x | xargs sh -c "cat .env"`, `sudo sh -c "cat .env"`, `env -S 'cat .env'`, `script -c "cat .env"`, `watch cat .env` y `xargs -a lista.txt cat .env`;

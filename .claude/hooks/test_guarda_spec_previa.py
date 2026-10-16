@@ -568,3 +568,30 @@ def test_settings_json_sigue_la_regla_normal(crear):
     repo = crear()
     datos = entrada(repo, "Write", file_path=str(repo / ".claude/settings.json"))
     assert guarda_spec_previa.motivo(datos) is None
+
+
+# --- Lanzadores (T050, FR-026) --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "echo x | xargs sh -c 'echo > src/app/b.py'",
+        "sudo sh -c 'echo > src/app/b.py'",
+        "env -S 'echo > src/app/b.py'",
+        'script -c "echo > src/app/b.py" /dev/null',
+    ],
+)
+def test_lanzadores_escriben_codigo_protegido_en_main(con_app, comando):
+    assert guarda_spec_previa.motivo(entrada(con_app(rama="main"), "Bash", command=comando))
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "echo x | xargs sh -c 'echo > src/app/b.py'",
+        "sudo sh -c 'echo > src/app/b.py'",
+    ],
+)
+def test_lanzadores_con_documentos_se_permiten(con_app, comando):
+    assert guarda_spec_previa.motivo(entrada(con_app(), "Bash", command=comando)) is None

@@ -404,3 +404,29 @@ def test_script_escribe_un_mensaje_con_tilde(repo):
     assert resultado.stderr.strip() == "[guarda_secretos] " + guarda_secretos.RECURSIVA.format(
         raiz="."
     )
+
+
+# --- Lanzadores (T050, FR-026) --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        'echo x | xargs sh -c "cat .env"',
+        'sudo sh -c "cat .env"',
+        "sudo cat .env",
+        "env -S 'cat .env'",
+        'script -c "cat .env" /dev/null',
+        "watch cat .env",
+        "xargs -a lista.txt cat .env",
+    ],
+)
+def test_lanzadores_que_nombran_secretos(repo, comando):
+    assert bash(repo, comando)
+
+
+@pytest.mark.parametrize(
+    "comando", ["echo x | xargs echo", "sudo -u otro ls", "env -S 'echo hola'"]
+)
+def test_lanzadores_sin_secretos(repo, comando):
+    assert bash(repo, comando) is None

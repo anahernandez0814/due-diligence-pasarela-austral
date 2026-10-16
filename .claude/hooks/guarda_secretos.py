@@ -368,7 +368,9 @@ def _raices_recursivas(subcomandos: list[list[str]], powershell: bool) -> list[s
         if not programa:
             continue
         nombre, args = _nombre(programa[0]), programa[1:]
-        siguientes = [p for p in programas[k + 1 :] if p]
+        # Para `find | xargs <lector>`, se mira el subcomando en crudo: `quitar_envoltorios`
+        # ahora quita `xargs` como lanzador (FR-026), así que no aparecería en `programas`.
+        siguientes = [s for s in subcomandos[k + 1 :] if s]
         if nombre in _GREP and _grep_recursivo(args):
             _, rutas = _busqueda(args, _GREP_CON_VALOR)
             raices += [args[i] for i in rutas] or ["."]

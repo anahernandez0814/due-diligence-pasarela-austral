@@ -153,6 +153,16 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 
   Ejecutar pytest y ruff sobre `.claude/hooks`, en verde, y volver a ejecutar los 9 sondeos. Commit: `fix(hooks): correcciones de la revisión de la parada B`.
 
+- [ ] T008b Correcciones de la revisión de la parada B2: heredocs que conocen las comillas (contracts/guardas.md, interfaz común; R9). Tests primero, que deben fallar, en `.claude/hooks/test_comun.py`; después, el código en `comun.py`:
+  1. **Comillas**: un `<<` dentro de comillas simples o dobles, o en un comentario, es texto literal y no abre heredoc. Dentro de `$(…)` empieza un contexto nuevo, aunque vaya entre comillas dobles. Con `echo "<<X"`, `cat .env` y `X` en tres líneas, `cat .env` se analiza como subcomando.
+  2. **El cuerpo viaja con su comando**: el texto de cada `$(…)`, y el de las palabras que se analizan como comando interior o como código, llevan sus heredocs completos.
+     - `git commit -m "$(cat <<'EOF'`, una línea de mensaje, `EOF` y `)"` (R1) se analiza sin excepción, y su comando interior `cat` no produce código.
+     - El mismo patrón con `python3 <<'EOF'` devuelve el cuerpo como código.
+  3. **Marca sin cuerpo**: `_tokenizar` nunca lanza `IndexError`; una marca sin cuerpo lanza `ValueError`, y en un comando interior se aplica la vuelta a texto.
+  4. **Corpus de regresión**, parametrizado: comandos legítimos del proyecto que se analizan sin excepción y sin código ni comandos interiores que nombren secretos. Incluye el commit R1, otro commit con heredoc cuyo mensaje menciona `.env` y `secrets/`, `git commit -m "protege .env"`, `git log --format='%h %s' -3`, `gh api repos/x/y/issues --jq '.[] | .title'`, `uv run pytest -q`, `uv run ruff check .` y `git switch main`.
+
+  Ejecutar pytest con `-W error` y ruff sobre `.claude/hooks`, en verde, y volver a ejecutar los 9 sondeos de la parada B y los casos nuevos. Commit: `fix(hooks): heredocs que conocen las comillas`.
+
 **Checkpoint**: `comun` y `detector_datos` probados. Ninguna guarda registrada.
 
 ---

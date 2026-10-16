@@ -63,13 +63,16 @@ def powershell(repo, comando):
 
 
 def ejecutar_script(repo, datos):
+    """Lanza el script como lo haría una terminal normal: sin PYTHONUTF8 ni
+    PYTHONIOENCODING, y con el JSON en UTF-8 sin escapar las tildes."""
+    entorno = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
     return subprocess.run(
         [sys.executable, str(SCRIPT)],
-        input=datos if isinstance(datos, str) else json.dumps(datos),
+        input=datos if isinstance(datos, str) else json.dumps(datos, ensure_ascii=False),
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env={**os.environ, "CLAUDE_PROJECT_DIR": str(repo)},
+        env={**entorno, "CLAUDE_PROJECT_DIR": str(repo)},
         timeout=30,
     )
 
@@ -380,4 +383,24 @@ def test_script_falla_cerrado_con_entrada_invalida(repo):
     assert resultado.returncode == 2
     assert resultado.stderr.strip() == (
         "[guarda_secretos] La guarda falló (JSONDecodeError); la acción se bloquea por precaución."
+    )
+
+
+# --- UTF-8 en los flujos, independiente del entorno (T011a) ---------------------------
+
+
+def test_script_lee_una_ruta_con_tilde(repo):
+    # "Í" en UTF-8 lleva el byte 0x8D, que cp1252 no define: sin UTF-8 en stdin, la
+    # lectura falla. "ó" no basta, porque sus bytes sobreviven a la ida y vuelta.
+    datos = entrada(repo, "Read", file_path="docs/configuración/Índice/.env")
+    resultado = ejecutar_script(repo, datos)
+    assert resultado.returncode == 2
+    assert "(docs/configuración/Índice/.env) con Read" in resultado.stderr
+
+
+def test_script_escribe_un_mensaje_con_tilde(repo):
+    resultado = ejecutar_script(repo, entrada(repo, "Bash", command="grep -r TOKEN ."))
+    assert resultado.returncode == 2
+    assert resultado.stderr.strip() == "[guarda_secretos] " + guarda_secretos.RECURSIVA.format(
+        raiz="."
     )

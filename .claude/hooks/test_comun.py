@@ -5,6 +5,8 @@ import json
 import os
 import re
 import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import comun
@@ -143,6 +145,32 @@ def test_ejecutar_falla_cerrado_si_el_json_es_invalido(monkeypatch, capsys):
         comun.ejecutar("guarda_x", lambda entrada: None)
     assert salida.value.code == 2
     assert "La guarda falló" in capsys.readouterr().err
+
+
+# --- UTF-8 en los flujos, independiente del entorno (T011a) -------------------------
+
+_GUARDA_DE_ECO = (
+    "import comun\n"
+    "comun.ejecutar('guarda_x', lambda e: comun.bloquear('guarda_x', e['ruta'] + ' ñandú.'))\n"
+)
+
+
+def entorno_sin_utf8() -> dict[str, str]:
+    """El entorno de una terminal normal: sin PYTHONUTF8 ni PYTHONIOENCODING."""
+    return {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+
+
+def test_ejecutar_usa_utf8_en_stdin_y_stderr_sin_variables_de_entorno():
+    resultado = subprocess.run(
+        [sys.executable, "-c", _GUARDA_DE_ECO],
+        input=json.dumps({"ruta": "docs/configuración/.env"}, ensure_ascii=False).encode(),
+        capture_output=True,
+        cwd=Path(comun.__file__).parent,
+        env=entorno_sin_utf8(),
+        timeout=30,
+    )
+    assert resultado.returncode == 2
+    assert resultado.stderr.decode("utf-8").strip() == "[guarda_x] docs/configuración/.env ñandú."
 
 
 # --- Extractor de texto ejecutable: comandos interiores ------------------------------

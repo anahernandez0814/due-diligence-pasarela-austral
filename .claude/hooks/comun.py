@@ -332,9 +332,22 @@ def bloquear(guarda: str, mensaje: str) -> NoReturn:
     sys.exit(2)
 
 
+def _flujos_utf8() -> None:
+    """UTF-8 en stdin, stdout y stderr, independiente de PYTHONUTF8 y PYTHONIOENCODING.
+
+    Sin esas variables, Python en Windows usa cp1252 en las tuberías. Los flujos que no
+    se pueden reconfigurar (los de las pruebas) se dejan como están.
+    """
+    for flujo in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigurar = getattr(flujo, "reconfigure", None)
+        if reconfigurar is not None:
+            reconfigurar(encoding="utf-8")
+
+
 def ejecutar(guarda: str, revisar: Callable[[dict], None]) -> NoReturn:
     """Lee la entrada y ejecuta la guarda; ante cualquier error propio, bloquea."""
     try:
+        _flujos_utf8()
         revisar(leer_entrada())
     except SystemExit:
         raise

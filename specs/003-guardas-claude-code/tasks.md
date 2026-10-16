@@ -234,7 +234,7 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 
   Origen: FR-001, FR-002, FR-020, FR-023, R9.
 - [X] T011 [US1] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de secretos`.
-- [ ] T011a Corrección de la revisión de la parada C: UTF-8 en los flujos, independiente del entorno (contracts/guardas.md, interfaz común). Tests primero, que deben fallar; después, el código en `comun.py`:
+- [X] T011a Corrección de la revisión de la parada C: UTF-8 en los flujos, independiente del entorno (contracts/guardas.md, interfaz común). Tests primero, que deben fallar; después, el código en `comun.py`:
   - `comun.ejecutar`, antes de leer la entrada, reconfigura `sys.stdin`, `sys.stdout` y `sys.stderr` con `encoding="utf-8"`;
   - los tests de extremo a extremo lanzan el script quitando del entorno `PYTHONUTF8` y `PYTHONIOENCODING`;
   - un test con una ruta con tilde en el JSON de stdin, y otro que comprueba que un mensaje con tilde llega bien en stderr.

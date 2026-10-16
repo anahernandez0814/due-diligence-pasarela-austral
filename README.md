@@ -36,7 +36,8 @@ uv run ruff format --check .
 uv run pytest
 ```
 
-Los tres comandos deben terminar sin errores; pytest ejecuta los tests de humo de `src/`.
+Los tres comandos deben terminar sin errores; pytest ejecuta los tests de `src/` y de
+`.claude/hooks/`.
 
 ## Token de GitHub para Claude Code (`GITHUB_PAT`)
 
@@ -110,6 +111,30 @@ export GITHUB_PAT="$(secret-tool lookup service github_pat)"   # en el perfil
 Necesita el binario `github-mcp-server` en el PATH. Configúrala solo para ti, en ámbito
 local (`claude mcp add-json github '<json>' --scope local`); no modifiques ni commitees el
 `.mcp.json` del equipo.
+
+## Guardas del entorno
+
+Claude Code trabaja con cuatro guardas y un hook de formato, registrados en
+[.claude/settings.json](.claude/settings.json). Las decisiones están en la entrada 4 de
+[DECISIONES.md](DECISIONES.md).
+
+- **`guarda_secretos`**: bloquea leer, buscar, editar o escribir `.env`, `.env.*` (salvo
+  `.env.example`), `*.key` y `secrets/`, también desde la terminal y desde código en línea.
+- **`guarda_datos`**: bloquea escribir, ejecutar o publicar en GitHub tarjetas, NIT,
+  cédulas o credenciales con forma real.
+- **`guarda_spec_previa`**: bloquea escribir, borrar o restaurar código protegido
+  (`src/**/*.py`, `.claude/hooks/`, `.claude/settings.json`, `.mcp.json` y el plugin) si
+  la rama no es de un ticket o le faltan la spec, el plan o las tareas.
+- **`guarda_mcp_github`**: limita `projects_write` del MCP de GitHub a mover tarjetas
+  (`update_project_item`).
+- **`formatear_python`**: formatea con ruff cada `.py` escrito o editado; nunca bloquea.
+
+Las guardas requieren `uv` en el `PATH`. Se cargan al iniciar la sesión y suelen
+activarse también al guardar `settings.json`; ante la duda, reinicie la sesión.
+
+- Ejecute `uv sync` antes de abrir Claude Code.
+- Con las guardas activas, no cambie a una rama sin `.claude/hooks/`; si ocurre, reinicie
+  la sesión.
 
 ## Cómo se trabaja
 

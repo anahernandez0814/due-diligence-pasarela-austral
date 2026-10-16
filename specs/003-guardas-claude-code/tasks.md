@@ -473,7 +473,7 @@ sesión.
 
 ## Phase 10: Polish & Cross-Cutting Concerns, paso 6 del plan (documentación)
 
-- [ ] T032 [P] `DECISIONES.md`, nueva entrada 4, "Guardas de Claude Code", con una línea por decisión, sin partir líneas, y el detalle remitido a `specs/003-guardas-claude-code/research.md`. Decisiones:
+- [X] T032 [P] `DECISIONES.md`, nueva entrada 4, "Guardas de Claude Code", con una línea por decisión, sin partir líneas, y el detalle remitido a `specs/003-guardas-claude-code/research.md`. Decisiones:
   - hooks en Python con `uv run` en forma exec (R1);
   - fallo cerrado en dos capas (R2);
   - matchers como listas exactas (R3);
@@ -487,11 +487,11 @@ sesión.
   En la entrada 2, la desviación temporal de II y X queda cerrada por la entrada 4, salvo la revisión previa, que sigue hasta #4.
 
   Comprobar que `DECISIONES.md` completo sigue cabiendo en dos páginas, el límite del enunciado que debe respetar el ticket #14; si no, resumir las entradas.
-- [ ] T033 [P] `README.md`, nueva sección breve "Guardas del entorno" (plan, "Cambios en la documentación"; R14):
+- [X] T033 [P] `README.md`, nueva sección breve "Guardas del entorno" (plan, "Cambios en la documentación"; R14):
   - qué bloquea cada guarda;
   - que requieren `uv` en el `PATH`, y que "se cargan al iniciar la sesión y suelen activarse también al guardar `settings.json`; ante la duda, reinicie la sesión";
   - las frases exactas "Ejecute `uv sync` antes de abrir Claude Code" y "Con las guardas activas, no cambie a una rama sin `.claude/hooks/`; si ocurre, reinicie la sesión".
-- [ ] T034 Comprobar que `git diff main -- CLAUDE.md` está vacío y que `CLAUDE.md` sigue en 40 líneas o menos. Commit: `docs: decisiones y README de las guardas del entorno`.
+- [X] T034 Comprobar que `git diff main -- CLAUDE.md` está vacío y que `CLAUDE.md` sigue en 40 líneas o menos. Commit: `docs: decisiones y README de las guardas del entorno`.
 
 ---
 

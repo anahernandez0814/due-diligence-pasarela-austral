@@ -316,7 +316,10 @@ un `test_*.py` y comprobar que la regla de tests está en el contexto.
   `Remove-Item`, `truncate`), la restauración desde git (`git checkout`, con o sin `--`,
   y `git restore`), la fuente de un movimiento (`mv`, `git mv`, `Move-Item`) y las
   carpetas que contienen código protegido (`rm -rf .claude`, `git restore .`). Las rutas
-  se resuelven tras los `cd` del propio comando y respecto al `-C` de git.
+  se resuelven tras los `cd` del propio comando y respecto al `-C` de git. Los comandos
+  interiores (`bash -c`, `eval`, heredocs hacia un shell) heredan la carpeta vigente
+  donde aparecen, y el código en línea de un intérprete que se ejecuta dentro de una
+  carpeta con código protegido (salvo la raíz) cuenta como código protegido.
 - **FR-013**: El mensaje de bloqueo DEBE decir qué documento falta, o por qué la rama no
   permite código.
 

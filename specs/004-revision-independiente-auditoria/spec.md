@@ -133,6 +133,9 @@ comprobar que se permite.
    remota tiene otros commits, **cuando** se intenta crear el PR, **entonces** se bloquea.
 7. **Dado** que no hay veredicto aprobado, **cuando** se intenta crear un PR con `gh api` y
    método POST contra el recurso de pull requests, **entonces** se bloquea igual.
+8. **Dado** cualquier rama, **cuando** una herramienta intenta escribir, editar, copiar o
+   mover un archivo del directorio de veredictos, o nombrarlo en código en línea para
+   escribirlo, **entonces** se bloquea; el comando de registro sigue funcionando.
 
 ---
 
@@ -143,7 +146,11 @@ comprobar que se permite.
 - Diff muy grande: la revisión siempre recibe la lista de archivos cambiados con sus
   estadísticas, y el diff completo solo si cabe en un umbral. Si no cabe, lee los archivos de
   la lista con sus herramientas de lectura. Solo si no puede leer algún archivo de la lista
-  declara que no cubrió el cambio, y entonces el veredicto no puede ser "aprobado".
+  declara que no cubrió el cambio, y entonces el veredicto no puede ser "aprobado". Los
+  documentos del propio ticket no cuentan para la cobertura, y un PR grande con spec, plan y
+  tareas extensos debe poder aprobarse.
+- Revisión que no recibe su contexto preparado (marca ausente): declara la cobertura como
+  incompleta y el veredicto no puede ser "aprobado".
 - Commit aprobado que no es el último publicado de la rama (no se ha subido, o la rama remota
   tiene otros commits): el veredicto no vale y la puerta bloquea.
 - Veredicto con bloqueantes: se registra para trazabilidad, pero la puerta solo acepta
@@ -151,9 +158,11 @@ comprobar que se permite.
 - `gh api` con POST al recurso de pull requests crea un PR igual que `gh pr create`: se
   bloquea con el mismo criterio. Otras formas de crear un PR fuera de Claude Code (la web de
   GitHub, otro cliente) no pasan por la guarda y se declaran como residual.
-- Archivo de veredicto manipulado a mano: el hook solo comprueba que exista un veredicto
-  aprobado del commit actual; no puede saber quién lo escribió. Es un límite declarado, no
-  un defecto.
+- Escribir el archivo de veredicto a mano, por cualquier herramienta o desde código en línea:
+  se bloquea, en cualquier rama (FR-020). La única vía de registro es el comando de registro
+  del veredicto.
+- Invocar el comando de registro con resúmenes inventados: la puerta no puede distinguirlo
+  de una revisión real. Es un límite declarado, no un defecto.
 - Commit nuevo tras la aprobación (incluso enmendado): el veredicto previo no sirve.
 - Comandos parecidos a `gh pr create` que no crean un PR (`gh pr view`, `gh pr list`): no se
   bloquean.
@@ -183,7 +192,11 @@ comprobar que se permite.
 - **FR-005**: Cada revisión recibe siempre, como contexto de su propia skill, la lista de
   archivos cambiados con estadísticas y los documentos del ticket; recibe el diff completo
   solo si cabe en un umbral. Si no cabe, lee los archivos de la lista con sus herramientas de
-  lectura. Solo no poder leer algún archivo de la lista impide la aprobación.
+  lectura. Solo no poder leer algún archivo de la lista impide la aprobación. Los documentos
+  del propio ticket (`specs/NNN-*/`) se leen como referencia y no cuentan para la cobertura;
+  cuentan el código y la configuración. El contexto preparado empieza con una marca fija: si
+  la revisión no la recibe (la preparación falló o está desactivada), declara la cobertura
+  como incompleta.
 - **FR-006**: Cada reporte separa los hallazgos bloqueantes de las sugerencias, y cada
   hallazgo trae ubicación y razón.
 - **FR-007**: El auditor informa por cada regla su estado (cumple, incumple, no aplica,
@@ -215,10 +228,16 @@ comprobar que se permite.
   proyecto y funciona en Windows, macOS y Linux.
 - **FR-017**: Los mensajes y reportes al usuario están en español.
 - **FR-018**: El límite del mecanismo (el hook verifica que exista un veredicto aprobado del
-  commit actual, no lo genera ni comprueba quién lo escribió) se declara en
-  `DECISIONES.md`.
+  commit actual, no lo genera ni comprueba que los resúmenes registrados vengan de una
+  revisión real) se declara en `DECISIONES.md`.
 - **FR-019**: Esta funcionalidad reemplaza la revisión de transición que `/abrir-pr` tenía
   desde el ticket #2; no deben quedar dos revisiones paralelas.
+- **FR-020**: Ninguna herramienta de Claude Code modifica el directorio de veredictos, en
+  ninguna rama: ni las de escritura y edición, ni las redirecciones, copias y movimientos de
+  la terminal, ni el código en línea que lo nombra. La única vía de registro es el comando de
+  registro del veredicto. Leerlo sigue permitido, porque la puerta y las personas lo
+  consultan. Se aplica con el mismo patrón que protege la configuración local de las guardas
+  (FR-025 del ticket #3).
 
 ### Entidades clave
 
@@ -247,8 +266,9 @@ comprobar que se permite.
 
 ## Supuestos
 
-- La puerta verifica la existencia del veredicto aprobado del commit actual; no puede
-  garantizar que lo generó una revisión real. El límite se declara en `DECISIONES.md`.
+- La puerta verifica la existencia del veredicto aprobado del commit actual, que solo puede
+  escribir el comando de registro (FR-020); no puede garantizar que los resúmenes que recibió
+  vengan de una revisión real. El límite se declara en `DECISIONES.md`.
 - Las cinco reglas de negocio son las del principio I de la constitución; si cambian, la
   auditoría las toma de allí.
 - Cuando todavía no hay código de producción, la auditoría marca las reglas como "no aplica"

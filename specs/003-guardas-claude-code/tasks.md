@@ -575,6 +575,26 @@ escenarios son los de [quickstart.md](quickstart.md).
 
 ---
 
+## Phase 12: Correcciones de la revisión previa del PR #17
+
+Criterio de la analista: se corrige lo que un PR no vería; se declara lo que escribe en código versionado o es un rodeo deliberado. Commits nuevos en la rama del PR, sin `--amend`. Todas las pruebas de rodeos se hacen por stdin (`motivo()` o el script) en repositorios de `tmp_path`, nunca en la sesión.
+
+- [ ] T049 [US3] `.claude/settings.local.json` en cualquier rama (FR-025, R14, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`:
+  - en una rama de ticket con sus tres documentos se bloquean, con el mensaje propio del contrato: una redirección que escribe `{"disableAllHooks": true}` en `.claude/settings.local.json`, `cp /tmp/x.json .claude/settings.local.json`, un `python -c` que lo abre en escritura y `rm .claude/settings.local.json`; también Write sobre él;
+  - en `main`, los mismos casos se bloquean con ese mismo mensaje;
+  - leerlo (`cat .claude/settings.local.json`) sigue permitido;
+  - `.claude/settings.json` sigue la regla normal (permitido con los tres documentos).
+- [ ] T050 [US1] [US3] Lanzadores en `comun.py` (FR-026, R9, contracts/guardas.md). Tests primero, que deben fallar, en `test_comun.py`, `test_guarda_secretos.py` y `test_guarda_spec_previa.py`; después, el código:
+  - `xargs [opciones] <cmd…>` (incluidas `-a`, `-I`, `-n` y `-0`), `sudo` y `doas` (saltando opciones como `-u <usuario>`) se saltan como envoltorios;
+  - `env -S "<cadena>"`, `script -c "<cmd>"` y `watch "<cmd>"` (o `watch <cmd…>`) dan un comando interior;
+  - `guarda_secretos` bloquea `echo x | xargs sh -c "cat .env"`, `sudo sh -c "cat .env"`, `env -S 'cat .env'`, `script -c "cat .env"`, `watch cat .env` y `xargs -a lista.txt cat .env`;
+  - `guarda_spec_previa` bloquea en `main` sus equivalentes que escriben `src/app/b.py`;
+  - siguen permitidos `echo x | xargs echo`, `sudo -u otro ls` y `env -S 'echo hola'`.
+- [ ] T051 Documentación (FR-025, R9, R10): README, con `.claude/settings.local.json` en la lista de lo protegido; `DECISIONES.md`, entrada 4, con los residuales nuevos y el residual (2) agrupado por categorías, terminando en "lista completa en R10".
+- [ ] T052 pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, `ruff check .` y `ruff format --check .` en verde; push; actualizar la descripción del PR #17 y ampliar la sección "Revisión previa" del comentario de #3 con lo decidido para los nueve hallazgos. Sin fusionar.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

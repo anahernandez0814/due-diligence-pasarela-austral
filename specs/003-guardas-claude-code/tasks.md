@@ -394,8 +394,8 @@ bloquean los otros nueve métodos.
 **Purpose**: incorporar los tests a la suite, revisar el repositorio completo y registrar
 las guardas y las denegaciones.
 
-- [ ] T024 En `pyproject.toml`, `[tool.pytest.ini_options]`: `testpaths = ["src", ".claude/hooks"]` y `pythonpath = [".claude/hooks"]`, conservando `--import-mode=importlib`. `uv run pytest`, sin argumentos, recoge `src/` y `.claude/hooks/` y queda en verde (R8).
-- [ ] T025 Escribir `.claude/hooks/test_revision_repositorio.py` (FR-007, SC-002, R8):
+- [X] T024 En `pyproject.toml`, `[tool.pytest.ini_options]`: `testpaths = ["src", ".claude/hooks"]` y `pythonpath = [".claude/hooks"]`, conservando `--import-mode=importlib`. `uv run pytest`, sin argumentos, recoge `src/` y `.claude/hooks/` y queda en verde (R8).
+- [X] T025 Escribir `.claude/hooks/test_revision_repositorio.py` (FR-007, SC-002, R8):
   - **Recorrido**: `git ls-files -z`; salta los binarios (un byte nulo en los primeros
     8 KB) y aplica `detector_datos.buscar`.
   - **Test 1, estado actual**: sin hallazgos. Si falla, informa `archivo:línea:tipo`,

@@ -279,7 +279,7 @@ rama.
 **Independent Test**: en repositorios git temporales, la guarda bloquea en `main`, sin
 patrón y sin documentos, y permite en una rama con los tres.
 
-- [ ] T015 [P] [US3] Escribir `.claude/hooks/test_guarda_spec_previa.py` con repositorios git temporales (`git init` en `tmp_path` y ramas creadas en la prueba). Origen: FR-009 a FR-013, R7, R10, R14, data-model.
+- [X] T015 [P] [US3] Escribir `.claude/hooks/test_guarda_spec_previa.py` con repositorios git temporales (`git init` en `tmp_path` y ramas creadas en la prueba). Origen: FR-009 a FR-013, R7, R10, R14, data-model.
   - **Bloqueos por la rama o la carpeta**:
     - `main`, una rama sin el patrón `NNN-` y HEAD separado;
     - `099-x` sin `specs/099-*`;
@@ -312,14 +312,14 @@ patrón y sin documentos, y permite en una rama con los tres.
   - **NotebookEdit**: se revisa `notebook_path`.
   - **Fallo cerrado**: si git falla (por ejemplo, `CLAUDE_PROJECT_DIR` no es un
     repositorio), sale con 2.
-- [ ] T016 [US3] Implementar `.claude/hooks/guarda_spec_previa.py` con `comun` hasta que pase `test_guarda_spec_previa.py`. Debe:
+- [X] T016 [US3] Implementar `.claude/hooks/guarda_spec_previa.py` con `comun` hasta que pase `test_guarda_spec_previa.py`. Debe:
   - leer la rama con `git -C <raíz> branch --show-current`;
   - usar los mensajes de la tabla del contrato;
   - tomar la lista de código protegido de data-model;
   - usar el extractor de `comun.py`: los comandos interiores, con estas mismas reglas de destinos, y los textos de código, buscando nombres de código protegido.
 
   Origen: FR-009 a FR-013, FR-020, FR-023, R7, R10, R14.
-- [ ] T017 [US3] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de spec previa`.
+- [X] T017 [US3] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de spec previa`.
 
 **Checkpoint**: la guarda de spec previa funciona en repositorios temporales.
 

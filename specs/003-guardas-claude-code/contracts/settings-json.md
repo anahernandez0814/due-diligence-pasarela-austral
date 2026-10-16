@@ -160,8 +160,11 @@ mcp__github__create_repository
 mcp__github__fork_repository
 ```
 
-Las dos primeras son las expuestas con `destructiveHint: true` que el proyecto no usa
-(FR-016). `mcp__github__projects_write`, también destructiva, se permite porque la usan
+Las dos primeras son las destructivas que el proyecto no usa (FR-016):
+- `mcp__github__delete_file` está expuesta y marcada como destructiva;
+- `mcp__github__delete_repository` no se expone con los toolsets
+  `repos,issues,pull_requests,projects`. Se deniega de forma preventiva, por si se
+  ampliaran los toolsets (comprobado en T003 contra `/mcp`; R4). `mcp__github__projects_write`, también destructiva, se permite porque la usan
 `siguiente-ticket` y `/abrir-pr` (FR-017), pero `guarda_mcp_github` la limita a
 `update_project_item` (FR-024). Las otras cinco se deniegan por mínimo privilegio (R4).
 

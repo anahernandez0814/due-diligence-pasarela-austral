@@ -31,7 +31,9 @@ hooks y permisos de Claude Code versionados en `.claude/`:
     desactivar todas las guardas (R14);
   - lectores y copiadores de Bash sobre secretos, sin `grep`, para no bloquear búsquedas
     del texto ".env" (R6);
-  - siete herramientas del MCP de GitHub, dos de ellas destructivas.
+  - siete herramientas del MCP de GitHub: entre ellas `delete_file`, expuesta y
+    destructiva, y `delete_repository`, denegada de forma preventiva porque no se expone
+    con los toolsets actuales (R4, comprobado en T003).
 - **Dos reglas por ruta** en `.claude/rules/`.
 - **Tests junto a los hooks**, incluida la revisión de todos los archivos versionados con
   el mismo detector.

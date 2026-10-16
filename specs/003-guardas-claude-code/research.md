@@ -125,13 +125,23 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   sale de las anotaciones del código del servidor (`github/github-mcp-server`, carpeta
   `pkg/github/__toolsnaps__`, commit `e3809fe`). El paso Q12 del quickstart lo contrasta
   con `/mcp`, porque `/mcp` es interactivo y no se puede consultar desde esta sesión.
-- **Herramientas expuestas y marcadas como destructivas**: exactamente tres.
+- **Corrección de T003 (2026-10-16)**: la primera versión de esta sección decía que había
+  tres herramientas expuestas y marcadas como destructivas. Ese dato salía del código
+  fuente del servidor y de la lista de esta sesión, no de lo que expone el servidor con
+  los toolsets de `.mcp.json`. La analista lo contrastó en `/mcp`, y coincide con la
+  consulta `tools/list` que hizo la revisora con los mismos toolsets:
+  - se exponen 42 herramientas;
+  - `delete_repository` **no** existe con `repos,issues,pull_requests,projects`;
+  - `projects_write` tiene exactamente los 10 métodos descritos más abajo.
+- **Herramientas expuestas y marcadas como destructivas**: `delete_file` y
+  `projects_write`. `delete_repository` no se expone con estos toolsets y se deniega de
+  forma **preventiva**: aparecería si se ampliaran los toolsets.
 
-  | Herramienta | ¿La usa el proyecto? | Decisión |
-  |-------------|----------------------|----------|
-  | `mcp__github__delete_repository` | No | **Denegar** |
-  | `mcp__github__delete_file` | No | **Denegar** |
-  | `mcp__github__projects_write` | Sí, `update_project_item` en `siguiente-ticket` y `/abrir-pr` | Permitir (FR-017) |
+  | Herramienta | ¿Expuesta? | ¿La usa el proyecto? | Decisión |
+  |-------------|------------|----------------------|----------|
+  | `mcp__github__delete_file` | Sí, destructiva | No | **Denegar** |
+  | `mcp__github__projects_write` | Sí, destructiva | Sí, `update_project_item` en `siguiente-ticket` y `/abrir-pr` | Permitir (FR-017), limitada por `guarda_mcp_github` (FR-024) |
+  | `mcp__github__delete_repository` | No, con estos toolsets | No | **Denegar de forma preventiva** |
 
   Las demás marcadas como destructivas en el código del servidor (`label_write`,
   `discussion_comment_write`, `actions_run_trigger`, reacciones, notificaciones,

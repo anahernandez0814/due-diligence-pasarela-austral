@@ -500,7 +500,7 @@ sesión.
 **Purpose**: comprobar en una sesión real lo que los tests prueban por stdin. Los
 escenarios son los de [quickstart.md](quickstart.md).
 
-- [ ] T035 Comprobación previa a la pausa:
+- [X] T035 Comprobación previa a la pausa:
   - `uv run pytest`, `uv run ruff check .` y `uv run ruff format --check .` en verde;
   - `git status --porcelain` vacío;
   - todo commiteado, para que las ramas temporales tengan `.claude/hooks/`.

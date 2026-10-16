@@ -50,3 +50,14 @@
   emisor 2–6 (FR-005, caso borde de las marcas de tiempo); FR-004 cubre los cuerpos que
   se publican por el MCP de GitHub (escenario 7 de la historia 2). Revalidada: todos los
   ítems siguen pasando.
+- Segunda revisión del analista (2026-10-15, durante el plan; commit `74e585c`):
+  - FR-003: las denegaciones cubren Bash; PowerShell queda desactivada por esas
+    denegaciones y, si se activa, las guardas son la garantía.
+  - FR-004: el MCP de GitHub se cubre "como mínimo" con tres herramientas.
+  - FR-011 y la entidad "Código protegido": se añade `.claude/settings.local.json`.
+  - FR-024, nuevo, con el escenario 3 de la historia 5: `projects_write` solo con
+    `update_project_item`.
+  - Por iniciativa propia, aceptada por el analista: FR-020 incluye la guarda del Project
+    y el caso borde de PowerShell indica que está desactivada.
+
+  Revalidada: todos los ítems siguen pasando.

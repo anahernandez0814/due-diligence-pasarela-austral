@@ -579,7 +579,7 @@ escenarios son los de [quickstart.md](quickstart.md).
 
 Criterio de la analista: se corrige lo que un PR no vería; se declara lo que escribe en código versionado o es un rodeo deliberado. Commits nuevos en la rama del PR, sin `--amend`. Todas las pruebas de rodeos se hacen por stdin (`motivo()` o el script) en repositorios de `tmp_path`, nunca en la sesión.
 
-- [ ] T049 [US3] `.claude/settings.local.json` en cualquier rama (FR-025, R14, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`:
+- [X] T049 [US3] `.claude/settings.local.json` en cualquier rama (FR-025, R14, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `guarda_spec_previa.py`:
   - en una rama de ticket con sus tres documentos se bloquean, con el mensaje propio del contrato: una redirección que escribe `{"disableAllHooks": true}` en `.claude/settings.local.json`, `cp /tmp/x.json .claude/settings.local.json`, un `python -c` que lo abre en escritura y `rm .claude/settings.local.json`; también Write sobre él;
   - en `main`, los mismos casos se bloquean con ese mismo mensaje;
   - leerlo (`cat .claude/settings.local.json`) sigue permitido;

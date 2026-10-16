@@ -529,3 +529,42 @@ def test_mensaje_del_codigo_en_una_carpeta_protegida(con_app):
         "src es código protegido y la rama 'main' no es de un ticket (NNN-nombre). "
         "Crea la rama con /siguiente-ticket."
     )
+
+
+# --- settings.local.json en cualquier rama (T049, FR-025) -----------------------------
+
+LOCAL = ".claude/settings.local.json"
+MSG_LOCAL = (
+    ".claude/settings.local.json no se modifica desde Claude Code en ninguna rama: puede "
+    "desactivar las guardas. Edítalo fuera de Claude Code."
+)
+MODIFICAN_LOCAL = [
+    ("Write", {"file_path": LOCAL}),
+    ("Bash", {"command": "echo '{\"disableAllHooks\": true}' > .claude/settings.local.json"}),
+    ("Bash", {"command": "cp /tmp/x.json .claude/settings.local.json"}),
+    ("Bash", {"command": "python -c \"open('.claude/settings.local.json','w').write('{}')\""}),
+    ("Bash", {"command": "rm .claude/settings.local.json"}),
+    ("Bash", {"command": "mv .claude/settings.local.json x"}),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "datos"), MODIFICAN_LOCAL)
+def test_settings_local_bloqueado_en_cualquier_rama(crear, rama, herramienta, datos):
+    repo = crear(rama=rama)
+    if "file_path" in datos:
+        datos = {"file_path": str(repo / LOCAL)}
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, **datos)) == MSG_LOCAL
+
+
+def test_leer_settings_local_se_permite(crear):
+    repo = crear()
+    comando = "cat .claude/settings.local.json"
+    assert guarda_spec_previa.motivo(entrada(repo, "Bash", command=comando)) is None
+
+
+def test_settings_json_sigue_la_regla_normal(crear):
+    # Rama de ticket con sus tres documentos: settings.json se permite.
+    repo = crear()
+    datos = entrada(repo, "Write", file_path=str(repo / ".claude/settings.json"))
+    assert guarda_spec_previa.motivo(datos) is None

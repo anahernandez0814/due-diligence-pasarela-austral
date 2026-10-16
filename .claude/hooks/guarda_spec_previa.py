@@ -35,6 +35,11 @@ FALTAN = (
     "Completa /speckit-plan o /speckit-tasks antes de escribir código."
 )
 ANIDAMIENTO = "Comando bloqueado por precaución: tiene más de 3 niveles de shells anidados."
+SETTINGS_LOCAL = (
+    ".claude/settings.local.json no se modifica desde Claude Code en ninguna rama: puede "
+    "desactivar las guardas. Edítalo fuera de Claude Code."
+)
+_SETTINGS_LOCAL = ".claude/settings.local.json"
 
 # --- Código protegido (data-model) ----------------------------------------------------
 
@@ -423,6 +428,10 @@ def _protegidas_en_terminal(
         tablas.append([carpetas_por_subcomando(texto, sin_escapes, base, i) for i in inicios])
         for inicio in inicios:
             for ruta, tipo in destinos(texto, sin_escapes, base, inicio):
+                # settings.local.json se bloquea al escribir, borrar o mover, en cualquier
+                # rama (FR-025): no se versiona, así que ningún PR vería el cambio.
+                if ruta == _SETTINGS_LOCAL:
+                    return SETTINGS_LOCAL
                 if (
                     es_protegido(ruta)
                     or (tipo == "copia" and _es_carpeta_protegida(ruta))
@@ -442,6 +451,8 @@ def _protegidas_en_terminal(
                 rutas.append(relativa)
             for nombrada in rutas_en_texto(codigo):
                 ruta = comun.normalizar_ruta(nombrada, base, carpeta)
+                if ruta == _SETTINGS_LOCAL:
+                    return SETTINGS_LOCAL
                 if es_protegido(ruta):
                     rutas.append(ruta)
     return rutas
@@ -457,6 +468,8 @@ def motivo(entrada: dict) -> str | None:
     if herramienta in ("Write", "Edit", "NotebookEdit"):
         clave = "notebook_path" if herramienta == "NotebookEdit" else "file_path"
         ruta = comun.normalizar_ruta(datos.get(clave) or "", base, cwd)
+        if ruta == _SETTINGS_LOCAL:
+            return SETTINGS_LOCAL  # cualquier rama (FR-025)
         rutas = [ruta] if datos.get(clave) and es_protegido(ruta) else []
     elif herramienta in ("Bash", "PowerShell"):
         resultado = _protegidas_en_terminal(

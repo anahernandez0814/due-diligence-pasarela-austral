@@ -152,8 +152,9 @@ transición hasta #4.
 
 1. Lecturas de secretos que los ocultan a propósito: rutas construidas al ejecutar, nombres
    codificados (por ejemplo, en base64) y scripts escritos en un archivo y ejecutados
-   después; y los lectores de archivos completos `tar c`, `zip -r` y
-   `git show <rev>:<ruta>` (`.env` nunca se versionó) (R9). El código en línea de
+   después; los lectores de archivos completos `tar c`, `zip -r` y
+   `git show <rev>:<ruta>` (`.env` nunca se versionó); y varias acciones `-exec`
+   encadenadas en un `find`, porque el `\;` separa subcomandos (R9). El código en línea de
    intérpretes y shells, `eval`, los heredocs que alimentan a un intérprete, los
    lanzadores (`xargs`, `sudo`, `doas`, `env -S`, `script -c`, `watch`) y las búsquedas
    recursivas cuya raíz contiene secretos ya **no** son residuales: los cubre la guarda.
@@ -161,8 +162,9 @@ transición hasta #4.
    `git reset`, `git stash`, `find … -delete`, `xargs rm`, los `cd -`,
    `cd ~` y `cd $X`, y las rutas en variables o construidas al ejecutar; y `perl -pi`,
    `dd of=`, `curl -o`, `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`,
-   `git clean`, `uv run ruff check --fix`, `ruff format` y las rutas que llegan por stdin
-   a un escritor (`echo src/app/a.py | xargs rm`), que escriben en código
+   `git clean`, `uv run ruff check --fix`, `ruff format`, las rutas que llegan por stdin
+   a un escritor (`echo src/app/a.py | xargs rm`) y las rutas relativas de `-execdir` y
+   `-okdir`, que se resuelven desde la carpeta de cada archivo encontrado, que escriben en código
    versionado y los ve el diff del PR (R10). Los intérpretes, shells y lanzadores que
    nombran código protegido ya no son residuales, ni `git checkout` (con o sin `--`),
    `git restore` y `git mv`, que se vigilan desde las revisiones de las paradas D y E.

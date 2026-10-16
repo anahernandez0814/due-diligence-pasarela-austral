@@ -242,8 +242,11 @@ Rutas que revisa:
     `find … -delete`, `xargs rm`, y `cd -`, `cd ~` o `cd $X`; y las escrituras que la
     guarda no reconoce, porque el diff del PR las ve: `perl -pi`, `dd of=`, `curl -o`,
     `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`,
-    `uv run ruff check --fix`, `ruff format` y las rutas que llegan por stdin a un
-    escritor (`echo src/app/a.py | xargs rm`) (R10);
+    `uv run ruff check --fix`, `ruff format`, las rutas que llegan por stdin a un
+    escritor (`echo src/app/a.py | xargs rm`) y las rutas relativas de `-execdir` y
+    `-okdir`, que se resuelven desde la carpeta de cada archivo encontrado (R10);
+  - residual de lectura: varias acciones `-exec` encadenadas en un mismo `find`, porque el
+    `\;` separa subcomandos y el segundo `-exec` no se analiza (R9);
   - **`.claude/settings.local.json` en cualquier rama** (FR-025, R14): si el comando lo
     escribe, lo borra, lo mueve o lo restaura, o si el código en línea lo nombra, se
     bloquea aunque la rama tenga spec, plan y tareas. Leerlo sigue permitido;

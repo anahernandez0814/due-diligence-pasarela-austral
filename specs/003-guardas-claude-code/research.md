@@ -465,6 +465,9 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - **Lectores de archivos completos** (revisión previa del PR #17): `tar c`, `zip -r` y
     `git show <rev>:<ruta>`. Leen todo un árbol o una revisión sin nombrar el secreto;
     `.env` nunca se versionó, así que `git show` no lo alcanza.
+  - **Varias acciones `-exec` encadenadas** (cierre de la fase 12): el tokenizador separa
+    también en un `\;` escapado, así que el segundo `-exec` queda como un subcomando sin
+    analizar. Ejemplo: `find docs -name x -exec echo {} \; -exec sh -c 'cat .env' \;`.
 
   Las reglas de Bash no son una frontera de seguridad. Las guardas reconocen todas las
   formas en que se nombra un secreto, pero no las que lo ocultan a propósito.
@@ -546,8 +549,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   construidas al ejecutar. Desde la revisión previa del PR #17, también las escrituras
   que la guarda no reconoce: `perl -pi`, `dd of=`, `curl -o`, `wget -O`, `ln -sf`,
   `rsync`, `tar -C` y `tar x`, `unzip -d`, `git clean`, `uv run ruff check --fix` y
-  `ruff format`; y las rutas que llegan por stdin a un escritor
-  (`echo src/app/a.py | xargs rm`). Motivo: escriben en código versionado, que el diff
+  `ruff format`; las rutas que llegan por stdin a un escritor
+  (`echo src/app/a.py | xargs rm`); y, con `-execdir` y `-okdir`, las rutas relativas, que
+  se resuelven desde la carpeta de cada archivo encontrado, que la guarda no conoce
+  (`find docs -execdir mv {} ../src/app/ \;`). Motivo: escriben en código versionado, que el diff
   del PR y la revisión previa ven. `find … -exec rm` ya no es residual: se analiza como
   lanzador. Se anota en `DECISIONES.md`. Los
   intérpretes y shells que nombran código protegido ya no son residuales, ni

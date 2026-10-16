@@ -9,12 +9,12 @@ Script de `.claude/hooks/` registrado en `.claude/settings.json`.
 
 | Campo | Valores |
 |-------|---------|
-| `nombre` | `guarda_secretos`, `guarda_datos`, `guarda_spec_previa`, `formatear_python` |
-| `evento` | `PreToolUse` (las tres guardas) o `PostToolUse` (formato) |
-| `matcher` | expresión regular sobre `tool_name` ([contracts/settings-json.md](contracts/settings-json.md)) |
+| `nombre` | `guarda_secretos`, `guarda_datos`, `guarda_spec_previa`, `guarda_mcp_github`, `formatear_python` |
+| `evento` | `PreToolUse` (las cuatro guardas) o `PostToolUse` (formato) |
+| `matcher` | lista de nombres exactos de herramienta separados por `\|`, no una expresión regular (R3; [contracts/settings-json.md](contracts/settings-json.md)) |
 | `efecto` | bloquear (código de salida 2 y motivo en stderr), permitir (salida 0) o actuar (formatear) |
-| `fallo` | cerrado para las tres guardas (excepción propia → salida 2); abierto para el formato (FR-020, FR-015) |
-| `timeout` | 10 s las guardas y 30 s el formato (R3) |
+| `fallo` | cerrado para las cuatro guardas (excepción propia → salida 2, más `onFailure: "block"`); abierto para el formato (FR-020, FR-015, R2) |
+| `timeout` | 10 s las guardas y 30 s el formato (R1) |
 
 Reglas:
 
@@ -51,14 +51,15 @@ Un hallazgo es `(tipo, línea)`; nunca guarda el valor.
 
 ## Código protegido
 
-Ruta relativa a la raíz que cumple alguna de estas condiciones (FR-011, R7):
+Ruta relativa a la raíz que cumple alguna de estas condiciones (FR-011, R7, R14):
 
 | Protegido | Exento |
 |-----------|--------|
 | `src/**/*.py`, salvo `test_*.py` | `docs/**`, `specs/**`, `.specify/**` |
 | `.claude/hooks/**`, salvo `test_*.py` | el resto de `.claude/**` (`.md` y `.json`) |
 | `.claude/settings.json` | `**/test_*.py` |
-| `.mcp.json` | cualquier otra ruta no listada |
+| `.claude/settings.local.json` (R14) | cualquier otra ruta no listada |
+| `.mcp.json` | |
 | `plugins/**` y `.claude-plugin/**` (plugin y marketplace de #13) | |
 
 ## Ticket en curso
@@ -88,7 +89,17 @@ Archivo de `.claude/rules/` con frontmatter YAML:
 
 ## Entrada de denegación
 
-Cadena de `permissions.deny` en `.claude/settings.json`. Tres familias: secretos para
-las herramientas de archivo, comandos de Bash (y de PowerShell, si se admiten) sobre
-secretos, y herramientas del MCP de GitHub por nombre exacto. Lista completa en
-[contracts/settings-json.md](contracts/settings-json.md).
+Cadena de `permissions.deny` en `.claude/settings.json`. 64 entradas, en tres familias:
+
+- **Herramientas de archivo** (17): secretos más `Edit(./.claude/settings.local.json)`.
+- **Bash** (40): lectores y copiadores sobre secretos, sin `grep` (R6).
+- **MCP de GitHub** (7): por nombre exacto.
+
+No hay reglas de PowerShell: la herramienta queda apagada por las denegaciones de Bash
+(R5). Lista completa en [contracts/settings-json.md](contracts/settings-json.md).
+
+## Método permitido del Project
+
+`guarda_mcp_github` admite en `mcp__github__projects_write` un único valor de
+`tool_input.method`: `update_project_item`. Los otros nueve métodos del esquema se
+bloquean (FR-024, R4).

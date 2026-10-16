@@ -16,6 +16,7 @@ Interfaz común y comportamiento de cada hook. Las entidades están en
 | Idioma | español |
 | Valores sensibles | nunca aparecen en stderr ni en stdout |
 | Dependencias | solo la biblioteca estándar; `formatear_python` también usa ruff |
+| PowerShell | la herramienta está desactivada en la sesión (research R5); las guardas la tratan igual que Bash como respaldo, y esa rama se prueba con JSON por stdin |
 
 Módulos compartidos:
 
@@ -81,6 +82,10 @@ Rutas que revisa:
 - Write y Edit: `file_path`. NotebookEdit: `notebook_path`.
 - Bash y PowerShell: los destinos de escritura reconocibles de R10.
 
+Código protegido según data-model: `src/**/*.py`, `.claude/hooks/**`,
+`.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`, `plugins/**` y
+`.claude-plugin/**`, salvo los `test_*.py`.
+
 Si ninguna ruta es código protegido, permite. Si alguna lo es, deduce el ticket en curso
 (data-model) y bloquea si falta algo:
 
@@ -93,6 +98,17 @@ Si ninguna ruta es código protegido, permite. Si alguna lo es, deduce el ticket
 
 La rama se lee con `git -C <raíz> branch --show-current`. Si git falla, se aplica el fallo
 cerrado.
+
+## `guarda_mcp_github.py` (FR-024, R4)
+
+- Matcher: `mcp__github__projects_write`.
+- Permite solo si `tool_input.method` es exactamente `update_project_item`.
+- Bloquea cualquier otro valor, un `method` ausente o que no sea texto, y un
+  `tool_input` que no sea un objeto.
+- Mensaje:
+  `[guarda_mcp_github] Método '<method>' de projects_write bloqueado: el proyecto solo actualiza ítems del Project (update_project_item).`
+  Si `method` falta o no es texto, `<method>` se sustituye por `(ausente)`.
+- Fallo cerrado como el resto (salida 2 y `onFailure: "block"`).
 
 ## `formatear_python.py` (FR-014, FR-015, R12)
 

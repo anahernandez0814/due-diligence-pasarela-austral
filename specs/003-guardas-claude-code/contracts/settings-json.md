@@ -1,7 +1,8 @@
 # Contrato: `.claude/settings.json`
 
 Estado final del archivo tras el ticket #3. Las claves `env` y `enabledMcpjsonServers` del
-ticket #1 se conservan sin cambios. Decisiones en [research.md](../research.md) (R1–R6).
+ticket #1 se conservan sin cambios. Decisiones en [research.md](../research.md) (R1–R6 y
+R14).
 
 ## `hooks`
 
@@ -49,6 +50,19 @@ Todas las entradas usan la forma exec (`command` + `args`), sin shell.
             "onFailure": "block"
           }
         ]
+      },
+      {
+        "matcher": "mcp__github__projects_write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_mcp_github.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -74,18 +88,21 @@ Invariantes que verifica `test_configuracion.py`:
 
 - Cada matcher contiene solo letras, dígitos, `_` y `|`, así que es una lista de nombres
   exactos, no una expresión regular.
-- Las tres guardas llevan `"onFailure": "block"` y `timeout` ≤ 10; el formato lleva
+- Las cuatro guardas llevan `"onFailure": "block"` y `timeout` ≤ 10; el formato lleva
   `"onFailure": "continue"`.
+- `PowerShell` está en los matchers de las guardas de secretos, datos y spec previa como
+  respaldo (R3, R5). No hay ninguna regla `PowerShell(...)` en `permissions`.
 - Cada script nombrado en `args` existe en `.claude/hooks/`.
 
 ## `permissions.deny`
 
 Sustituye a la lista del ticket #1. Primera barrera; la garantía es el hook (R6).
 
-### Herramientas de archivo (16)
+### Herramientas de archivo (17)
 
 `Read(...)` cubre Read, Grep, Glob y LSP; `Edit(...)` cubre Edit, Write y NotebookEdit.
-Para cada objetivo hay una regla `Read(<objetivo>)` y otra `Edit(<objetivo>)`:
+Para cada objetivo de esta tabla hay una regla `Read(<objetivo>)` y otra
+`Edit(<objetivo>)` (16):
 
 | Objetivo |
 |----------|
@@ -100,23 +117,35 @@ Para cada objetivo hay una regla `Read(<objetivo>)` y otra `Edit(<objetivo>)`:
 
 `.env.example` no coincide con ninguno.
 
-### Comandos de Bash (35)
+Más una regla de solo escritura (1):
+
+```text
+Edit(./.claude/settings.local.json)
+```
+
+Impide que Claude Code escriba `"disableAllHooks": true` u otra configuración que
+desactive las guardas (R14). Las personas lo siguen editando fuera de Claude Code.
+
+### Comandos de Bash (40)
 
 `Bash(<comando> <objetivo>)` para cada combinación de:
 
-- comandos: `cat`, `head`, `tail`, `grep`, `cp`, `mv`, `source`;
+- comandos: `cat`, `head`, `tail`, `less`, `more`, `cp`, `mv`, `source`;
 - objetivos: `*.env`, `*.env *`, `*.env.local*`, `*secrets/*`, `*.key`.
 
 Ejemplo: `Bash(head *.env.local*)`. Ninguno coincide con `cat .env.example`. Sustituyen
 a `Bash(cat .env*)` y `Bash(type .env*)`, que sí lo bloqueaban.
 
-### Comandos de PowerShell (20)
+`grep` no está en la lista a propósito: `Bash(grep *.env *)` bloquearía
+`grep -n .env README.md`, que FR-002 y SC-001 obligan a permitir. `grep` queda a cargo
+de `guarda_secretos`, que distingue el patrón buscado de los archivos (R6).
 
-`PowerShell(<cmdlet> <objetivo>)` para cada combinación de:
+### PowerShell (0)
 
-- cmdlets: `Get-Content`, `Select-String`, `Copy-Item`, `Move-Item` (los alias como
-  `gc`, `cat` o `type` se canonicalizan);
-- objetivos: los mismos cinco de Bash.
+No se añaden reglas `PowerShell(...)`: con Git Bash en Windows, las denegaciones de Bash
+mantienen apagada la herramienta PowerShell, y una regla de PowerShell la encendería
+(R5). Si alguien la activa con `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`, la garantía son las
+guardas.
 
 ### Herramientas del MCP de GitHub (7)
 
@@ -132,12 +161,13 @@ mcp__github__fork_repository
 
 Las dos primeras son las expuestas con `destructiveHint: true` que el proyecto no usa
 (FR-016). `mcp__github__projects_write`, también destructiva, se permite porque la usan
-`siguiente-ticket` y `/abrir-pr` (FR-017). Las otras cinco se deniegan por mínimo
-privilegio (R4).
+`siguiente-ticket` y `/abrir-pr` (FR-017), pero `guarda_mcp_github` la limita a
+`update_project_item` (FR-024). Las otras cinco se deniegan por mínimo privilegio (R4).
 
 Invariantes que verifica `test_configuracion.py`:
 
-- Están las 78 entradas: 16 + 35 + 20 + 7.
+- Están exactamente las 64 entradas: 17 + 40 + 0 + 7.
+- Ninguna entrada empieza por `PowerShell(` ni por `Bash(grep`.
 - Ninguna herramienta `mcp__github__*` que aparezca en
   `.claude/skills/siguiente-ticket/SKILL.md`, `.claude/commands/abrir-pr.md` o
   `.claude/commands/comentar-avance.md` está en la lista (FR-017).

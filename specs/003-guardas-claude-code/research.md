@@ -50,7 +50,7 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     sistemas sin instalar nada.
   - El Python del `.venv` directo: la ruta cambia entre Windows (`Scripts/`) y Unix
     (`bin/`), y en un clon recién hecho no existe.
-  - Un único script despachador para las tres guardas: ahorra procesos, pero el ticket
+  - Un único script despachador para todas las guardas: ahorra procesos, pero el ticket
     #13 tiene que empaquetar la guarda de datos por separado. Al correr en paralelo, el
     tiempo total es el de la guarda más lenta, no la suma.
 
@@ -67,8 +67,9 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   1. Cada guarda envuelve su lógica en un `try/except BaseException`. Ante cualquier
      excepción escribe en stderr "La guarda <nombre> falló (<tipo de error>); la acción
      se bloquea por precaución." y sale con 2.
-  2. Las tres guardas llevan `"onFailure": "block"`. Así se cubre lo que el script no
-     puede atrapar: `uv` ausente, script inexistente o timeout.
+  2. Las cuatro guardas (secretos, datos, spec previa y Project, R4) llevan
+     `"onFailure": "block"`. Así se cubre lo que el script no puede atrapar: `uv`
+     ausente, script inexistente o timeout.
 
   El formato lleva `"onFailure": "continue"` (FR-015).
 - **Consecuencia aceptada**: sin `uv` en el `PATH`, la guarda de secretos bloquea todas
@@ -92,9 +93,16 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   | `guarda_secretos` | PreToolUse | `Read\|Write\|Edit\|NotebookEdit\|Grep\|Glob\|Bash\|PowerShell` |
   | `guarda_datos` | PreToolUse | `Write\|Edit\|NotebookEdit\|Bash\|PowerShell\|mcp__github__add_issue_comment\|mcp__github__update_issue_comment\|mcp__github__create_pull_request\|mcp__github__update_pull_request\|mcp__github__issue_write\|mcp__github__add_reply_to_pull_request_comment\|mcp__github__pull_request_review_write\|mcp__github__add_comment_to_pending_review` |
   | `guarda_spec_previa` | PreToolUse | `Write\|Edit\|NotebookEdit\|Bash\|PowerShell` |
+  | `guarda_mcp_github` | PreToolUse | `mcp__github__projects_write` |
   | `formatear_python` | PostToolUse | `Write\|Edit` |
 
   (En la tabla, `\|` es el `|` literal del JSON.)
+
+  - **`PowerShell` en los matchers es un respaldo**: la herramienta queda desactivada
+    por las denegaciones de Bash (R5). Si alguien la activa con
+    `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`, las guardas ya la cubren. Esa parte se prueba
+    con los tests de extremo a extremo (JSON con `tool_name: "PowerShell"` por stdin),
+    no en la sesión.
 
   - **Tres herramientas que pide FR-004** (`add_issue_comment`, `update_issue_comment` y
     `create_pull_request`), más las cinco que también publican texto y que el proyecto no
@@ -144,11 +152,19 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   `issue_read`, `add_issue_comment`, `update_issue_comment`, `list_pull_requests`,
   `create_pull_request`, `projects_list`, `projects_get` y `projects_write`. Ninguna está
   en la lista. Un test lo comprueba leyendo esos tres archivos (R8).
-- **Riesgo residual**: `projects_write` también tiene métodos que borran (ítems, vistas o
-  campos del Project). No se puede denegar por argumento: las reglas de permiso de
-  herramientas MCP con paréntesis se ignoran. Se acepta y se anota en `DECISIONES.md`. Si
-  hiciera falta, una guarda podría limitar `method` a `update_project_item`, pero queda
-  fuera del alcance de este ticket.
+- **`projects_write` limitada por una guarda (FR-024)**:
+  - Su esquema expone diez métodos: `add_project_item`, `update_project_item`,
+    `update_project_items`, `delete_project_item`, `create_project_status_update`,
+    `create_project_view`, `update_project_view`, `delete_project_view`,
+    `create_project` y `create_iteration_field`.
+  - El proyecto solo usa `update_project_item`, en `siguiente-ticket` y `/abrir-pr`.
+  - No se puede denegar por argumento: las reglas de permiso de herramientas MCP con
+    paréntesis se ignoran.
+  - Decisión: guarda `guarda_mcp_github.py` (PreToolUse, matcher
+    `mcp__github__projects_write`, timeout 10 s, `onFailure: "block"`). Permite solo si
+    `tool_input.method` es exactamente `update_project_item`, y bloquea cualquier otro
+    método, también los que no borran: nada más del Project lo necesita el flujo. Cierra
+    el que era riesgo residual 3.
 
 ## R5. Reglas de permiso de PowerShell (FR-003)
 
@@ -161,10 +177,18 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     PowerShell, salvo que haya una regla de PowerShell con alcance o
     `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`. Por eso hoy, con solo reglas de Bash, la sesión
     no tiene la herramienta PowerShell.
-- **Decisión**: FR-003 se cumple con reglas `PowerShell(...)` en `permissions.deny`. No
-  hace falta el plan B ("el hook es la garantía"). Efecto secundario aceptado: al
-  añadirlas, la herramienta PowerShell queda disponible en Windows, ya cubierta por las
-  tres guardas.
+- **Decisión (revisión del analista)**: PowerShell **se mantiene desactivada**, por
+  mínimo privilegio.
+  - No se añaden reglas `PowerShell(...)` a `permissions.deny`: encenderían la
+    herramienta en Windows con Git Bash.
+  - Las denegaciones de Bash la mantienen apagada.
+  - Si alguien la activa con `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`, las guardas son la
+    garantía, porque tienen `PowerShell` en sus matchers (R3).
+
+  FR-003 queda así: "las denegaciones cubren Bash; la herramienta PowerShell queda
+  desactivada por esas denegaciones y, si se activa, las guardas son la garantía".
+- **Alternativa descartada**: reglas `PowerShell(...)` en `permissions.deny`. Dan una
+  barrera más, pero a costa de encender una herramienta que el proyecto no necesita.
 
 ## R6. Patrones de la lista de denegaciones de secretos (FR-003)
 
@@ -182,12 +206,16 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - **Herramientas de archivo**: `Read` y `Edit` sobre `.env`, `.env.local`,
     `.env.*.local`, `.env.development`, `.env.production`, `.env.test`, `*.key` y
     `secrets/**`, a cualquier profundidad (`**/`). El resto de variantes `.env.*` las
-    cubre el hook, que sí puede exceptuar `.env.example`.
+    cubre el hook, que sí puede exceptuar `.env.example`. Además,
+    `Edit(./.claude/settings.local.json)` (R14).
   - **Bash**: los lectores y copiadores más comunes (`cat`, `head`, `tail`, `less`,
-    `more`, `grep`, `cp`, `mv`, `source`) sobre `.env`, `.env.local`, `secrets/` y
-    `*.key`.
-  - **PowerShell**: `Get-Content`, `Select-String`, `Copy-Item` y `Move-Item` sobre los
-    mismos objetivos.
+    `more`, `cp`, `mv` y `source`) sobre `.env`, `.env.local`, `secrets/` y `*.key`.
+  - **Sin `grep`**: una regla como `Bash(grep *.env *)` bloquearía
+    `grep -n .env README.md`, una búsqueda del texto ".env" en un archivo normal, que
+    FR-002 y SC-001 obligan a permitir. Una regla de permiso no distingue el patrón del
+    archivo; la guarda sí (R9 y el contrato de `guarda_secretos`). Por eso `grep` queda
+    solo a cargo de la guarda.
+  - **Sin PowerShell** (R5).
   - Se sustituyen las dos reglas actuales por otras que no alcanzan `.env.example`.
 
   Lista exacta en [contracts/settings-json.md](contracts/settings-json.md).
@@ -225,6 +253,10 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - Funciones puras del detector y de cada guarda, más una prueba de extremo a extremo
     por guarda que lanza el script con un JSON en stdin y comprueba el código de salida
     y que stderr no repite el valor.
+  - La rama de PowerShell de cada guarda se prueba solo así, con JSON por stdin y
+    `tool_name: "PowerShell"`, porque en la sesión la herramienta está desactivada (R5).
+  - `test_guarda_mcp_github.py` comprueba que `update_project_item` pasa y que los otros
+    nueve métodos, un `method` ausente y una entrada malformada se bloquean.
   - Los valores con forma real se construyen en tiempo de ejecución (dígito de Luhn y
     DV de la DIAN calculados; prefijos de credencial concatenados), así que nunca quedan
     literales en el repositorio (spec, casos borde).
@@ -251,7 +283,7 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
     - `rg` con `-u`, `--no-ignore`, `--hidden` o `-uu`;
     - `find` combinado con `-exec`, `-execdir` o `| xargs` y un lector (`cat`, `head`,
       `tail`, `grep`, `less`, `more`);
-    - en PowerShell, `Get-ChildItem` (o `gci`, `ls`, `dir`) con `-Recurse` conectado por
+    - en PowerShell (respaldo, R5), `Get-ChildItem` (o `gci`, `ls`, `dir`) con `-Recurse` conectado por
       tubería a `Get-Content` o `Select-String`, salvo con un `-Exclude` que cubra
       `.env`.
   - **Se permiten**: la herramienta Grep, `rg` sin esas opciones y `git grep`, porque
@@ -275,7 +307,7 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
   - **Bash**: redirecciones `>`, `>>` y `>|`, salvo `/dev/null` y los descriptores
     (`2>&1`); `tee [-a]`; el último argumento de `cp`, `mv` e `install`, o el de `-t`;
     los archivos de `sed -i`; `touch`.
-  - **PowerShell**: redirecciones `>` y `>>`; `Set-Content`, `Add-Content`, `Out-File` y
+  - **PowerShell** (respaldo, R5): redirecciones `>` y `>>`; `Set-Content`, `Add-Content`, `Out-File` y
     `New-Item` (`-Path`, `-FilePath` o primer posicional); `Copy-Item` y `Move-Item`
     (`-Destination` o segundo posicional).
   - El comando se divide por `;`, `&&`, `||` y `|`, y se separa en palabras con `shlex`
@@ -324,3 +356,27 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 - **Decisión**: `paths` como lista YAML entre comillas (`- "**/test_*.py"` y
   `- "src/servidor_mcp/**/*.py"`). `test_configuracion.py` valida que el frontmatter se
   pueda leer y contenga exactamente esos globs.
+
+## R14. `.claude/settings.local.json` y el cambio de rama (revisión del analista)
+
+- **Hallazgo**:
+  - `.claude/settings.local.json` es personal y no se versiona (`.gitignore`), pero se
+    impone a la configuración del proyecto. Un `"disableAllHooks": true` en ese archivo
+    apaga todas las guardas.
+  - Las guardas viven en `.claude/hooks/` de la rama actual. En `main`, mientras no se
+    fusione este ticket, no existen. Si la sesión cambia a una rama sin esos scripts,
+    cada guarda falla al arrancar y `onFailure: "block"` bloquea todas las acciones que
+    vigila. Si se recarga el `settings.json` de esa rama, las guardas desaparecen.
+- **Decisión**:
+  - `Edit(./.claude/settings.local.json)` en `permissions.deny`. Esta regla cubre Edit,
+    Write y NotebookEdit.
+  - `.claude/settings.local.json` pasa a ser código protegido (FR-011), así que la
+    guarda de spec previa también vigila las escrituras por terminal que lo tengan como
+    destino.
+  - Las personas siguen pudiendo editarlo fuera de Claude Code, que es su función.
+  - Las pruebas "sin ticket" del quickstart no se hacen en `main`, sino en una rama
+    temporal `prueba-sin-ticket` creada desde `003-guardas-claude-code`, que sí tiene los
+    hooks.
+  - El README avisa: con las guardas activas, no se cambia a una rama sin
+    `.claude/hooks/`, y si ocurre, se reinicia la sesión. Además, `uv sync` se ejecuta
+    antes de abrir Claude Code.

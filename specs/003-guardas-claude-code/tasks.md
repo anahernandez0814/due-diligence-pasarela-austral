@@ -141,6 +141,18 @@ verificación del cierre de #3 la hace el paso 0 del siguiente `/siguiente-ticke
 - [X] T007 Implementar `.claude/hooks/detector_datos.py` con `buscar(texto) -> list[tuple[str, int]]` y los tipos `"tarjeta"`, `"nit"`, `"cedula"` y `"credencial"`, hasta que pase `test_detector_datos.py` (FR-005, FR-006, R11). Las expresiones regulares usan clases de caracteres, de modo que no coinciden consigo mismas.
 - [X] T008 Ejecutar `uv run pytest .claude/hooks -o pythonpath=.claude/hooks`, `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks`, todo en verde. Commit: `feat(hooks): módulos comunes y detector de datos con forma real`.
 
+- [ ] T008a Correcciones de la revisión de la parada B (contracts/guardas.md, interfaz común; contracts/detector-datos.md; R9 y R11). Tests primero, que deben fallar, en `.claude/hooks/test_comun.py` y `.claude/hooks/test_detector_datos.py`; después, el código en `comun.py` y `detector_datos.py`. Los 9 sondeos de la revisora pasan a ser tests:
+  1. **Heredocs**: `<<` no cuenta dentro de `<<<` (`(?<!<)<<(?!<)`). `cat <<< "FIN"` seguido de una línea con `python -c` que abre `.env` devuelve las dos líneas, y la segunda como código. Un heredoc sin delimitador de cierre no se quita: con `echo "<<X"` y en la línea siguiente `cat .env`, la segunda línea queda como subcomando.
+  2. **Tarjeta y decimales**: `(?<!\d[.,])` en el patrón. Con semilla fija, 20.000 `repr(random.random())` dan 0 hallazgos.
+  3. **Sustitución de comandos**: `echo "$(cat .env)"` y `` echo `cat .env` `` devuelven `cat .env` como comando interior de nivel 1. `echo '$(cat .env)'`, entre comillas simples, no.
+  4. **Tuberías**: `echo "print(open('.env').read())" | python` devuelve el texto de la etapa anterior como código; `cat <<'FIN' | python3`, con el cuerpo en las líneas siguientes, devuelve el cuerpo como código; `echo "cat .env" | bash` devuelve `cat .env` como comando interior.
+  5. **Herestrings**: `python <<< "X"` devuelve `X` como código; `bash <<< "cat a"` devuelve `cat a` como comando interior.
+  6. **Envoltorios**: `FOO=1 python -c "X"`, `env -i FOO=1 python -c "X"`, `exec`, `command`, `nohup`, `time`, `nice -n 5`, `timeout -s KILL 5` y `uv run --with x --python 3.12 python -c "X"` devuelven `X` como código.
+  7. **`cmd`**: `cmd //c "type .env"`, `cmd /c` y `cmd /k` devuelven el comando interior, analizado sin `\` como escape.
+  8. **Rutas de Git Bash**: con la raíz `D:\AIReadyOrquestador`, `/d/AIReadyOrquestador/src/due_diligence/x.py` queda `src/due_diligence/x.py`. La conversión solo se aplica en Windows; en otros sistemas, el test se salta.
+
+  Ejecutar pytest y ruff sobre `.claude/hooks`, en verde, y volver a ejecutar los 9 sondeos. Commit: `fix(hooks): correcciones de la revisión de la parada B`.
+
 **Checkpoint**: `comun` y `detector_datos` probados. Ninguna guarda registrada.
 
 ---

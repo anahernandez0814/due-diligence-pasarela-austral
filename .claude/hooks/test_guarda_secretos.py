@@ -430,3 +430,30 @@ def test_lanzadores_que_nombran_secretos(repo, comando):
 )
 def test_lanzadores_sin_secretos(repo, comando):
     assert bash(repo, comando) is None
+
+
+# --- find -exec como lanzador (T053, FR-026) ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        'find docs -exec sh -c "cat .env" \\;',
+        "find docs -exec cat .env {} \\;",
+        "find docs -execdir head .env.local {} +",
+    ],
+)
+def test_find_exec_con_raiz_sin_secretos_bloquea_secretos(repo, comando):
+    assert bash(repo, comando)
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        'find docs -name "*.md" -exec cat {} +',
+        'find src -name "*.py" -exec uv run ruff check {} +',
+    ],
+)
+def test_find_exec_sin_secretos_se_permite(repo, comando):
+    (repo / "docs").mkdir(exist_ok=True)
+    assert bash(repo, comando) is None

@@ -592,7 +592,7 @@ Criterio de la analista: se corrige lo que un PR no vería; se declara lo que es
   - siguen permitidos `echo x | xargs echo`, `sudo -u otro ls` y `env -S 'echo hola'`.
 - [X] T051 Documentación (FR-025, R9, R10): README, con `.claude/settings.local.json` en la lista de lo protegido; `DECISIONES.md`, entrada 4, con los residuales nuevos y el residual (2) agrupado por categorías, terminando en "lista completa en R10".
 - [X] T052 pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, `ruff check .` y `ruff format --check .` en verde; push; actualizar la descripción del PR #17 y ampliar la sección "Revisión previa" del comentario de #3 con lo decidido para los nueve hallazgos. Sin fusionar.
-- [ ] T053 [US1] [US3] `find … -exec|-execdir|-ok|-okdir <cmd…> ;|+` como lanzador (FR-026, R9, R10, contracts/guardas.md). Tests primero, que deben fallar, en `test_comun.py`, `test_guarda_secretos.py` y `test_guarda_spec_previa.py`; después, el código en `comun.py`:
+- [X] T053 [US1] [US3] `find … -exec|-execdir|-ok|-okdir <cmd…> ;|+` como lanzador (FR-026, R9, R10, contracts/guardas.md). Tests primero, que deben fallar, en `test_comun.py`, `test_guarda_secretos.py` y `test_guarda_spec_previa.py`; después, el código en `comun.py`:
   - los tokens hasta `;` o `+` son el comando lanzado, y `{}` es una ruta desconocida; se analiza como `xargs`;
   - con una raíz sin secretos (`docs`) se bloquean `find docs -exec sh -c "cat .env" \;` y, en `main`, `find docs -exec cp {} src/app/ \;` y `find docs -exec rm src/app/a.py \;`;
   - se permiten `find docs -name "*.md" -exec cat {} +` y `find src -name "*.py" -exec uv run ruff check {} +`;

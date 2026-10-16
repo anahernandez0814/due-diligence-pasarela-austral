@@ -412,7 +412,7 @@ def _revisar_comando(
 ) -> str | None:
     """Rutas y búsquedas recursivas de un comando, sin entrar en su texto ejecutable."""
     subcomandos = comun.dividir_comando(texto, powershell=powershell)
-    for sub in subcomandos:
+    for sub in comun.con_lanzados_de_find(subcomandos):  # find -exec <cmd> (FR-026)
         programa = comun.quitar_envoltorios(sub)
         delante = len(sub) - len(programa)
         omitir = {delante + i for i in _patrones(programa)} if programa else set()

@@ -297,7 +297,8 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
         tipo = "borrado_carpeta" if es_carpeta(ruta, carpeta) else "borrado"
         return resolver(ruta, carpeta), tipo
 
-    for sub in comun.dividir_comando(texto, powershell=powershell):
+    subcomandos = comun.dividir_comando(texto, powershell=powershell)
+    for sub in comun.con_lanzados_de_find(subcomandos):  # find -exec <cmd> (FR-026)
         for ruta in _redirecciones(sub):
             yield resolver(ruta), "archivo"
         programa = comun.quitar_envoltorios(sub)

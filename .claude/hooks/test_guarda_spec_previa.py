@@ -595,3 +595,27 @@ def test_lanzadores_escriben_codigo_protegido_en_main(con_app, comando):
 )
 def test_lanzadores_con_documentos_se_permiten(con_app, comando):
     assert guarda_spec_previa.motivo(entrada(con_app(), "Bash", command=comando)) is None
+
+
+# --- find -exec como lanzador (T053, FR-026) ------------------------------------------
+
+FIND_EXEC = [
+    "find docs -exec cp {} src/app/ \\;",
+    "find docs -exec rm src/app/a.py \\;",
+    "find docs -execdir mv {} src/app/b.py +",
+]
+
+
+@pytest.mark.parametrize("comando", FIND_EXEC)
+def test_find_exec_escribe_codigo_protegido_en_main(con_app, comando):
+    assert bash(con_app(rama="main"), comando)
+
+
+@pytest.mark.parametrize("comando", FIND_EXEC)
+def test_find_exec_con_documentos_se_permite(con_app, comando):
+    assert bash(con_app(), comando) is None
+
+
+def test_find_exec_sin_escrituras_en_main(con_app):
+    repo = con_app(rama="main")
+    assert bash(repo, 'find docs -name "*.md" -exec cat {} +') is None

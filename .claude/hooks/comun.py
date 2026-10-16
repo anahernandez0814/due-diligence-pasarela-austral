@@ -518,6 +518,41 @@ def _interior_de_shell(palabras: list[str]) -> tuple[str, bool, bool] | None:
     return None
 
 
+_EXEC_DE_FIND = {"-exec", "-execdir", "-ok", "-okdir"}
+
+
+def comandos_de_find(palabras: list[str]) -> list[list[str]]:
+    """Comandos que lanza `find … -exec|-execdir|-ok|-okdir <cmd…> ;|+` (FR-026).
+
+    El comando son las palabras hasta `+` o hasta el final del subcomando: el `;`, escapado
+    o no, ya separa los subcomandos al dividir. `{}` queda como una ruta desconocida.
+    """
+    programa = quitar_envoltorios(palabras)
+    if not programa or _nombre(programa[0]) != "find":
+        return []
+    lanzados: list[list[str]] = []
+    i = 1
+    while i < len(programa):
+        if programa[i] in _EXEC_DE_FIND:
+            fin = i + 1
+            while fin < len(programa) and programa[fin] != "+":
+                fin += 1
+            if fin > i + 1:
+                lanzados.append(programa[i + 1 : fin])
+            i = fin
+        i += 1
+    return lanzados
+
+
+def con_lanzados_de_find(subcomandos: list[list[str]]) -> list[list[str]]:
+    """Los subcomandos, con lo que lanza cada `find -exec` justo detrás de él (FR-026)."""
+    resultado: list[list[str]] = []
+    for sub in subcomandos:
+        resultado.append(sub)
+        resultado += comandos_de_find(sub)
+    return resultado
+
+
 def _cadena_de_lanzador(palabras: list[str]) -> str | None:
     """Comando en una cadena de `env -S`, `script -c` o `watch` (FR-026).
 
@@ -635,6 +670,17 @@ def _extraer(
         if cadena is not None:
             interiores.append((cadena, False, False, origen))
             continue
+        for lanzado in comandos_de_find(originales):
+            # `find -exec <cmd>` se analiza como `xargs`: lo lanzado es el comando.
+            programa = quitar_envoltorios(lanzado)
+            if not programa:
+                continue
+            interior = _interior_de_shell(programa)
+            if interior is not None:
+                interiores.append((*interior, origen))
+            codigo = _codigo_de_interprete(programa)
+            if codigo is not None:
+                extraccion.agregar_codigo(codigo, padre, origen)
         palabras = quitar_envoltorios(originales)
         if not palabras:
             continue

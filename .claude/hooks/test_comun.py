@@ -604,3 +604,23 @@ def test_env_s_script_watch_dan_comando_interior(comando):
 def test_xargs_con_shell_interior():
     extraccion = comun.extraer_texto_ejecutable('echo x | xargs sh -c "cat a"')
     assert [c.texto for c in extraccion.comandos] == ["cat a"]
+
+
+# --- find -exec como lanzador (T053, FR-026) ------------------------------------------
+
+
+@pytest.mark.parametrize("opcion", ["-exec", "-execdir", "-ok", "-okdir"])
+@pytest.mark.parametrize("cierre", [";", "+"])
+def test_find_exec_con_shell_da_comando_interior(opcion, cierre):
+    comando = f'find docs {opcion} sh -c "cat a" {{}} {cierre}'
+    assert [c.texto for c in comun.extraer_texto_ejecutable(comando).comandos] == ["cat a"]
+
+
+def test_find_exec_con_interprete_da_codigo():
+    comando = 'find docs -exec python -c "X" {} \\;'
+    assert comun.extraer_texto_ejecutable(comando).codigos == ["X"]
+
+
+def test_find_exec_solo_toma_hasta_el_cierre():
+    comando = 'find docs -exec echo {} ; -name "*.md"'
+    assert comun.extraer_texto_ejecutable(comando).comandos == []

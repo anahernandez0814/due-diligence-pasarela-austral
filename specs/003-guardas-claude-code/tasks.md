@@ -253,7 +253,7 @@ con forma real.
 **Independent Test**: los tests de extremo a extremo de `guarda_datos` bloquean cada tipo
 generado en cada herramienta y permiten el mensaje de ejemplo del enunciado.
 
-- [ ] T012 [P] [US2] Escribir `.claude/hooks/test_guarda_datos.py` (FR-004, FR-006, FR-008, R3, contracts/guardas.md). Con valores generados en la prueba, con las mismas funciones auxiliares de `test_detector_datos.py`:
+- [X] T012 [P] [US2] Escribir `.claude/hooks/test_guarda_datos.py` (FR-004, FR-006, FR-008, R3, contracts/guardas.md). Con valores generados en la prueba, con las mismas funciones auxiliares de `test_detector_datos.py`:
   - **Se bloquean**:
     - Write (`content`), Edit (`new_string`), NotebookEdit (`new_source`), Bash y
       PowerShell (`command`);
@@ -263,8 +263,8 @@ generado en cada herramienta y permiten el mensaje de ejemplo del enunciado.
     contiene un valor, porque solo se revisa el texto nuevo.
   - **Mensajes**: stderr tiene el tipo y la línea, y nunca contiene el valor; con varios
     hallazgos, aparecen todos separados por `;`.
-- [ ] T013 [US2] Implementar `.claude/hooks/guarda_datos.py` con `comun` y `detector_datos` hasta que pase `test_guarda_datos.py`, con el mensaje del contrato. Origen: FR-004, FR-008, FR-020, FR-023.
-- [ ] T014 [US2] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de datos con forma real`.
+- [X] T013 [US2] Implementar `.claude/hooks/guarda_datos.py` con `comun` y `detector_datos` hasta que pase `test_guarda_datos.py`, con el mensaje del contrato. Origen: FR-004, FR-008, FR-020, FR-023.
+- [X] T014 [US2] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de datos con forma real`.
 
 **Checkpoint**: la guarda de datos funciona por stdin. La revisión del repositorio llega
 en T025.

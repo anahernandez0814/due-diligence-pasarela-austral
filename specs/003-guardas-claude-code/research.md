@@ -278,34 +278,69 @@ https://code.claude.com/docs/en/memory). Versión instalada: Claude Code 2.1.300
 - **Cuando llegue #13**: el detector y la guarda de datos se moverán al plugin con sus
   tests. Es decisión de #13, no de este ticket.
 
-## R9. Riesgo residual de la lectura recursiva (punto f)
+## R9. Secretos que no se nombran como ruta (punto f, C1 e I1 del análisis)
 
 - **Hallazgo**:
   - La herramienta Grep "respects .gitignore", y `.gitignore` excluye `.env`, `.env.*`,
     `*.key` y `secrets/`.
   - `rg` respeta `.gitignore` por defecto, y `git grep` solo busca en archivos
     versionados.
-  - `grep -r`, `find … -exec` y `Get-ChildItem -Recurse` no respetan `.gitignore`.
-- **Decisión**:
-  - **Se bloquean** en la guarda de secretos los comandos recursivos que pueden leer
-    secretos sin nombrarlos y no los excluyen:
-    - `grep`/`egrep`/`fgrep` con `-r`, `-R`, `--recursive` o `-d recurse`, salvo con un
-      `--exclude` o `--exclude-dir` que cubra `.env`;
-    - `rg` con `-u`, `--no-ignore`, `--hidden` o `-uu`;
+  - `grep -r`, `rg` con `-u`, `--no-ignore` o `--hidden`, `find … -exec` y
+    `Get-ChildItem -Recurse` no respetan `.gitignore`.
+  - Un secreto también se puede leer nombrándolo dentro de un texto que se ejecuta:
+    código en línea de un intérprete (`python -c "…open('.env')…"`), `bash -c`, `eval`
+    o un heredoc que alimenta a un intérprete. La primera versión del plan lo aceptaba
+    como riesgo residual, y el análisis lo marcó como conflicto con la constitución VIII
+    (C1).
+  - Medido: recorrer la raíz del repositorio podando solo `.git` tarda ≈ 3 ms (813
+    archivos).
+- **Decisión 1, texto ejecutable (C1)**:
+  - En Bash, y en PowerShell como respaldo (R5), `guarda_secretos` revisa además **como
+    texto**, buscando nombres de archivos de secretos:
+    - el código en línea de `python`, `python3`, `py`, `node`, `ruby` y `perl` con `-c`
+      o `-e`, también detrás de `uv run` (con o sin opciones de `uv`);
+    - el argumento de `bash -c` y `sh -c`;
+    - el argumento de `powershell` y `pwsh` con `-Command` o `-c`;
+    - los argumentos de `eval`;
+    - el cuerpo de los heredocs (`<<`, `<<-`, `<<'FIN'`) cuyo comando es uno de esos
+      intérpretes o shells.
+  - **Heredocs, acotación**: los que alimentan a otro comando, como `git commit -F - <<…`
+    o `cat > archivo <<…`, no se revisan como código. Un mensaje de commit que menciona
+    ".env" no lee nada.
+  - **Búsqueda en el texto**: una expresión regular encuentra `.env` o `.env.<sufijo>`
+    (salvo `.env.example`), un nombre que termina en `.key` seguido de comilla, espacio
+    o fin de texto, y `secrets/` o `secrets\`. Siempre exige que no haya una letra, un
+    dígito, `.`, `_` o `-` pegado delante. Así, `x.keys()`, `obj.key)` y el módulo
+    `secrets.token_hex` no coinciden.
+- **Decisión 2, búsquedas recursivas (I1)**: se bloquean **solo si su raíz contiene
+  archivos de secretos** (FR-002: la búsqueda "no apunta a archivos de secretos").
+  - Se aplica a:
+    - `grep`, `egrep` y `fgrep` con `-r`, `-R`, `--recursive` o `-d recurse`;
+    - `rg` con `-u`, `-uu`, `--no-ignore` o `--hidden`;
     - `find` combinado con `-exec`, `-execdir` o `| xargs` y un lector (`cat`, `head`,
-      `tail`, `grep`, `less`, `more`);
-    - en PowerShell (respaldo, R5), `Get-ChildItem` (o `gci`, `ls`, `dir`) con `-Recurse` conectado por
-      tubería a `Get-Content` o `Select-String`, salvo con un `-Exclude` que cubra
-      `.env`.
-  - **Se permiten**: la herramienta Grep, `rg` sin esas opciones y `git grep`, porque
-    respetan `.gitignore` o solo ven archivos versionados.
-  - Un comodín que se expande a un secreto (`cat .e*`, `Get-Content *.local`) también se
-    bloquea: la guarda expande cada argumento con comodines contra la raíz del
-    repositorio.
-  - **Riesgo que se acepta y se declara** en `DECISIONES.md`: rutas construidas en tiempo
-    de ejecución (variables, `base64`, `eval`, subshells), intérpretes que leen archivos
-    (`python -c`, `node -e`) y copias recursivas de directorios. Las reglas de Bash no
-    son una frontera de seguridad y las guardas reconocen formas comunes, no todas.
+      `tail`, `grep`, `less` o `more`);
+    - en PowerShell, `Get-ChildItem` (o `gci`, `ls`, `dir`) con `-Recurse`, conectado
+      por tubería a `Get-Content` o `Select-String`.
+  - **Raíz de la búsqueda**: los argumentos de ruta del comando, o `.` si no hay
+    ninguno, resueltos contra el `cwd` del JSON de entrada.
+  - **Recorrido**: se recorre cada raíz con `os.walk`, podando solo `.git`. Se para en el
+    primer archivo de secretos (data-model) y se bloquea. Si la raíz no tiene ninguno, se
+    permite.
+  - **Exclusiones**: un `--exclude` o `-Exclude` que cubre `.env` no cambia la decisión,
+    porque solo cuenta lo que hay bajo la raíz. Se mantiene simple a propósito.
+  - **Ejemplos**: `grep -rn ".env" src/` se permite (en `src/` no hay secretos) y
+    `grep -r TOKEN .` se bloquea (la raíz tiene `.env`).
+- **Se permiten siempre**: la herramienta Grep, `rg` sin esas opciones y `git grep`.
+- **Comodines**: un comodín que se expande a un secreto (`cat .e*`, `Get-Content *.local`)
+  se bloquea, porque la guarda expande cada argumento con comodines contra la raíz.
+- **Riesgo que se acepta y se declara** en `DECISIONES.md`: solo rodeos deliberados.
+  - Rutas construidas al ejecutar (variables, concatenaciones, subshells que generan el
+    nombre).
+  - Nombres codificados, por ejemplo en base64.
+  - Scripts escritos en un archivo y ejecutados después.
+
+  Las reglas de Bash no son una frontera de seguridad. Las guardas reconocen todas las
+  formas en que se nombra un secreto, pero no las que lo ocultan a propósito.
 - **Alternativa descartada para el MVP**: el sandbox de Bash de Claude Code, con
   denegación de lectura a nivel de sistema operativo. Cambia el comportamiento de todos
   los comandos, y su soporte en Windows nativo, el sistema del equipo, no está

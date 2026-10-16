@@ -43,18 +43,58 @@ texto que se busca, no un archivo (FR-002). Una palabra solo cuenta como ruta si
 ruta completa; el texto `.env` dentro de un mensaje entre comillas
 (`git commit -m "protege .env"`) no bloquea.
 
+**Texto ejecutable (R9, decisión 1)**: además de las rutas, en Bash y en PowerShell
+(como respaldo) se revisa **como texto**, buscando nombres de archivos de secretos:
+
+| Construcción | Texto revisado |
+|--------------|----------------|
+| `python`, `python3`, `py`, `node`, `ruby` o `perl` con `-c` o `-e`, también detrás de `uv run [opciones]` | el argumento de `-c` o `-e` |
+| `bash -c` y `sh -c` | el argumento de `-c` |
+| `powershell` y `pwsh` con `-Command` o `-c` | el argumento |
+| `eval` | todos sus argumentos |
+| heredoc (`<<`, `<<-`, `<<'FIN'`) cuyo comando es uno de los anteriores | el cuerpo del heredoc |
+
+- Un heredoc que alimenta a otro comando (`git commit -F - <<…`, `cat > archivo <<…`) no
+  se revisa como código.
+- Patrón de nombres en el texto:
+  - `.env` o `.env.<sufijo>`, salvo `.env.example`;
+  - `<nombre>.key` seguido de comilla, espacio o fin de texto;
+  - `secrets/` o `secrets\`.
+  - Siempre sin una letra, un dígito, `.`, `_` o `-` pegado delante.
+- No coinciden: `x.keys()`, `obj.key)` ni `secrets.token_hex`.
+
+**Búsquedas recursivas (R9, decisión 2)**: `grep -r`/`-R`/`--recursive`/`-d recurse`,
+`rg` con `-u`/`-uu`/`--no-ignore`/`--hidden`, `find` con `-exec`/`-execdir`/`| xargs` y un
+lector, y `Get-ChildItem -Recurse` (o `gci`, `ls`, `dir`) con tubería a `Get-Content` o
+`Select-String`.
+
+- La raíz son los argumentos de ruta, o `.` si no hay ninguno, resueltos contra el `cwd`
+  del JSON.
+- Se recorre con `os.walk` podando solo `.git`, y se para en el primer archivo de
+  secretos.
+- Bloquea solo si alguna raíz contiene archivos de secretos.
+- Ejemplos: `grep -rn ".env" src/` se permite; `grep -r TOKEN .` se bloquea, porque la
+  raíz tiene `.env`.
+
 Bloquea si:
 
 - alguna ruta es un archivo de secretos (data-model);
-- el comando es una lectura recursiva sin exclusión, según la lista de R9.
+- algún texto ejecutable nombra un archivo de secretos;
+- una búsqueda recursiva tiene una raíz que contiene archivos de secretos.
 
 Mensajes:
 
 - `[guarda_secretos] Acceso bloqueado a un archivo de secretos (<ruta>) con <herramienta>. Usa .env.example para ver las variables.`
-- `[guarda_secretos] Búsqueda recursiva bloqueada: puede leer archivos de secretos sin nombrarlos. Usa la herramienta Grep, rg o git grep, o excluye .env.`
+- `[guarda_secretos] Código en línea bloqueado: nombra un archivo de secretos (<construcción>). Usa .env.example para ver las variables.`
+- `[guarda_secretos] Búsqueda recursiva bloqueada: <raíz> contiene archivos de secretos. Busca en una carpeta sin secretos o usa la herramienta Grep, rg o git grep.`
 
-Permite `.env.example`, la herramienta Grep con un patrón que contiene `.env` y cualquier
-ruta que no sea de secretos.
+Permite:
+
+- `.env.example`;
+- la herramienta Grep con un patrón que contiene `.env`;
+- `grep -n .env README.md`, `grep -rn ".env" src/` y `git grep ".env"`;
+- `python -c` sin nombres de secretos y `git commit -m "protege .env"`;
+- cualquier ruta que no sea de secretos.
 
 ## `guarda_datos.py` (FR-004 a FR-008)
 
@@ -100,6 +140,10 @@ La rama se lee con `git -C <raíz> branch --show-current`. Si git falla, se apli
 cerrado.
 
 ## `guarda_mcp_github.py` (FR-024, R4)
+
+> Alcance actual: pese al nombre, hoy solo limita `projects_write`. El nombre se mantiene
+> por si otro ticket le añade límites a más herramientas del MCP de GitHub; cada
+> herramienta nueva necesitaría su matcher y su test.
 
 - Matcher: `mcp__github__projects_write`.
 - Permite solo si `tool_input.method` es exactamente `update_project_item`.

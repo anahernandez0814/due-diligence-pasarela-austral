@@ -65,11 +65,26 @@ llamada.
 **Target Platform**: sesiones de Claude Code en Windows (Git Bash; la herramienta
 PowerShell queda apagada), macOS y Linux.
 
+- **Validación por plataforma (FR-022)**: la validación manual, la suite y el
+  quickstart, se hace en Windows, el sistema del equipo.
+- **macOS y Linux** los respalda el diseño:
+  - forma exec sin shell, que no depende de bash ni de PowerShell;
+  - `uv` como lanzador, igual en los tres sistemas;
+  - rutas con `pathlib`, normalizadas a `/`;
+  - solo la biblioteca estándar.
+- Una ejecución en CI sobre otros sistemas queda como mejora opcional del ticket #14.
+
 **Project Type**: configuración versionada de Claude Code más scripts de hook, en un
 repositorio de aplicación Python.
 
-**Performance Goals**: cada guarda en menos de 1 s (SC-004). Medido: ≈ 0,5 s de arranque
-con `uv run --no-project`, y las guardas que coinciden corren en paralelo.
+**Performance Goals**: cada guarda en menos de 1 s, medida en caliente desde la segunda
+llamada de la sesión (SC-004). Lo medido:
+
+- ≈ 0,5 s de arranque con `uv run --no-project`;
+- la primera llamada, ≈ 1,1 s, porque `uv` prepara el entorno;
+- el recorrido de la raíz para las búsquedas recursivas, ≈ 3 ms.
+
+Las guardas que coinciden con una herramienta corren en paralelo.
 
 **Constraints**:
 
@@ -93,7 +108,7 @@ No quedan NEEDS CLARIFICATION. Los puntos (a)–(f) del analista y FR-003 se res
 | (c) herramientas destructivas y `projects_write` | R4 |
 | (d) directorio del plugin | R7 |
 | (e) tests | R8 |
-| (f) lectura recursiva | R9 |
+| (f) lectura recursiva y texto ejecutable (C1, I1) | R9 |
 | FR-003 PowerShell | R5, R6 |
 | `.claude/settings.local.json` y cambio de rama | R14 |
 
@@ -110,7 +125,7 @@ No quedan NEEDS CLARIFICATION. Los puntos (a)–(f) del analista y FR-003 se res
 | V. Escalamiento | No | Fuera de alcance. | N/A |
 | VI. Transparencia en la interfaz | No | Se refiere a la interfaz de chat. | N/A |
 | VII. Solo datos ficticios | Sí | La guarda de datos bloquea lo que entra por Claude Code; la revisión del repositorio cubre todo lo versionado. Los tests construyen los valores en tiempo de ejecución, sin literales. | Cumple |
-| VIII. Sin credenciales | Sí | Claude Code no puede leer ni modificar `.env` ni sus variantes por ninguna herramienta (hook más denegaciones); `.env.example` sigue accesible. Las credenciales tampoco pueden escribirse ni publicarse en GitHub. | Cumple, con riesgo residual (R9) |
+| VIII. Sin credenciales | Sí | Claude Code no puede leer ni modificar `.env` ni sus variantes por ninguna herramienta (hook más denegaciones), tampoco nombrándolos en el código en línea de un intérprete o shell, en `eval`, en un heredoc que alimenta a un intérprete, ni con una búsqueda recursiva cuya raíz los contiene (R9). `.env.example` sigue accesible. Las credenciales tampoco pueden escribirse ni publicarse en GitHub. Solo escapan los rodeos deliberados (riesgo residual 1). | Cumple |
 | IX. Spec first y trazabilidad | Sí | La guarda de spec previa hace cumplir "ningún código sin spec, plan y tareas" a nivel de herramienta. El ticket sigue el ciclo de #2: hooks de Spec Kit para los comentarios y `/abrir-pr`. | Cumple |
 | X. Calidad y pruebas | Sí | Tests con pytest junto a los hooks. Formato con ruff tras cada edición, con el hook. La revisión previa al PR sigue siendo la de transición de `/abrir-pr` hasta el ticket #4. No aplica la revisión de reglas de negocio. | Cumple, con la desviación de #4 vigente |
 | Restricciones técnicas | Sí | Python 3.12 con uv, pytest y ruff; sin dependencias nuevas; documentación en español. | Cumple |
@@ -133,8 +148,11 @@ transición hasta #4.
 
 **Riesgos residuales** (se declaran en la nueva entrada de `DECISIONES.md`):
 
-1. Lecturas de secretos que no los nombran: variables, `eval`, `base64`, intérpretes con
-   `-c` o copias recursivas (R9).
+1. Lecturas de secretos que los ocultan a propósito: rutas construidas al ejecutar, nombres
+   codificados (por ejemplo, en base64) y scripts escritos en un archivo y ejecutados
+   después (R9). El código en línea de intérpretes y shells, `eval`, los heredocs que
+   alimentan a un intérprete y las búsquedas recursivas cuya raíz contiene secretos ya
+   **no** son residuales: los cubre la guarda.
 2. Escrituras en código protegido que no son reconocibles: `git apply`, `patch`,
    intérpretes, rutas en variables (R10).
 3. Un `.py` escrito por comando de terminal no se formatea al momento; lo detecta
@@ -146,8 +164,9 @@ transición hasta #4.
 El riesgo de los métodos de borrado de `projects_write`, que la primera versión del plan
 aceptaba, queda cerrado con `guarda_mcp_github` (FR-024, R4).
 
-Ninguno contradice el principio II: las garantías cubren las vías normales de Claude Code
-(herramientas de archivo, comandos con rutas y el MCP), y lo que queda son formas de
+Ninguno contradice los principios II y VIII. Las garantías cubren todas las formas en que
+Claude Code nombra un secreto o escribe código: herramientas de archivo, rutas en
+comandos, texto ejecutable, búsquedas recursivas y el MCP. Lo que queda son formas de
 eludirlas a propósito. Una regla de Bash "isn't a security boundary", según la propia
 documentación de Claude Code.
 
@@ -243,7 +262,8 @@ specs/003-guardas-claude-code/
   entrada 4, salvo la revisión previa, que sigue hasta #4.
 - **`README.md`**: sección breve "Guardas del entorno". La ampliación es de #14. Contiene:
   - qué bloquea cada guarda;
-  - que requieren `uv` en el `PATH` y que se cargan al iniciar la sesión;
+  - que requieren `uv` en el `PATH`, y que "se cargan al iniciar la sesión y suelen
+    activarse también al guardar `settings.json`; ante la duda, reinicie la sesión";
   - "Ejecute `uv sync` antes de abrir Claude Code";
   - "Con las guardas activas, no cambie a una rama sin `.claude/hooks/`; si ocurre,
     reinicie la sesión" (R14).

@@ -121,13 +121,13 @@ No quedan NEEDS CLARIFICATION. Los puntos (a)–(f) del analista y FR-003 se res
 | Principio | Aplica | Verificación en este plan | Estado |
 |-----------|--------|---------------------------|--------|
 | I. Reglas de negocio | No | Sus hooks son del Agent SDK, en el ticket #7. | N/A |
-| II. Garantizado vs. sugerido | Sí | Es el objeto del ticket. Spec previa, secretos y datos con forma real pasan a hooks `PreToolUse` que bloquean con salida 2, independientemente de lo que decida el modelo, y fallan cerrados. `permissions.deny` es una barrera adicional, que además impide a Claude Code desactivar las guardas desde `.claude/settings.local.json`. Las reglas de `.claude/rules/` solo guían, y así se declaran. | Cumple, con los riesgos residuales declarados (ver abajo) |
+| II. Garantizado vs. sugerido | Sí | Es el objeto del ticket. Spec previa, secretos y datos con forma real pasan a hooks `PreToolUse` que bloquean con salida 2, independientemente de lo que decida el modelo, y fallan cerrados. `permissions.deny` es una barrera adicional. Claude Code no puede desactivar las guardas desde `.claude/settings.local.json`: Edit y Write los niega `permissions.deny`, y la terminal y el código en línea los bloquea `guarda_spec_previa` en cualquier rama (FR-025, R14). Las reglas de `.claude/rules/` solo guían, y así se declaran. | Cumple, con los riesgos residuales declarados (ver abajo) |
 | III. Arquitectura de agentes | No | Fuera de alcance. | N/A |
 | IV. Herramientas y servidor MCP | Indirecto | La regla `herramientas-mcp.md` recoge las convenciones de IV para cuando se escriba el servidor (#5). | Cumple |
 | V. Escalamiento | No | Fuera de alcance. | N/A |
 | VI. Transparencia en la interfaz | No | Se refiere a la interfaz de chat. | N/A |
 | VII. Solo datos ficticios | Sí | La guarda de datos bloquea lo que entra por Claude Code; la revisión del repositorio cubre todo lo versionado. Los tests construyen los valores en tiempo de ejecución, sin literales. | Cumple |
-| VIII. Sin credenciales | Sí | Claude Code no puede leer ni modificar `.env` ni sus variantes por ninguna herramienta (hook más denegaciones), tampoco nombrándolos en el código en línea de un intérprete o shell, en `eval`, en un heredoc que alimenta a un intérprete, ni con una búsqueda recursiva cuya raíz los contiene (R9). `.env.example` sigue accesible. Las credenciales tampoco pueden escribirse ni publicarse en GitHub. Solo escapan los rodeos deliberados (riesgo residual 1). | Cumple |
+| VIII. Sin credenciales | Sí | Claude Code no puede leer ni modificar `.env` ni sus variantes por ninguna herramienta (hook más denegaciones), tampoco nombrándolos en el código en línea de un intérprete o shell, en `eval`, en un heredoc que alimenta a un intérprete, ni con una búsqueda recursiva cuya raíz los contiene (R9). `.env.example` sigue accesible. Las credenciales tampoco pueden escribirse ni publicarse en GitHub. Solo escapan los rodeos deliberados y los lectores de archivos completos (`tar c`, `zip -r`, `git show <rev>:<ruta>`) del riesgo residual 1. | Cumple |
 | IX. Spec first y trazabilidad | Sí | La guarda de spec previa hace cumplir "ningún código sin spec, plan y tareas" a nivel de herramienta. El ticket sigue el ciclo de #2: hooks de Spec Kit para los comentarios y `/abrir-pr`. | Cumple |
 | X. Calidad y pruebas | Sí | Tests con pytest junto a los hooks. Formato con ruff tras cada edición, con el hook. La revisión previa al PR sigue siendo la de transición de `/abrir-pr` hasta el ticket #4. No aplica la revisión de reglas de negocio. | Cumple, con la desviación de #4 vigente |
 | Restricciones técnicas | Sí | Python 3.12 con uv, pytest y ruff; sin dependencias nuevas; documentación en español. | Cumple |
@@ -152,15 +152,21 @@ transición hasta #4.
 
 1. Lecturas de secretos que los ocultan a propósito: rutas construidas al ejecutar, nombres
    codificados (por ejemplo, en base64) y scripts escritos en un archivo y ejecutados
-   después (R9). El código en línea de intérpretes y shells, `eval`, los heredocs que
-   alimentan a un intérprete y las búsquedas recursivas cuya raíz contiene secretos ya
-   **no** son residuales: los cubre la guarda.
+   después; y los lectores de archivos completos `tar c`, `zip -r` y
+   `git show <rev>:<ruta>` (`.env` nunca se versionó) (R9). El código en línea de
+   intérpretes y shells, `eval`, los heredocs que alimentan a un intérprete, los
+   lanzadores (`xargs`, `sudo`, `doas`, `env -S`, `script -c`, `watch`) y las búsquedas
+   recursivas cuya raíz contiene secretos ya **no** son residuales: los cubre la guarda.
 2. Escrituras en código protegido que no son reconocibles: `git apply`, `patch`,
    `git reset`, `git stash`, `find … -delete`, `find … -exec rm`, `xargs rm`, los `cd -`,
-   `cd ~` y `cd $X`, y las rutas en variables o construidas al ejecutar (R10). Los
-   intérpretes y shells que nombran código protegido ya no son residuales, ni
-   `git checkout` (con o sin `--`), `git restore` y `git mv`, que se vigilan desde las
-   revisiones de las paradas D y E.
+   `cd ~` y `cd $X`, y las rutas en variables o construidas al ejecutar; y `perl -pi`,
+   `dd of=`, `curl -o`, `wget -O`, `ln -sf`, `rsync`, `tar -C` y `tar x`, `unzip -d`,
+   `git clean`, `uv run ruff check --fix` y `ruff format`, que escriben en código
+   versionado y los ve el diff del PR (R10). Los intérpretes, shells y lanzadores que
+   nombran código protegido ya no son residuales, ni `git checkout` (con o sin `--`),
+   `git restore` y `git mv`, que se vigilan desde las revisiones de las paradas D y E.
+   `.claude/settings.local.json`, que no se versiona, no es residual: se bloquea en
+   cualquier rama (FR-025).
 3. Un `.py` escrito por comando de terminal no se formatea al momento; lo detecta
    `ruff format --check` (R12).
 4. Cambiar a una rama sin `.claude/hooks/` bloquea todas las acciones vigiladas, por el
@@ -170,11 +176,16 @@ transición hasta #4.
 El riesgo de los métodos de borrado de `projects_write`, que la primera versión del plan
 aceptaba, queda cerrado con `guarda_mcp_github` (FR-024, R4).
 
-Ninguno contradice los principios II y VIII. Las garantías cubren todas las formas en que
+Ninguno contradice los principios II y VIII. Las garantías cubren las formas en que
 Claude Code nombra un secreto o escribe código: herramientas de archivo, rutas en
-comandos, texto ejecutable, búsquedas recursivas y el MCP. Lo que queda son formas de
-eludirlas a propósito. Una regla de Bash "isn't a security boundary", según la propia
-documentación de Claude Code.
+comandos, texto ejecutable, lanzadores, búsquedas recursivas y el MCP. Lo que queda son
+los residuales 1 y 2: rodeos deliberados, lectores de archivos completos y escrituras que
+la guarda no reconoce en código versionado, que el diff del PR ve. Una regla de Bash
+"isn't a security boundary", según la propia documentación de Claude Code.
+
+**Mejoras futuras**, sin bloquear (revisión previa del PR #17): que el mensaje de
+`guarda_spec_previa` proponga `/speckit-specify` cuando falta `spec.md`, y añadir
+`mcp__github__projects_write` al matcher de `guarda_datos`.
 
 **Resultado de la puerta**: cumple.
 

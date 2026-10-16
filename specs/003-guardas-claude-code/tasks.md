@@ -359,13 +359,13 @@ las otras herramientas llega en T026.
 **Independent Test**: los tests de `guarda_mcp_github` permiten `update_project_item` y
 bloquean los otros nueve métodos.
 
-- [ ] T021 [P] [US5] Escribir `.claude/hooks/test_guarda_mcp_github.py` (FR-024, R4, contracts/guardas.md):
+- [X] T021 [P] [US5] Escribir `.claude/hooks/test_guarda_mcp_github.py` (FR-024, R4, contracts/guardas.md):
   - `update_project_item` sale con 0;
   - los otros nueve métodos del esquema (`add_project_item`, `update_project_items`, `delete_project_item`, `create_project_status_update`, `create_project_view`, `update_project_view`, `delete_project_view`, `create_project` y `create_iteration_field`) salen con 2 y el mensaje del contrato;
   - sin `method`, sale con 2 y el texto `(ausente)`;
   - un `method` que no es texto y un `tool_input` que no es un objeto salen con 2.
-- [ ] T022 [US5] Implementar `.claude/hooks/guarda_mcp_github.py` con `comun` hasta que pase `test_guarda_mcp_github.py`. Origen: FR-024, FR-020, FR-023, R4.
-- [ ] T023 [US5] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de projects_write`.
+- [X] T022 [US5] Implementar `.claude/hooks/guarda_mcp_github.py` con `comun` hasta que pase `test_guarda_mcp_github.py`. Origen: FR-024, FR-020, FR-023, R4.
+- [X] T023 [US5] Ejecutar los tests y ruff sobre `.claude/hooks`, en verde. Commit: `feat(hooks): guarda de projects_write`.
 
 **Checkpoint**: las cinco piezas funcionan por stdin.
 

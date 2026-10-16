@@ -334,6 +334,13 @@ patrón y sin documentos, y permite en una rama con los tres.
   5. **`truncate`**: `truncate -s 0 src/app/a.py`.
 
   Ejecutar pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, y ruff. Commit: `fix(hooks): carpetas, git checkout, git mv, cd y truncate`.
+- [ ] T017c [US3] Corrección del cierre de la revisión de la parada E (FR-012, R10, contracts/guardas.md). Tests primero, que deben fallar, en `.claude/hooks/test_comun.py` (el `padre` y el `origen` que anota el extractor) y en `.claude/hooks/test_guarda_spec_previa.py`; después, el código en `comun.py` y `guarda_spec_previa.py`:
+  - los comandos interiores heredan la carpeta vigente en el subcomando donde aparecen;
+  - un texto de código de intérprete cuenta como código protegido si esa carpeta cuenta según la regla de carpetas, salvo la raíz;
+  - se bloquean en `main` y se permiten con los tres documentos: `cd .claude && bash -c 'rm settings.json'`, `cd .claude && eval rm settings.json`, `cd src/app && sh -c 'echo x > b.py'`, `cd src && python -c "open('app/b.py','w')"` y `cd src/app && python3 - <<'EOF'` con `open('b.py','w')` en el cuerpo;
+  - se siguen permitiendo en `main`: `cd docs && bash -c 'rm -rf build'`, `cd docs && python -c "print(1)"`, `python -c "print(1)"` en la raíz y `cd src && uv run pytest`.
+
+  Ejecutar pytest con y sin `PYTHONUTF8`/`PYTHONIOENCODING`, y ruff. Commit: `fix(hooks): comandos interiores que heredan el cwd`.
 
 **Checkpoint**: la guarda de spec previa funciona en repositorios temporales.
 

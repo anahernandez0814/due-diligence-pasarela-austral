@@ -134,8 +134,9 @@ comprueba si además llega por `@import`, solo como dato para `DECISIONES.md`.
 de archivos, rutas del ticket y diff), no solo al diff: lo que Claude Code mide es la salida
 completa del comando. El script emite **siempre** la marca, la lista con estadísticas y las
 rutas; añade el diff completo **solo si la salida total sigue por debajo de
-`UMBRAL_SALIDA`**, con margen respecto al techo de la herramienta Bash. Valor provisional:
-30 000 bytes, que Q4 ajusta tras medir el techo real. Por encima, la salida indica que el
+`UMBRAL_SALIDA`**, que vale **la mitad del techo medido** de la herramienta Bash (el margen
+es ese 50 %). Valor provisional hasta medirlo: 30 000 bytes; Q4 mide el techo real y T031
+fija el valor definitivo. Por encima, la salida indica que el
 diff se omitió y el revisor lee los archivos de la lista con `Read` y `Grep`. Si la lista y
 las rutas por sí solas superaran el umbral (PR con cientos de archivos), la lista se agrupa
 por directorio con sus totales y se dice así.
@@ -166,8 +167,8 @@ veredicto no puede ser aprobado (R7). Un diff omitido por tamaño no es falta de
 `specs/NNN-*/` (spec, plan, tareas, research, contratos…) se leen como referencia, con `Grep`
 o por secciones, y no hace falta leerlos enteros. Cuentan el código y la configuración. Sin
 esto, un PR como el #17, cuyo diff pesaba ≈ 370 KB en su mayoría de documentos, no podría
-aprobarse nunca. Q4 usa una rama temporal con el diff real del PR #17
-(`b7d5f48^1..5225965`) y comprueba que la revisión termina con `cobertura=completa`.
+aprobarse nunca. Q4 usa un clon desechable de la rama 004 con `origin/main` en
+`b7d5f48^1` (R13) y comprueba que la revisión termina con `cobertura=completa`.
 
 **Alternativas descartadas**: entregar siempre el diff entero (inviable, ≈ 370 KB), entregar
 solo la lista sin diff nunca (pierde el contexto de las líneas cambiadas en los cambios
@@ -235,9 +236,16 @@ El auditor añade antes del resumen una tabla de las cinco reglas con estado y e
 `registrar_veredicto` (R8), que consolida:
 
 - **aprobado** solo si las dos líneas se leen, las dos tienen `bloqueantes=0` y
-  `cobertura=completa`;
+  `cobertura=completa`, **y el cambio frente a la base no está vacío**;
 - **con bloqueantes** en cualquier otro caso, incluida una línea ausente o con formato
   inesperado (FR-008).
+
+**Cambio vacío (determinista)**: lo comprueba `veredicto.py registrar` con git
+(`git diff --quiet <base>..HEAD`, con la misma base que `preparar_revision.py`: `git
+merge-base HEAD origin/main`), no el reporte. Sin cambios, el veredicto es `con bloqueantes
+(sin cambios)` diga lo que diga el reporte; si no puede calcular la base, `con bloqueantes
+(sin base de comparación)`. La base y la comprobación son funciones de `veredicto.py` que
+`preparar_revision.py` importa, para que las dos usen la misma.
 
 Cada subagente declara `cobertura=incompleta` también si la salida inyectada no empieza con
 la marca `CONTEXTO DE REVISIÓN` (R2.4) o si no pudo leer algún archivo de código o
@@ -410,7 +418,9 @@ por #4"). `CLAUDE.md` no cambia (37 líneas).
 cubre):
 
 - `test_veredicto.py`: registrar, leer, formato inesperado, un archivo por commit,
-  consolidación con resúmenes válidos, ausentes y mal formados.
+  consolidación con resúmenes válidos, ausentes y mal formados, y rama sin cambios frente a
+  la base (`con bloqueantes (sin cambios)` aunque los dos resúmenes sean limpios) o sin base
+  calculable.
 - `test_preparar_revision.py`: lista y estadísticas, umbral, base de fusión, archivos
   eliminados, marcador de contexto incompleto y salida 0 siempre. Con repositorios temporales
   creados en el test.
@@ -440,7 +450,7 @@ cubre):
 | 1 | Qué variable resuelve la ruta del script dentro de una skill (`${CLAUDE_SKILL_DIR}` o `${CLAUDE_PROJECT_DIR}`) y que el comando y su patrón de `allowed-tools` funcionan en cualquier clon y desde cualquier carpeta, sin rutas absolutas | La doc da el ejemplo `Bash(gh *)`; no se asume cómo coincide un patrón con un comando con `uv run` y variables |
 | 2 | El subagente **no** puede ejecutar un comando ni escribir | `allowed-tools` de la skill podría ampliar sus herramientas (la doc no lo especifica) |
 | 3 | Si la constitución llega por `@import` | La doc no lo especifica para subagentes; solo informa, el diseño no depende de ello |
-| 4 | El techo real de la salida inyectada, con una salida de tamaño conocido (¿llega en línea o como ruta?), y una revisión con el diff real del PR #17 (`b7d5f48^1..5225965`) | La doc enlaza una página que no se pudo leer; hay que ajustar `UMBRAL_SALIDA` y comprobar `cobertura=completa` con un PR grande |
+| 4 | El techo real de la salida inyectada, con una salida de tamaño conocido (¿llega en línea o como ruta?), y una revisión de un PR grande en un **clon desechable** de la rama 004, fuera del repositorio, con `git update-ref refs/remotes/origin/main b7d5f48^1`: el diff es el del #3 más el del #4 (41 archivos, ≈ 475 KB, medido) y las skills ya están en el clon | La doc enlaza una página que no se pudo leer; hay que fijar `UMBRAL_SALIDA` (la mitad del techo) y comprobar `cobertura=completa` con un PR grande. El rango `b7d5f48^1..5225965` solo da un diff vacío, porque `5225965` ya está en `origin/main`. No sirve un worktree: comparte las referencias y movería el `origin/main` real |
 | 5 | Si los hooks de la sesión se aplican a las herramientas del subagente | La doc no lo especifica; define si `guarda_secretos` protege al revisor |
 | 6 | La inyección y los hooks (`!comando` ¿pasa por `PreToolUse`?) | No se asume; el diseño no se apoya en ello |
 

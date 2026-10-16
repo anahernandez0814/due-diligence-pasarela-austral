@@ -78,7 +78,9 @@ Archivo `.claude/veredictos/<sha>.json`, ignorado por git (R8).
 Reglas:
 
 - `aprobado` solo si las dos líneas `RESUMEN` son válidas, con `bloqueantes=0` y
-  `cobertura=completa` (R7).
+  `cobertura=completa` (R7) **y el cambio frente a la base no está vacío**, comprobado con
+  git por el registro y no por el reporte. Sin cambios: `con bloqueantes (sin cambios)`; sin
+  base calculable: `con bloqueantes (sin base de comparación)`.
 - Se registran los dos veredictos; la guarda solo acepta `aprobado`.
 - Ninguna herramienta de Claude Code modifica el directorio, en ninguna rama (FR-020); solo lo
   escribe `veredicto.py registrar`. Leerlo está permitido.

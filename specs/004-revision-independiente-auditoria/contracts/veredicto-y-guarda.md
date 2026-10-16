@@ -11,11 +11,11 @@ Módulo con una interfaz de línea de comandos que `/abrir-pr` invoca por Bash.
 |---------|----------|
 | Invocación | `uv run --no-project --python 3.12 --quiet <raíz>/.claude/hooks/veredicto.py registrar --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` |
 | Qué hace | valida las dos líneas `RESUMEN`, consolida, escribe `.claude/veredictos/<HEAD>.json` y escribe el resultado |
-| Consolidación | `aprobado` solo si las dos líneas son válidas, con `bloqueantes=0` y `cobertura=completa`; si no, `con bloqueantes` |
+| Consolidación | `aprobado` solo si las dos líneas son válidas, con `bloqueantes=0` y `cobertura=completa`, **y hay cambios frente a la base** (`git diff --quiet <base>..HEAD` con `<base>` = `git merge-base HEAD origin/main`, la misma que `preparar_revision.py`); si no, `con bloqueantes`. Sin cambios: `con bloqueantes (sin cambios)`; sin base calculable: `con bloqueantes (sin base de comparación)`. El reporte no puede revertirlo |
 | Salida | una línea: `veredicto: aprobado` o `veredicto: con bloqueantes (<motivo>)` |
 | Código de salida | 0 con `aprobado`; 1 con `con bloqueantes`; 2 si no pudo registrar (no hay git, no se puede escribir) |
 | Escritura | un archivo por commit; si existe, se sobrescribe (misma revisión repetida sobre el mismo commit) |
-| Funciones | `ruta_veredicto(raiz, sha)`, `registrar(...)`, `leer(raiz, sha)` y `consolidar(...)`; las usa también la guarda |
+| Funciones | `ruta_veredicto(raiz, sha)`, `registrar(...)`, `leer(raiz, sha)`, `consolidar(...)`, `base_de_fusion(raiz)` y `hay_cambios(raiz)`; las usa también la guarda, y `preparar_revision.py` importa la base |
 
 Un `RESUMEN` ausente, repetido o con formato inesperado cuenta como reporte no utilizable y
 el veredicto es `con bloqueantes`.

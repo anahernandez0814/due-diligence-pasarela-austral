@@ -53,16 +53,19 @@ de negocio, y que esa exigencia la haga cumplir un hook, no una instrucción:
 por stdin, con repositorios git temporales. Escenarios Q1–Q17 del [quickstart](quickstart.md)
 en una sesión nueva.
 
-**Target Platform**: sesiones de Claude Code en Windows (validación manual) y, por diseño,
-macOS y Linux: forma exec sin shell, `uv`, `pathlib` y solo la biblioteca estándar. CI sobre
-otros sistemas queda como mejora opcional de #14, igual que en #3.
+**Target Platform**: sesiones de Claude Code en Windows (Git Bash; validación manual, solo
+en Windows, el sistema del equipo) y, por diseño, macOS y Linux: forma exec sin shell, `uv`,
+`pathlib` y solo la biblioteca estándar (FR-016). Ninguna tarea valida otro sistema; CI
+sobre otros sistemas queda como mejora opcional de #14, igual que en #3.
 
 **Project Type**: configuración versionada de Claude Code más scripts, en un repositorio de
 aplicación Python.
 
-**Performance Goals**: la comprobación de la puerta en menos de 1 s (SC-004): ≈ 0,5 s de
-arranque de `uv run --no-project` más milisegundos de `git rev-parse`. `git ls-remote` se
-descarta porque solo él tarda ≈ 1,2 s (R9).
+**Performance Goals**: la comprobación de la puerta en menos de 1 s (SC-004), **medida en
+caliente desde la segunda llamada de la sesión**, como en #3: la primera llamada tarda
+≈ 1,1 s porque `uv` prepara el entorno. ≈ 0,5 s de arranque de `uv run --no-project` más
+milisegundos de `git rev-parse`. `git ls-remote` se descarta porque solo él tarda ≈ 1,2 s
+(R9). Q15 lo mide y pasa o falla con ese umbral.
 
 **Constraints**:
 

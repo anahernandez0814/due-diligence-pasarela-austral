@@ -336,15 +336,15 @@ src/servidor_mcp/test_decisiones.py`.
 
 ## Fase 8: Documentación
 
-- [ ] T035 [P] Añadir al `README.md` una sección breve «Servidor MCP de la pasarela»: las seis
+- [X] T035 [P] Añadir al `README.md` una sección breve «Servidor MCP de la pasarela»: las seis
   herramientas, `uv sync` antes de abrir Claude Code, abrir siempre en la raíz, las variables
   `PASARELA_FALLA_NOTICIAS` y `PASARELA_RESULTADOS_DIR`, y que los datos son ficticios.
-- [ ] T036 Añadir a `DECISIONES.md` la **entrada 6, de 4 líneas como máximo** (el archivo está en el
+- [X] T036 Añadir a `DECISIONES.md` la **entrada 6, de 4 líneas como máximo** (el archivo está en el
   límite de dos páginas): `mcp` 2.x con `MCPServer`; errores como `CallToolResult` con parámetros
   opcionales validados dentro; datos ficticios con fecha de corte; riesgos residuales (caída de
   noticias al lanzar, raíz de `resultados/`, comando de `.mcp.json`). Detalle en
   `specs/005-servidor-mcp-pasarela/research.md`. Contar las líneas de la entrada antes de cerrar.
-- [ ] T037 `uv run ruff format .`, `uv run ruff check .`, `uv run pytest`. Commit
+- [X] T037 `uv run ruff format .`, `uv run ruff check .`, `uv run pytest`. Commit
   `docs: servidor MCP de la pasarela en el README y en DECISIONES.md`.
 
 ---

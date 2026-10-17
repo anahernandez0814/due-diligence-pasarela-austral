@@ -12,7 +12,6 @@ el revisor nunca vería nada. Lo que no se puede calcular se dice con
 Contrato: specs/004-revision-independiente-auditoria/contracts/revisiones.md.
 """
 
-import os
 import re
 import sys
 from collections import defaultdict
@@ -20,6 +19,9 @@ from pathlib import Path
 
 import comun
 import veredicto
+
+# La misma raíz que veredicto.py: CLAUDE_PROJECT_DIR, la del repositorio git o el directorio actual.
+raiz = veredicto.raiz
 
 MARCA = "CONTEXTO DE REVISIÓN"
 # Provisional: la fija T031 en la mitad del techo medido en Q4 (R4).
@@ -166,9 +168,8 @@ def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
 
 def main() -> int:
     comun.flujos_utf8()
-    raiz = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     try:
-        print(construir(raiz), end="")
+        print(construir(raiz()), end="")
     except Exception as error:  # noqa: BLE001 - siempre sale con 0 (R2)
         print(f"{MARCA}\nCONTEXTO INCOMPLETO: error inesperado ({type(error).__name__})")
     return 0

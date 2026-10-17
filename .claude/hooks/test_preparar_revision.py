@@ -202,3 +202,20 @@ def test_el_commit_cambia_con_un_commit_nuevo(repo):
     despues = preparar_revision.construir(repo)
     assert f"Commit: {nuevo}" in despues
     assert f"Commit: {nuevo}" not in antes
+
+
+def test_el_script_desde_una_subcarpeta_encuentra_los_specs_en_la_raiz_del_repositorio(repo):
+    subcarpeta = repo / "src"
+    resultado = ejecutar_script(subcarpeta)
+    assert resultado.returncode == 0
+    assert "Ticket: specs/004-demo/" in resultado.stdout
+    assert "CONTEXTO INCOMPLETO" not in resultado.stdout
+    assert "src/a.py" in resultado.stdout
+
+
+def test_preparar_y_veredicto_calculan_la_misma_raiz(repo, monkeypatch):
+    import veredicto
+
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(repo / "src")
+    assert preparar_revision.raiz() == veredicto.raiz()

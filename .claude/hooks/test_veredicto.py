@@ -402,3 +402,66 @@ def test_cli_con_el_commit_de_head_aprueba_como_siempre(repo_con_cambio):
     assert resultado.returncode == 0
     assert resultado.stdout.strip() == "veredicto: aprobado"
     assert [p.stem for p in archivos_de_veredicto(repo)] == [git(repo, "rev-parse", "HEAD")]
+
+
+# --- La raíz no es el directorio actual (parada C, hallazgo 1) -------------------------
+
+
+def sin_variable():
+    return {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+
+
+def test_raiz_prefiere_claude_project_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    assert veredicto.raiz() == tmp_path
+
+
+def test_raiz_sin_variable_desde_una_subcarpeta_es_la_raiz_del_repositorio(repo, monkeypatch):
+    subcarpeta = repo / "src" / "modulo"
+    subcarpeta.mkdir(parents=True)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(subcarpeta)
+    assert veredicto.raiz().resolve() == repo.resolve()
+
+
+def test_raiz_fuera_de_un_repositorio_y_sin_variable_es_el_directorio_actual(tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert veredicto.raiz().resolve() == tmp_path.resolve()
+
+
+def test_cli_desde_una_subcarpeta_escribe_en_la_raiz_del_repositorio(repo_con_cambio):
+    repo = repo_con_cambio
+    subcarpeta = repo / "src"
+    subcarpeta.mkdir(exist_ok=True)
+    sha = git(repo, "rev-parse", "HEAD")
+    resultado = subprocess.run(
+        [sys.executable, str(SCRIPT), "registrar", "--commit", sha]
+        + ["--codigo", LIMPIO, "--auditoria", LIMPIO],
+        cwd=subcarpeta,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=sin_variable(),
+        check=False,
+    )
+    assert resultado.returncode == 0
+    assert resultado.stdout.strip() == "veredicto: aprobado"
+    assert veredicto.leer(repo, sha)["veredicto"] == "aprobado"
+    assert not (subcarpeta / ".claude").exists()
+
+
+def test_cli_fuera_de_un_repositorio_y_sin_variable_informa_y_sale_con_dos(tmp_path):
+    resultado = subprocess.run(
+        [sys.executable, str(SCRIPT), "registrar", "--commit", "a" * 40]
+        + ["--codigo", LIMPIO, "--auditoria", LIMPIO],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=sin_variable(),
+        check=False,
+    )
+    assert resultado.returncode == 2
+    assert resultado.stderr.strip()
+    assert not (tmp_path / ".claude").exists()

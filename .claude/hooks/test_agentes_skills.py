@@ -285,8 +285,10 @@ def test_abrir_pr_declara_las_dos_skills_el_registro_y_rev_parse():
     assert "Bash(git fetch:*)" in permitidas
     registro = [x for x in permitidas if "veredicto.py registrar" in x]
     assert len(registro) == 1
-    assert registro[0].startswith("Bash(uv run --no-project --python 3.12 --quiet ")
-    assert "${CLAUDE_PROJECT_DIR}/.claude/hooks/veredicto.py" in registro[0]
+    # Ruta relativa y literal: la variable no existe en la herramienta Bash (R2.5).
+    assert registro[0] == (
+        "Bash(uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar:*)"
+    )
 
 
 def test_abrir_pr_hace_fetch_guarda_el_sha_lanza_las_skills_y_registra_con_commit():
@@ -325,3 +327,51 @@ def test_abrir_pr_pasa_al_registro_solo_las_lineas_resumen():
     _, cuerpo = cargar_abrir_pr()
     assert "solo la línea `RESUMEN`" in cuerpo
     assert "comillas simples" in cuerpo
+
+
+# --- Parada C: sin variable en /abrir-pr y RESUMEN validado antes de pasarlo ---------------
+
+FORMATO_RESUMEN = (
+    "RESUMEN: bloqueantes=<dígitos> sugerencias=<dígitos> cobertura=<completa|incompleta>"
+)
+
+
+def test_abrir_pr_no_usa_claude_project_dir_en_ningun_sitio():
+    texto = ABRIR_PR.read_text(encoding="utf-8")
+    assert "CLAUDE_PROJECT_DIR" not in texto
+    assert "CLAUDE_SKILL_DIR" not in texto
+
+
+def test_el_comando_de_registro_de_abrir_pr_usa_la_ruta_relativa():
+    _, cuerpo = cargar_abrir_pr()
+    comandos = [x for x in cuerpo.splitlines() if "veredicto.py registrar --commit" in x]
+    assert len(comandos) == 1
+    assert (
+        comandos[0]
+        .strip()
+        .startswith(
+            "uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar"
+        )
+    )
+
+
+def test_abrir_pr_valida_cada_resumen_antes_de_pasarlo():
+    _, cuerpo = cargar_abrir_pr()
+    assert FORMATO_RESUMEN in cuerpo
+    assert "coincide exactamente" in cuerpo
+    assert "sin resumen" in cuerpo
+    # Se valida antes de registrar.
+    assert cuerpo.index("coincide exactamente") < cuerpo.index("veredicto.py registrar --commit")
+
+
+def test_abrir_pr_no_deja_pasar_texto_del_reporte_que_no_cumpla_el_formato():
+    _, cuerpo = cargar_abrir_pr()
+    assert "nunca" in cuerpo.lower()
+    assert "comillas" in cuerpo
+
+
+@pytest.mark.parametrize(("subagente", "skill"), REVISIONES)
+def test_las_skills_conservan_la_variable_que_skills_md_si_sustituye(subagente, skill):
+    frontmatter, cuerpo = cargar_skill(skill)
+    assert "${CLAUDE_PROJECT_DIR}" in frontmatter["allowed-tools"][0]
+    assert "${CLAUDE_PROJECT_DIR}" in comando_inyectado(cuerpo)

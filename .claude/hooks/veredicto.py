@@ -181,8 +181,20 @@ def registrar(raiz: Path, commit: str, codigo: str, auditoria: str) -> tuple[str
 # --- Línea de comandos ---------------------------------------------------------------
 
 
-def _raiz() -> Path:
-    return Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
+def raiz() -> Path:
+    """La raíz del proyecto, que no es siempre el directorio actual.
+
+    `CLAUDE_PROJECT_DIR` si existe; si no, la raíz del repositorio git del directorio actual
+    (`git rev-parse --show-toplevel`); y si tampoco, el directorio actual. Ejecutado desde
+    una subcarpeta, el veredicto se escribe donde la guarda lo busca.
+    """
+    variable = os.environ.get("CLAUDE_PROJECT_DIR")
+    if variable:
+        return Path(variable)
+    codigo, salida = git(Path.cwd(), "rev-parse", "--show-toplevel")
+    if codigo == 0 and salida:
+        return Path(salida)
+    return Path.cwd()
 
 
 def main(argv: list[str]) -> int:
@@ -199,7 +211,7 @@ def main(argv: list[str]) -> int:
     argumentos = parser.parse_args(argv)
     try:
         veredicto, motivo = registrar(
-            _raiz(), argumentos.commit, argumentos.codigo, argumentos.auditoria
+            raiz(), argumentos.commit, argumentos.codigo, argumentos.auditoria
         )
     except CommitCambiado as error:
         print(error, file=sys.stderr)

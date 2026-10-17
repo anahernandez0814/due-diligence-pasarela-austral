@@ -22,6 +22,7 @@ GUARDAS = {
     "guarda_datos.py",
     "guarda_spec_previa.py",
     "guarda_mcp_github.py",
+    "guarda_pr.py",
 }
 MCP_DENEGADAS = {
     "mcp__github__delete_repository",
@@ -50,7 +51,7 @@ def script(hook: dict) -> str:
 # --- Hooks ----------------------------------------------------------------------------
 
 
-def test_hay_cuatro_guardas_previas_y_un_formato_posterior():
+def test_hay_cinco_guardas_previas_y_un_formato_posterior():
     assert {script(h) for _, h in entradas("PreToolUse")} == GUARDAS
     assert [script(h) for _, h in entradas("PostToolUse")] == ["formatear_python.py"]
 
@@ -96,9 +97,9 @@ def test_powershell_esta_en_los_matchers_de_respaldo():
 # --- Denegaciones ---------------------------------------------------------------------
 
 
-def test_exactamente_58_denegaciones():
-    assert len(DENY) == 58
-    assert len(set(DENY)) == 58
+def test_exactamente_59_denegaciones():
+    assert len(DENY) == 59
+    assert len(set(DENY)) == 59
 
 
 def test_sin_reglas_de_powershell_ni_de_grep():
@@ -183,3 +184,63 @@ def frontmatter_paths(archivo: Path) -> list[str]:
 )
 def test_reglas_declaran_exactamente_su_glob(regla, glob):
     assert frontmatter_paths(RAIZ / ".claude" / "rules" / regla) == [glob]
+
+
+# --- Guarda de PR y directorio de veredictos (ticket #4: FR-012, FR-016, FR-020) ------
+
+MATCHER_GUARDA_PR = "Bash|PowerShell|mcp__github__create_pull_request"
+DENEGACION_VEREDICTOS = "Edit(/.claude/veredictos/**)"
+
+
+def test_la_guarda_de_pr_esta_registrada_con_su_matcher_exacto():
+    registradas = [(m, h) for m, h in entradas("PreToolUse") if script(h) == "guarda_pr.py"]
+    assert len(registradas) == 1
+    matcher, hook = registradas[0]
+    assert matcher == MATCHER_GUARDA_PR
+    assert hook["onFailure"] == "block"
+    assert hook["timeout"] == 10
+    assert hook["type"] == "command"
+    assert hook["command"] == "uv"
+    assert hook["args"] == [
+        "run",
+        "--no-project",
+        "--python",
+        "3.12",
+        "--quiet",
+        "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_pr.py",
+    ]
+
+
+def test_el_matcher_de_la_guarda_de_pr_es_una_lista_de_nombres_exactos():
+    assert re.fullmatch(r"[A-Za-z0-9_|]+", MATCHER_GUARDA_PR)
+    assert MATCHER_GUARDA_PR.split("|") == [
+        "Bash",
+        "PowerShell",
+        "mcp__github__create_pull_request",
+    ]
+
+
+def test_los_veredictos_no_se_editan_desde_claude_code():
+    assert DENEGACION_VEREDICTOS in DENY
+    assert DENY.index(DENEGACION_VEREDICTOS) == DENY.index("Edit(/.claude/settings.local.json)") + 1
+
+
+def test_la_denegacion_de_veredictos_es_de_edicion_y_no_de_lectura():
+    # Leer el directorio sigue permitido: la puerta y las personas consultan los veredictos.
+    assert "Read(/.claude/veredictos/**)" not in DENY
+    assert not [r for r in DENY if r.startswith("Read(") and "veredictos" in r]
+
+
+def test_crear_el_pr_por_el_mcp_no_se_deniega():
+    assert "mcp__github__create_pull_request" not in DENY
+
+
+def test_las_entradas_de_los_hooks_de_3_no_cambian():
+    esperadas = {
+        "guarda_secretos.py": "Read|Write|Edit|NotebookEdit|Grep|Glob|Bash|PowerShell",
+        "guarda_spec_previa.py": "Write|Edit|NotebookEdit|Bash|PowerShell",
+        "guarda_mcp_github.py": "mcp__github__projects_write",
+    }
+    por_script = {script(h): m for m, h in entradas("PreToolUse")}
+    for nombre, matcher in esperadas.items():
+        assert por_script[nombre] == matcher

@@ -27,3 +27,6 @@ build/
 .DS_Store
 .idea/
 *.log
+
+# Veredictos de la revisión previa al PR (ticket #4)
+.claude/veredictos/

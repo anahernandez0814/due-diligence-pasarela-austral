@@ -40,6 +40,19 @@ SETTINGS_LOCAL = (
     "desactivar las guardas. Edítalo fuera de Claude Code."
 )
 _SETTINGS_LOCAL = ".claude/settings.local.json"
+VEREDICTOS = (
+    "El directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr."
+)
+_VEREDICTOS = ".claude/veredictos"
+COPIA_A_CLAUDE = (
+    "Copiar de forma recursiva o mover hacia la carpeta .claude se bloquea en cualquier rama, "
+    "sin mirar el origen: podría crear un veredicto o desactivar las guardas. Usa un "
+    "subdirectorio (.claude/agents/…) o nombra los archivos."
+)
+BORRAR_CLAUDE = (
+    ".claude no se borra ni se mueve entera desde Claude Code: contiene los veredictos y "
+    "las guardas."
+)
 
 # --- Código protegido (data-model) ----------------------------------------------------
 
@@ -53,6 +66,21 @@ def _relativa(ruta: str) -> str | None:
     if texto.startswith("/") or re.match(r"^[a-z]:/", texto):
         return None
     return "/".join(p for p in texto.split("/") if p not in ("", "."))
+
+
+def ruta_privada(ruta: str) -> str | None:
+    """El mensaje de bloqueo si `ruta` es `.claude/settings.local.json` (FR-025 de #3) o está
+    en `.claude/veredictos/` (FR-020 de #4); None en otro caso.
+
+    Los dos se bloquean en cualquier rama: no se versionan, así que ningún PR vería el
+    cambio. `ruta` es relativa a la raíz y ya está normalizada.
+    """
+    relativa = _relativa(ruta)  # sin distinguir mayúsculas: Windows y macOS no las distinguen
+    if relativa == _SETTINGS_LOCAL:
+        return SETTINGS_LOCAL
+    if relativa and (relativa == _VEREDICTOS or relativa.startswith(_VEREDICTOS + "/")):
+        return VEREDICTOS
+    return None
 
 
 def es_protegido(ruta: str) -> bool:
@@ -188,6 +216,36 @@ def _copia(args: list[str], powershell: bool) -> tuple[str | None, bool, list[st
     return destino, carpeta, fuentes + posicionales
 
 
+def _origen_opaco(fuente: str) -> bool:
+    """El origen no deja saber qué nombres llegan: termina en `/.` o lleva comodines."""
+    texto = fuente.replace("\\", "/")
+    return texto.endswith("/.") or any(c in texto for c in "*?[")
+
+
+def _termina_en_barra(fuente: str) -> bool:
+    """En macOS y BSD, `cp -R origen/ destino` copia el contenido de `origen`."""
+    return fuente.endswith(("/", "\\"))
+
+
+def _sin_directorio_de_destino(args: list[str]) -> bool:
+    """`-T` o `--no-target-directory`, suelto o dentro de un grupo (`-rT`): el origen se
+    copia o se mueve *como* el destino, así que su contenido llega al destino."""
+    return any(
+        arg == "--no-target-directory" or (re.fullmatch(r"-[a-zA-Z]*T[a-zA-Z]*", arg) is not None)
+        for arg in args
+    )
+
+
+def _es_recursiva(args: list[str], powershell: bool) -> bool:
+    """`cp -r`, `-R`, `-a`, `--recursive`, `--archive` o `-Recurse`."""
+    for arg in args:
+        if powershell and _parametro(arg, ("-recurse",)):
+            return True
+        if arg in ("--recursive", "--archive") or re.fullmatch(r"-[a-zA-Z]*[rRa][a-zA-Z]*", arg):
+            return True
+    return False
+
+
 def _escritura_powershell(nombre: str, args: list[str]) -> Iterator[str]:
     """Rutas de Set-Content, Add-Content, Out-File, New-Item, Tee-Object y Remove-Item.
 
@@ -281,7 +339,13 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
     - `archivo`: se escribe en la ruta;
     - `copia`: la ruta es la carpeta de destino de una copia o un movimiento;
     - `borrado`: se borra, se restaura desde git o es la fuente de un movimiento;
-    - `borrado_carpeta`: lo mismo, y la ruta es una carpeta.
+    - `borrado_carpeta`: lo mismo, y la ruta es una carpeta;
+    - `claude_entera`: la ruta es `.claude` y se borra o se mueve entera;
+    - `copia_recursiva` y `movimiento`: la ruta es el destino de una copia recursiva o de
+      un movimiento, sin mirar el origen;
+    - `copia_con_comodin`: copia no recursiva cuyo origen lleva comodines;
+    - `copia_oculta`: lo mismo que `copia_recursiva`, y el origen oculta los nombres que
+      llegan (`/.`, comodines, barra final o `-T`/`--no-target-directory`).
 
     Las rutas se resuelven tras los `cd` del propio comando (revisiones D y E).
     """
@@ -296,6 +360,13 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
     def borrado(ruta: str, carpeta: Path | None = None) -> tuple[str, str]:
         tipo = "borrado_carpeta" if es_carpeta(ruta, carpeta) else "borrado"
         return resolver(ruta, carpeta), tipo
+
+    def borrado_directo(ruta: str) -> Iterator[tuple[str, str]]:
+        """Borrado con rm, mv o Remove-Item; `.claude` entera añade `claude_entera`. El
+        `git checkout` o `git restore` de `.claude` no: no toca lo que git no versiona."""
+        yield borrado(ruta)
+        if resolver(ruta) == ".claude":
+            yield ".claude", "claude_entera"
 
     subcomandos = comun.dividir_comando(texto, powershell=powershell)
     for sub in comun.con_lanzados_de_find(subcomandos):  # find -exec <cmd> (FR-026)
@@ -312,9 +383,22 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
         elif nombre in ("cp", "mv", "install") or (powershell and nombre in _COPIA_POWERSHELL):
             destino, carpeta, fuentes = _copia(args, powershell)
             if nombre in _MOVIMIENTO:
-                yield from (borrado(f) for f in fuentes)  # mover también borra la fuente
+                for f in fuentes:  # mover también borra la fuente
+                    yield from borrado_directo(f)
             if destino is None:
                 continue
+            # La regla es sobre el destino, no sobre el origen (parada D, segunda ronda).
+            if nombre in _MOVIMIENTO:
+                yield resolver(destino), "movimiento"
+            elif _es_recursiva(args, powershell):
+                yield resolver(destino), "copia_recursiva"
+                if any(
+                    _origen_opaco(f) or _termina_en_barra(f) for f in fuentes
+                ) or _sin_directorio_de_destino(args):
+                    yield resolver(destino), "copia_oculta"
+            elif any(_origen_opaco(f) for f in fuentes):
+                # Sin recursión, pero con comodines: no se ven los nombres (parada F)
+                yield resolver(destino), "copia_con_comodin"
             if carpeta or es_carpeta(destino):
                 yield resolver(destino), "copia"
                 for fuente in fuentes:
@@ -334,14 +418,16 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
             rutas = _posicionales(args, ("-s", "-r", "--size", "--reference"))
             yield from ((resolver(a), "archivo") for a in rutas)
         elif nombre in ("rm", "unlink"):
-            yield from (borrado(a) for a in _posicionales(args))
+            for a in _posicionales(args):
+                yield from borrado_directo(a)
         elif nombre == "git":
             rutas, carpeta = _rutas_de_git(args, actual)
             yield from (borrado(r, carpeta) for r in rutas)
         elif powershell and nombre in _ESCRITURA_POWERSHELL:
             yield from ((resolver(r), "archivo") for r in _escritura_powershell(nombre, args))
         elif powershell and nombre in _BORRADO_POWERSHELL:
-            yield from (borrado(r) for r in _escritura_powershell(nombre, args))
+            for r in _escritura_powershell(nombre, args):
+                yield from borrado_directo(r)
 
 
 # --- Ticket en curso (data-model) -----------------------------------------------------
@@ -431,8 +517,16 @@ def _protegidas_en_terminal(
             for ruta, tipo in destinos(texto, sin_escapes, base, inicio):
                 # settings.local.json se bloquea al escribir, borrar o mover, en cualquier
                 # rama (FR-025): no se versiona, así que ningún PR vería el cambio.
-                if ruta == _SETTINGS_LOCAL:
-                    return SETTINGS_LOCAL
+                privado = ruta_privada(ruta)
+                if privado:
+                    return privado
+                if (
+                    tipo in ("copia_recursiva", "movimiento", "copia_con_comodin")
+                    and ruta == ".claude"
+                ) or (tipo == "copia_oculta" and ruta == ""):
+                    return COPIA_A_CLAUDE
+                if tipo == "claude_entera":
+                    return BORRAR_CLAUDE
                 if (
                     es_protegido(ruta)
                     or (tipo == "copia" and _es_carpeta_protegida(ruta))
@@ -452,8 +546,9 @@ def _protegidas_en_terminal(
                 rutas.append(relativa)
             for nombrada in rutas_en_texto(codigo):
                 ruta = comun.normalizar_ruta(nombrada, base, carpeta)
-                if ruta == _SETTINGS_LOCAL:
-                    return SETTINGS_LOCAL
+                privado = ruta_privada(ruta)
+                if privado:
+                    return privado
                 if es_protegido(ruta):
                     rutas.append(ruta)
     return rutas
@@ -469,8 +564,9 @@ def motivo(entrada: dict) -> str | None:
     if herramienta in ("Write", "Edit", "NotebookEdit"):
         clave = "notebook_path" if herramienta == "NotebookEdit" else "file_path"
         ruta = comun.normalizar_ruta(datos.get(clave) or "", base, cwd)
-        if ruta == _SETTINGS_LOCAL:
-            return SETTINGS_LOCAL  # cualquier rama (FR-025)
+        privado = ruta_privada(ruta)
+        if privado:
+            return privado  # cualquier rama (FR-025 de #3 y FR-020 de #4)
         rutas = [ruta] if datos.get(clave) and es_protegido(ruta) else []
     elif herramienta in ("Bash", "PowerShell"):
         resultado = _protegidas_en_terminal(

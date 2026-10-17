@@ -5,6 +5,7 @@ Cada prueba crea un repositorio git en `tmp_path` y sus ramas.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,12 +21,20 @@ def git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
+@pytest.fixture(scope="module")
+def plantilla(tmp_path_factory):
+    """Repositorio git vacío, creado una vez por módulo y copiado en cada prueba."""
+    carpeta = tmp_path_factory.mktemp("plantilla-spec-previa")
+    git(carpeta, "init", "-q")
+    return carpeta
+
+
 @pytest.fixture
-def crear(tmp_path, monkeypatch):
+def crear(plantilla, tmp_path, monkeypatch):
     """Crea el repositorio con la rama y las carpetas de specs pedidas."""
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
-    git(tmp_path, "init", "-q")
+    shutil.copytree(plantilla, tmp_path, dirs_exist_ok=True)
 
     def _crear(rama="099-x", carpetas=("099-x",), documentos=DOCUMENTOS, separada=False):
         if separada:
@@ -410,13 +419,10 @@ def test_mensaje_de_un_borrado_en_main(crear):
 # --- Carpetas, git checkout, git mv, cd y truncate (T017b) ----------------------------
 
 AMPLIACION = [
-    ("Bash", "rm -rf .claude"),
     ("Bash", "rm -rf ."),
     ("Bash", "git restore ."),
     ("Bash", "git checkout -- ."),
     ("Bash", "git checkout 003-x -- .claude"),
-    ("Bash", "mv .claude .claude-viejo"),
-    ("PowerShell", "Remove-Item -Recurse .claude"),
     ("Bash", "rm -rf src/app/"),
     ("Bash", "git checkout 003-x .claude/settings.json"),
     ("Bash", "git checkout HEAD src/app/a.py"),
@@ -619,3 +625,260 @@ def test_find_exec_con_documentos_se_permite(con_app, comando):
 def test_find_exec_sin_escrituras_en_main(con_app):
     repo = con_app(rama="main")
     assert bash(repo, 'find docs -name "*.md" -exec cat {} +') is None
+
+
+# --- Directorio de veredictos en cualquier rama (ticket #4: FR-020, R8) -----------------
+
+VEREDICTOS = ".claude/veredictos"
+FICHERO = f"{VEREDICTOS}/{'a' * 40}.json"
+MSG_VEREDICTOS = (
+    "El directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr."
+)
+MODIFICAN_VEREDICTOS = [
+    ("Write", {"file_path": FICHERO}),
+    ("Edit", {"file_path": FICHERO, "old_string": "a", "new_string": "b"}),
+    ("NotebookEdit", {"notebook_path": f"{VEREDICTOS}/x.ipynb", "new_source": "x"}),
+    ("Bash", {"command": f"echo '{{}}' > {FICHERO}"}),
+    ("Bash", {"command": f"echo '{{}}' >> {FICHERO}"}),
+    ("Bash", {"command": f"echo '{{}}' | tee {FICHERO}"}),
+    ("Bash", {"command": f"cp /tmp/x.json {FICHERO}"}),
+    ("Bash", {"command": f"cp /tmp/x.json {VEREDICTOS}/"}),
+    ("Bash", {"command": f"mv /tmp/x.json {FICHERO}"}),
+    ("Bash", {"command": f"mv {FICHERO} /tmp/x.json"}),
+    ("Bash", {"command": f"sed -i s/a/b/ {FICHERO}"}),
+    ("Bash", {"command": f"touch {FICHERO}"}),
+    ("Bash", {"command": f"rm {FICHERO}"}),
+    ("Bash", {"command": f"rm -r {VEREDICTOS}"}),
+    ("Bash", {"command": f"python -c \"open('{FICHERO}','w').write('{{}}')\""}),
+    ("Bash", {"command": f"python3.12 -c \"open('{VEREDICTOS}/x.json','w')\""}),
+    ("Bash", {"command": f"node -e \"require('fs').writeFileSync('{FICHERO}','{{}}')\""}),
+    ("Bash", {"command": f"bash -c 'echo > {FICHERO}'"}),
+    ("Bash", {"command": f'eval "echo x > {FICHERO}"'}),
+    ("Bash", {"command": f"python - <<'EOF'\nopen('{FICHERO}', 'w')\nEOF"}),
+    ("Bash", {"command": f"cat <<'EOF' | bash\necho x > {FICHERO}\nEOF"}),
+    ("Bash", {"command": f"echo ok && echo x > {FICHERO}"}),
+    ("Bash", {"command": f"echo x > .CLAUDE/Veredictos/{'a' * 40}.json"}),
+    ("PowerShell", {"command": f"Set-Content {FICHERO} '{{}}'"}),
+    ("PowerShell", {"command": f"Remove-Item {FICHERO}"}),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "datos"), MODIFICAN_VEREDICTOS)
+def test_veredictos_bloqueado_en_cualquier_rama(crear, rama, herramienta, datos):
+    repo = crear(rama=rama)
+    if "file_path" in datos:
+        datos = {**datos, "file_path": str(repo / datos["file_path"])}
+    if "notebook_path" in datos:
+        datos = {**datos, "notebook_path": str(repo / datos["notebook_path"])}
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, **datos)) == MSG_VEREDICTOS
+
+
+LEEN_VEREDICTOS = [
+    ("Bash", f"cat {FICHERO}"),
+    ("Bash", f"ls {VEREDICTOS}"),
+    ("Bash", f"head -n 3 {FICHERO}"),
+    ("Bash", f"git check-ignore -v {FICHERO}"),
+    ("PowerShell", f"Get-Content {FICHERO}"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), LEEN_VEREDICTOS)
+def test_leer_los_veredictos_se_permite(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) is None
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_la_herramienta_read_no_es_de_esta_guarda(crear, rama):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, "Read", file_path=str(repo / FICHERO))) is None
+
+
+REGISTRO = (
+    "uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar "
+    f"--commit {'a' * 40} --codigo 'RESUMEN: bloqueantes=0 sugerencias=0 cobertura=completa' "
+    "--auditoria 'sin resumen'"
+)
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_el_comando_de_registro_no_se_bloquea(crear, rama):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, "Bash", command=REGISTRO)) is None
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_otros_archivos_de_claude_siguen_su_regla_normal(crear, rama):
+    repo = crear(rama=rama)
+    comando = "echo x > .claude/otro-directorio/a.txt"
+    resultado = guarda_spec_previa.motivo(entrada(repo, "Bash", command=comando))
+    assert resultado != MSG_VEREDICTOS
+
+
+def test_un_nombre_parecido_no_cuenta_como_el_directorio_de_veredictos(crear):
+    repo = crear(rama="003-x")
+    for ruta in (".claude/veredictos-otros/x.json", ".claude/veredictosx", "veredictos/x.json"):
+        resultado = guarda_spec_previa.motivo(entrada(repo, "Bash", command=f"echo x > {ruta}"))
+        assert resultado != MSG_VEREDICTOS, ruta
+
+
+# --- Copias que ocultan los nombres y borrar .claude entera (parada D, hallazgo 3) ----------
+
+COPIA_A_CLAUDE = guarda_spec_previa.COPIA_A_CLAUDE
+BORRAR_CLAUDE = guarda_spec_previa.BORRAR_CLAUDE
+
+COPIAS_OPACAS = [
+    ("Bash", "cp -r /tmp/falso/. .claude"),
+    ("Bash", "cp -a /tmp/falso/. .claude/"),
+    # Regla sobre el destino: no se mira el origen (segunda ronda de la parada D)
+    ("Bash", "cp -rT /tmp/falso .claude"),
+    ("Bash", "cp -r --no-target-directory /tmp/falso .claude"),
+    ("Bash", "cp -R /tmp/falso/ .claude"),
+    ("Bash", "cp -r /tmp/falso .claude"),
+    ("Bash", "cp -r /tmp/falso .claude/"),
+    ("Bash", "cp -r src-dir .claude/"),
+    ("Bash", "cp -aT /tmp/falso .claude"),
+    ("Bash", "mv -T /tmp/falso .claude"),
+    ("Bash", "mv /tmp/falso .claude"),
+    ("Bash", "mv archivo.txt .claude/"),
+    ("Bash", "cp -R /tmp/falso/ ."),
+    ("Bash", "cp -rT /tmp/falso ."),
+    ("Bash", "cp -r --no-target-directory /tmp/falso ./"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso .claude"),
+    ("Bash", "cp -r /tmp/falso/* .claude/"),
+    ("Bash", "cp -R /tmp/falso/. .claude"),
+    ("Bash", "cp -rf /tmp/falso/* .claude"),
+    ("Bash", "cp --recursive /tmp/falso/. .claude/"),
+    ("Bash", "cp -r /tmp/falso/. ."),
+    ("Bash", "cp -r /tmp/falso/* ./"),
+    ("Bash", "cp -r /tmp/falso/. -t .claude"),
+    ("Bash", "mv /tmp/falso/* .claude/"),
+    ("Bash", "mv /tmp/falso/. .claude"),
+    ("Bash", "bash -c 'cp -r /tmp/falso/. .claude'"),
+    ("Bash", 'eval "cp -r /tmp/falso/* .claude/"'),
+    ("Bash", "sudo cp -r /tmp/falso/. .claude"),
+    ("Bash", "echo ok && cp -r /tmp/falso/. .claude/"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item -Recurse -Path C:\tmp\falso\* -Destination .claude"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* ."),
+    ("PowerShell", "cp -Recurse /tmp/falso/* .claude"),
+    ("PowerShell", r"Move-Item C:\tmp\falso\* .claude"),
+    # Sin recursión, pero con comodín: no se ven los nombres que llegan (parada F)
+    ("Bash", "cp /tmp/falso/* .claude/"),
+    ("Bash", "cp /tmp/falso/* .claude"),
+    ("Bash", "cp /tmp/falso/settings.local.* .claude/"),
+    ("Bash", "cp /tmp/falso/settings.loca?.json .claude/"),
+    ("Bash", "cp /tmp/falso/settings.local.[j]son .claude/"),
+    ("Bash", "cp -f /tmp/falso/* .claude/"),
+    ("Bash", "bash -c 'cp /tmp/falso/* .claude/'"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude" + "\\"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item -Path C:\tmp\falso\* -Destination .claude"),
+]
+
+BORRAN_CLAUDE_ENTERA = [
+    ("Bash", "rm -rf .claude"),
+    ("Bash", "rm -r .claude/"),
+    ("Bash", "rm -rf ./.claude"),
+    ("Bash", "mv .claude x"),
+    ("Bash", "mv .claude/ /tmp/x"),
+    ("Bash", "mv .claude .claude-viejo"),
+    ("PowerShell", "Remove-Item -Recurse .claude"),
+    ("Bash", "bash -c 'rm -rf .claude'"),
+    ("Bash", "echo ok && rm -rf .claude"),
+    ("PowerShell", "Remove-Item -Recurse -Force .claude"),
+    ("PowerShell", "Move-Item .claude x"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), COPIAS_OPACAS)
+def test_copiar_o_mover_hacia_claude_sin_saber_los_nombres_se_bloquea(
+    crear, rama, herramienta, comando
+):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == COPIA_A_CLAUDE
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), BORRAN_CLAUDE_ENTERA)
+def test_borrar_o_mover_claude_entera_se_bloquea(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == BORRAR_CLAUDE
+
+
+def test_los_mensajes_explican_el_motivo_y_la_salida():
+    assert "veredicto" in COPIA_A_CLAUDE
+    assert "subdirectorio" in COPIA_A_CLAUDE
+    assert "origen" in COPIA_A_CLAUDE
+    assert "veredicto" in BORRAR_CLAUDE
+
+
+PERMITIDOS_JUNTO_A_CLAUDE = [
+    ("Bash", "cp archivo.txt .claude/otro-directorio/"),
+    ("Bash", "cp /tmp/falso/*.md .claude/agents/"),
+    ("Bash", "cp nota.md .claude/"),
+    ("Bash", "cp -r src-no-protegida dir-temporal/"),
+    ("Bash", "cp -r /tmp/falso/. dir-temporal"),
+    # Hacia subcarpetas, la regla normal; hacia la raíz, solo la copia que oculta nombres
+    ("Bash", "cp -r /tmp/falso ."),
+    ("Bash", "cp -r /tmp/falso/algo ."),
+    ("Bash", "cp -r src-no-protegida .claude/agents/"),
+    ("Bash", "cp archivo .claude/"),
+    ("Bash", "mv archivo .claude/agents/x"),
+    ("Bash", "mv a.txt ./b.txt"),
+    ("Bash", "cp -r /tmp/falso/* dir-temporal/"),
+    ("Bash", "mv /tmp/*.log ."),
+    ("Bash", "mv a.txt b.txt"),
+    ("Bash", "rm .claude/otro-directorio/a.txt"),
+    ("Bash", "rm -rf dir-temporal"),
+    ("Bash", "rm -rf .claude-no-es-esta"),
+    ("Bash", "ls .claude"),
+    ("Bash", "cat .claude/settings.json"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\*.md .claude\agents\ "),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* dir-temporal"),
+    ("PowerShell", "Remove-Item -Recurse -Force dir-temporal"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), PERMITIDOS_JUNTO_A_CLAUDE)
+def test_lo_que_no_oculta_nombres_ni_borra_claude_se_permite(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+    assert resultado not in (COPIA_A_CLAUDE, BORRAR_CLAUDE, MSG_VEREDICTOS, MSG_LOCAL)
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_cuando_el_nombre_aparece_sigue_bloqueandose(crear, rama):
+    repo = crear(rama=rama)
+    (repo / ".claude").mkdir()  # como en el repositorio real, es una carpeta
+    for herramienta, comando in (
+        ("Bash", "cp -r /tmp/falso/veredictos .claude/"),
+        ("PowerShell", r"Move-Item C:\tmp\falso\veredictos .claude"),
+    ):
+        resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+        # Lo bloquea la regla del destino o, si no, la del nombre (FR-020)
+        assert resultado in (COPIA_A_CLAUDE, MSG_VEREDICTOS), comando
+
+
+# --- settings.local.json sin distinguir mayúsculas (revisión de T030) ---------------------
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(
+    "ruta",
+    [
+        ".claude/Settings.local.json",
+        ".CLAUDE/settings.local.json",
+        ".claude/SETTINGS.LOCAL.JSON",
+    ],
+)
+def test_settings_local_se_protege_sin_distinguir_mayusculas(crear, rama, ruta):
+    repo = crear(rama=rama)
+    escritura = guarda_spec_previa.motivo(entrada(repo, "Write", file_path=str(repo / ruta)))
+    assert escritura == MSG_LOCAL
+    terminal = guarda_spec_previa.motivo(entrada(repo, "Bash", command=f"echo x > {ruta}"))
+    assert terminal == MSG_LOCAL

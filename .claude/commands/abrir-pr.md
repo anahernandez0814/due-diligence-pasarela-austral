@@ -1,5 +1,5 @@
 ---
-description: "Verifica spec, plan y tareas del ticket, ejecuta la revisión previa, sube la rama, abre el PR hacia main con Closes #N, mueve el ticket a In review y comenta en el issue."
+description: "Verifica spec, plan y tareas del ticket, ejecuta la revisión independiente y la auditoría de cumplimiento, registra el veredicto del commit revisado, sube la rama, abre el PR hacia main con Closes #N, mueve el ticket a In review y comenta en el issue."
 argument-hint: ""
 allowed-tools:
   - Bash(git branch:*)
@@ -7,12 +7,14 @@ allowed-tools:
   - Bash(git cat-file:*)
   - Bash(git log:*)
   - Bash(git fetch:*)
-  - Bash(git diff:*)
+  - Bash(git rev-parse:*)
   - Bash(git push:*)
+  - Bash(uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar:*)
   - Read
   - Glob
   - Grep
-  - Agent
+  - Skill(revisar-codigo)
+  - Skill(auditar-cumplimiento)
   - mcp__github__projects_list
   - mcp__github__projects_write
   - mcp__github__issue_read
@@ -30,7 +32,8 @@ en español.
 Datos fijos: repositorio `anahernandez0814/due-diligence-pasarela-austral`; GitHub Project
 número `1` del usuario `anahernandez0814`, con el campo `Status`.
 
-Contrato: `specs/002-automatizacion-tickets/contracts/abrir-pr.md`.
+Contratos: `specs/002-automatizacion-tickets/contracts/abrir-pr.md` y, para la revisión y
+el veredicto, `specs/004-revision-independiente-auditoria/contracts/abrir-pr.md`.
 
 ## 1. Comprobaciones
 
@@ -55,46 +58,67 @@ PR y no cambia el estado del ticket.
    existe en el Project. Guarda su `id` (`item_id`) para la acción 3.3. Si no aparece, se
    detiene.
 
-## 2. Revisión previa
+## 2. Revisión independiente y veredicto
 
-> **Paso aislado, de transición.** El ticket #4 reemplaza esta sección por las skills
-> `revisar-codigo` y `auditar-cumplimiento` y por su puerta mecánica. El resto del comando
-> solo depende del veredicto que sale de aquí.
+Sustituye a la revisión de transición del ticket #2. Las revisiones las hacen dos
+subagentes de solo lectura, en contexto separado de esta sesión, y el veredicto queda
+atado al commit que se revisó. Un hook (`guarda_pr`) bloquea la creación del PR si no hay
+un veredicto aprobado de ese commit, publicado en la rama.
 
-1. `git fetch origin main` y `git diff origin/main...HEAD`.
-2. Lanza un subagente con la herramienta Agent, `subagent_type: Plan`, en contexto
-   separado.
-   - El tipo `Plan` no tiene Edit, Write ni NotebookEdit.
-   - Conserva Bash, así que el prompt le prohíbe expresamente cualquier comando con
-     efectos: git que modifique algo, redirecciones a archivos, borrados o instalaciones.
+1. **Actualiza las referencias.** `git fetch origin main`: si falla, se detiene, porque la
+   base del diff sería la del `main` local. Después `git fetch origin <rama>`: **no es
+   fatal si la rama aún no existe en el remoto**.
+2. **Guarda el commit que se revisa.** `git rev-parse HEAD`: guarda el sha completo como
+   `SHA_REVISADO`. Es el commit al que se ata el veredicto, no el que exista al terminar.
+3. **Lanza las dos revisiones.** Con la herramienta Skill, `revisar-codigo` y
+   `auditar-cumplimiento`, cada una con la carpeta del ticket de la comprobación 1.3 como
+   argumento (por ejemplo, `specs/NNN-nombre`). Cada una se ejecuta en un contexto separado
+   y devuelve un reporte que termina con una línea `RESUMEN`. No las repitas ni las
+   interpretes: el veredicto no lo decides tú.
+4. **Registra el veredicto.** De cada reporte toma **solo la línea `RESUMEN`** (la última),
+   nunca el reporte completo, y **valídala antes de pasarla**: solo se pasa si coincide
+   exactamente, carácter por carácter, con
+   `RESUMEN: bloqueantes=<dígitos> sugerencias=<dígitos> cobertura=<completa|incompleta>`,
+   donde los dígitos son `0-9`. Un texto así no puede contener comillas ni otros
+   caracteres especiales. Si no coincide exactamente, o el reporte no trae la línea, pasa el
+   texto `sin resumen` en su lugar. **Nunca** pases texto del reporte que no cumpla el
+   formato: lo escribe un subagente que lee contenido del repositorio, y una línea con una
+   comilla simple permitiría inyectar comandos en la terminal. Ejecuta desde la raíz del
+   repositorio, con la ruta **relativa** (la variable del directorio del proyecto no existe
+   en la herramienta Bash) y las dos líneas ya validadas entre comillas simples:
 
-   El prompt le da:
-   - el diff completo;
-   - las rutas de `spec.md`, `plan.md` y `tasks.md` del ticket y de
-     `.specify/memory/constitution.md`, para que las lea;
-   - los criterios de aceptación del issue #N, copiados del cuerpo del issue.
+   ```text
+   uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar --commit <SHA_REVISADO> --codigo '<RESUMEN validado de revisar-codigo>' --auditoria '<RESUMEN validado de auditar-cumplimiento>'
+   ```
 
-   Y le pide revisar el diff frente a esos documentos (correcciones, consistencia,
-   cumplimiento de la constitución, credenciales o datos con forma real) y devolver:
-   - un **veredicto**: `aprobado`, `aprobado con cambios` o `bloqueado`;
-   - sus **hallazgos**, cada uno con severidad (`bloqueante`, `importante` o `menor`),
-     archivo y motivo.
-3. Si hay algún hallazgo `bloqueante`, el comando se detiene sin push ni PR, muestra los
-   hallazgos e indica que se corrijan con commits nuevos y se vuelva a ejecutar
-   `/abrir-pr`.
-4. Guarda el veredicto y los hallazgos no bloqueantes para la descripción del PR.
+5. **Interpreta el resultado** por el código de salida:
+   - **0, `aprobado`**: sigue con las acciones.
+   - **1, `con bloqueantes`**: se detiene **sin push ni PR** y sin cambiar el estado del
+     ticket. Muestra los hallazgos bloqueantes de los dos reportes, con su ubicación, y el
+     motivo del veredicto, e indica que se corrijan con commits nuevos y que hay que
+     volver a ejecutar `/abrir-pr` (un commit nuevo exige una revisión nueva). El veredicto queda
+     registrado para trazabilidad, pero la puerta solo acepta `aprobado`.
+   - **2**: no hay veredicto. Si el mensaje es `El commit cambió durante la revisión…`,
+     `HEAD` cambió mientras corrían las revisiones: se detiene sin push ni PR y se
+     vuelve a ejecutar `/abrir-pr`. Con cualquier otro mensaje, informa el error y se
+     detiene.
+6. **Guarda para la descripción del PR**: el veredicto, `SHA_REVISADO`, los dos `RESUMEN` y
+   los hallazgos no bloqueantes (sugerencias) de los dos reportes.
 
 ## 3. Acciones
 
 1. `git push -u origin <rama>`. Si falla, se detiene sin PR y sin cambiar el estado.
 2. `mcp__github__create_pull_request` con `owner: anahernandez0814`, `repo:
    due-diligence-pasarela-austral`, `head: <rama>`, `base: main` y título
-   `<título del issue> (#N)`. La descripción, en español, tiene estas secciones:
+   `<título del issue> (#N)`. La guarda `guarda_pr` lo bloquea si no hay veredicto aprobado
+   del commit actual, publicado en la rama. La descripción, en español, tiene estas
+   secciones:
    - **Resumen**: lo implementado, a partir de `spec.md`, `plan.md` y
      `git log origin/main..HEAD`.
    - **Criterios de aceptación**: los del issue y cómo se verificó cada uno.
-   - **Revisión previa**: el veredicto y los hallazgos no bloqueantes, y cómo se atendió
-     cada uno.
+   - **Revisión previa**: el veredicto, el commit revisado (`SHA_REVISADO`), el `RESUMEN` de
+     la revisión de código y el de la auditoría, y las sugerencias con cómo se atendió cada
+     una.
    - **Desviaciones y pendientes**.
    - Una línea `Closes #N`.
    - Al final, la línea exacta:
@@ -122,15 +146,16 @@ PR y no cambia el estado del ticket.
    ### Lo decidido
    …
    ### Revisión previa
-   Veredicto: … (hallazgos no bloqueantes y cómo se atendieron)
+   Veredicto del commit `SHA_REVISADO`: … (los dos `RESUMEN` y las sugerencias, y cómo se
+   atendieron)
    ### Lo pendiente
    …
    ```
 
 ## Salida
 
-Enlace al PR, veredicto de la revisión, Status nuevo y enlace al comentario. Termina con
-este recordatorio:
+Enlace al PR, veredicto de la revisión con su commit, Status nuevo y enlace al comentario.
+Termina con este recordatorio:
 
 > Tras el merge, el próximo `/siguiente-ticket` registra el cierre en el issue. Si era el
 > último ticket, ejecútalo una vez más para registrarlo.

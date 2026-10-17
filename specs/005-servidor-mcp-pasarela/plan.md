@@ -155,12 +155,13 @@ tests llamen a las funciones y, aparte, a las herramientas por el protocolo.
   editable del proyecto (R6).
 - El comando de `.mcp.json` depende de abrir Claude Code en la raíz y de que `uv sync` esté hecho
   (R7); Q6 lo comprueba.
-- La regla de coincidencia con mínimo de 3 caracteres y la de noticias por nombre completo son
-  decisiones de este plan, no de la spec (R3).
+- Los nombres de los datos son inventados pero verosímiles: no se descarta un homónimo real (R8).
 
 ## Decisiones para la analista
 
-1. **Mínimo de 3 caracteres** en las búsquedas por nombre (R3). La spec dice solo "contenido".
-2. **Noticias por nombre completo** o identificador, igual que las listas (R3). La spec no lo fija.
+1. **Mínimo de 3 caracteres** en las búsquedas por nombre (R3): validado, solo para el nombre; ya
+   está en la spec.
+2. **Noticias por nombre completo** o identificador, igual que las listas (R3): validado; ya está en
+   la spec.
 3. **`mcp` 2.x**: el rango `>=2.3,<3` obliga a `MCPServer`; casi toda la documentación pública es de
    1.x (R1).

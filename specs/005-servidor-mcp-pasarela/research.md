@@ -64,13 +64,13 @@ conocía el equipo antes del ticket.
   identificador. Con `identificador` la coincidencia es exacta.
 - **Listas restrictivas y noticias**: igualdad del nombre completo normalizado, o del
   identificador. Nunca parcial.
-- **Decisión para la analista**: el texto buscado debe tener **al menos 3 caracteres
-  normalizados**; con menos, `entrada_invalida` no reintentable. La spec dice solo
-  "contenido". Sin mínimo, `a` devolvería todo el registro. Si no se quiere esa regla,
-  se quita con una constante.
-- **Noticias**: la spec no fija la regla. Se aplica la de las listas (igualdad del nombre
-  completo normalizado o del identificador) para que "una mención no sea una coincidencia
-  difusa". Una noticia menciona entidades por nombre completo.
+- **Mínimo de 3 caracteres, solo para `nombre`** (decisión validada por la analista y recogida
+  en la spec): el nombre buscado debe tener **al menos 3 caracteres normalizados**; con menos,
+  `entrada_invalida` no reintentable. Sin mínimo, `a` devolvería todo el registro. **No aplica al
+  `identificador`**: uno desconocido, aunque sea corto, da `sin_coincidencias`.
+- **Noticias** (decisión validada y recogida en la spec): se aplica la regla de las listas
+  (igualdad del nombre completo normalizado o del identificador) para que "una mención no sea
+  una coincidencia difusa". Una noticia menciona entidades por nombre completo.
 - **Alternativas descartadas**: coincidencia por palabras sueltas o por parecido
   (Levenshtein): produce coincidencias que la analista no puede justificar (I.2 exige
   precisión en listas).
@@ -151,6 +151,10 @@ conocía el equipo antes del ticket.
   contexto), ni tarjeta (Luhn de 13 a 19) pueden coincidir con el patrón de `guarda_datos`.
 - **La fecha de las respuestas** es la `fecha_corte` del archivo de la fuente, no el reloj:
   así los tests son deterministas y la fecha describe la fuente (principio I.4).
+- **Residual: nombres verosímiles**. Los nombres de personas y comercios son inventados, pero
+  verosímiles, y no se puede descartar un homónimo real. Se acepta como residual de la regla
+  VII: los nombres no se contrastan con ninguna fuente real, y cada archivo lleva el aviso de
+  que es ficticio. Cualquier coincidencia con una persona o empresa real es casual.
 - **Dentro de `src/`**: el empaquetado de `uv_build` incluye los archivos del módulo. Los JSON
   no son código protegido (la guarda protege `src/**/*.py`), pero los lee la revisión de
   datos con forma real de #3 (`git ls-files`).
@@ -162,9 +166,21 @@ conocía el equipo antes del ticket.
   Cada **hecho** es `{"contenido": {...}, "metadatos": {"fuente": ..., "fecha": ...}}`. Con
   `resultado: "sin_coincidencias"` los hechos van vacíos y los metadatos van igual
   (ajuste 5 de la revisión de la spec).
+- **Una sola forma** (análisis I1): ninguna respuesta de éxito lleva `contenido` fuera de un
+  hecho. `registrar_informe` y `escalar_a_cumplimiento` devuelven un hecho con `contenido`
+  `{id}` y metadatos con la fuente «Registro local de informes (ficticio)» o «Registro local de
+  escalamientos (ficticio)» y la fecha de registro. Una categoría desconocida devuelve un hecho
+  con `contenido` `{categoria, categorias_conocidas}`, sin nivel, con la fuente de
+  `categorias.json`.
 - En el registro, una coincidencia con dos fuentes lleva **un hecho por fuente**: el que dice
   `fecha_constitucion: 2016-03-14` con la fuente RMF-Sur y el que dice `2017-09-02` con RUFE.
   El servidor no resuelve la contradicción ni marca una como la correcta (I.4).
+- **Coincidencias** (análisis I2): el registro añade en el nivel superior `coincidencias`, la
+  lista de identificadores de comercio distintos, en orden. SC-004 y el caso (d) cuentan
+  `coincidencias`, no `hechos`: `almacen mirador` da 2 coincidencias y 4 hechos.
+- **Fecha** (análisis I3): `metadatos.fecha` es la `fecha_corte` de la fuente; la `fecha` de cada
+  hecho es la de su origen (en noticias, la de la noticia; en los canales de decisión, la de
+  registro).
 - Ninguna coincidencia lleva un campo `elegida` ni un orden que sugiera preferencia: el
   orden es el del identificador.
 - Un test comprueba que ninguna respuesta contiene `contenido` con claves de metadatos

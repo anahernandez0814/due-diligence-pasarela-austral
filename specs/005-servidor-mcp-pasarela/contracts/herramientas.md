@@ -20,7 +20,14 @@ el JSON de abajo (texto) y cuyo `structured_content` es el mismo objeto (R2).
 
 - `contenido` nunca lleva `fuente` ni `fecha`, y `metadatos` nunca lleva contenido (R9).
 - `sin_coincidencias`: `hechos` vacío y `metadatos` presentes (FR-010).
-- La `fecha` es la `fecha_corte` de la fuente consultada (R8), no el reloj.
+- **Una sola forma para todas las herramientas**: ninguna respuesta de éxito lleva `contenido`
+  fuera de un hecho. Lo que una herramienta devuelve, por ejemplo un `id`, va en
+  `hechos[].contenido`.
+- `metadatos.fecha` (nivel superior) es la `fecha_corte` de la fuente consultada (R8), no el
+  reloj. La `fecha` de **cada hecho** es la de su origen: en el registro, la `fecha_corte` de la
+  fuente registral; en noticias, **la fecha de la noticia**; en los canales de decisión, la fecha
+  de registro.
+- Solo `consultar_registro_mercantil` añade `coincidencias` en el nivel superior (abajo).
 
 **Error** (`is_error: true`):
 
@@ -54,11 +61,21 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 ## `consultar_registro_mercantil`
 
 - **Entrada**: `nombre` **o** `identificador` (exactamente uno; con los dos o con ninguno,
-  `entrada_invalida`). El texto se normaliza (R3) y debe tener al menos 3 caracteres.
+  `entrada_invalida`). El texto se normaliza (R3). **El mínimo de 3 caracteres normalizados es
+  solo para `nombre`**: un `identificador` desconocido, aunque sea corto, da `sin_coincidencias`.
 - **Coincidencia**: por `identificador`, exacta. Por `nombre`, el texto normalizado contenido en
   el nombre normalizado.
-- **Respuesta**: `resultado` es `coincidencias` o `sin_coincidencias`. Por cada comercio, los
-  hechos van **agrupados por comercio**:
+- **Respuesta**: `resultado` es `coincidencias` o `sin_coincidencias`. Los hechos son **uno por
+  comercio y fuente**, y el nivel superior añade `coincidencias`: la lista de identificadores de
+  comercio **distintos**, en orden (vacía con `sin_coincidencias`). **Las coincidencias se cuentan
+  en `coincidencias`, no en `hechos`** (SC-004, caso d):
+
+```json
+{"resultado": "coincidencias", "coincidencias": ["CO-AM-0004", "CO-AM-0005"], "hechos": ["…"],
+ "metadatos": {"fuentes": ["…", "…"], "fecha": "2026-09-30"}}
+```
+
+  Cada hecho:
 
 ```json
 {"contenido": {"identificador": "CO-RF-0006", "nombre": "Ferretería Río Fino SAS",
@@ -67,8 +84,9 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
  "metadatos": {"fuente": "Registro Mercantil Ficticio del Sur", "fecha": "2026-09-30"}}
 ```
 
-  Un comercio que está en las dos fuentes produce **un hecho por fuente**. Si difieren, ambos se
-  devuelven y ninguno se marca como elegido; el orden es por identificador y luego por fuente.
+  Un comercio que está en las dos fuentes produce **un hecho por fuente**: `almacen mirador`
+  devuelve 2 coincidencias y 4 hechos. Si las fuentes difieren, ambos hechos se devuelven y
+  ninguno se marca como elegido; el orden es por identificador y luego por fuente.
 - **Descripción** (texto fijo):
   > Busca un comercio en el registro mercantil por nombre o por identificador. Devuelve, por
   > cada fuente registral, la existencia, la fecha de constitución, el representante legal y el
@@ -100,8 +118,9 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 - **Entrada**: `nombre` **o** `identificador` (exactamente uno).
 - **Coincidencia**: nombre completo normalizado igual, o identificador igual, entre las entidades
   mencionadas por cada noticia (R3).
-- **Respuesta**: `coincidencias` (un hecho por noticia: titular, url; metadatos con la fuente y la
-  fecha de la noticia) o `sin_coincidencias`.
+- **Respuesta**: `coincidencias` (un hecho por noticia: contenido con titular y url; metadatos
+  del hecho con la fuente y **la fecha de la noticia**) o `sin_coincidencias`. `metadatos.fecha`
+  de nivel superior es la `fecha_corte` del corpus.
 - **Error**: con `PASARELA_FALLA_NOTICIAS=1` (leída en cada llamada, R5), `servicio_no_disponible`,
   `reintentable: true`.
 - **Descripción**:
@@ -113,9 +132,11 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 ## `consultar_riesgo_categoria`
 
 - **Entrada**: `categoria` (texto). Se compara normalizada (R3).
-- **Respuesta**: `resultado: "categoria_conocida"` con un hecho `{categoria, nivel}`
-  (`alto`, `medio` o `bajo`), o `resultado: "categoria_desconocida"` con la lista de categorías
-  conocidas y **sin nivel**.
+- **Respuesta**, siempre con un hecho y como fuente la de `categorias.json` y su `fecha_corte`:
+  - `resultado: "categoria_conocida"`: hecho con `contenido` `{categoria, nivel}`
+    (`alto`, `medio` o `bajo`).
+  - `resultado: "categoria_desconocida"`: hecho con `contenido` `{categoria, categorias_conocidas}`,
+    **sin `nivel`**.
 - **Descripción** (las categorías conocidas se generan desde `categorias.json`):
   > Devuelve el nivel de riesgo (alto, medio o bajo) de una categoría de negocio, que aporta
   > quien consulta; el registro mercantil no la devuelve. Categorías conocidas: {lista}. El
@@ -134,7 +155,9 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 | `hallazgos` | objeto `frente → {contenido, fuente}`; ningún hallazgo sin fuente |
 | `cobertura` | texto o lista no vacíos: frentes cubiertos y frentes sin cubrir |
 
-- **Respuesta**: `resultado: "informe_registrado"` y `contenido.id` (`INF-xxxxxxxx`).
+- **Respuesta**: `resultado: "informe_registrado"` y un hecho con `contenido` `{id}`
+  (`INF-xxxxxxxx`) y metadatos con la fuente **«Registro local de informes (ficticio)»** y la
+  fecha de registro. `metadatos` de nivel superior: esa misma fuente y fecha.
 - **Error**: `campos_obligatorios_ausentes`, no reintentable, con `campos_faltantes`.
 - **Descripción**:
   > Registra el informe de due diligence con su recomendación, sus hallazgos por frente con la
@@ -146,7 +169,9 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 
 - **Entrada** (todas obligatorias): `comercio`, `hallazgos`, `cobertura`, `causa_escalamiento`
   y `accion_recomendada`, con la forma de arriba.
-- **Respuesta**: `resultado: "caso_escalado"` y `contenido.id` (`ESC-xxxxxxxx`).
+- **Respuesta**: `resultado: "caso_escalado"` y un hecho con `contenido` `{id}`
+  (`ESC-xxxxxxxx`) y metadatos con la fuente **«Registro local de escalamientos (ficticio)»** y la
+  fecha de registro. `metadatos` de nivel superior: esa misma fuente y fecha.
 - **Error**: `campos_obligatorios_ausentes`, no reintentable, con `campos_faltantes`.
 - **Descripción**:
   > Pasa el caso a un oficial de cumplimiento con un resumen estructurado y autosuficiente: el
@@ -161,3 +186,6 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 - Ninguna respuesta marca una coincidencia como elegida.
 - Las descripciones contienen las frases de la constitución (R10).
 - Las respuestas de éxito y de «sin coincidencias» llevan `metadatos` con `fuentes` y `fecha`.
+- Ninguna respuesta de éxito lleva `contenido` fuera de un hecho.
+- `consultar_registro_mercantil` devuelve `coincidencias` con los identificadores distintos, en
+  orden, y `almacen mirador` da 2 coincidencias aunque tenga 4 hechos.

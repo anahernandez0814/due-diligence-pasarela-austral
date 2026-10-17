@@ -285,24 +285,28 @@ commiteada hasta T018. Los escenarios y sus reglas están en el [quickstart](qui
   Cada rama `098-*` nace de `main` del clon (una sola carpeta `specs/098-*`). `uv sync` en el
   clon. Datos ficticios. Entregar a la analista la ruta del clon y el comando de cada escenario.
   **Resultado de T019**: clon en `C:\Users\ana.hernandez\AppData\Local\Temp\claude\D--AIReadyOrquestador\326bdc06-818e-4d19-80f7-aac699694e93\scratchpad\clon-019` (script `preparar-clon-019.sh` en el mismo scratchpad, fuera del repositorio; el remoto del clon no admite push). Q3: rama `005-servidor-mcp-pasarela` con `git merge --no-ff` de `origin/019-auditoria-reglas-delegadas` (sin conflictos) y la línea 161 de su spec corregida a «I.1, I.2 e I.3 … del ticket #7». Q4: rama `098-delegada-contradice`. Q5: `main` del clon con `src/prueba_098/` (regla y test), `origin/main` avanzado con `git update-ref`, y rama `098-borra-test` que borra `test_regla.py`. `preparar_revision.py` verificado en las tres ramas: salida 0, sin `CONTEXTO INCOMPLETO`, carpeta del ticket correcta; el diff de la 005 se omite por tamaño (58 archivos) y el de las dos `098` es completo.
-- [ ] T020 [MANUAL] **Q3** (SC-001): sesión nueva en la raíz del clon, en la rama 005 del merge:
+- [X] T020 [MANUAL] **Q3** (SC-001): sesión nueva en la raíz del clon, en la rama 005 del merge:
   `/auditar-cumplimiento specs/005-servidor-mcp-pasarela`. Esperado: I.1, I.2 e I.3 `no aplica`
   con la razón «delegada al ticket #7»; I.4 e I.5 `cumple`; 0 bloqueantes de las tres primeras.
   Claude espera la confirmación de la analista y anota el `RESUMEN` y la tabla.
-- [ ] T021 [MANUAL] **Q4** (SC-002, FR-004, FR-011): sesión nueva en la raíz del clon, en
+  **Resultado de T020 (Q3, SC-001)**: sesión nueva en el clon, rama `005-servidor-mcp-pasarela` con la línea 161 de su spec corregida. I.1, I.2 e I.3 `no aplica`, delegadas al #7 (`spec.md:161`, FR-017); I.4 e I.5 `cumple`. `RESUMEN: bloqueantes=0 sugerencias=2 cobertura=completa`. Como se esperaba.
+- [X] T021 [MANUAL] **Q4** (SC-002, FR-004, FR-011): sesión nueva en la raíz del clon, en
   `098-delegada-contradice`: `/auditar-cumplimiento specs/098-delegada-contradice`. Esperado:
   **I.3 `incumple`** y **I.1 `no verificada`**, las dos bloqueantes, con ubicación y razón;
   `bloqueantes≥2`. Claude espera la confirmación y anota el resultado.
-- [ ] T022 [MANUAL] **Q5** (SC-008, FR-012): sesión nueva en la raíz del clon, en `098-borra-test`:
+  **Resultado de T021 (Q4, SC-002, FR-004, FR-011)**: sesión nueva en el clon, rama `098-delegada-contradice`. I.3 `incumple` en `habilitacion.py:8` e I.1 `no verificada` (citada sin número). `RESUMEN`: 2 bloqueantes, cobertura completa. Como se esperaba.
+- [X] T022 [MANUAL] **Q5** (SC-008, FR-012): sesión nueva en la raíz del clon, en `098-borra-test`:
   `/auditar-cumplimiento specs/098-borra-test`. Esperado: I.3 aplica pese a estar delegada y
   sale `no verificada` (o `incumple`), bloqueante; nunca `no aplica`. Claude espera la
   confirmación y anota el resultado.
-- [ ] T023 Anotar en esta lista los resultados de Q1 a Q6 (T015, T017, T018, T020 a T022) y,
+  **Resultado de T022 (Q5, SC-008, FR-012)**: sesión nueva en el clon, rama `098-borra-test`. I.3 `no verificada` por el test borrado, nunca `no aplica`. `RESUMEN`: 1 bloqueante. **Observación**: la cobertura salió incompleta porque el auditor no leyó `.claude/hooks`, los agentes ni las skills, que no estaban en el diff; se vigila en el `/abrir-pr` real del #5.
+- [X] T023 Anotar en esta lista los resultados de Q1 a Q6 (T015, T017, T018, T020 a T022) y,
   como **verificación pendiente de #5**, SC-003: «`uv.lock` no reduce la cobertura» se comprueba
   con el `/abrir-pr` real del #5, cuyo diff trae `uv.lock`; este ticket solo cubre el texto
   (T008, T014). Borrar la carpeta `clon-019` del scratchpad. Commit:
   `docs(specs): resultados de la validación del ticket #19`. Después, `/abrir-pr`. **Ningún
   commit va después de la revisión.**
+  **Resultado de T023**: resultados de Q1 a Q6 anotados: Q1 (T017), Q2 (T015), Q6 (T018), Q3 (T020), Q4 (T021) y Q5 (T022), cada uno bajo su tarea. **Verificación pendiente de #5**: SC-003 («`uv.lock` no reduce la cobertura») se comprueba en el `/abrir-pr` real del #5, cuyo diff trae `uv.lock`; este ticket solo cubre el texto (T008, T014). Misma vigilancia para la cobertura incompleta de Q5. Carpeta `clon-019` del scratchpad borrada.
 
 ---
 

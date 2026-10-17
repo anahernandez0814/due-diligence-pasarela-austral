@@ -9,11 +9,13 @@ Módulo con una interfaz de línea de comandos que `/abrir-pr` invoca por Bash.
 
 | Aspecto | Contrato |
 |---------|----------|
-| Invocación | `uv run --no-project --python 3.12 --quiet <raíz>/.claude/hooks/veredicto.py registrar --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` |
-| Qué hace | valida las dos líneas `RESUMEN`, consolida, escribe `.claude/veredictos/<HEAD>.json` y escribe el resultado |
+| Invocación | `uv run --no-project --python 3.12 --quiet <raíz>/.claude/hooks/veredicto.py registrar --commit <sha> --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` |
+| `--commit` | **Obligatorio**: el sha completo (hexadecimal, 40 o 64 caracteres) del commit que se revisó. Es el que `/abrir-pr` guardó antes de lanzar las skills. Ausente, abreviado o no hexadecimal: salida 2 sin escribir nada |
+| Commit cambiado | Si `--commit` no coincide con `HEAD`, **no escribe nada** y sale con 2, con este mensaje en stderr: `El commit cambió durante la revisión (revisado <7 caracteres>, actual <7 caracteres>): ejecute /abrir-pr de nuevo.` Sin archivo de veredicto, la guarda ya bloquea, así que no hace falta otro estado |
+| Qué hace | comprueba que `--commit` es `HEAD`, valida las dos líneas `RESUMEN` (formato estricto: dígitos `[0-9]`, no los de otros alfabetos), consolida, escribe `.claude/veredictos/<--commit>.json` y escribe el resultado. El veredicto queda atado al commit que se revisó, no al que exista al registrar |
 | Consolidación | `aprobado` solo si las dos líneas son válidas, con `bloqueantes=0` y `cobertura=completa`, **y hay cambios frente a la base** (`git diff --quiet <base>..HEAD` con `<base>` = `git merge-base HEAD origin/main`, la misma que `preparar_revision.py`); si no, `con bloqueantes`. Sin cambios: `con bloqueantes (sin cambios)`; sin base calculable: `con bloqueantes (sin base de comparación)`. El reporte no puede revertirlo |
 | Salida | una línea: `veredicto: aprobado` o `veredicto: con bloqueantes (<motivo>)` |
-| Código de salida | 0 con `aprobado`; 1 con `con bloqueantes`; 2 si no pudo registrar (no hay git, no se puede escribir) |
+| Código de salida | 0 con `aprobado`; 1 con `con bloqueantes`; 2 si no pudo registrar (no hay git, no se puede escribir, `--commit` ausente, no hexadecimal, abreviado o distinto de `HEAD`) |
 | Escritura | un archivo por commit; si existe, se sobrescribe (misma revisión repetida sobre el mismo commit) |
 | Funciones | `ruta_veredicto(raiz, sha)`, `registrar(...)`, `leer(raiz, sha)`, `consolidar(...)`, `base_de_fusion(raiz)` y `hay_cambios(raiz)`; las usa también la guarda, y `preparar_revision.py` importa la base |
 

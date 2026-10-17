@@ -43,7 +43,8 @@ El cuerpo (prompt de la tarea, que el subagente recibe porque no ve la conversac
 3. Qué hacer si el diff se omitió por tamaño: leer los archivos de la lista con `Read` y
    `Grep`; solo `cobertura=incompleta` si algún archivo de código o configuración no se puede
    leer. Los archivos de `specs/NNN-*/` se leen como referencia (por secciones o con `Grep`) y
-   no cuentan para la cobertura.
+   no cuentan para la cobertura. Si la lista viene **agrupada por directorio**, el revisor no
+   puede saber qué archivos leer y reporta `cobertura=incompleta`.
 4. Qué hacer si la salida no empieza con `CONTEXTO DE REVISIÓN` (la inyección falló o está
    desactivada), o si ve `CONTEXTO INCOMPLETO`: reportarlo y `cobertura=incompleta`.
 5. El formato del reporte.
@@ -61,6 +62,7 @@ pueden invocarse a mano (`/revisar-codigo specs/NNN-nombre`), sin registrar vere
 | Código de salida | siempre 0; un fallo se dice en la salida con `CONTEXTO INCOMPLETO: <motivo>` |
 | Red | ninguna; usa `origin/main` ya actualizado por `/abrir-pr` |
 | Marca | la primera línea de la salida es `CONTEXTO DE REVISIÓN` (R2.4) |
+| Commit | la línea `Commit: <sha completo de HEAD>` va justo después de `Rama:`: es el commit que se revisa y al que `/abrir-pr` ata el veredicto |
 | Umbral | `UMBRAL_SALIDA` (provisional, 30 000 bytes, ajustable tras Q4) sobre **toda** la salida: el diff completo solo si la salida total queda por debajo; marca, lista y rutas se emiten siempre |
 | Referencia | los archivos de `specs/NNN-*/` van marcados como referencia y no cuentan para la cobertura |
 

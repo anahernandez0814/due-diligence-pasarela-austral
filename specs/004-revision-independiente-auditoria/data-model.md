@@ -41,6 +41,7 @@ Lo que imprime `preparar_revision.py` y las skills inyectan.
 | Base | `git merge-base HEAD origin/main` |
 | Archivos | lista de cambiados, con estado y estadísticas (`numstat`); los eliminados, marcados |
 | Marca | primera línea fija: `CONTEXTO DE REVISIÓN`; si el subagente no la ve, `cobertura=incompleta` |
+| Commit | `Commit: <sha completo de HEAD>`, justo después de `Rama:`; es el commit revisado |
 | Diff | completo si **toda la salida** queda por debajo de `UMBRAL_SALIDA` (provisional, 30 000 bytes; Q4 lo ajusta); si no, una línea que dice que se omitió |
 | Ticket | carpeta `specs/NNN-*/` y rutas de `spec.md`, `plan.md` y `tasks.md`; sus archivos van marcados como **referencia** y no cuentan para la cobertura |
 | Constitución | ruta de `.specify/memory/constitution.md` |
@@ -81,6 +82,9 @@ Reglas:
   `cobertura=completa` (R7) **y el cambio frente a la base no está vacío**, comprobado con
   git por el registro y no por el reporte. Sin cambios: `con bloqueantes (sin cambios)`; sin
   base calculable: `con bloqueantes (sin base de comparación)`.
+- El veredicto queda atado al commit **revisado**, que `/abrir-pr` guarda antes de lanzar las
+  skills y pasa a `registrar --commit <sha>`. Si no coincide con `HEAD` al registrar, no se
+  escribe nada. Un sha ausente, abreviado o no hexadecimal tampoco se acepta.
 - Se registran los dos veredictos; la guarda solo acepta `aprobado`.
 - Ninguna herramienta de Claude Code modifica el directorio, en ninguna rama (FR-020); solo lo
   escribe `veredicto.py registrar`. Leerlo está permitido.

@@ -114,12 +114,23 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
     commit; un commit nuevo no tiene archivo.
   - **Lectura**: archivo ilegible, con otro formato o con `commit` distinto del nombre →
     "sin veredicto".
-  - **CLI**: `registrar --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` escribe una línea
-    (`veredicto: aprobado` o `veredicto: con bloqueantes (<motivo>)`) y sale con 0 si
-    `aprobado`, 1 si `con bloqueantes` y 2 si no pudo registrar.
+  - **CLI**: `registrar --commit <sha> --codigo "<RESUMEN>" --auditoria "<RESUMEN>"`
+    escribe una línea (`veredicto: aprobado` o `veredicto: con bloqueantes (<motivo>)`) y
+    sale con 0 si `aprobado`, 1 si `con bloqueantes` y 2 si no pudo registrar.
+  - **Ampliado tras la parada A (hallazgo 1: el veredicto queda atado al commit
+    revisado)**: `--commit` distinto de `HEAD` → salida 2, ningún archivo creado y el
+    mensaje `El commit cambió durante la revisión (revisado <7 caracteres>, actual <7
+    caracteres>): ejecute /abrir-pr de nuevo.` en stderr; `--commit` ausente → salida 2;
+    `--commit` no hexadecimal o abreviado → salida 2; `--commit` igual a `HEAD` → el
+    comportamiento de siempre. El sha del archivo es el de `--commit`.
+  - **Ampliado tras la parada A (hallazgo 2: formato estricto)**: `bloqueantes=٠` y
+    `bloqueantes=０` (dígitos de otros alfabetos) → reporte no utilizable; el formato usa
+    solo `[0-9]`.
 - [X] T004 [P] Escribir `.claude/hooks/test_preparar_revision.py` (R4, R6, FR-005; debe
   fallar primero). Repositorios git temporales con un `origin` local. Casos:
   - la primera línea de la salida es exactamente `CONTEXTO DE REVISIÓN`;
+  - **ampliado tras la parada A**: la salida contiene `Commit: <sha completo de HEAD>`,
+    justo después de `Rama:`;
   - la base es la de `veredicto.base_de_fusion` (`git merge-base HEAD origin/main`), no el
     `main` local (con un `main` local desactualizado);
   - la lista de archivos trae estado y estadísticas, y marca los eliminados;
@@ -250,14 +261,16 @@ vez, en T036 (Q12, Q13).
   acciones según [contracts/abrir-pr.md](contracts/abrir-pr.md) (FR-008, FR-009, FR-010,
   FR-019, R11; hace pasar T016). Orden: comprobaciones sin cambios → `git fetch origin main`
   (falla → se detiene) y `git fetch origin <rama>` (**no es fatal si la rama aún no existe
-  en el remoto**) → skills `revisar-codigo` y `auditar-cumplimiento` con la carpeta del
-  ticket → `veredicto.py registrar` con las dos líneas `RESUMEN` → con bloqueantes, se
-  detiene sin push ni PR ni cambio de estado y muestra los hallazgos → `git push -u origin
-  <rama>` → PR, estado y comentario. `allowed-tools`: salen `Agent` y `Bash(git diff:*)`;
+  en el remoto**) → `git rev-parse HEAD` y **se guarda el sha** → skills `revisar-codigo`
+  y `auditar-cumplimiento` con la carpeta del ticket → `veredicto.py registrar --commit
+  <sha guardado>` con las dos líneas `RESUMEN` (si sale con 2 porque `HEAD` cambió, no hay
+  veredicto, push ni PR: se vuelve a ejecutar `/abrir-pr`) → con bloqueantes, se detiene
+  sin push ni PR ni cambio de estado y muestra los hallazgos → `git push -u origin <rama>`
+  → PR, estado y comentario. `allowed-tools`: salen `Agent` y `Bash(git diff:*)`;
   entran `Skill(revisar-codigo)`, `Skill(auditar-cumplimiento)`, el comando de
   `veredicto.py registrar` y `Bash(git rev-parse:*)`. La descripción del PR cita el
-  veredicto, el commit, los dos `RESUMEN` y los hallazgos no bloqueantes. No quedan dos
-  revisiones: se elimina el subagente `Plan`.
+  veredicto, **ese sha guardado**, los dos `RESUMEN` y los hallazgos no bloqueantes. No
+  quedan dos revisiones: se elimina el subagente `Plan`.
 - [ ] T018 [US3] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(abrir-pr):
   revisión independiente y veredicto en /abrir-pr`.

@@ -264,7 +264,11 @@ razón de cada "no aplica". Sin código de producción, las cinco figuran "no ap
 
 **Decisión**: `registrar_veredicto` es un script (`veredicto.py`, en `.claude/hooks/`)
 con subcomando de línea de comandos que `/abrir-pr` invoca por Bash. Guarda un archivo por
-commit en `.claude/veredictos/<sha>.json`, ignorado por git (`.gitignore`).
+commit en `.claude/veredictos/<sha>.json`, ignorado por git (`.gitignore`). El `<sha>` es el
+del commit **revisado** (`--commit`, obligatorio y hexadecimal completo), no el que exista al
+registrar: si `HEAD` cambió mientras corrían las revisiones, no escribe nada. Sin esa
+comprobación, un commit hecho durante la revisión quedaría aprobado sin que nadie lo
+revisara. El formato de `RESUMEN` usa solo dígitos `[0-9]`.
 
 ```json
 {
@@ -393,8 +397,11 @@ subagente `Plan`) se **reemplaza**; no quedan dos revisiones (FR-019). Orden nue
    no existe).
 3. Skill `revisar-codigo` y skill `auditar-cumplimiento`, con la carpeta del ticket como
    argumento; cada una devuelve su reporte (con la línea `RESUMEN`).
-4. `registrar_veredicto` con las dos líneas (R7, R8). Con bloqueantes, se detiene, muestra los
-   hallazgos y no hay push ni PR (FR-009).
+3a. Antes de las skills, `git rev-parse HEAD` y se guarda el sha: es el commit que se revisa.
+4. `veredicto.py registrar --commit <sha>` con las dos líneas (R7, R8). Si `HEAD` cambió
+   durante la revisión, no escribe nada y sale con 2 (el veredicto es del commit revisado,
+   no del que exista al registrar). Con bloqueantes, se detiene, muestra los hallazgos y no
+   hay push ni PR (FR-009).
 5. `git push -u origin <rama>` (actualiza `origin/<rama>`, R9).
 6. `create_pull_request` (la guarda de R10 lo comprueba), estado y comentario, como hoy; la
    sección "Revisión previa" de la descripción pasa a citar el veredicto, los dos resúmenes y

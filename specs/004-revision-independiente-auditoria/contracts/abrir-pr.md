@@ -11,7 +11,8 @@ comprobaciones de la sección 1 no cambian. Decisión: [research.md](../research
 | 1 | Comprobaciones de la sección 1 (sin cambios) | se detiene, sin push ni PR |
 | 2 | `git fetch origin main` y `git fetch origin <rama>` (el segundo puede no existir aún) | se detiene si falla el de `main`, porque la base del diff sería la del `main` local |
 | 3 | Skills `revisar-codigo` y `auditar-cumplimiento`, con la carpeta del ticket como argumento | un reporte ausente o sin `RESUMEN` válido cuenta como bloqueante (paso 4) |
-| 4 | `veredicto.py registrar` con las dos líneas `RESUMEN` | con `con bloqueantes`: muestra los hallazgos, no hay push, ni PR, ni cambio de estado |
+| 3a | Antes de lanzar las skills, `git rev-parse HEAD` y se **guarda el sha** | se detiene |
+| 4 | `veredicto.py registrar --commit <sha guardado>` con las dos líneas `RESUMEN` | con `con bloqueantes`: muestra los hallazgos, no hay push, ni PR, ni cambio de estado. Si sale con 2 porque `HEAD` cambió durante la revisión (mensaje `El commit cambió durante la revisión…`), no hay veredicto, no hay push ni PR, y se vuelve a ejecutar `/abrir-pr` |
 | 5 | `git push -u origin <rama>` | se detiene sin PR |
 | 6 | `create_pull_request` (la guarda lo comprueba), estado `In review`, comentario | como hoy |
 
@@ -29,7 +30,7 @@ Los pasos 3 y 4 sustituyen al subagente `Plan` de #2.
 
 La sección **Revisión previa** pasa a incluir:
 
-- el veredicto consolidado y el commit al que corresponde;
+- el veredicto consolidado y el commit al que corresponde (el sha guardado en el paso 3a);
 - el `RESUMEN` de cada revisión;
 - los hallazgos no bloqueantes y cómo se atendió cada uno.
 

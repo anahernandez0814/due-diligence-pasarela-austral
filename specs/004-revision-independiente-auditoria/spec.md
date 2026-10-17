@@ -66,10 +66,15 @@ estado.
    **cuando** se audita, **entonces** las reglas figuran como "no aplica" con la razón, y no
    se bloquea.
 4. **Dado** una regla que aplica al cambio (la spec del ticket la cita o el diff toca código
-   que la implementa) y para la que no se encuentra evidencia en la spec, el código ni los
-   tests, **cuando** se audita, **entonces** figura como "no verificada" y es bloqueante.
-5. **Dado** una regla que la spec del ticket no cita y que el diff no toca, **cuando** se
-   audita, **entonces** figura como "no aplica" con esa razón y no bloquea.
+   o tests que la implementan o la prueban) y para la que no se encuentra evidencia en la
+   spec, el código ni los tests, **cuando** se audita, **entonces** figura como "no
+   verificada" y es bloqueante.
+5. **Dado** una regla que la spec del ticket no cita y que el diff no toca (ni en el código
+   ni en sus tests), **cuando** se audita, **entonces** figura como "no aplica" con esa
+   razón y no bloquea.
+6. **Dado** un cambio que solo borra o debilita el test de una regla, **cuando** se audita,
+   **entonces** esa regla aplica y no se da por "no aplica": sin evidencia vigente en el
+   código y en los tests, es "no verificada" y bloqueante.
 
 ---
 
@@ -202,9 +207,9 @@ comprobar que se permite.
   hallazgo trae ubicación y razón.
 - **FR-007**: El auditor informa por cada regla su estado (cumple, incumple, no aplica,
   no verificada) con evidencia; una regla sin evidencia nunca se reporta como cumplida. Una
-  regla aplica al cambio si la spec del ticket la cita o si el diff toca código que la
-  implementa. Si no aplica, figura como "no aplica" con esa razón; si aplica y no hay
-  evidencia, es bloqueante.
+  regla aplica al cambio si la spec del ticket la cita o si el diff toca código o tests que
+  la implementan o la prueban. Si no aplica, figura como "no aplica" con esa razón; si
+  aplica y no hay evidencia, es bloqueante.
 - **FR-008**: El flujo de apertura del PR ejecuta ambas revisiones y consolida un veredicto:
   "aprobado" solo si ninguna tiene bloqueantes, ambas devolvieron un reporte utilizable y el
   cambio frente a la base no está vacío; en cualquier otro caso, "con bloqueantes". Que el
@@ -277,8 +282,8 @@ comprobar que se permite.
   vengan de una revisión real. El límite se declara en `DECISIONES.md`.
 - Las cinco reglas de negocio son las del principio I de la constitución; si cambian, la
   auditoría las toma de allí.
-- Cuando todavía no hay código de producción, la auditoría marca las reglas como "no aplica"
-  con la razón y no bloquea por ausencia.
+- Cuando todavía no hay código de producción ni tests de las reglas, la auditoría marca las
+  reglas como "no aplica" con la razón y no bloquea por ausencia.
 - Las skills de revisión preparan como contexto la lista de archivos cambiados con
   estadísticas y, si cabe en un umbral, el diff completo; los diffs reales pueden pesar
   cientos de KB (el del PR #17 rondaba los 370 KB), así que el diff completo no es requisito.

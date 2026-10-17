@@ -70,7 +70,7 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
 - [X] T001 Confirmar que la rama es `006-coordinador-subagentes-agent` y commitear este
   `specs/006-coordinador-subagentes-agent/tasks.md` (`docs(specs): tareas del ticket #6`), para que
   `guarda_spec_previa` deje editar el código protegido. *(Hecha en `4a3cb22`.)*
-- [ ] T002 Añadir las dependencias con `uv add "claude-agent-sdk>=0.2.168,<0.3" "python-dotenv>=1.2,<2"`
+- [X] T002 Añadir las dependencias con `uv add "claude-agent-sdk>=0.2.168,<0.3" "python-dotenv>=1.2,<2"`
   (actualiza `pyproject.toml` y `uv.lock`, R10). Comprobar con
   `uv run python -c "import claude_agent_sdk, dotenv, mcp_types"` y
   `uv run pytest src/due_diligence/test_humo.py src/servidor_mcp`. Commit: `build: dependencias del
@@ -82,11 +82,11 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 **Propósito**: la tabla de frentes, los eventos y el estado, que usan todas las historias. T003 va primero porque `estado.py` y los tests usan `Frente`. Tests primero en eventos y estado.
 
-- [ ] T003 Crear `src/due_diligence/frentes.py` con `Frente` (`registro`, `listas`, `noticias`,
+- [X] T003 Crear `src/due_diligence/frentes.py` con `Frente` (`registro`, `listas`, `noticias`,
   `categoria`) y la tabla de `data-model.md`: herramienta de la pasarela de cada frente (nombre corto
   y completo `mcp__pasarela__<herramienta>`), dependencia (`listas` depende de `registro`) y campos
   de contexto que cada frente necesita. Se prueba con `test_configuracion.py` (T009).
-- [ ] T004 Escribir `src/due_diligence/test_eventos_estado.py` (R7, data-model). Casos de
+- [X] T004 Escribir `src/due_diligence/test_eventos_estado.py` (R7, data-model). Casos de
   `RegistroEventos`: `secuencia` creciente desde 1 y única aun con 100 eventos registrados desde
   tareas `asyncio` concurrentes; con un reloj inyectado que devuelve siempre la misma marca, el orden
   lo da `secuencia`; `marca` es UTC con zona; `eventos()` devuelve una copia ordenada; tipos válidos
@@ -95,11 +95,11 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
   `sin_iniciar`; transiciones permitidas `sin_iniciar → en_curso → terminado | no_terminado` y
   `sin_iniciar → rechazado`, y una transición no permitida se rechaza; `instantanea()` devuelve una
   copia (modificarla no cambia el estado); `comercio` empieza `None`.
-- [ ] T005 [P] Crear `src/due_diligence/eventos.py` con `Evento` (`secuencia`, `marca`, `tipo`,
+- [X] T005 [P] Crear `src/due_diligence/eventos.py` con `Evento` (`secuencia`, `marca`, `tipo`,
   `frente`, `detalle`; dataclass congelada) y `RegistroEventos` (`registrar(tipo, frente=None,
   detalle="")` bajo un `threading.Lock`, reloj inyectable `Callable[[], datetime]` por defecto
   `datetime.now(UTC)`, `eventos()`). Tipos como constantes. Hace pasar la parte de eventos de T004.
-- [ ] T006 [P] Crear `src/due_diligence/estado.py` con `Consulta`, `ResultadoFrente` y `EstadoCaso`
+- [X] T006 [P] Crear `src/due_diligence/estado.py` con `Consulta`, `ResultadoFrente` y `EstadoCaso`
   tal como los define `data-model.md`: situación de cada frente, `resultados`, `consultas`, `comercio`
   y `terminacion`; `instantanea()` (copia profunda); un frente sin terminar **nunca** figura con un
   resultado vacío (US5-3). Un `EstadoCaso` por `Caso`, sin variables de módulo (FR-014). Hace pasar la
@@ -113,7 +113,7 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 **Prueba independiente**: la clasificación pura con mensajes de resultado simulados (Q4, SC-005).
 
-- [ ] T007 [US6] Escribir `src/due_diligence/test_terminacion.py` (R5). Casos con `ResultMessage`
+- [X] T007 [US6] Escribir `src/due_diligence/test_terminacion.py` (R5). Casos con `ResultMessage`
   simulados: `subtype=success`, `stop_reason=end_turn`, `is_error=False` → `NORMAL`;
   `stop_reason=max_tokens` → `ANOMALA`; **`subtype=error_max_turns` con `stop_reason=tool_use`** y
   `terminal_reason=max_turns` → `LIMITE_SEGURIDAD` (el `subtype` gana al `stop_reason`); un resultado
@@ -122,7 +122,7 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
   `ANOMALA`, con el valor original en el detalle. Un `ResultError` simulado (con `subtype` y
   `terminal_reason`) se clasifica igual que el mensaje equivalente. El detalle devuelto incluye
   `subtype`, `stop_reason` y `terminal_reason` originales.
-- [ ] T008 [US6] Crear `src/due_diligence/terminacion.py` con `Terminacion` (`NORMAL`, `ANOMALA`,
+- [X] T008 [US6] Crear `src/due_diligence/terminacion.py` con `Terminacion` (`NORMAL`, `ANOMALA`,
   `LIMITE_SEGURIDAD`), `clasificar(subtype, stop_reason, is_error, terminal_reason)` como función pura
   en el orden de R5 (subtype primero), `clasificar_resultado(mensaje)` para un `ResultMessage` y
   `clasificar_error(error)` para un `ResultError`. Ninguna función recibe el texto de la respuesta.

@@ -73,7 +73,7 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
 
 **Purpose**: confirmar el punto de partida y excluir de git el directorio de veredictos.
 
-- [ ] T001 Confirmar el punto de partida:
+- [X] T001 Confirmar el punto de partida:
   - la rama activa es `004-revision-independiente-auditoria`;
   - `git log --oneline main..HEAD` contiene los commits de spec (`4a095f4`, `7d7bba7`,
     `471f879`), de plan (`880aa89`, `f536e63`) y de tareas (`docs(specs): tareas del
@@ -82,7 +82,7 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
   - el issue #4 está en "In Progress" (`mcp__github__projects_list`,
     `list_project_items`);
   - `uv sync` y `uv run pytest` pasan antes de tocar nada.
-- [ ] T002 Añadir `.claude/veredictos/` a `.gitignore` (R8, FR-010) y comprobar con
+- [X] T002 Añadir `.claude/veredictos/` a `.gitignore` (R8, FR-010) y comprobar con
   `git check-ignore -v .claude/veredictos/prueba.json` que queda ignorado. Es el único
   cambio de esta tarea; no se crea el directorio.
 
@@ -95,7 +95,7 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
 
 **⚠️ CRITICAL**: ninguna historia empieza hasta terminar esta fase.
 
-- [ ] T003 [P] Escribir `.claude/hooks/test_veredicto.py` (R7, R8, FR-008, FR-010, FR-011;
+- [X] T003 [P] Escribir `.claude/hooks/test_veredicto.py` (R7, R8, FR-008, FR-010, FR-011;
   debe fallar primero). Repositorios git temporales con `tmp_path`; sin valores reales.
   Casos:
   - **Consolidación**: `aprobado` solo si las dos líneas `RESUMEN` son válidas, con
@@ -117,7 +117,7 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
   - **CLI**: `registrar --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` escribe una línea
     (`veredicto: aprobado` o `veredicto: con bloqueantes (<motivo>)`) y sale con 0 si
     `aprobado`, 1 si `con bloqueantes` y 2 si no pudo registrar.
-- [ ] T004 [P] Escribir `.claude/hooks/test_preparar_revision.py` (R4, R6, FR-005; debe
+- [X] T004 [P] Escribir `.claude/hooks/test_preparar_revision.py` (R4, R6, FR-005; debe
   fallar primero). Repositorios git temporales con un `origin` local. Casos:
   - la primera línea de la salida es exactamente `CONTEXTO DE REVISIÓN`;
   - la base es la de `veredicto.base_de_fusion` (`git merge-base HEAD origin/main`), no el
@@ -132,16 +132,16 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
   - sin `origin/main`, sin merge-base o sin carpeta de specs: `CONTEXTO INCOMPLETO:
     <motivo>` y **salida 0**;
   - la salida siempre termina con código 0 y no usa la red.
-- [ ] T005 Implementar `.claude/hooks/veredicto.py` (solo biblioteca estándar; R7, R8,
+- [X] T005 Implementar `.claude/hooks/veredicto.py` (solo biblioteca estándar; R7, R8,
   FR-008, FR-010, FR-011; hace pasar T003). Funciones `ruta_veredicto(raiz, sha)`,
   `consolidar(...)`, `registrar(...)`, `leer(raiz, sha)`, `base_de_fusion(raiz)` y
   `hay_cambios(raiz)`, y la CLI de `registrar`. La ruta la calcula el script; el comando de
   `/abrir-pr` no nombra el directorio.
-- [ ] T006 Implementar `.claude/hooks/preparar_revision.py` (solo biblioteca estándar; R4,
+- [X] T006 Implementar `.claude/hooks/preparar_revision.py` (solo biblioteca estándar; R4,
   R6, FR-005; hace pasar T004). Importa `base_de_fusion` de `veredicto.py` para usar la
   misma base. Constante `UMBRAL_SALIDA`, provisional en 30 000 bytes; T031 la fija en la
   mitad del techo medido en Q4. Sin argumentos ni stdin; siempre sale con 0.
-- [ ] T007 Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check .claude/hooks` y
+- [X] T007 Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check .claude/hooks` y
   `uv run pytest .claude/hooks`, y commitear los archivos de T002 a T006: `feat(hooks):
   registro del veredicto y preparación del contexto de revisión`.
 

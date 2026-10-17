@@ -159,7 +159,10 @@ personales van en `CLAUDE.local.md` y `.claude/settings.local.json`, que git ign
   `/comentar-avance` deja en el issue lo especificado, lo decidido y lo encontrado.
 - **`/abrir-pr`**:
   - Comprueba que la spec, el plan y las tareas están commiteados.
-  - Ejecuta la revisión previa.
+  - Ejecuta la revisión independiente y la auditoría de las reglas de negocio, dos subagentes de
+    solo lectura en contexto separado, y registra el veredicto del commit revisado.
+  - Un hook bloquea crear el PR, por el MCP de GitHub o por `gh`, si no hay un veredicto
+    aprobado del commit actual publicado en la rama.
   - Abre el PR con `Closes #N` y pasa el ticket a In review.
 - **Done**: lo hace el workflow "Item closed" del Project al fusionar. El siguiente
   `/siguiente-ticket` registra ese cierre en el issue. Tras el merge del último ticket,

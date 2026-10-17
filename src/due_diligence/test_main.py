@@ -152,3 +152,16 @@ def test_hubo_solape_se_lee_de_la_secuencia_de_los_eventos():
     assert principal.hubo_solape(solapados) is True
     assert principal.hubo_solape(en_serie) is False
     assert principal.hubo_solape(un_solo_frente) is None
+
+
+def test_una_re_delegacion_no_cambia_el_solape_ni_la_duracion_del_primer_ciclo():
+    eventos = _eventos(
+        (TIPO_FRENTE_INICIO, Frente.REGISTRO),
+        (TIPO_FRENTE_INICIO, Frente.CATEGORIA),
+        (TIPO_FRENTE_FIN, Frente.REGISTRO),
+        (TIPO_FRENTE_FIN, Frente.CATEGORIA),
+        (TIPO_FRENTE_INICIO, Frente.CATEGORIA),
+        (TIPO_FRENTE_FIN, Frente.CATEGORIA),
+    )
+    assert principal.hubo_solape(eventos) is True
+    assert principal.duraciones(eventos)[Frente.CATEGORIA] == 2.0

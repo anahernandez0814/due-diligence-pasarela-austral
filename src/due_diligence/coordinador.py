@@ -57,7 +57,11 @@ llamadas a delegar_frente a la vez). Después delega listas: usa el comercio que
 registro y no pases datos, porque salen del resultado del registro.
 2. A cada frente pásale solo los datos que aparecen en la solicitud: el identificador o el nombre \
 del comercio y la categoría de negocio. Nunca inventes un identificador, un nombre, una categoría \
-ni un representante legal. Si falta un dato, no delegues el frente que lo necesita y dilo.
+ni un representante legal. Si falta un dato, no delegues el frente que lo necesita y dilo. La \
+categoría es el sector o producto del comercio, sin el canal de venta («suplementos dietarios», no \
+«venta en línea de suplementos dietarios»). Si la herramienta de categoría devuelve \
+categoria_desconocida, solo vuelve a delegar con un nombre del catálogo que aparezca en la \
+solicitud; si ninguno aparece, pide confirmación al analista.
 3. Si el registro devuelve varias coincidencias, no elijas una ni sigas con listas: informa las \
 coincidencias y pide al analista el identificador.
 4. {PROHIBICION_DECISION}

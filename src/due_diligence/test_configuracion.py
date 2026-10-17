@@ -230,3 +230,18 @@ def test_importar_el_paquete_no_carga_el_entorno():
     )
     assert resultado.returncode == 0, resultado.stderr
     assert "sin carga" in resultado.stdout
+
+
+def test_el_aviso_de_conectores_se_descarta_y_los_errores_reales_pasan(capsys):
+    configuracion.filtrar_stderr("Warning: claude.ai connectors are disabled in this session")
+    configuracion.filtrar_stderr("Error: no se pudo iniciar el servidor")
+    capturado = capsys.readouterr()
+    assert "connectors" not in capturado.err
+    assert "no se pudo iniciar el servidor" in capturado.err
+
+
+def test_todas_las_opciones_usan_el_filtro_de_stderr():
+    opciones = configuracion.opciones_base(
+        modelo="m", system_prompt="s", permitidas=[], prohibidas=[], mcp_servers={}
+    )
+    assert opciones.stderr is configuracion.filtrar_stderr

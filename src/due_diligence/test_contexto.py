@@ -146,6 +146,11 @@ def test_listas_sin_comercio_ni_motivo_dice_que_el_registro_no_identifico_al_com
 
 
 @pytest.mark.parametrize("frente", list(Frente))
+def test_las_instrucciones_de_cada_subagente_prohiben_afirmar_sin_fuente(frente):
+    assert "No afirmes nada que no esté en el resultado de la herramienta." in instrucciones(frente)
+
+
+@pytest.mark.parametrize("frente", list(Frente))
 def test_las_instrucciones_son_fijas_en_espanol_y_nombran_su_herramienta(frente):
     texto = instrucciones(frente)
     assert FRENTES[frente].herramienta in texto

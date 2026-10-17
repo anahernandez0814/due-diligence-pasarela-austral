@@ -33,6 +33,7 @@ def test_los_tipos_de_evento_son_los_del_modelo():
     assert TIPOS == {
         "caso_iniciado",
         "delegacion",
+        "delegacion_repetida",
         "frente_inicio",
         "frente_fin",
         "frente_rechazado",
@@ -120,6 +121,8 @@ def test_todos_los_frentes_empiezan_sin_iniciar():
         (Situacion.SIN_INICIAR, Situacion.RECHAZADO),
         (Situacion.RECHAZADO, Situacion.EN_CURSO),
         (Situacion.RECHAZADO, Situacion.RECHAZADO),
+        (Situacion.TERMINADO, Situacion.EN_CURSO),
+        (Situacion.NO_TERMINADO, Situacion.EN_CURSO),
     ],
 )
 def test_transiciones_permitidas(origen, destino):
@@ -137,7 +140,6 @@ def test_transiciones_permitidas(origen, destino):
         (Situacion.SIN_INICIAR, Situacion.NO_TERMINADO),
         (Situacion.EN_CURSO, Situacion.SIN_INICIAR),
         (Situacion.EN_CURSO, Situacion.RECHAZADO),
-        (Situacion.TERMINADO, Situacion.EN_CURSO),
         (Situacion.NO_TERMINADO, Situacion.TERMINADO),
         (Situacion.TERMINADO, Situacion.NO_TERMINADO),
     ],

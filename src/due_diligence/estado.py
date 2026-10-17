@@ -24,12 +24,13 @@ class Situacion(StrEnum):
     RECHAZADO = "rechazado"  # la última delegación se rechazó, con un motivo
 
 
-# Transiciones permitidas. `rechazado` puede volver a delegarse con el dato corregido.
+# Transiciones permitidas. `rechazado` puede volver a delegarse con el dato corregido, y un frente
+# terminado o no terminado, volver a ejecutarse cuando se delega con otra entrada.
 _TRANSICIONES: dict[Situacion, frozenset[Situacion]] = {
     Situacion.SIN_INICIAR: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
     Situacion.EN_CURSO: frozenset({Situacion.TERMINADO, Situacion.NO_TERMINADO}),
-    Situacion.TERMINADO: frozenset(),
-    Situacion.NO_TERMINADO: frozenset(),
+    Situacion.TERMINADO: frozenset({Situacion.EN_CURSO}),
+    Situacion.NO_TERMINADO: frozenset({Situacion.EN_CURSO}),
     Situacion.RECHAZADO: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
 }
 

@@ -25,6 +25,7 @@ from due_diligence.estado import (
 )
 from due_diligence.eventos import (
     TIPO_DELEGACION,
+    TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
     TIPO_FRENTE_RECHAZADO,
@@ -41,7 +42,12 @@ DESCRIPCION = (
     "del registro, no hay que pasarlo). Los frentes registro, noticias y categoria son "
     "independientes: delégalos juntos, en la misma respuesta. listas necesita el registro. Pasa "
     "solo los datos que el frente necesita y nunca inventes uno: si falta, la delegación se "
-    "rechaza. Esta herramienta no consulta fuentes por sí misma, no registra el informe ni escala "
+    "rechaza. La categoría es el sector o producto del comercio, sin el canal de venta (por "
+    "ejemplo «suplementos dietarios», no «venta en línea de suplementos dietarios»). Si "
+    "consultar_riesgo_categoria devuelve categoria_desconocida, solo vuelve a delegar con un "
+    "nombre del catálogo que aparezca en la solicitud. Repetir un frente con la misma entrada "
+    "devuelve el resultado guardado; con otra entrada, vuelve a ejecutarlo. "
+    "Esta herramienta no consulta fuentes por sí misma, no registra el informe ni escala "
     "el caso."
 )
 
@@ -107,6 +113,7 @@ class Delegador:
         self._opciones = opciones_subagente
         self._hecho: dict[Frente, asyncio.Event] = {f: asyncio.Event() for f in Frente}
         self._respuestas: dict[Frente, dict[str, Any]] = {}
+        self._contextos: dict[Frente, str] = {}
         self.herramienta: SdkMcpTool[Any] = self._crear_herramienta()
 
     # ------------------------------------------------------------ servidor en proceso
@@ -143,9 +150,8 @@ class Delegador:
                 "entrada_invalida", f"El frente debe ser uno de: {valores}.", reintentable=False
             )
 
-        repetida = await self._si_ya_delegado(frente)
-        if repetida is not None:
-            return repetida
+        if self.estado.situacion(frente) is Situacion.EN_CURSO:
+            await self._hecho[frente].wait()
 
         if frente is Frente.LISTAS:
             previa = await self._esperar_al_registro()
@@ -155,19 +161,21 @@ class Delegador:
         try:
             contexto = construir_contexto(frente, entrada, self.estado)
         except FrenteRechazado as rechazo:
+            if frente in self._respuestas:  # ya tiene resultado: se conserva, no se rechaza
+                motivo = str(rechazo)
+                self.eventos.registrar(TIPO_FRENTE_RECHAZADO, frente, motivo)
+                return _error("frente_rechazado", motivo, False, {"frente": frente.value})
             return self._rechazar(frente, str(rechazo))
 
-        return await self._ejecutar(frente, contexto)
-
-    async def _si_ya_delegado(self, frente: Frente) -> dict[str, Any] | None:
-        """Un frente en curso o ya terminado no lanza otro subagente: devuelve lo guardado."""
-        situacion = self.estado.situacion(frente)
-        if situacion is Situacion.EN_CURSO:
-            await self._hecho[frente].wait()
-            situacion = self.estado.situacion(frente)
-        if situacion in (Situacion.TERMINADO, Situacion.NO_TERMINADO):
+        if frente in self._respuestas and self._contextos.get(frente) == contexto:
+            self.eventos.registrar(
+                TIPO_DELEGACION_REPETIDA,
+                frente,
+                f"Misma entrada que la anterior: se devuelve lo guardado de {frente.value}.",
+            )
             return self._respuestas[frente]
-        return None
+
+        return await self._ejecutar(frente, contexto, repite=frente in self._respuestas)
 
     def _rechazar(self, frente: Frente, motivo: str, reintentable: bool = False) -> dict[str, Any]:
         self.estado.cambiar_situacion(frente, Situacion.RECHAZADO, motivo)
@@ -177,8 +185,8 @@ class Delegador:
     async def _esperar_al_registro(self) -> dict[str, Any] | None:
         """El orden de `listas` (R4): espera al registro en curso; sin iniciar, se rechaza.
 
-        Devuelve una respuesta si `listas` no debe seguir (rechazo reintentable, o ya delegada
-        mientras esperaba) y `None` si puede continuar. Los rechazos por varias coincidencias,
+        Devuelve una respuesta si `listas` no debe seguir (rechazo reintentable) y `None` si puede
+        continuar. Los rechazos por varias coincidencias,
         ninguna o un registro que no terminó no son reintentables: salen de `construir_contexto`.
         """
         situacion = self.estado.situacion(Frente.REGISTRO)
@@ -186,12 +194,20 @@ class Delegador:
             return self._rechazar(Frente.LISTAS, MOTIVO_REGISTRO_PRIMERO, reintentable=True)
         if situacion is Situacion.EN_CURSO:
             await self._hecho[Frente.REGISTRO].wait()
-            return await self._si_ya_delegado(Frente.LISTAS)
         return None
 
-    async def _ejecutar(self, frente: Frente, contexto: str) -> dict[str, Any]:
-        self.eventos.registrar(TIPO_DELEGACION, frente, f"Se delega el frente {frente.value}.")
+    async def _ejecutar(
+        self, frente: Frente, contexto: str, repite: bool = False
+    ) -> dict[str, Any]:
+        detalle = (
+            f"Se vuelve a delegar el frente {frente.value} con otra entrada."
+            if repite
+            else f"Se delega el frente {frente.value}."
+        )
+        self.eventos.registrar(TIPO_DELEGACION, frente, detalle)
         self.estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+        self._contextos[frente] = contexto
+        self._hecho[frente].clear()
         self.eventos.registrar(TIPO_FRENTE_INICIO, frente, f"Contexto entregado: {contexto}")
         try:
             try:

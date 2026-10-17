@@ -51,9 +51,12 @@ el frente necesita (data-model, tabla de frentes); los demás se ignoran, no se 
    actualiza la situación del frente (`terminado` o `no_terminado`).
 6. **Responde** al coordinador con el resultado (abajo).
 
-Un frente ya delegado en este caso **no se vuelve a ejecutar** si está `en_curso` o `terminado`: la
-llamada repetida devuelve el resultado guardado (o espera al que está en curso). Reintentar un frente
-`no_terminado` es del #8.
+Un frente `en_curso` no se lanza dos veces: la llamada repetida espera al que corre. Con el frente ya
+terminado o no terminado, se compara la **entrada** (el contexto construido) con la anterior: si es
+**idéntica**, devuelve el resultado guardado y registra `delegacion_repetida`; si es **distinta**, vuelve
+a ejecutar el frente (`delegacion` con «otra entrada», nuevo `frente_inicio` y `frente_fin`). Lo hallado
+en la validación real: el coordinador corrigió la categoría y recibió el resultado anterior. La política
+de cuándo reintentar un frente `no_terminado` es del #8.
 
 ## Respuesta
 

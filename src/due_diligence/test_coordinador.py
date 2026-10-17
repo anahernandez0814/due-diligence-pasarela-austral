@@ -154,6 +154,16 @@ def test_las_instrucciones_piden_delegar_juntos_los_frentes_independientes_y_no_
     assert "no elijas" in texto
 
 
+def test_la_categoria_es_el_sector_sin_canal_y_lo_desconocido_se_confirma_en_las_dos_guias():
+    from due_diligence.delegacion import DESCRIPCION
+
+    for texto in (INSTRUCCIONES_COORDINADOR, DESCRIPCION):
+        assert "sin el canal de venta" in texto
+        assert "categoria_desconocida" in texto
+        assert "catálogo" in texto
+    assert "pide confirmación al analista" in INSTRUCCIONES_COORDINADOR
+
+
 def test_las_opciones_del_coordinador_llevan_el_servidor_de_delegacion_del_caso():
     caso, _, _ = _caso([])
     opciones = caso.opciones_coordinador()

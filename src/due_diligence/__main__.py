@@ -28,7 +28,12 @@ def _hora(marca: datetime) -> str:
 
 
 def _eventos_de(eventos: list[Evento], tipo: str) -> dict[Frente, Evento]:
-    return {e.frente: e for e in eventos if e.tipo == tipo and e.frente is not None}
+    """El primer evento de cada frente: una re-delegación no cambia el inicio ni el solape."""
+    primeros: dict[Frente, Evento] = {}
+    for evento in eventos:
+        if evento.tipo == tipo and evento.frente is not None:
+            primeros.setdefault(evento.frente, evento)
+    return primeros
 
 
 def duraciones(eventos: list[Evento]) -> dict[Frente, float]:

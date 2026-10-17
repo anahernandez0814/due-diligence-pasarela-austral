@@ -13,6 +13,7 @@ from due_diligence.frentes import Frente
 
 TIPO_CASO_INICIADO = "caso_iniciado"
 TIPO_DELEGACION = "delegacion"
+TIPO_DELEGACION_REPETIDA = "delegacion_repetida"
 TIPO_FRENTE_INICIO = "frente_inicio"
 TIPO_FRENTE_FIN = "frente_fin"
 TIPO_FRENTE_RECHAZADO = "frente_rechazado"
@@ -22,6 +23,7 @@ TIPOS = frozenset(
     {
         TIPO_CASO_INICIADO,
         TIPO_DELEGACION,
+        TIPO_DELEGACION_REPETIDA,
         TIPO_FRENTE_INICIO,
         TIPO_FRENTE_FIN,
         TIPO_FRENTE_RECHAZADO,

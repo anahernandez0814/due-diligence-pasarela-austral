@@ -17,7 +17,8 @@ Los cuatro frentes son constantes del paquete (`frentes.py`), no datos del caso.
 
 `sin_iniciar` → `en_curso` → `terminado` | `no_terminado`, o `sin_iniciar` → `rechazado`.
 Un frente `rechazado` puede volver a `en_curso` (o seguir `rechazado`) cuando se reintenta la
-delegación: es el caso de `listas` pedida antes de que el registro terminara.
+delegación: es el caso de `listas` pedida antes de que el registro terminara. Un frente `terminado` o
+`no_terminado` vuelve a `en_curso` si se delega con otra entrada.
 
 - `sin_iniciar`: el coordinador aún no lo delegó.
 - `en_curso`: hay un evento `frente_inicio` y aún no `frente_fin`.
@@ -81,7 +82,7 @@ mezcla ni los reescribe (FR-007).
 |-------|-----------|
 | `secuencia` | entero creciente desde 1, único por caso; da orden estable aunque coincidan las marcas |
 | `marca` | fecha y hora UTC con zona (reloj inyectable en los tests) |
-| `tipo` | `caso_iniciado`, `delegacion`, `frente_inicio`, `frente_fin`, `frente_rechazado`, `terminacion` |
+| `tipo` | `caso_iniciado`, `delegacion`, `delegacion_repetida`, `frente_inicio`, `frente_fin`, `frente_rechazado`, `terminacion` |
 | `frente` | frente al que se refiere, o `None` (`caso_iniciado`, `terminacion` del coordinador) |
 | `detalle` | texto en español para la interfaz; en `terminacion` y `frente_fin`, la clasificación y los valores originales de `subtype`, `stop_reason` y `terminal_reason` |
 

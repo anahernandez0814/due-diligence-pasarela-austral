@@ -44,9 +44,12 @@ _INSTRUCCIONES: dict[Frente, str] = {
 }
 
 
+SOLO_LO_DEL_RESULTADO = "No afirmes nada que no esté en el resultado de la herramienta."
+
+
 def instrucciones(frente: Frente) -> str:
     """El `system_prompt` fijo del subagente de un frente."""
-    return _INSTRUCCIONES[frente]
+    return f"{_INSTRUCCIONES[frente]} {SOLO_LO_DEL_RESULTADO}"
 
 
 def _texto(entrada: Mapping[str, Any], campo: str) -> str | None:

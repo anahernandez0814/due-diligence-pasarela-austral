@@ -12,6 +12,7 @@ from due_diligence.delegacion import Delegador
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_DELEGACION,
+    TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
     TIPO_FRENTE_RECHAZADO,
@@ -166,12 +167,44 @@ def test_un_frente_invalido_es_entrada_invalida_no_reintentable(entrada):
 # ------------------------------------------------------------------ frente repetido
 
 
-def test_un_frente_terminado_no_lanza_un_segundo_subagente_y_devuelve_lo_guardado():
-    delegador, _, _, ejecutor = _crear()
+def test_la_misma_entrada_no_lanza_otro_subagente_y_devuelve_lo_guardado_con_un_evento():
+    delegador, _, registro, ejecutor = _crear()
     primera = _delegar(delegador, frente="registro", identificador="CO-TV-0001")
-    segunda = _delegar(delegador, frente="registro", identificador="CO-OTRO-9999")
+    segunda = _delegar(delegador, frente="registro", identificador="CO-TV-0001")
     assert segunda == primera
     assert len(ejecutor.llamadas) == 1
+    tipos = [t for _, t in _tipos(registro, Frente.REGISTRO)]
+    assert tipos == [
+        TIPO_DELEGACION,
+        TIPO_FRENTE_INICIO,
+        TIPO_FRENTE_FIN,
+        TIPO_DELEGACION_REPETIDA,
+    ]
+
+
+def test_otra_entrada_vuelve_a_ejecutar_el_frente_y_lo_registra():
+    delegador, estado, registro, ejecutor = _crear()
+    _delegar(delegador, frente="categoria", categoria="Venta en línea de suplementos dietarios")
+    segunda = _delegar(delegador, frente="categoria", categoria="suplementos dietarios")
+    assert len(ejecutor.llamadas) == 2
+    assert "«suplementos dietarios»" in ejecutor.llamadas[1].contexto
+    assert segunda["situacion"] == "terminado"
+    assert estado.situacion(Frente.CATEGORIA) is Situacion.TERMINADO
+    eventos = registro.eventos()
+    delegaciones = [e for e in eventos if e.tipo == TIPO_DELEGACION]
+    assert "otra entrada" not in delegaciones[0].detalle
+    assert "otra entrada" in delegaciones[1].detalle
+    assert [e.tipo for e in eventos].count(TIPO_FRENTE_FIN) == 2
+
+
+def test_una_re_delegacion_con_dato_que_falta_conserva_el_resultado_anterior():
+    delegador, estado, _, ejecutor = _crear()
+    primera = _delegar(delegador, frente="categoria", categoria="suplementos dietarios")
+    rechazada = _delegar(delegador, frente="categoria")
+    assert rechazada["error"] is True and rechazada["tipo"] == "frente_rechazado"
+    assert estado.situacion(Frente.CATEGORIA) is Situacion.TERMINADO
+    assert len(ejecutor.llamadas) == 1
+    assert _delegar(delegador, frente="categoria", categoria="suplementos dietarios") == primera
 
 
 def test_un_frente_en_curso_no_lanza_un_segundo_subagente_y_espera_al_primero():

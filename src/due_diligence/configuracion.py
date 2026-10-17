@@ -93,6 +93,20 @@ def herramientas_subagente(frente: Frente) -> tuple[list[str], list[str]]:
     return permitidas, prohibidas
 
 
+AVISO_CONECTORES = "claude.ai connectors are disabled"
+
+
+def filtrar_stderr(linea: str) -> None:
+    """Callback `stderr` del SDK: descarta el aviso de conectores y deja pasar lo demás.
+
+    Cada CLI lo emite al arrancar con `strict_mcp_config`; no informa de nada. Cualquier otra línea
+    (un error real) se escribe en la salida de error.
+    """
+    if AVISO_CONECTORES in linea.lower():
+        return
+    print(linea, file=sys.stderr)
+
+
 def opciones_base(
     *,
     modelo: str,
@@ -115,6 +129,7 @@ def opciones_base(
         strict_mcp_config=True,
         cwd=str(RAIZ),
         max_turns=MAX_TURNOS_SEGURIDAD,
+        stderr=filtrar_stderr,
     )
 
 

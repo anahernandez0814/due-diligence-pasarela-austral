@@ -48,6 +48,30 @@ En este orden, y no reportes antes de terminarlo:
 3. Los tests, por secciones si hace falta.
 4. Solo entonces, el reporte.
 
+## Cuándo aplica una regla
+
+Decide, para cada una de las cinco reglas, en este orden:
+
+1. **Delegada con número.** La spec del ticket cita la regla para delegarla y nombra el ticket
+   responsable con su número (`#N`). La regla es `no aplica`, con la razón «delegada al ticket
+   #N en la spec». La delegación prevalece incluso sobre el código del cambio que solo aporta
+   datos o clasificación que la regla usa y no la hace cumplir. Salvo los puntos 2 y 4.
+   Citarla sin delegarla con un número de ticket no es delegarla: sigue el punto 3.
+2. **Delegada y contradicha.** Si el diff contradice o debilita una regla delegada, es
+   `incumple` y es **bloqueante**. Delegar exime de implementar la regla, no de violarla.
+3. **Asignada a este ticket.** Si la spec del ticket la cita sin delegarla con número, o le
+   asigna su cumplimiento, o el diff toca código o tests que la implementan o la prueban, la
+   regla aplica y la verificas con los estados de abajo.
+4. **Borrada o debilitada.** Sea delegada o no, un cambio que borra o debilita el código o el
+   test de una regla la toca: aplica y, si sin ese código o ese test ya no hay evidencia
+   vigente en el código y en los tests, es `no verificada` y bloqueante. La delegación exime
+   de implementar, no de conservar lo que ya garantiza la regla. Nunca la des por `no aplica`
+   porque no se tocó código de producción.
+5. **Ninguna de las anteriores.** `no aplica`, y das **la razón**.
+   Sin código de producción ni tests de las reglas en el cambio (por ejemplo, solo
+   configuración o documentación), las cinco reglas son `no aplica`, con esa razón, y eso no
+   bloquea.
+
 ## Qué hacer
 
 1. **Comprueba el contexto.** La salida de arriba debe empezar con la línea
@@ -60,11 +84,8 @@ En este orden, y no reportes antes de terminarlo:
    calculada con git a partir de la rama, que es la fuente fiable. El argumento de arriba
    solo es una pista; si indica otra carpeta, dilo en el reporte y declara
    `cobertura=incompleta`.
-3. **Decide cuáles de las cinco reglas aplican** al cambio: una regla aplica si la spec del
-   ticket la cita o si el diff toca código o tests que la implementan o la prueban. Sin
-   código de producción ni tests de las reglas, las cinco son `no aplica`, con la razón. Un
-   cambio que solo borra o debilita el test de una regla sí la toca: esa regla aplica, y sin
-   evidencia vigente es `no verificada` y bloqueante.
+3. **Decide cuáles de las cinco reglas aplican** al cambio con la sección «Cuándo aplica una
+   regla» de arriba, y reporta la razón de cada `no aplica`.
 4. **Verifica las que aplican** contra la spec, el código y los tests, con `Read` y `Grep`.
    Si la salida trae el diff completo, úsalo; si dice que se omitió por tamaño, lee los
    archivos de la lista, empezando por los de código y configuración.

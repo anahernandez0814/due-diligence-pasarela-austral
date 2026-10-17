@@ -461,3 +461,101 @@ def test_el_plan_de_lectura_va_en_orden_y_el_reporte_al_final(nombre, cuerpo):
     assert "plan de lectura" in cuerpo.lower()
     posiciones = [cuerpo.index(paso) for paso in PASOS_DE_LECTURA]
     assert posiciones == sorted(posiciones), nombre
+
+
+# --- Coherencia entre los archivos de la puerta (FR-013, R4) ------------------------------
+
+
+def seccion(cuerpo: str, encabezado: str, origen: str = "el texto") -> str:
+    """Texto de la sección `## <encabezado>`, hasta el siguiente `## ` o el final.
+
+    Se normaliza (espacios, tabuladores y saltos de línea colapsados en un solo espacio y sin
+    extremos): ajustar las líneas de un archivo no produce un falso fallo, una palabra distinta
+    sí. Si la sección no existe, falla nombrando el origen.
+    """
+    lineas = cuerpo.splitlines()
+    marca = f"## {encabezado}"
+    inicio = next((i for i, linea in enumerate(lineas) if linea.rstrip() == marca), None)
+    if inicio is None:
+        raise AssertionError(f"{origen}: falta la sección «{encabezado}»")
+    fin = next((i for i in range(inicio + 1, len(lineas)) if lineas[i].startswith("## ")), None)
+    cuerpo_de_la_seccion = lineas[inicio + 1 : fin]
+    return " ".join(" ".join(cuerpo_de_la_seccion).split())
+
+
+def test_seccion_llega_hasta_el_siguiente_encabezado():
+    texto = "# Título\n\n## Uno\nprimera\nsegunda\n\n## Dos\notra\n"
+    assert seccion(texto, "Uno") == "primera segunda"
+    assert seccion(texto, "Dos") == "otra"
+
+
+def test_seccion_llega_hasta_el_final_si_es_la_ultima():
+    assert seccion("## Última\nfin del archivo\n", "Última") == "fin del archivo"
+
+
+def test_seccion_no_confunde_un_encabezado_de_nivel_tres_con_el_fin():
+    texto = "## Uno\nantes\n### Detalle\ndentro\n## Dos\nfuera\n"
+    assert seccion(texto, "Uno") == "antes ### Detalle dentro"
+
+
+def test_dos_secciones_que_difieren_en_una_palabra_no_son_iguales():
+    a = "## Regla\nla delegación exime de implementar\n"
+    b = "## Regla\nla delegación exime de conservar\n"
+    assert seccion(a, "Regla") != seccion(b, "Regla")
+
+
+def test_dos_secciones_que_difieren_solo_en_espacios_o_saltos_de_linea_son_iguales():
+    a = "## Regla\nla delegación exime\nde implementar\n"
+    b = "## Regla\n  la   delegación\texime de   implementar  \n\n"
+    assert seccion(a, "Regla") == seccion(b, "Regla")
+
+
+def test_una_seccion_inexistente_falla_nombrando_el_origen():
+    with pytest.raises(AssertionError, match=r"agente auditor.*falta la sección «Regla»"):
+        seccion("## Otra\ntexto\n", "Regla", origen="agente auditor")
+
+
+# --- Cuándo aplica una regla (FR-001 a FR-005, FR-011, FR-012; R1, R2) ---------------------
+
+ENCABEZADO_APLICA = "Cuándo aplica una regla"
+FRASES_DE_APLICABILIDAD = [
+    "con su número",
+    "no es delegarla",
+    "delegada al ticket #N en la spec",
+    "Delegar exime de implementar la regla, no de violarla",
+    "no de conservar",
+    "borra o debilita",
+    "bloqueante",
+]
+
+
+def instrucciones_del_auditor():
+    """Los dos textos que dicen cuándo aplica una regla: el agente y su skill."""
+    return [
+        ("agente auditor-cumplimiento", cargar_agente("auditor-cumplimiento")[1]),
+        ("skill auditar-cumplimiento", cargar_skill("auditar-cumplimiento")[1]),
+    ]
+
+
+IDS_DEL_AUDITOR = [nombre for nombre, _ in instrucciones_del_auditor()]
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_la_regla_de_aplicabilidad_dice_lo_que_exige_la_spec(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    for frase in FRASES_DE_APLICABILIDAD:
+        assert " ".join(frase.split()) in texto, f"{nombre}: falta «{frase}»"
+
+
+def test_la_skill_remite_a_la_seccion_y_no_resume_la_regla_aparte():
+    _, cuerpo = cargar_skill("auditar-cumplimiento")
+    normal = " ".join(cuerpo.split())
+    assert f"con la sección «{ENCABEZADO_APLICA}»" in normal
+    # La regla se dice una sola vez: en la sección, no también en el paso 3 (R1).
+    assert normal.count("el diff toca código o tests que la implementan o la prueban") == 1
+
+
+def test_la_seccion_de_aplicabilidad_de_la_skill_no_menciona_spec_md():
+    # La skill exige nombrar la constitución antes que spec.md.
+    _, cuerpo = cargar_skill("auditar-cumplimiento")
+    assert "spec.md" not in seccion(cuerpo, ENCABEZADO_APLICA, origen="skill auditar-cumplimiento")

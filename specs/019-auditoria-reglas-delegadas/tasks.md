@@ -69,10 +69,11 @@ verificación del cierre de #19 la hace el paso 0 del siguiente `/siguiente-tick
 
 - [X] T001 Commitear este `tasks.md`: `docs(specs): tareas del ticket #19`. Con spec y plan ya
   commiteados, deja a la rama con los tres documentos antes de tocar código protegido.
-- [ ] T002 Estado de partida: con `Grep` sobre `.claude/agents` y `.claude/skills`, comprobar que
+- [X] T002 Estado de partida: con `Grep` sobre `.claude/agents` y `.claude/skills`, comprobar que
   `uv.lock` aparece **exactamente cuatro veces** (una por archivo de la puerta, R3); ejecutar
   `uv run pytest .claude/hooks/test_agentes_skills.py` (debe estar en verde) y
   `git status --porcelain` (vacío). Anotar el número de tests que pasan: es la línea base.
+  **Resultado de T002** (2026-10-17, rama `019-auditoria-reglas-delegadas`, commit `42ac154`): `uv.lock` aparece 4 veces (`revisor-codigo.md:65`, `auditor-cumplimiento.md:89`, `revisar-codigo/SKILL.md:30` y `auditar-cumplimiento/SKILL.md:31`); `test_agentes_skills.py`: **67 passed**; `git status` limpio.
 
 ---
 
@@ -80,7 +81,7 @@ verificación del cierre de #19 la hace el paso 0 del siguiente `/siguiente-tick
 
 **Propósito**: la función que extrae una sección y la compara, que usan las tres historias.
 
-- [ ] T003 Añadir a `.claude/hooks/test_agentes_skills.py`, al final y bajo un encabezado
+- [X] T003 Añadir a `.claude/hooks/test_agentes_skills.py`, al final y bajo un encabezado
   «Coherencia entre los archivos de la puerta (FR-013, R4)», la función
   `seccion(cuerpo: str, encabezado: str) -> str` y sus pruebas, según
   [contracts/test-coherencia.md](contracts/test-coherencia.md), apartado «Función»:
@@ -105,7 +106,7 @@ auditoría da I.1 a I.3 `no aplica` (Q3, fase 8).
 
 ### Tests de US1 (deben fallar antes de T005 y T006)
 
-- [ ] T004 [US1] En `.claude/hooks/test_agentes_skills.py`, sección «Cuándo aplica una regla
+- [X] T004 [US1] En `.claude/hooks/test_agentes_skills.py`, sección «Cuándo aplica una regla
   (FR-001 a FR-005, FR-011, FR-012; R1, R2)», con la función `seccion` de T003:
   - el agente `auditor-cumplimiento` y la skill `auditar-cumplimiento` tienen cada uno la
     sección `Cuándo aplica una regla`;
@@ -119,25 +120,27 @@ auditoría da I.1 a I.3 `no aplica` (Q3, fase 8).
     menciona `spec.md`).
   Origen: FR-001 a FR-005, FR-011, FR-012, R1, R2, contrato «Bloque 2». Deben fallar con el
   texto actual: ejecutar y anotar los fallos.
+  **Resultado de T004**: con el texto anterior fallaron 4 pruebas (`test_la_regla_de_aplicabilidad_dice_lo_que_exige_la_spec` en el agente y en la skill, `test_la_skill_remite_a_la_seccion_y_no_resume_la_regla_aparte` y `test_la_seccion_de_aplicabilidad_de_la_skill_no_menciona_spec_md`); `seccion` y sus 6 pruebas (T003) pasaron desde el principio.
 
 ### Implementación de US1
 
-- [ ] T005 [P] [US1] En `.claude/agents/auditor-cumplimiento.md`, sustituir la sección
+- [X] T005 [P] [US1] En `.claude/agents/auditor-cumplimiento.md`, sustituir la sección
   `## Cuándo aplica una regla` actual (y el párrafo «Los tests cuentan…», que pasa al punto 4)
   por el texto exacto del «Bloque 2» de
   [contracts/texto-de-la-puerta.md](contracts/texto-de-la-puerta.md). Conserva las frases que
   fijan los tests existentes: «la spec del ticket la cita», «el diff toca código o tests que la
   implementan o la prueban», «sin código de producción ni tests de las reglas» y «borra o
   debilita» (R5). No cambia el frontmatter ni las demás secciones.
-- [ ] T006 [P] [US1] En `.claude/skills/auditar-cumplimiento/SKILL.md`: añadir la sección
+- [X] T006 [P] [US1] En `.claude/skills/auditar-cumplimiento/SKILL.md`: añadir la sección
   `## Cuándo aplica una regla` con el texto exacto del «Bloque 2» (entre «Plan de lectura» y
   «Qué hacer») y sustituir el paso 3 de «Qué hacer» por el texto del apartado «Paso 3 de la
   skill de auditoría (reemplazo)» del contrato. La sección **no menciona `spec.md`**. No
   cambia el frontmatter, el comando inyectado ni `allowed-tools`.
-- [ ] T007 [US1] Ejecutar `uv run pytest .claude/hooks/test_agentes_skills.py`: los tests de T004
+- [X] T007 [US1] Ejecutar `uv run pytest .claude/hooks/test_agentes_skills.py`: los tests de T004
   pasan y los existentes (línea base de T002) siguen en verde sin editarlos;
   `uv run ruff format .claude/hooks` y `uv run ruff check .claude/hooks` limpios. Commit:
   `fix(auditoria): una regla delegada con número de ticket es no aplica`.
+  **Resultado de T007**: `test_agentes_skills.py` 77 passed (67 de la línea base + 6 de `seccion` + 4 de US1); `ruff format .claude/hooks` y `ruff check .claude/hooks` limpios. Ajuste de forma: el punto 5 del texto de la sección se parte en otras líneas para que «sin código de producción ni tests de las reglas» quede entera en una línea, porque un test existente la busca sin normalizar; el contrato se alineó.
 
 **Checkpoint**: US1 completa y probada por texto. Q3 y Q4 la comprueban con sesiones reales.
 

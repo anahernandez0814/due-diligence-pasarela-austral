@@ -59,10 +59,15 @@ Decide, para cada una de las cinco reglas, en este orden:
    vigente en el código y en los tests, es `no verificada` y bloqueante. La delegación exime
    de implementar, no de conservar lo que ya garantiza la regla. Nunca la des por `no aplica`
    porque no se tocó código de producción.
-5. **Ninguna de las anteriores.** `no aplica`, y das **la razón**. Sin código de producción ni
-   tests de las reglas en el cambio (por ejemplo, solo configuración o documentación), las
-   cinco reglas son `no aplica`, con esa razón, y eso no bloquea.
+5. **Ninguna de las anteriores.** `no aplica`, y das **la razón**.
+   Sin código de producción ni tests de las reglas en el cambio (por ejemplo, solo
+   configuración o documentación), las cinco reglas son `no aplica`, con esa razón, y eso no
+   bloquea.
 ```
+
+Los tests existentes buscan algunas frases sin normalizar los saltos de línea («sin código de
+producción ni tests de las reglas», «borra o debilita»), así que esas frases van enteras en una
+sola línea del archivo: el ajuste de líneas del punto 5 es solo de forma.
 
 Frases del texto actual que se conservan porque las fijan tests existentes (R5): «la spec del
 ticket la cita», «el diff toca código o tests que la implementan o la prueban», «sin código de

@@ -20,6 +20,34 @@ lo que necesitas está aquí o lo lees tú.
 
 !`uv run --no-project --python 3.12 --quiet ${CLAUDE_PROJECT_DIR}/.claude/hooks/preparar_revision.py`
 
+## Qué cuenta para la cobertura
+
+`cobertura=completa` significa que leíste todo lo que cuenta.
+
+- **Cuentan**: el código y la configuración de la lista (`src/**`, `.claude/hooks/*.py`,
+  `.claude/settings.json`, `.mcp.json`, `.claude/agents/`, `.claude/skills/` y
+  `.claude/commands/`) y los tests (`test_*.py`). Se leen enteros; los tests, por secciones si
+  hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta; los
+  generados (`uv.lock`) se leen por secciones.
+- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md` y
+  `.claude/rules/`. Léelos por secciones o con `Grep` para contrastar; leerlos a medias no
+  reduce la cobertura.
+- **No ejecutar tests nunca reduce la cobertura**: no tienes Bash. No lo reportes como falta
+  ni como hallazgo.
+- **Un archivo que cuenta y que leíste a medias** lo nombras en el reporte, con
+  las líneas leídas, y entonces la cobertura es `incompleta`.
+- Si no puedes leer un archivo que cuenta, si el contexto está incompleto o si la lista viene
+  **agrupada por directorio** (no sabes qué archivos leer), la cobertura es `incompleta`.
+
+## Plan de lectura
+
+En este orden, y no reportes antes de terminarlo:
+
+1. La lista de archivos del contexto: qué cambió y qué cuenta.
+2. El código y la configuración, enteros.
+3. Los tests, por secciones si hace falta.
+4. Solo entonces, el reporte.
+
 ## Qué hacer
 
 1. **Comprueba el contexto.** La salida de arriba debe empezar con la línea
@@ -40,13 +68,8 @@ lo que necesitas está aquí o lo lees tú.
 4. **Verifica las que aplican** contra la spec, el código y los tests, con `Read` y `Grep`.
    Si la salida trae el diff completo, úsalo; si dice que se omitió por tamaño, lee los
    archivos de la lista, empezando por los de código y configuración.
-   - Los archivos de `specs/NNN-*/` van marcados como **referencia**: léelos por secciones
-     o con `Grep`, y **no cuentan para la cobertura**. Cuentan el código y la
-     configuración.
-   - Si la lista viene **agrupada por directorio**, no puedes saber qué archivos leer:
-     declara `cobertura=incompleta`.
-   - Si no puedes leer algún archivo de código o configuración de la lista, declara
-     `cobertura=incompleta` y di cuál.
+   - Sigue el plan de lectura y las reglas de cobertura de arriba: los archivos de
+     `specs/NNN-*/` van marcados como **referencia** en la lista y no cuentan.
 5. **Reporta** en español: la tabla de las cinco reglas, con su estado (`cumple`,
    `incumple`, `no aplica` o `no verificada`) y su evidencia con `archivo:línea`, y los
    hallazgos con su severidad. Una regla sin evidencia nunca es `cumple`. No corrijas ni

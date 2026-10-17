@@ -375,3 +375,89 @@ def test_las_skills_conservan_la_variable_que_skills_md_si_sustituye(subagente, 
     frontmatter, cuerpo = cargar_skill(skill)
     assert "${CLAUDE_PROJECT_DIR}" in frontmatter["allowed-tools"][0]
     assert "${CLAUDE_PROJECT_DIR}" in comando_inyectado(cuerpo)
+
+
+# --- Qué cuenta para la cobertura (T030: contracts/revisiones.md) -------------------------
+
+CUENTAN = [
+    "src/**",
+    ".claude/hooks/*.py",
+    ".claude/settings.json",
+    ".mcp.json",
+    ".claude/agents/",
+    ".claude/skills/",
+    ".claude/commands/",
+    "`test_*.py`",
+]
+REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/"]
+PASOS_DE_LECTURA = [
+    "1. La lista de archivos",
+    "2. El código y la configuración",
+    "3. Los tests",
+    "4. Solo entonces, el reporte",
+]
+
+
+def instrucciones_de_cobertura():
+    """Los cuatro textos que dan instrucciones a los revisores: subagentes y skills."""
+    textos = []
+    for subagente, skill in REVISIONES:
+        textos.append((f"agente {subagente}", cargar_agente(subagente)[1]))
+        textos.append((f"skill {skill}", cargar_skill(skill)[1]))
+    return textos
+
+
+IDS_DE_COBERTURA = [nombre for nombre, _ in instrucciones_de_cobertura()]
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_las_instrucciones_listan_lo_que_cuenta_para_la_cobertura(nombre, cuerpo):
+    for ruta in CUENTAN:
+        assert ruta in cuerpo, f"{nombre}: falta {ruta}"
+    assert "enteros" in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_las_instrucciones_listan_la_referencia_que_no_cuenta(nombre, cuerpo):
+    for ruta in REFERENCIA:
+        assert ruta in cuerpo, f"{nombre}: falta {ruta}"
+    assert "no cuentan" in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_no_ejecutar_tests_nunca_reduce_la_cobertura(nombre, cuerpo):
+    assert "No ejecutar tests nunca reduce la cobertura" in cuerpo
+    assert "no tienes Bash" in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_un_archivo_leido_a_medias_se_nombra_con_las_lineas_leidas(nombre, cuerpo):
+    assert "a medias" in cuerpo
+    assert "las líneas leídas" in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_el_plan_de_lectura_va_en_orden_y_el_reporte_al_final(nombre, cuerpo):
+    assert "plan de lectura" in cuerpo.lower()
+    posiciones = [cuerpo.index(paso) for paso in PASOS_DE_LECTURA]
+    assert posiciones == sorted(posiciones), nombre

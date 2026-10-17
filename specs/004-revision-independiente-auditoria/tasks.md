@@ -265,10 +265,10 @@ un bloqueante, no hay push, ni PR ni cambio de estado. Q12 y Q13 se prueban sin
 `/abrir-pr` (skills y `veredicto.py registrar` a mano); `/abrir-pr` completo se valida una
 vez, en T036 (Q12, Q13).
 
-- [ ] T016 [US3] Añadir a `.claude/hooks/test_agentes_skills.py` la comprobación de
+- [X] T016 [US3] Añadir a `.claude/hooks/test_agentes_skills.py` la comprobación de
   `/abrir-pr` (R12; debe fallar primero): ya no usa `Agent` ni `git diff`, declara las dos
   `Skill(...)` y el comando de `veredicto.py registrar`, y menciona `git fetch origin main`.
-- [ ] T017 [US3] Reescribir la sección 2 de `.claude/commands/abrir-pr.md` y ajustar sus
+- [X] T017 [US3] Reescribir la sección 2 de `.claude/commands/abrir-pr.md` y ajustar sus
   acciones según [contracts/abrir-pr.md](contracts/abrir-pr.md) (FR-008, FR-009, FR-010,
   FR-019, R11; hace pasar T016). Orden: comprobaciones sin cambios → `git fetch origin main`
   (falla → se detiene) y `git fetch origin <rama>` (**no es fatal si la rama aún no existe
@@ -282,7 +282,7 @@ vez, en T036 (Q12, Q13).
   `veredicto.py registrar` y `Bash(git rev-parse:*)`. La descripción del PR cita el
   veredicto, **ese sha guardado**, los dos `RESUMEN` y los hallazgos no bloqueantes. No
   quedan dos revisiones: se elimina el subagente `Plan`.
-- [ ] T018 [US3] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
+- [X] T018 [US3] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(abrir-pr):
   revisión independiente y veredicto en /abrir-pr`.
 

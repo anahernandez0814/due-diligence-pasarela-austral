@@ -158,7 +158,7 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 ## Assumptions
 
 - El destinatario directo de las herramientas son los agentes del ticket #6; el analista las ve a través de ellos.
-- Las herramientas simulan las fuentes: no hacen validaciones de negocio de orden ni escalan por sí solas; las reglas I.1 e I.2 las garantizan los hooks del ticket #7.
+- Las herramientas simulan las fuentes: no hacen validaciones de negocio de orden ni escalan por sí solas; las reglas I.1, I.2 e I.3 las garantizan los hooks del ticket #7.
 - La normalización de nombres ignora mayúsculas, tildes, espacios repetidos y puntuación (S.A.S. = SAS). En `consultar_registro_mercantil`, un nombre coincide si el texto buscado normalizado está contenido en el nombre normalizado del comercio, y se devuelven todas las coincidencias; **se ignoran las formas jurídicas al final del nombre** (SAS, SA, Ltda, EU, SCA, S. en C.), en el texto buscado y en el nombre del comercio, y el mínimo de 3 caracteres se cuenta después de quitarlas. Así el mensaje natural del analista, «Almacén Mirador SAS», devuelve las dos coincidencias del caso (d). En `consultar_listas_restrictivas` solo hay coincidencia por nombre completo normalizado o por identificador, nunca parcial.
 - En `buscar_noticias` la coincidencia es la misma que en las listas: nombre completo normalizado o identificador de las entidades que menciona cada noticia, nunca parcial.
 - La categoría de negocio la aporta el analista en su solicitud; el registro mercantil no la devuelve. Por eso la consulta de riesgo recibe la categoría como entrada y el comercio no la lleva como dato del registro.

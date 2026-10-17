@@ -470,10 +470,10 @@ existen.
   techo medido en Q4** (A2) y el test de T004 que lo fija; y, si Q1 pide otra variable o
   patrón, corregir las dos skills y `/abrir-pr`. Si no hace falta ningún cambio, se anota.
   Commit nuevo: `fix(revision): ajuste con las comprobaciones de la sesión`.
-- [ ] T032 Ejecutar Q5 y Q6 (R5, R13) y anotar: si `guarda_secretos` alcanza a las
+- [X] T032 Ejecutar Q5 y Q6 (R5, R13) y anotar: si `guarda_secretos` alcanza a las
   herramientas del subagente y si la inyección pasa por `PreToolUse`. Si `Read` del
   subagente queda sin protección, declararlo en la entrada 5 de `DECISIONES.md` (T033).
-- [ ] T033 Ejecutar Q7 a Q10 (revisión, auditoría y que los revisores no modifican nada)
+- [X] T033 Ejecutar Q7 a Q10 (revisión, auditoría y que los revisores no modifican nada)
   y Q11 a Q15 (veredicto, puerta, commit nuevo y tiempo de la guarda en caliente, que
   **pasa o falla** con 1 s), con la rama temporal y **sin `/abrir-pr`**: las skills y
   `veredicto.py registrar` a mano, y la guarda por stdin y en la sesión (un `gh pr create`
@@ -665,4 +665,53 @@ Con las instrucciones anteriores a las correcciones de cobertura:
   `settings.local.json`); `_nombre` repetida en tres módulos; con unos 140 archivos la lista se
   agrupa por directorio y entonces la cobertura es incompleta; y el bloque de cobertura repetido
   en cuatro archivos.
+
+### Q5 y Q6 (T032)
+
+- **Q5**: el subagente `revisor-codigo` intentó leer `.env.local`. `Read` lo bloqueó la regla de
+  permisos («File is in a directory that is denied by your permission settings») y `Grep`, el
+  hook `guarda_secretos` (`[guarda_secretos] Acceso bloqueado a un archivo de secretos
+  (.env.local) con Grep`). Los hooks **sí** alcanzan a las herramientas del subagente. No llegó
+  a ver contenido (0 líneas).
+- **Q6**: una skill temporal inyectó `grep -r <patrón inexistente> .` desde la raíz, que contiene
+  `.env.local`; como comando normal de Bash, `guarda_secretos` lo bloquea. La inyección **se
+  ejecutó**: **no pasa por `PreToolUse`**, solo por las reglas de permisos. El diseño no depende
+  de ello (el único comando inyectado es fijo, versionado y sin argumentos) y se declara como
+  residual en `DECISIONES.md`. La skill temporal se borró y no se commiteó.
+
+### Q7 a Q15 (T033)
+
+Rama temporal `099-prueba`, desde la del ticket, con `specs/099-prueba/` y datos ficticios, y con
+`refs/remotes/origin/main` movido a propósito entre commits para que el diff fuera solo el de la
+prueba. **`origin/main` se restauró con `git fetch origin main` y vale otra vez `b7d5f48`.** Los
+commits A a F son temporales y no se publicaron.
+
+| Q | Escenario | Resultado |
+|---|-----------|-----------|
+| Q7 | `/revisar-codigo` con un defecto (`dividir` sin proteger) y una regla I.1 incumplida | `bloqueantes=4 sugerencias=1 cobertura=completa`: reportó los dos con `archivo:línea` (`division.py:5`, `consulta_listas.py:6`) y que faltaban los tests |
+| Q8 | `/auditar-cumplimiento` sobre lo mismo | I.1 `incumple`, I.2 a I.5 `no aplica` con razón; `bloqueantes=3 sugerencias=0 cobertura=completa` |
+| Q9 | `/auditar-cumplimiento` sobre este ticket | las cinco reglas `no aplica`, con la razón; `bloqueantes=0 sugerencias=0 cobertura=completa` |
+| Q9b | commit que solo borra el test de I.3 | I.3 **no** sale `no aplica`: `no verificada` y bloqueante; `bloqueantes=2 sugerencias=1 cobertura=completa` |
+| Q10 | `git status` y `git log` antes y después de Q7, Q8 y Q9b | idénticos: mismo `HEAD`, sin cambios sin commitear y sin stashes |
+| Q11 | sin veredicto, en la sesión: `create_pull_request` del MCP, `gh pr create`, `gh pr new` y `gh api -X POST …/pulls` | los cuatro bloqueados por `guarda_pr`. `gh pr view 17` y `gh api …/pulls/17` (GET) se permiten |
+| Q12 | `veredicto.py registrar` con bloqueantes, y con la rama sin cambios | `con bloqueantes (2 bloqueante(s) en la revisión de auditoría)` y `con bloqueantes (sin cambios)`, ambas con salida 1 y el archivo registrado |
+| Q13 | commit con el defecto corregido y los tests restaurados; las dos skills de nuevo | `bloqueantes=0` en las dos (la primera vez la revisión pidió el test de I.3 que el commit C había borrado); `registrar` → `aprobado`, salida 0 |
+| Q14 | con veredicto aprobado, intentar crear el PR (con el commit sin publicar, y otra vez tras un commit nuevo) | bloqueado las dos veces (`El commit no está publicado en origin/099-prueba`). El caso del veredicto de otro commit y de la rama remota distinta están en `test_guarda_pr.py`, por stdin |
+| Q15 | tiempo de `guarda_pr.py` con el comando real de `settings.json`, en caliente | ≈ 475 a 495 ms por llamada: **pasa** (< 1 s) |
+
+- La guarda comprueba antes la publicación que el veredicto, así que en la sesión el mensaje es
+  el de «no publicado»; que con veredicto aprobado y commit publicado se **permite** lo prueba
+  `test_guarda_pr.py` por stdin, porque publicar crearía una rama remota.
+- SC-005 (que quien no conoce el código entienda los reportes sin abrirlo): pendiente de la
+  analista, con los reportes de Q7 y Q8 de esta sesión.
+
+### Q16 (T034, parcial)
+
+- En la rama del ticket y en `prueba-revision` (sin patrón `NNN-`): `Write` y `Edit` sobre
+  `.claude/veredictos/` los deniega `permissions.deny`; `echo >`, `cp`, `mv` y `python -c` que lo
+  nombra los bloquea `guarda_spec_previa` («El directorio de veredictos solo lo escribe el
+  registro de la revisión»). Leerlo con `Read` y `cat` se permite y `veredicto.py registrar`
+  funciona. Ninguna de las pruebas creó ni modificó archivos.
+- Q17 (inyección desactivada con `disableSkillShellExecution`): pendiente de la analista, porque
+  exige editar `settings.local.json` desde fuera de Claude Code.
 

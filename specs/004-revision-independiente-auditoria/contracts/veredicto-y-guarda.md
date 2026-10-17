@@ -87,3 +87,13 @@ escribe el registro de la revisión. Ejecuta /abrir-pr.`
 - Creación fuera de Claude Code, alias de `gh` y construcciones que el extractor de #3 no
   reconoce (R10).
 - Commits de otras personas empujados después del último `fetch` (R9).
+- La validación de la línea `RESUMEN` antes de pasarla es una **instrucción de `/abrir-pr`,
+  no código**. Que se ejecutara un comando ajeno exigiría tres fallos a la vez: un contenido
+  manipulado que hace al revisor escribir una comilla en la línea `RESUMEN`, el modelo
+  ignorando la validación, y la capa de permisos dejándolo pasar (exige que cada parte de un
+  comando compuesto coincida con una regla permitida). Leer los reportes de un archivo o de
+  stdin no lo elimina: el modelo seguiría escribiendo el texto en un comando o en un archivo
+  temporal. Por eso el contrato no cambia y el límite se declara.
+- La ruta relativa del registro **exige ejecutarlo desde la raíz**. Desde una subcarpeta,
+  `uv` no encuentra el script y sale con 2: `/abrir-pr` se detiene sin push ni PR (falla
+  cerrado).

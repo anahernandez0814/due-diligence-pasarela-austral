@@ -112,6 +112,12 @@ CREAN_UN_PR = [
     f"gh api {ENDPOINT} --raw-field title=t",
     f"gh api {ENDPOINT} --input cuerpo.json",
     "gh api graphql -f query='mutation { createPullRequest(input: {}) { clientMutationId } }'",
+    # Opciones con valor de `gh api` que no son el endpoint (revisión de T030)
+    f"gh api -p nebula {ENDPOINT} -X POST",
+    f"gh api --preview nebula {ENDPOINT} -f title=x",
+    f"gh api -p nebula -X POST {ENDPOINT}",
+    f"gh api --cache 1h {ENDPOINT} -X POST",
+    f"gh api -H 'Accept: application/json' {ENDPOINT} -X POST",
     # `gh pr new` es el alias oficial de `gh pr create` (hallazgo 1 de la parada D)
     "gh pr new --fill",
     "gh pr new -t x -b y -B main",

@@ -746,7 +746,7 @@ COPIAS_OPACAS = [
     ("Bash", "cp -R /tmp/falso/ ."),
     ("Bash", "cp -rT /tmp/falso ."),
     ("Bash", "cp -r --no-target-directory /tmp/falso ./"),
-    ("PowerShell", r"Copy-Item -Recurse C:	mpalso .claude"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso .claude"),
     ("Bash", "cp -r /tmp/falso/* .claude/"),
     ("Bash", "cp -R /tmp/falso/. .claude"),
     ("Bash", "cp -rf /tmp/falso/* .claude"),
@@ -850,3 +850,23 @@ def test_cuando_el_nombre_aparece_sigue_bloqueandose(crear, rama):
         resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
         # Lo bloquea la regla del destino o, si no, la del nombre (FR-020)
         assert resultado in (COPIA_A_CLAUDE, MSG_VEREDICTOS), comando
+
+
+# --- settings.local.json sin distinguir mayúsculas (revisión de T030) ---------------------
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(
+    "ruta",
+    [
+        ".claude/Settings.local.json",
+        ".CLAUDE/settings.local.json",
+        ".claude/SETTINGS.LOCAL.JSON",
+    ],
+)
+def test_settings_local_se_protege_sin_distinguir_mayusculas(crear, rama, ruta):
+    repo = crear(rama=rama)
+    escritura = guarda_spec_previa.motivo(entrada(repo, "Write", file_path=str(repo / ruta)))
+    assert escritura == MSG_LOCAL
+    terminal = guarda_spec_previa.motivo(entrada(repo, "Bash", command=f"echo x > {ruta}"))
+    assert terminal == MSG_LOCAL

@@ -62,7 +62,9 @@ _PROPIETARIO_DE_ORIGIN = re.compile(r"github\.com[:/]([^/\s]+)/", re.IGNORECASE)
 # Opciones globales con valor que pueden ir delante del subcomando.
 _GLOBALES_CON_VALOR = {"-R", "--repo", "--hostname"}
 # Opciones de `gh api` que llevan un valor aparte.
-_API_CON_VALOR = {"-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "--cache"}
+_API_CON_VALOR = {
+    "-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "--cache", "-p", "--preview",
+}  # fmt: skip
 _API_CAMPOS = {"-f", "-F", "--field", "--raw-field"}
 
 

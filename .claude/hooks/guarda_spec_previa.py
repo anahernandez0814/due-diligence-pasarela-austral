@@ -75,9 +75,9 @@ def ruta_privada(ruta: str) -> str | None:
     Los dos se bloquean en cualquier rama: no se versionan, así que ningún PR vería el
     cambio. `ruta` es relativa a la raíz y ya está normalizada.
     """
-    if ruta == _SETTINGS_LOCAL:
+    relativa = _relativa(ruta)  # sin distinguir mayúsculas: Windows y macOS no las distinguen
+    if relativa == _SETTINGS_LOCAL:
         return SETTINGS_LOCAL
-    relativa = _relativa(ruta)
     if relativa and (relativa == _VEREDICTOS or relativa.startswith(_VEREDICTOS + "/")):
         return VEREDICTOS
     return None

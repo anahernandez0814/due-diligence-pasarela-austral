@@ -351,15 +351,28 @@ src/servidor_mcp/test_decisiones.py`.
 
 ## Fase 9: Validación con el quickstart
 
-- [ ] T038 Ejecutar Q1, Q2, Q3, Q4 y Q8 del [quickstart](quickstart.md) y anotar el resultado de cada
+- [X] T038 Ejecutar Q1, Q2, Q3, Q4 y Q8 del [quickstart](quickstart.md) y anotar el resultado de cada
   uno debajo de esta tarea. **Q8.2** se prueba pasando a la guarda por stdin un `Write` con una
   tarjeta generada en ejecución, como en #3 (`tarjeta` de `test_detector_datos.py`), con el script
   fuera del repositorio y sin escribir el valor en ningún archivo. Si alguno falla, corregir con un commit nuevo y repetirlo.
-- [ ] T039 Ejecutar Q5 y Q7 con un script desechable **fuera del repositorio** (carpeta de
+  **Resultados de T038** (2026-10-17, rama `005-servidor-mcp-pasarela`, commit `0b98f18`):
+  - **Q1**: `ruff format --check` sin cambios (122 archivos) y `ruff check` sin avisos; `uv run pytest`: 1796 passed.
+  - **Q2**: `test_servidor.py`: 46 passed. Las seis herramientas, sus descripciones, los tipos JSON del esquema y un campo ausente o un tipo incorrecto en `registrar_informe`, `escalar_a_cumplimiento` y `consultar_registro_mercantil` dan error estructurado en español, sin el texto de pydantic.
+  - **Q3**: `test_datos_casos.py`: 9 passed, uno «datos del caso (x)» por cada (a)–(g); (e) y (f) no añaden datos y (c) usa a `PE-0003`, representante de `CO-PL-0003`.
+  - **Q4**: los cinco JSON tienen `"ficticio": true` y `aviso`; las únicas URL son de `diario.example`; ninguna secuencia de 6 o más dígitos; `test_revision_repositorio.py`: 2 passed, con los JSON versionados.
+  - **Q8.1**: `guarda_spec_previa` por stdin con un `Write` de `src/servidor_mcp/prueba_q8.py` en la rama `005-*` con spec, plan y tareas commiteados: salida 0 (permite). No se escribió ningún archivo.
+  - **Q8.2**: `guarda_datos` por stdin con un `Write` con una tarjeta generada en ejecución (`tarjeta` de `test_detector_datos.py`; el script está fuera del repositorio): salida 2, bloqueado, y el mensaje no repite el valor.
+  - **Q8.3**: `uv run pytest` con `PYTHONUTF8` y `PYTHONIOENCODING` (1796 passed) y sin ellos (1796 passed, 241 s).
+- [X] T039 Ejecutar Q5 y Q7 con un script desechable **fuera del repositorio** (carpeta de
   scratchpad): `registrar_informe` con la ruta por defecto, `git check-ignore`, borrar
   `resultados/` y comprobar que no queda nada en `.claude/`; y el servidor lanzado por stdio con
   `PASARELA_FALLA_NOTICIAS=1`, con el mismo error de noticias y las otras cuatro herramientas
   respondiendo. Anotar el resultado.
+  **Resultados de T039** (script fuera del repositorio, en el scratchpad de la sesión):
+  - **Q5.1**: `test_decisiones.py`: 43 passed; `git status --short` sin nada nuevo y sin `resultados/`.
+  - **Q5.2**: con `PASARELA_RESULTADOS_DIR` sin definir, `registrar_informe` creó `resultados/informes/INF-xxxxxxxx.json`; `git check-ignore` lo reconoce; `git status` no cambió; no hay nada de resultados dentro de `.claude/`; `resultados/` se borró y el estado de git quedó como al inicio.
+  - **Q7.1**: 10 tests lo comprueban en proceso, entre ellos `test_la_variable_se_lee_en_cada_llamada_en_la_misma_instancia` (noticias) y `test_la_variable_se_lee_en_cada_llamada_con_el_servidor_ya_arrancado` (por el protocolo).
+  - **Q7.2**: el servidor lanzado por stdio con `PASARELA_FALLA_NOTICIAS=1` y `PASARELA_RESULTADOS_DIR` en una carpeta temporal: `buscar_noticias` devuelve `servicio_no_disponible` con `reintentable: true` y las **otras cinco** herramientas responden (`is_error=False`). El quickstart y T039 decían «cuatro»: son cinco.
 - [ ] T040 [MANUAL] **Q6 en una sesión nueva** abierta en la raíz del repositorio: `/mcp` muestra
   `github` y `pasarela` conectados **sin pedir aprobación** y las seis herramientas
   `mcp__pasarela__*`; llamar a `consultar_registro_mercantil` con «almacén mirador» y comprobar

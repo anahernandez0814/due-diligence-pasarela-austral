@@ -197,6 +197,8 @@ def main(argumentos: list[str] | None = None) -> int:
         "--limite", action="store_true", help="límite de turnos con max_turns=1 (Q4)"
     )
     args = analizador.parse_args(argumentos)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     sondeo = (
         sondeo_herramientas
         if args.herramientas

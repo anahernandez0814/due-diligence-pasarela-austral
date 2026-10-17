@@ -20,8 +20,13 @@ from due_diligence.eventos import (
 from due_diligence.frentes import Frente
 from due_diligence.simulacion import (
     EjecutorSimulado,
+    comercio_del_registro,
     consulta,
+    consulta_listas,
+    respuesta_del_contrato,
     resultado_frente,
+    resultado_listas,
+    resultado_registro,
     terminacion_anomala,
 )
 
@@ -409,3 +414,191 @@ def test_si_el_registro_falla_con_una_excepcion_listas_no_espera_para_siempre():
     assert estado.situacion(Frente.REGISTRO) is Situacion.NO_TERMINADO
     assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
     assert estado.situacion(Frente.LISTAS) is Situacion.RECHAZADO
+
+
+# ------------------------------------------------------- listas: comercio y representante (US4)
+
+COMERCIO_ESPERADO = {
+    "identificador": "CO-TV-0001",
+    "nombre": "Tienda Verde SAS",
+    "representante_legal": {"nombre": "Lucía Ferrer Montalvo", "identificador": "PE-0001"},
+}
+
+
+def _registro_y_listas(consultas_de_listas=None, registro=None, retardo=0.0):
+    """El registro y `listas` en el mismo turno; devuelve la respuesta de `listas`."""
+    resultados = {Frente.REGISTRO: registro or resultado_registro()}
+    if consultas_de_listas is not None:
+        resultados[Frente.LISTAS] = resultado_listas(consultas_de_listas)
+    delegador, estado, _, ejecutor = _crear(resultados=resultados, retardo=retardo)
+    _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
+    return listas, estado, ejecutor
+
+
+def test_el_comercio_del_estado_es_exactamente_el_que_devolvio_el_registro():
+    _, estado, _ = _registro_y_listas()
+    assert estado.comercio == COMERCIO_ESPERADO
+    assert estado.motivo_comercio == ""
+
+
+def test_el_prompt_de_listas_usa_el_estado_aunque_la_entrada_traiga_otros_datos():
+    delegador, _, _, ejecutor = _crear()
+    asyncio.run(delegador.delegar(REGISTRO))
+    asyncio.run(
+        delegador.delegar({"frente": "listas", "identificador": "CO-XX-9999", "nombre": "Otro SAS"})
+    )
+    contexto = ejecutor.llamadas_de(Frente.LISTAS)[0].contexto
+    assert (
+        "CO-TV-0001" in contexto and "Lucía Ferrer Montalvo" in contexto and "PE-0001" in contexto
+    )
+    assert "CO-XX-9999" not in contexto and "Otro SAS" not in contexto
+
+
+def test_listas_consulta_al_comercio_y_al_representante_y_ambas_quedan_en_el_estado():
+    listas, estado, _ = _registro_y_listas()
+    assert listas["situacion"] == "terminado"
+    consultas = [c for c in estado.consultas if c.frente is Frente.LISTAS]
+    assert [c.argumentos["tipo"] for c in consultas] == ["comercio", "persona"]
+    assert all(c.valido and c.resultado["metadatos"]["fuentes"] for c in consultas)
+    assert [r["argumentos"]["tipo"] for r in listas["resultados"]] == ["comercio", "persona"]
+
+
+def test_si_listas_consulta_solo_al_comercio_el_frente_queda_no_terminado():
+    listas, estado, _ = _registro_y_listas(
+        [consulta_listas("comercio", identificador="CO-TV-0001")]
+    )
+    assert listas["tipo"] == "frente_no_terminado" and listas["reintentable"] is False
+    assert "consulta del representante" in listas["mensaje"]
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    assert estado.motivo(Frente.LISTAS) == listas["mensaje"]
+
+
+def test_si_listas_consulta_solo_al_representante_el_frente_queda_no_terminado():
+    listas, estado, _ = _registro_y_listas([consulta_listas("persona", identificador="PE-0001")])
+    assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+
+
+def test_otra_capitalizacion_o_sin_tildes_cuenta_porque_igual_la_normaliza():
+    consultas = [
+        consulta_listas("comercio", identificador="co-tv-0001"),
+        consulta_listas("persona", nombre="LUCIA FERRER MONTALVO"),
+    ]
+    listas, estado, _ = _registro_y_listas(consultas)
+    assert listas["situacion"] == "terminado"
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
+def test_el_nombre_del_comercio_sin_su_forma_juridica_no_cuenta():
+    # La pasarela busca por el nombre completo: «Tienda Verde» daría sin coincidencias.
+    consultas = [
+        consulta_listas("comercio", nombre="Tienda Verde"),
+        consulta_listas("persona", identificador="PE-0001"),
+    ]
+    listas, _, _ = _registro_y_listas(consultas)
+    assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
+
+
+def test_un_nombre_parcial_del_representante_no_cuenta():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", nombre="Lucía Ferrer"),
+    ]
+    listas, _, _ = _registro_y_listas(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert "consulta del representante" in listas["mensaje"]
+
+
+def test_una_consulta_con_el_tipo_cambiado_no_cuenta():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("comercio", nombre="Lucía Ferrer Montalvo"),  # tipo equivocado
+    ]
+    listas, _, _ = _registro_y_listas(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert "consulta del representante" in listas["mensaje"]
+
+
+def test_el_nombre_del_comercio_con_el_tipo_persona_no_cuenta_como_consulta_del_comercio():
+    consultas = [
+        consulta_listas("persona", nombre="Tienda Verde SAS"),  # tipo equivocado
+        consulta_listas("persona", identificador="PE-0001"),
+    ]
+    listas, _, _ = _registro_y_listas(consultas)
+    assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
+
+
+def test_las_consultas_de_mas_no_estorban():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", identificador="PE-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),
+    ]
+    listas, _, _ = _registro_y_listas(consultas)
+    assert listas["situacion"] == "terminado"
+
+
+def test_sin_representante_en_el_registro_basta_la_consulta_del_comercio():
+    registro = resultado_registro([comercio_del_registro(representante=None)])
+    listas, estado, ejecutor = _registro_y_listas(
+        [consulta_listas("comercio", identificador="CO-TV-0001")], registro=registro
+    )
+    assert estado.comercio["representante_legal"] is None
+    assert listas["situacion"] == "terminado"
+    assert "no devolvió representante" in ejecutor.llamadas_de(Frente.LISTAS)[0].contexto
+
+
+def test_varias_coincidencias_no_ejecutan_listas_y_no_son_reintentables():
+    registro = resultado_registro(
+        [
+            comercio_del_registro("CO-AM-0004", "Almacén Mirador SAS", None),
+            comercio_del_registro("CO-AM-0005", "Almacén Mirador del Norte SAS", None),
+        ]
+    )
+    listas, estado, ejecutor = _registro_y_listas(registro=registro)
+    assert estado.comercio is None
+    assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
+    assert "varias coincidencias" in listas["mensaje"]
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+    assert estado.situacion(Frente.LISTAS) is Situacion.RECHAZADO
+
+
+def test_sin_coincidencias_no_ejecuta_listas_y_no_es_reintentable():
+    listas, estado, ejecutor = _registro_y_listas(registro=resultado_registro([]))
+    assert estado.comercio is None
+    assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
+    assert "ninguna coincidencia" in listas["mensaje"]
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+
+
+def test_un_registro_que_no_termino_bien_no_ejecuta_listas():
+    anomalo = resultado_frente(Frente.REGISTRO, [], terminacion_anomala())
+    listas, estado, ejecutor = _registro_y_listas(registro=anomalo)
+    assert estado.comercio is None
+    assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
+    assert "no terminó" in listas["mensaje"]
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+
+
+def test_si_las_fuentes_difieren_en_el_representante_no_se_elige_una():
+    otro = {"nombre": "Pedro Ríos Quintero", "identificador": "PE-0002"}
+    respuesta = respuesta_del_contrato(
+        "coincidencias",
+        [comercio_del_registro(), comercio_del_registro(representante=otro)],
+        ["CO-TV-0001"],
+    )
+    registro = resultado_frente(Frente.REGISTRO, [consulta(Frente.REGISTRO, {}, respuesta)])
+    listas, estado, _ = _registro_y_listas(registro=registro)
+    assert estado.comercio is None and "difieren" in listas["mensaje"]
+
+
+def test_si_las_fuentes_difieren_solo_en_la_fecha_el_comercio_se_deriva_igual():
+    # Caso (g): dos fechas de constitución, cada una con su fuente; el comercio es el mismo.
+    otra_fecha = {**comercio_del_registro(), "fecha_constitucion": "2017-09-02"}
+    respuesta = respuesta_del_contrato(
+        "coincidencias", [comercio_del_registro(), otra_fecha], ["CO-TV-0001"]
+    )
+    registro = resultado_frente(Frente.REGISTRO, [consulta(Frente.REGISTRO, {}, respuesta)])
+    listas, estado, _ = _registro_y_listas(registro=registro)
+    assert estado.comercio == COMERCIO_ESPERADO
+    assert listas["situacion"] == "terminado"

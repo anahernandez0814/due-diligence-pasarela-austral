@@ -11,6 +11,7 @@ from due_diligence.estado import (
     ResultadoFrente,
     Situacion,
     TransicionInvalida,
+    derivar_comercio,
 )
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
@@ -23,6 +24,7 @@ from due_diligence.eventos import (
     TipoDeEventoInvalido,
 )
 from due_diligence.frentes import Frente
+from due_diligence.simulacion import comercio_del_registro, respuesta_del_contrato
 
 # ---------------------------------------------------------------- eventos
 
@@ -227,3 +229,48 @@ def _llevar_a(estado, frente, destino):
     estado.cambiar_situacion(frente, Situacion.EN_CURSO)
     if destino in (Situacion.TERMINADO, Situacion.NO_TERMINADO):
         estado.cambiar_situacion(frente, destino)
+
+
+# ------------------------------------------------------- derivar_comercio (FR-005, FR-013)
+
+
+def _registro(*contenidos, coincidencias=None, resultado="coincidencias"):
+    return respuesta_del_contrato(resultado, list(contenidos), coincidencias)
+
+
+def test_derivar_comercio_con_una_coincidencia_unica():
+    respuesta = _registro(comercio_del_registro(), coincidencias=["CO-TV-0001"])
+    comercio, motivo = derivar_comercio(respuesta)
+    assert motivo == ""
+    assert comercio["identificador"] == "CO-TV-0001"
+    assert comercio["representante_legal"]["nombre"] == "Lucía Ferrer Montalvo"
+
+
+def test_derivar_comercio_sin_representante():
+    sin = comercio_del_registro(representante=None)
+    comercio, _ = derivar_comercio(_registro(sin, coincidencias=["CO-TV-0001"]))
+    assert comercio["representante_legal"] is None
+
+
+@pytest.mark.parametrize(
+    ("resultado", "texto"),
+    [
+        (None, "forma esperada"),
+        ({"hola": 1}, "forma esperada"),
+        (
+            {"resultado": "sin_coincidencias", "hechos": [], "coincidencias": []},
+            "ninguna coincidencia",
+        ),
+        (
+            {"resultado": "coincidencias", "hechos": [], "coincidencias": ["A", "B"]},
+            "varias coincidencias",
+        ),
+        (
+            {"resultado": "coincidencias", "hechos": [], "coincidencias": ["A"]},
+            "no trae el comercio",
+        ),
+    ],
+)
+def test_derivar_comercio_sin_comercio_unico_da_el_motivo(resultado, texto):
+    comercio, motivo = derivar_comercio(resultado)
+    assert comercio is None and texto in motivo

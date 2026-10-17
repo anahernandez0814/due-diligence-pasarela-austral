@@ -32,6 +32,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION, Frente
 from due_diligence.terminacion import Clasificacion, Terminacion
+from servidor_mcp.normalizar import igual, igual_identificador
 
 DESCRIPCION = (
     "Delega un frente de la investigación en un subagente especializado y devuelve su resultado. "
@@ -235,7 +236,53 @@ class Delegador:
                 Situacion.NO_TERMINADO,
                 "Un resultado no tiene la forma del contrato de la pasarela.",
             )
+        if frente is Frente.LISTAS:
+            faltante = self._falta_en_listas(resultado)
+            if faltante:
+                return Situacion.NO_TERMINADO, faltante
         return Situacion.TERMINADO, ""
+
+    def _falta_en_listas(self, resultado: ResultadoFrente) -> str:
+        """Comprueba que `listas` consultó al comercio y, si lo hay, a su representante (FR-005).
+
+        Cuenta una consulta del tipo correcto (`comercio` o `persona`) cuyo identificador coincide
+        con `igual_identificador` o cuyo nombre completo coincide con `igual()` de
+        `servidor_mcp.normalizar`. `igual()` es estricto: ignora mayúsculas y tildes, pero no la
+        forma jurídica ni acepta un nombre parcial, porque la pasarela busca por el nombre completo
+        y otra forma sería un falso negativo. Devuelve el motivo si falta una, o "" si están ambas.
+        """
+        comercio = self.estado.comercio
+        if comercio is None:
+            return ""
+
+        def consultada(tipo: str, entidad: Mapping[str, Any]) -> bool:
+            for consulta in resultado.consultas:
+                argumentos = consulta.argumentos
+                if argumentos.get("tipo") != tipo:
+                    continue
+                identificador, nombre = argumentos.get("identificador"), argumentos.get("nombre")
+                if (
+                    entidad.get("identificador")
+                    and isinstance(identificador, str)
+                    and igual_identificador(identificador, entidad["identificador"])
+                ):
+                    return True
+                if (
+                    entidad.get("nombre")
+                    and isinstance(nombre, str)
+                    and igual(nombre, entidad["nombre"])
+                ):
+                    return True
+            return False
+
+        if not consultada("comercio", comercio):
+            return "Falta la consulta del comercio en listas restrictivas (tipo comercio)."
+        representante = comercio.get("representante_legal")
+        if representante and not consultada("persona", representante):
+            return (
+                "Falta la consulta del representante legal en listas restrictivas (tipo persona)."
+            )
+        return ""
 
     def _concluir(self, frente: Frente, resultado: ResultadoFrente) -> dict[str, Any]:
         self.estado.guardar_resultado(resultado)

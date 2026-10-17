@@ -262,7 +262,7 @@ modelo real).
 **Prueba independiente**: un registro simulado que devuelve un comercio con representante, y se
 comprueban las dos consultas.
 
-- [ ] T022 [US4] Añadir a `src/due_diligence/test_delegacion.py` y `test_contexto.py` (R4, R11). El
+- [X] T022 [US4] Añadir a `src/due_diligence/test_delegacion.py` y `test_contexto.py` (R4, R11). El
   registro simulado devuelve el JSON del contrato del #5 con **un** comercio y su
   `representante_legal` `{nombre, identificador}`: `estado.comercio` queda con identificador, nombre y
   representante, **exactamente como los devolvió el registro** (US4-2); el prompt de `listas` contiene
@@ -272,7 +272,7 @@ comprueban las dos consultas.
   al comercio y el resultado lo declara (US4-3). **Varias coincidencias** (`coincidencias` con dos
   identificadores), `sin_coincidencias` y un resultado del registro inválido → `estado.comercio` es
   `None`, `listas` no se ejecuta y devuelve `frente_rechazado` con el motivo; el coordinador no elige una coincidencia (FR-013). **El ejecutor simulado de `listas` que consulta solo al comercio** (o solo al representante) deja el frente `no_terminado` con el motivo («falta la consulta del representante» o «del comercio»). Se compara el nombre completo con `igual()` de `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`) **y el tipo de cada consulta** (`comercio` para el comercio, `persona` para el representante). `igual()` es **estricto**: otra capitalización o sin tildes **cuenta**; **otra forma jurídica o un nombre parcial no cuentan** (la pasarela busca por el nombre completo: sería un falso negativo, «Ernesto Calderón» no es «Ernesto Calderón Ibarra»); una consulta con el tipo cambiado no cuenta; sin representante en el registro basta la consulta del comercio (FR-005, SC-004).
-- [ ] T023 [US4] Implementar en `src/due_diligence/estado.py` la derivación de `comercio` a partir del
+- [X] T023 [US4] Implementar en `src/due_diligence/estado.py` la derivación de `comercio` a partir del
   resultado válido del registro (solo con una coincidencia única) y en `delegacion.py` el uso de
   `estado.comercio` como contexto de `listas`, con los eventos de `frente_rechazado`, y tras el subagente de `listas` la comprobación en `estado.consultas` de la consulta del comercio y, si hay, la del representante, con `igual()` de `servidor_mcp.normalizar` (y `igual_identificador`) y el **tipo** de cada consulta (`comercio` para el comercio, `persona` para el representante); si falta una, el frente queda `no_terminado` con el motivo (G1). Hace pasar T022.
 

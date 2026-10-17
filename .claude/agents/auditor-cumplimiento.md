@@ -23,13 +23,27 @@ toma de allí el texto exacto del principio I; lo de abajo es un resumen para or
 
 ## Cuándo aplica una regla
 
-Una regla **aplica** al cambio si la spec del ticket la cita o si el diff toca código o tests que la implementan o la prueban.
-Si no aplica, su estado es `no aplica` y das **la razón**. Sin código de producción ni tests de las reglas en el cambio (por ejemplo, solo configuración o documentación), las cinco reglas son `no aplica`, con esa razón, y eso no bloquea.
+Decide, para cada una de las cinco reglas, en este orden:
 
-Los tests cuentan: un cambio que solo borra o debilita el test de una regla **sí la toca**.
-Esa regla aplica, y si sin ese test ya no hay evidencia vigente en el código y en los tests,
-su estado es `no verificada` y es bloqueante. Nunca la des por `no aplica` porque no se
-tocó código de producción.
+1. **Delegada con número.** La spec del ticket cita la regla para delegarla y nombra el ticket
+   responsable con su número (`#N`). La regla es `no aplica`, con la razón «delegada al ticket
+   #N en la spec». La delegación prevalece incluso sobre el código del cambio que solo aporta
+   datos o clasificación que la regla usa y no la hace cumplir. Salvo los puntos 2 y 4.
+   Citarla sin delegarla con un número de ticket no es delegarla: sigue el punto 3.
+2. **Delegada y contradicha.** Si el diff contradice o debilita una regla delegada, es
+   `incumple` y es **bloqueante**. Delegar exime de implementar la regla, no de violarla.
+3. **Asignada a este ticket.** Si la spec del ticket la cita sin delegarla con número, o le
+   asigna su cumplimiento, o el diff toca código o tests que la implementan o la prueban, la
+   regla aplica y la verificas con los estados de abajo.
+4. **Borrada o debilitada.** Sea delegada o no, un cambio que borra o debilita el código o el
+   test de una regla la toca: aplica y, si sin ese código o ese test ya no hay evidencia
+   vigente en el código y en los tests, es `no verificada` y bloqueante. La delegación exime
+   de implementar, no de conservar lo que ya garantiza la regla. Nunca la des por `no aplica`
+   porque no se tocó código de producción.
+5. **Ninguna de las anteriores.** `no aplica`, y das **la razón**.
+   Sin código de producción ni tests de las reglas en el cambio (por ejemplo, solo
+   configuración o documentación), las cinco reglas son `no aplica`, con esa razón, y eso no
+   bloquea.
 
 ## Estados
 
@@ -85,11 +99,10 @@ una tarjeta, un NIT o una cédula reales, di el tipo y la ubicación y no repita
 - **Cuentan**: el código y la configuración de la lista (`src/**`, `.claude/hooks/*.py`,
   `.claude/settings.json`, `.mcp.json`, `.claude/agents/`, `.claude/skills/` y
   `.claude/commands/`) y los tests (`test_*.py`). Se leen enteros; los tests, por secciones si
-  hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta; los
-  generados (`uv.lock`) se leen por secciones.
-- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md` y
-  `.claude/rules/`. Léelos por secciones o con `Grep` para contrastar; leerlos a medias no
-  reduce la cobertura.
+  hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta.
+- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`,
+  `.claude/rules/` y los archivos generados por herramientas (`uv.lock`). Léelos por secciones
+  o con `Grep` para contrastar; leerlos a medias no reduce la cobertura.
 - **No ejecutar tests nunca reduce la cobertura**: no tienes Bash. No lo reportes como falta
   ni como hallazgo.
 - **Un archivo que cuenta y que leíste a medias** lo nombras en el reporte, con

@@ -414,7 +414,7 @@ validación en sesión (fase 8).
 
 **Purpose**: dejar declaradas las decisiones y el límite del mecanismo.
 
-- [ ] T026 [P] Escribir la entrada 5 de `DECISIONES.md` (FR-018, SC-006), con unas 15
+- [X] T026 [P] Escribir la entrada 5 de `DECISIONES.md` (FR-018, SC-006), con unas 15
   líneas y una por decisión, y el detalle remitido a `research.md`: dos subagentes de solo
   lectura y una skill con `context: fork` por revisión (R1, R5); inyección con script que
   sale siempre con 0, marca `CONTEXTO DE REVISIÓN` y umbral sobre toda la salida (R2, R4);
@@ -433,10 +433,10 @@ validación en sesión (fase 8).
   sí se bloquea. Añadir una nota en la entrada 3 ("la revisión de
   transición de `/abrir-pr` queda reemplazada por #4"). Los resultados de Q1 a Q6 se añaden
   en T033.
-- [ ] T027 [P] Añadir una frase en la sección "Ciclo de un ticket" de `README.md`:
+- [X] T027 [P] Añadir una frase en la sección "Ciclo de un ticket" de `README.md`:
   `/abrir-pr` ejecuta la revisión independiente y la auditoría, y el hook bloquea el PR sin
   veredicto aprobado del commit actual. `CLAUDE.md` no cambia.
-- [ ] T028 Ejecutar la suite completa y `uv run ruff format --check .`, `uv run ruff check
+- [X] T028 Ejecutar la suite completa y `uv run ruff format --check .`, `uv run ruff check
   .`, y commitear: `docs: decisiones y ciclo de ticket de la revisión independiente`.
 
 ---

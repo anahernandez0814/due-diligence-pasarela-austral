@@ -69,8 +69,12 @@ completo es del #12. Debe verse que (e) y (f) **no añaden datos** y que (c) usa
 
 1. Con la rama `005-*` y `spec.md`, `plan.md` y `tasks.md` commiteados, crear un `.py` en
    `src/servidor_mcp/` pasa `guarda_spec_previa`.
-2. Un valor con forma de tarjeta en un test se rechaza (los tests generan los valores sensibles en
-   tiempo de ejecución, si hicieran falta).
+2. Con un script desechable **fuera del repositorio**, igual que en #3: construir en ejecución una
+   tarjeta (la función `tarjeta` de `.claude/hooks/test_detector_datos.py`, sin escribir el valor en
+   ningún archivo) y pasar por stdin a `uv run --no-project --python 3.12
+   .claude/hooks/guarda_datos.py` un `Write` sobre `src/servidor_mcp/datos/prueba.json` con ese
+   valor. Esperado: salida 2, bloqueado, y el mensaje no repite el valor. Nada se escribe en el
+   repositorio.
 3. `uv run pytest` sigue en verde con y sin `PYTHONUTF8`/`PYTHONIOENCODING`.
 
 ## Criterio de cierre

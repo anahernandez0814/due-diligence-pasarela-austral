@@ -95,6 +95,7 @@ src/servidor_mcp/
 ├── CLAUDE.md                 # convenciones del servidor
 ├── servidor.py               # MCPServer y registro de las seis herramientas
 ├── respuestas.py             # respuesta() y error(): CallToolResult (R2, R9)
+├── entradas.py               # validadores de parámetros Any: nunca lanzan (R2)
 ├── normalizar.py             # normalizar() y reglas de coincidencia (R3)
 ├── datos.py                  # carga y validación de los JSON; DatosNoDisponibles
 ├── registro.py               # consultar_registro_mercantil
@@ -110,6 +111,8 @@ src/servidor_mcp/
 │   └── categorias.json
 ├── test_humo.py              # existente
 ├── test_normalizar.py
+├── test_respuestas.py
+├── test_entradas.py
 ├── test_datos.py
 ├── test_registro.py
 ├── test_listas.py
@@ -138,7 +141,7 @@ tests llamen a las funciones y, aparte, a las herramientas por el protocolo.
 ## Orden de implementación
 
 1. `uv add "mcp>=2.3,<3"`; `.gitignore`.
-2. `normalizar.py`, `respuestas.py` y `datos.py` con sus tests.
+2. `normalizar.py`, `respuestas.py`, `entradas.py` y `datos.py` con sus tests.
 3. Los cinco archivos de datos y `test_datos.py`.
 4. Herramientas de consulta (`registro`, `listas`, `noticias`, `riesgo`) con sus tests.
 5. `decisiones.py` con su test (carpeta por variable, `tmp_path`).

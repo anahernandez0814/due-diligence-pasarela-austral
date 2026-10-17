@@ -199,7 +199,8 @@ ningún archivo (Q7, Q10).
   inyecta la salida del script, ordena leer `spec.md`, `plan.md`, `tasks.md` y la
   constitución, trata `specs/NNN-*/` como referencia que no cuenta para la cobertura, y
   pide `cobertura=incompleta` si falta la marca o no se puede leer un archivo de código o
-  configuración. `$ARGUMENTS` solo en prosa.
+  configuración. `$ARGUMENTS` solo en prosa, y solo como pista: la carpeta del ticket es la
+  de la línea `Ticket:` del contexto, calculada con git (ajuste tras la parada B).
 - [X] T011 [US1] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(revision):
   subagente y skill de revisión de código`.
@@ -214,20 +215,30 @@ ningún archivo (Q7, Q10).
 evidencia, con estados `cumple`, `incumple`, `no aplica` o `no verificada`.
 
 **Independent Test**: una rama con una regla deliberadamente incumplida sale con esa regla
-bloqueante y las demás con su estado (Q8); este ticket, sin código de producción, sale con
-las cinco `no aplica` (Q9).
+bloqueante y las demás con su estado (Q8); este ticket, sin código de producción ni tests
+de las reglas, sale con las cinco `no aplica` (Q9); y una rama que solo borra o debilita el
+test de una regla no la deja en `no aplica` (Q9b).
 
 - [X] T012 [US2] Ampliar `REVISIONES` en `.claude/hooks/test_agentes_skills.py` con el par
   `auditor-cumplimiento` y `auditar-cumplimiento` (debe fallar primero). Añadir al
   auditor: el cuerpo menciona las cinco reglas del principio I, los cuatro estados, la razón
   obligatoria de cada `no aplica` y que una regla sin evidencia nunca es `cumple`.
+  - **Ampliado tras la parada B** (hallazgos 1, 2 y 3; deben fallar primero):
+    `test_el_auditor_define_cuando_aplica_una_regla` exige "código o tests" y "ni tests de
+    las reglas"; un test del revisor comprueba que no contiene "ponlo como sugerencia" y sí
+    la regla de ubicar lo que falta en el requisito (`spec.md:línea` o `tasks.md:línea`), con
+    severidad bloqueante si es obligatorio; y un test de las dos skills comprueba que
+    nombran la línea `Ticket:` del contexto como la carpeta que manda y que `$ARGUMENTS`
+    solo es una pista (si indica otra carpeta, se dice y `cobertura=incompleta`).
 - [X] T013 [P] [US2] Crear `.claude/agents/auditor-cumplimiento.md` (FR-002, FR-003,
   FR-007, R5, R7): `tools: Read, Grep, Glob`; verifica las cinco reglas del principio I de
   `.specify/memory/constitution.md` contra la spec, el código y los tests, con evidencia de
   archivo y línea. Una regla **aplica** si la spec del ticket la cita o si el diff toca
-  código que la implementa; si no aplica, estado `no aplica` con esa razón; si aplica y no
-  hay evidencia, `no verificada` y bloqueante. Sin código de producción, las cinco `no
-  aplica`. Tabla de las cinco reglas y línea `RESUMEN` al final.
+  código **o tests** que la implementan o la prueban; si no aplica, estado `no aplica` con
+  esa razón; si aplica y no hay evidencia, `no verificada` y bloqueante. Sin código de
+  producción **ni tests de las reglas**, las cinco `no aplica`. Un cambio que solo borra o
+  debilita el test de una regla sí la toca. Tabla de las cinco reglas y línea `RESUMEN` al
+  final.
 - [X] T014 [P] [US2] Crear `.claude/skills/auditar-cumplimiento/SKILL.md` (FR-004, FR-005,
   R1, R2): mismas reglas que T010, con `agent: auditor-cumplimiento` y la constitución como
   documento principal.

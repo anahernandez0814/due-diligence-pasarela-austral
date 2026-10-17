@@ -16,7 +16,10 @@ Instrucciones comunes del cuerpo de cada subagente:
 
 - Solo lee y reporta; si encuentra un problema, lo describe, no lo corrige (alcance del issue).
 - Lee los documentos del ticket y la constitución con `Read` (R3).
-- Cada hallazgo lleva ubicación y razón; no hay hallazgo sin ubicación.
+- Cada hallazgo lleva ubicación y razón; no hay hallazgo sin ubicación. Lo que **falta** (un
+  requisito sin implementar o sin prueba) no tiene línea en el código: se ubica en el
+  requisito (`spec.md:línea` o `tasks.md:línea`) y es **BLOQUEANTE** si el requisito es
+  obligatorio. Nunca se rebaja a sugerencia por no poder ubicarlo en el código.
 - No repite valores sensibles si los encuentra: dice el tipo y la ubicación.
 - Termina con la línea `RESUMEN` (formato abajo).
 
@@ -40,6 +43,9 @@ El cuerpo (prompt de la tarea, que el subagente recibe porque no ve la conversac
 1. La inyección del contexto: la salida de `preparar_revision.py` (R6). `$ARGUMENTS`
    **no** se interpola en el comando.
 2. La instrucción: lee `spec.md`, `plan.md`, `tasks.md` y la constitución; revisa el cambio.
+   **La carpeta del ticket es la de la línea `Ticket:` del contexto**, calculada con git a
+   partir de la rama, que es la fuente fiable. `$ARGUMENTS` es solo una pista: si indica otra
+   carpeta, el revisor lo dice en el reporte y declara `cobertura=incompleta`.
 3. Qué hacer si el diff se omitió por tamaño: leer los archivos de la lista con `Read` y
    `Grep`; solo `cobertura=incompleta` si algún archivo de código o configuración no se puede
    leer. Los archivos de `specs/NNN-*/` se leen como referencia (por secciones o con `Grep`) y
@@ -76,7 +82,7 @@ pueden invocarse a mano (`/revisar-codigo specs/NNN-nombre`), sin registrar vere
 ## Reglas de negocio            (solo el auditor)
 | Regla | Estado | Razón o evidencia |
 |-------|--------|-------------------|
-| I.1 … | no aplica | la spec del ticket no la cita y el diff no toca código que la implemente |
+| I.1 … | no aplica | la spec del ticket no la cita y el diff no toca código ni tests que la implementen o la prueben |
 
 RESUMEN: bloqueantes=1 sugerencias=1 cobertura=completa
 ```

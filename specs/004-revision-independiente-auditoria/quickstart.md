@@ -46,7 +46,8 @@ Se anota el resultado de cada comprobación en `DECISIONES.md`.
 |---|-----------|--------------------|
 | Q7 | `/revisar-codigo` sobre una rama temporal con un defecto sembrado (por ejemplo, una división sin protección) y una desviación de `spec.md` | Reporta ambos como `BLOQUEANTE`, con `archivo:línea`, y `RESUMEN` con `bloqueantes=2` o más |
 | Q8 | `/auditar-cumplimiento` sobre una rama con un cambio que incumple una regla del principio I (en datos ficticios) | Esa regla sale `incumple` o `no verificada` y bloqueante; las demás con su estado |
-| Q9 | `/auditar-cumplimiento` sobre este ticket (solo configuración, sin código de producción) | Las cinco reglas `no aplica`, con la razón, y `bloqueantes=0` |
+| Q9 | `/auditar-cumplimiento` sobre este ticket (solo configuración, sin código de producción ni tests de las reglas) | Las cinco reglas `no aplica`, con la razón, y `bloqueantes=0` |
+| Q9b | `/auditar-cumplimiento` sobre una rama temporal que solo borra o debilita el test de una regla (con datos ficticios) | Esa regla **no** sale `no aplica`: sin evidencia vigente es `no verificada` y bloqueante |
 | Q10 | Tras Q7 y Q8, `git status` y `git log` | Idénticos a antes: los revisores no modifican nada (SC-002) |
 
 ## Veredicto y puerta

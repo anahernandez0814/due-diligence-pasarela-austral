@@ -257,8 +257,10 @@ La misma regla del proyecto (principio III) evita decidir por palabras en el tex
 valida un formato fijo y su ausencia bloquea.
 
 **Cuándo aplica una regla de negocio** (spec FR-007): aplica si la spec del ticket la cita o
-si el diff toca código que la implementa. La instrucción del auditor lo detalla y exige la
-razón de cada "no aplica". Sin código de producción, las cinco figuran "no aplica".
+si el diff toca código o tests que la implementan o la prueban. La instrucción del auditor lo
+detalla y exige la razón de cada "no aplica". Sin código de producción ni tests de las
+reglas, las cinco figuran "no aplica". Un cambio que solo borra o debilita el test de una
+regla **sí la toca**: sin evidencia vigente es `no verificada` y bloqueante.
 
 ## R8. Veredicto: dónde vive, qué guarda y quién lo escribe
 

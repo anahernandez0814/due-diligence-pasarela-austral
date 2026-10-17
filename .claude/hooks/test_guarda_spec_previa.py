@@ -765,6 +765,17 @@ COPIAS_OPACAS = [
     ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* ."),
     ("PowerShell", "cp -Recurse /tmp/falso/* .claude"),
     ("PowerShell", r"Move-Item C:\tmp\falso\* .claude"),
+    # Sin recursión, pero con comodín: no se ven los nombres que llegan (parada F)
+    ("Bash", "cp /tmp/falso/* .claude/"),
+    ("Bash", "cp /tmp/falso/* .claude"),
+    ("Bash", "cp /tmp/falso/settings.local.* .claude/"),
+    ("Bash", "cp /tmp/falso/settings.loca?.json .claude/"),
+    ("Bash", "cp /tmp/falso/settings.local.[j]son .claude/"),
+    ("Bash", "cp -f /tmp/falso/* .claude/"),
+    ("Bash", "bash -c 'cp /tmp/falso/* .claude/'"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude" + "\\"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item -Path C:\tmp\falso\* -Destination .claude"),
 ]
 
 BORRAN_CLAUDE_ENTERA = [
@@ -807,7 +818,8 @@ def test_los_mensajes_explican_el_motivo_y_la_salida():
 
 PERMITIDOS_JUNTO_A_CLAUDE = [
     ("Bash", "cp archivo.txt .claude/otro-directorio/"),
-    ("Bash", "cp /tmp/falso/* .claude/"),
+    ("Bash", "cp /tmp/falso/*.md .claude/agents/"),
+    ("Bash", "cp nota.md .claude/"),
     ("Bash", "cp -r src-no-protegida dir-temporal/"),
     ("Bash", "cp -r /tmp/falso/. dir-temporal"),
     # Hacia subcarpetas, la regla normal; hacia la raíz, solo la copia que oculta nombres
@@ -825,7 +837,7 @@ PERMITIDOS_JUNTO_A_CLAUDE = [
     ("Bash", "rm -rf .claude-no-es-esta"),
     ("Bash", "ls .claude"),
     ("Bash", "cat .claude/settings.json"),
-    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\*.md .claude\agents\ "),
     ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* dir-temporal"),
     ("PowerShell", "Remove-Item -Recurse -Force dir-temporal"),
 ]

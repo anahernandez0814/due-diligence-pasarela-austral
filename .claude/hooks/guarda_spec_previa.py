@@ -343,8 +343,9 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
     - `claude_entera`: la ruta es `.claude` y se borra o se mueve entera;
     - `copia_recursiva` y `movimiento`: la ruta es el destino de una copia recursiva o de
       un movimiento, sin mirar el origen;
-    - `copia_oculta`: lo mismo, y el origen oculta los nombres que llegan (`/.`, comodines,
-      barra final o `-T`/`--no-target-directory`).
+    - `copia_con_comodin`: copia no recursiva cuyo origen lleva comodines;
+    - `copia_oculta`: lo mismo que `copia_recursiva`, y el origen oculta los nombres que
+      llegan (`/.`, comodines, barra final o `-T`/`--no-target-directory`).
 
     Las rutas se resuelven tras los `cd` del propio comando (revisiones D y E).
     """
@@ -395,6 +396,9 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
                     _origen_opaco(f) or _termina_en_barra(f) for f in fuentes
                 ) or _sin_directorio_de_destino(args):
                     yield resolver(destino), "copia_oculta"
+            elif any(_origen_opaco(f) for f in fuentes):
+                # Sin recursión, pero con comodines: no se ven los nombres (parada F)
+                yield resolver(destino), "copia_con_comodin"
             if carpeta or es_carpeta(destino):
                 yield resolver(destino), "copia"
                 for fuente in fuentes:
@@ -516,9 +520,10 @@ def _protegidas_en_terminal(
                 privado = ruta_privada(ruta)
                 if privado:
                     return privado
-                if (tipo in ("copia_recursiva", "movimiento") and ruta == ".claude") or (
-                    tipo == "copia_oculta" and ruta == ""
-                ):
+                if (
+                    tipo in ("copia_recursiva", "movimiento", "copia_con_comodin")
+                    and ruta == ".claude"
+                ) or (tipo == "copia_oculta" and ruta == ""):
                     return COPIA_A_CLAUDE
                 if tipo == "claude_entera":
                     return BORRAR_CLAUDE

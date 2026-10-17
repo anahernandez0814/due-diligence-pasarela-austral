@@ -41,7 +41,7 @@ estándar, sin rutas del sistema.
 **Constraints**: stdout reservado al protocolo (nada se imprime); sin credenciales; solo datos
 ficticios; la variable de noticias se lee en cada llamada.
 
-**Scale/Scope**: seis comercios en dos fuentes, dos listas restrictivas, unas pocas noticias y nueve
+**Scale/Scope**: seis comercios en dos fuentes, dos listas restrictivas, unas pocas noticias y diez
 categorías.
 
 ## Constitution Check

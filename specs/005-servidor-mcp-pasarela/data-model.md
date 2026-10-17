@@ -91,7 +91,7 @@ Datos adicionales, sin caso propio:
 
 - **Mención sin lista** (US2, escenario 3): una noticia de `Diario Ficticio del Sur` menciona
   a `CO-AM-0005` (Almacén Mirador Norte SAS), que no está en listas.
-- **Categorías**: las nueve de la tabla anterior; cualquier otra devuelve `categoria_desconocida`.
+- **Categorías**: las diez de la tabla anterior; cualquier otra devuelve `categoria_desconocida`.
 
 ## Reglas de validación
 

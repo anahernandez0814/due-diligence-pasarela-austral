@@ -4,8 +4,9 @@ Bloquea crear un pull request si no hay un veredicto aprobado del commit actual,
 en la rama, por cualquiera de estas vías:
 
 - la herramienta `mcp__github__create_pull_request` del MCP de GitHub;
-- `gh pr create` por terminal (Bash o PowerShell), también tras `bash -c`, `eval`, heredocs,
-  `xargs`, `sudo`, `env -S` y demás envoltorios que reconoce el extractor de #3;
+- `gh pr create` y su alias oficial `gh pr new` por terminal (Bash o PowerShell), también
+  tras `bash -c`, `eval`, heredocs, `xargs`, `sudo`, `env -S` y demás envoltorios que
+  reconoce el extractor de #3;
 - `gh api` con POST al recurso de pull requests y la mutación `createPullRequest` de
   `gh api graphql`.
 
@@ -50,7 +51,12 @@ ANIDAMIENTO = (
 )
 
 _TIENE_GH = re.compile(r"\bgh\b", re.IGNORECASE)
-_PULLS = re.compile(r"/?repos/[^/\s]+/[^/\s]+/pulls/?(?:\?.*)?", re.IGNORECASE)
+# El endpoint de `gh api` es una ruta (`repos/o/r/pulls`) o una URL completa
+# (`https://<host>/repos/o/r/pulls`, también con el prefijo `/api/v3/` de GitHub Enterprise).
+_PULLS = re.compile(
+    r"(?:https?://[^/\s]+(?:/api/v3)?)?/?repos/[^/\s]+/[^/\s]+/pulls/?(?:\?.*)?",
+    re.IGNORECASE,
+)
 _PROPIETARIO_DE_ORIGIN = re.compile(r"github\.com[:/]([^/\s]+)/", re.IGNORECASE)
 
 # Opciones globales con valor que pueden ir delante del subcomando.
@@ -150,7 +156,7 @@ def _api(args: list[str]) -> tuple[str | None, str | None, bool, dict[str, str]]
 def creacion_de_pr(args: list[str]) -> tuple[bool, str | None]:
     """`(crea un PR, head)` para los argumentos de `gh`. `head` es None si no se indica."""
     palabras, fin = _posicionales_iniciales(args)
-    if palabras == ["pr", "create"]:
+    if palabras in (["pr", "create"], ["pr", "new"]):  # `gh pr new`: alias oficial
         return True, _head_de_pr_create(args[fin:])
     if palabras[:1] != ["api"]:
         return False, None

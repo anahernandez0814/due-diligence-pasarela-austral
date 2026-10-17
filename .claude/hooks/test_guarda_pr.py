@@ -104,6 +104,24 @@ CREAN_UN_PR = [
     f"gh api {ENDPOINT} --raw-field title=t",
     f"gh api {ENDPOINT} --input cuerpo.json",
     "gh api graphql -f query='mutation { createPullRequest(input: {}) { clientMutationId } }'",
+    # `gh pr new` es el alias oficial de `gh pr create` (hallazgo 1 de la parada D)
+    "gh pr new --fill",
+    "gh pr new -t x -b y -B main",
+    "gh pr new --repo o/r --fill",
+    "gh.exe pr new --fill",
+    "bash -c 'gh pr new --fill'",
+    'eval "gh pr new --fill"',
+    "sudo gh pr new --fill",
+    "echo 1 | xargs gh pr new --fill",
+    # El endpoint como URL completa (hallazgo 2)
+    f"gh api https://api.github.com/{ENDPOINT} -f title=x",
+    f"gh api https://api.github.com/{ENDPOINT} -X POST",
+    f"gh api https://api.github.com/{ENDPOINT}/ --method POST",
+    f"gh api http://api.github.com/{ENDPOINT} -X POST",
+    f"gh api https://ghe.example.com/api/v3/{ENDPOINT} -f title=x",
+    f"gh api https://localhost:1/{ENDPOINT} -f title=x",
+    f"gh api https://api.github.com/{ENDPOINT}?draft=true -X POST",
+    f"gh api -X POST https://api.github.com/{ENDPOINT}",
 ]
 
 NO_CREAN_UN_PR = [
@@ -119,6 +137,13 @@ NO_CREAN_UN_PR = [
     f"gh api {ENDPOINT}/1/comments -X POST -f body=x",
     "gh api graphql -f query='query { viewer { login } }'",
     "echo gh pr create",
+    "echo gh pr new",
+    f"gh api https://api.github.com/{ENDPOINT}",
+    f"gh api https://api.github.com/{ENDPOINT} -X GET",
+    f"gh api https://api.github.com/{ENDPOINT}/1 -X POST -f body=x",
+    f"gh api https://ghe.example.com/api/v3/{ENDPOINT}/1/comments -X POST -f body=x",
+    "gh api https://api.github.com/user",
+    f"gh api https://api.github.com/repos/{PROPIETARIO}/{REPOSITORIO}/issues -X POST -f title=x",
     "git status",
     "git push -u origin rama",
     "uv run pytest",
@@ -270,13 +295,29 @@ def test_mcp_con_tool_input_que_no_es_un_objeto_se_bloquea(repo):
     assert guarda_pr.motivo(entrada) is not None
 
 
-@pytest.mark.parametrize("comando", ["gh pr create --head {rama}", "gh pr create -H {rama}"])
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "gh pr create --head {rama}",
+        "gh pr create -H {rama}",
+        "gh pr new --head {rama}",
+        "gh pr new -H {rama}",
+    ],
+)
 def test_head_de_la_terminal_igual_a_la_rama_actual_se_permite(repo, comando):
     aprobar(repo)
     assert motivo_terminal(repo, comando.format(rama=RAMA)) is None
 
 
-@pytest.mark.parametrize("comando", ["gh pr create --head otra", "gh pr create -H otra"])
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "gh pr create --head otra",
+        "gh pr create -H otra",
+        "gh pr new --head otra",
+        "gh pr new -H otra",
+    ],
+)
 def test_head_de_la_terminal_distinto_de_la_rama_actual_se_bloquea(repo, comando):
     aprobar(repo)
     assert "Cambia a la rama" in motivo_terminal(repo, comando)

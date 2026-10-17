@@ -322,3 +322,85 @@ def test_el_servidor_arranca_por_stdio_y_responde_sin_ensuciar_stdout():
     assert herramientas == HERRAMIENTAS
     assert resultado.is_error is False
     assert resultado.structured_content["hechos"][0]["contenido"]["nivel"] == "alto"
+
+
+# --- el esquema publica el tipo JSON, y un tipo incorrecto sigue siendo error propio --------------
+
+TIPOS_JSON = {
+    "consultar_registro_mercantil": {"nombre": "string", "identificador": "string"},
+    "consultar_listas_restrictivas": {
+        "tipo": "string",
+        "nombre": "string",
+        "identificador": "string",
+    },
+    "buscar_noticias": {"nombre": "string", "identificador": "string"},
+    "consultar_riesgo_categoria": {"categoria": "string"},
+    "registrar_informe": {
+        "comercio": "object",
+        "recomendacion": "string",
+        "hallazgos": "object",
+        "cobertura": ["string", "array"],
+    },
+    "escalar_a_cumplimiento": {
+        "comercio": "object",
+        "hallazgos": "object",
+        "cobertura": ["string", "array"],
+        "causa_escalamiento": "string",
+        "accion_recomendada": "string",
+    },
+}
+
+
+def test_tools_list_publica_el_tipo_json_de_cada_parametro():
+    herramientas = _herramientas()
+    for nombre, esperados in TIPOS_JSON.items():
+        propiedades = herramientas[nombre].input_schema["properties"]
+        assert {p: v.get("type") for p, v in propiedades.items()} == esperados, nombre
+
+
+def test_publicar_el_tipo_no_vuelve_obligatorio_ningun_parametro():
+    for nombre, herramienta in _herramientas().items():
+        assert not herramienta.input_schema.get("required"), nombre
+
+
+def _validos(herramienta):
+    return {
+        "consultar_registro_mercantil": {"identificador": "CO-TV-0001"},
+        "consultar_listas_restrictivas": {"tipo": "persona", "identificador": "PE-0003"},
+        "buscar_noticias": {"identificador": "CO-AM-0005"},
+        "consultar_riesgo_categoria": {"categoria": "apuestas"},
+        "registrar_informe": _informe(),
+        "escalar_a_cumplimiento": _escalamiento(),
+    }[herramienta]
+
+
+TIPOS_INCORRECTOS = [
+    ("consultar_registro_mercantil", {"identificador": None, "nombre": 5}),
+    ("consultar_registro_mercantil", {"identificador": 5}),
+    ("consultar_listas_restrictivas", {"tipo": 5}),
+    ("consultar_listas_restrictivas", {"identificador": ["PE-0003"]}),
+    ("buscar_noticias", {"identificador": None, "nombre": 5}),
+    ("consultar_riesgo_categoria", {"categoria": 5}),
+    ("consultar_riesgo_categoria", {"categoria": ["apuestas"]}),
+    ("registrar_informe", {"comercio": "Tienda Verde SAS"}),
+    ("registrar_informe", {"recomendacion": 5}),
+    ("registrar_informe", {"hallazgos": ["registro"]}),
+    ("registrar_informe", {"cobertura": 5}),
+    ("escalar_a_cumplimiento", {"comercio": 5}),
+    ("escalar_a_cumplimiento", {"hallazgos": "texto"}),
+    ("escalar_a_cumplimiento", {"cobertura": {"a": 1}}),
+    ("escalar_a_cumplimiento", {"causa_escalamiento": 5}),
+    ("escalar_a_cumplimiento", {"accion_recomendada": ["x"]}),
+]
+
+
+@pytest.mark.parametrize(("herramienta", "cambio"), TIPOS_INCORRECTOS)
+def test_un_tipo_incorrecto_sigue_dando_entrada_invalida_en_espanol(herramienta, cambio):
+    # Con el tipo publicado en el esquema, el SDK sigue dejando pasar cualquier valor hasta la
+    # validación propia: el error es el del contrato, no el de pydantic.
+    resultado = _llamar(herramienta, _validos(herramienta) | cambio)
+    cuerpo = _comprobar_error_estructurado(resultado, "entrada_invalida")
+    assert "debe" in cuerpo["mensaje"] or "exactamente" in cuerpo["mensaje"]
+    texto = _texto(resultado).lower()
+    for ingles in ("pydantic", "[type=", "input_value", "valid string", "valid dictionary"):
+        assert ingles not in texto

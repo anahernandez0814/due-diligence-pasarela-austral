@@ -50,8 +50,13 @@ def _categorias_para_la_descripcion() -> str:
         return "(el catálogo no está disponible)"
 
 
-def _p(descripcion: str) -> Any:
-    return Field(description=descripcion)
+def _p(descripcion: str, tipo: str | list[str] = "string") -> Any:
+    """Descripción y tipo JSON de un parámetro.
+
+    Los parámetros se declaran `Any` para que el SDK no rechace un tipo incorrecto en inglés
+    (R2); `json_schema_extra` publica en `tools/list` el tipo que sí se espera, y la validación
+    sigue siendo la propia de cada herramienta."""
+    return Field(description=descripcion, json_schema_extra={"type": tipo})
 
 
 # --- consultar_registro_mercantil -------------------------------------------------------------
@@ -190,12 +195,15 @@ def consultar_riesgo_categoria(
 
 # --- registrar_informe y escalar_a_cumplimiento ----------------------------------------------
 
-_COMERCIO = _p("Objeto. El comercio: «identificador» y «nombre», ambos texto.")
+_COMERCIO = _p("Objeto. El comercio: «identificador» y «nombre», ambos texto.", "object")
 _HALLAZGOS = _p(
     "Objeto. Un hallazgo por frente: la clave es el frente (por ejemplo «registro») y el valor es "
-    "un objeto con «contenido» y «fuente», ambos texto. Ningún hallazgo sin fuente."
+    "un objeto con «contenido» y «fuente», ambos texto. Ningún hallazgo sin fuente.",
+    "object",
 )
-_COBERTURA = _p("Texto o lista. Frentes cubiertos y frentes que quedaron sin cubrir.")
+_COBERTURA = _p(
+    "Texto o lista. Frentes cubiertos y frentes que quedaron sin cubrir.", ["string", "array"]
+)
 
 
 @servidor.tool(

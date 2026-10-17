@@ -256,3 +256,72 @@ def test_la_carpeta_del_ticket_es_la_de_la_linea_ticket_del_contexto(subagente, 
     assert "Carpeta del ticket: $ARGUMENTS" not in cuerpo
     # Si $ARGUMENTS indica otra carpeta, se dice y la cobertura es incompleta.
     assert "otra carpeta" in cuerpo
+
+
+# --- /abrir-pr: la revisión de transición queda reemplazada (US3, FR-019) -------------
+
+ABRIR_PR = RAIZ / ".claude" / "commands" / "abrir-pr.md"
+
+
+def cargar_abrir_pr() -> tuple[dict, str]:
+    return separar(ABRIR_PR.read_text(encoding="utf-8"))
+
+
+def test_abrir_pr_ya_no_usa_el_subagente_plan_ni_git_diff():
+    frontmatter, cuerpo = cargar_abrir_pr()
+    permitidas = frontmatter["allowed-tools"]
+    assert "Agent" not in permitidas
+    assert not any(x.startswith("Bash(git diff") for x in permitidas)
+    assert "subagent_type" not in cuerpo
+    assert "git diff origin/main" not in cuerpo
+
+
+def test_abrir_pr_declara_las_dos_skills_el_registro_y_rev_parse():
+    frontmatter, _ = cargar_abrir_pr()
+    permitidas = frontmatter["allowed-tools"]
+    assert "Skill(revisar-codigo)" in permitidas
+    assert "Skill(auditar-cumplimiento)" in permitidas
+    assert "Bash(git rev-parse:*)" in permitidas
+    assert "Bash(git fetch:*)" in permitidas
+    registro = [x for x in permitidas if "veredicto.py registrar" in x]
+    assert len(registro) == 1
+    assert registro[0].startswith("Bash(uv run --no-project --python 3.12 --quiet ")
+    assert "${CLAUDE_PROJECT_DIR}/.claude/hooks/veredicto.py" in registro[0]
+
+
+def test_abrir_pr_hace_fetch_guarda_el_sha_lanza_las_skills_y_registra_con_commit():
+    _, cuerpo = cargar_abrir_pr()
+    assert "git fetch origin main" in cuerpo
+    assert "git fetch origin <rama>" in cuerpo
+    assert "git rev-parse HEAD" in cuerpo
+    assert "--commit" in cuerpo
+    orden = [
+        cuerpo.index("git fetch origin main"),
+        cuerpo.index("git rev-parse HEAD"),
+        cuerpo.index("revisar-codigo"),
+        cuerpo.index("veredicto.py registrar"),
+        cuerpo.index("git push"),
+        cuerpo.index("mcp__github__create_pull_request", cuerpo.index("git push")),
+    ]
+    assert orden == sorted(orden)
+
+
+def test_abrir_pr_se_detiene_si_el_commit_cambio_o_hay_bloqueantes():
+    _, cuerpo = cargar_abrir_pr()
+    assert "El commit cambió durante la revisión" in cuerpo
+    assert "sin push ni PR" in cuerpo
+    assert "volver a ejecutar `/abrir-pr`" in cuerpo
+
+
+def test_abrir_pr_cita_el_sha_revisado_y_los_resumenes_en_la_descripcion():
+    _, cuerpo = cargar_abrir_pr()
+    assert "SHA_REVISADO" in cuerpo
+    assert "RESUMEN" in cuerpo
+    assert "veredicto" in cuerpo.lower()
+
+
+def test_abrir_pr_pasa_al_registro_solo_las_lineas_resumen():
+    # El reporte completo, entre comillas en una terminal, permitiría inyectar comandos.
+    _, cuerpo = cargar_abrir_pr()
+    assert "solo la línea `RESUMEN`" in cuerpo
+    assert "comillas simples" in cuerpo

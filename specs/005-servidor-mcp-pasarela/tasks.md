@@ -82,16 +82,16 @@ verificación del cierre de #5 la hace el paso 0 del siguiente `/siguiente-ticke
 
 **Propósito**: las piezas que usan todas las herramientas. Tests primero.
 
-- [ ] T004 [P] Escribir `src/servidor_mcp/test_normalizar.py` (R3). Casos: `S.A.S.` y `SAS` dan lo
+- [X] T004 [P] Escribir `src/servidor_mcp/test_normalizar.py` (R3). Casos: `S.A.S.` y `SAS` dan lo
   mismo; tildes y `ñ` (`Almacén` → `almacen`); mayúsculas; espacios repetidos; apóstrofo se
   elimina; coma, guion y barra pasan a espacio; `contiene` es subcadena del texto normalizado
   (`almacen mirador` está en `almacen mirador norte sas`); `igual` compara el nombre completo
   normalizado, nunca parcial; el texto normalizado de menos de 3 caracteres se rechaza
   (`MINIMO_CARACTERES = 3`).
-- [ ] T005 Implementar `src/servidor_mcp/normalizar.py`: `normalizar(texto)` con los cinco pasos de R3
+- [X] T005 Implementar `src/servidor_mcp/normalizar.py`: `normalizar(texto)` con los cinco pasos de R3
   (NFKD sin marcas combinadas, `casefold`, eliminar `.` y `'`, otros signos a espacio, colapsar),
   `contiene(buscado, nombre)`, `igual(a, b)` y la constante `MINIMO_CARACTERES = 3`. Pasa T004.
-- [ ] T006 [P] Escribir `src/servidor_mcp/test_respuestas.py` (R2, R9, FR-010, FR-011). `respuesta()`
+- [X] T006 [P] Escribir `src/servidor_mcp/test_respuestas.py` (R2, R9, FR-010, FR-011). `respuesta()`
   devuelve `CallToolResult` con `is_error=False`, `structured_content` igual al JSON del `content`,
   `hechos` y `metadatos` con `fuentes` y `fecha`; con `sin_coincidencias` los `hechos` van vacíos y
   los `metadatos` presentes. `error()` devuelve `is_error=True` con `error: true`, `tipo`,
@@ -101,25 +101,25 @@ verificación del cierre de #5 la hace el paso 0 del siguiente `/siguiente-ticke
   un hecho; `respuesta(..., coincidencias=[...])` añade `coincidencias` al nivel superior, y solo
   entonces; la `fecha` de un hecho puede ser distinta de la de `metadatos` (la de la noticia, la de
   registro). `ensure_ascii=False`: las tildes no salen como `é`.
-- [ ] T007 Implementar `src/servidor_mcp/respuestas.py`: `respuesta(resultado, hechos, fuentes, fecha,
+- [X] T007 Implementar `src/servidor_mcp/respuestas.py`: `respuesta(resultado, hechos, fuentes, fecha,
   coincidencias=None)` (`coincidencias` solo en el registro mercantil), `hecho(contenido, fuente,
   fecha)` y `error(tipo, mensaje, reintentable, obtenido=None,
   campos_faltantes=None)`. Los tipos de error son los de `data-model.md`: `entrada_invalida`,
   `campos_obligatorios_ausentes`, `servicio_no_disponible`, `datos_no_disponibles`,
   `error_de_almacenamiento` y `error_interno`; `servicio_no_disponible` es el **único**
   reintentable. Pasa T006.
-- [ ] T008 [P] Escribir `src/servidor_mcp/test_entradas.py` (R2). Los validadores reciben un valor
+- [X] T008 [P] Escribir `src/servidor_mcp/test_entradas.py` (R2). Los validadores reciben un valor
   `Any` y devuelven el valor o un error en español: `texto_obligatorio` (ausente, vacío, solo
   espacios, o de tipo distinto de `str` → `entrada_invalida` con el nombre del parámetro y el tipo
   esperado), `exactamente_uno(nombre, identificador)` (los dos o ninguno → `entrada_invalida`),
   `objeto_obligatorio` y `campos_obligatorios(entrada, requeridos)` (devuelve **todos** los
   faltantes; un campo vacío cuenta como faltante; un tipo incorrecto → `entrada_invalida`).
-- [ ] T009 Implementar `src/servidor_mcp/entradas.py` con esos validadores, que **nunca lanzan**. Pasa T008.
-- [ ] T010 [P] Escribir `src/servidor_mcp/test_datos.py`, parte del cargador (R8), con archivos en
+- [X] T009 Implementar `src/servidor_mcp/entradas.py` con esos validadores, que **nunca lanzan**. Pasa T008.
+- [X] T010 [P] Escribir `src/servidor_mcp/test_datos.py`, parte del cargador (R8), con archivos en
   `tmp_path`: `cargar(ruta)` devuelve el contenido; un archivo ausente, con JSON corrupto o sin
   `"ficticio": true`, `"aviso"` o `"fecha_corte"` lanza `DatosNoDisponibles`; el cargador no
   imprime nada.
-- [ ] T011 Implementar `src/servidor_mcp/datos.py`: la excepción `DatosNoDisponibles`, `cargar(ruta)`
+- [X] T011 Implementar `src/servidor_mcp/datos.py`: la excepción `DatosNoDisponibles`, `cargar(ruta)`
   con esas validaciones y las funciones `registros()`, `listas()`, `noticias()` y `categorias()`
   que leen `src/servidor_mcp/datos/*.json` (con `Path(__file__)`, sin rutas del sistema) y
   guardan el resultado en caché por proceso. Pasa T010. Al final de la fase: `uv run ruff format .`,

@@ -175,7 +175,7 @@ hallazgos con `archivo:línea`, bloqueantes y sugerencias.
 `/revisar-codigo specs/NNN-nombre` los reporta con su ubicación, los clasifica y no modifica
 ningún archivo (Q7, Q10).
 
-- [ ] T008 [US1] Escribir `.claude/hooks/test_agentes_skills.py` con los casos generales,
+- [X] T008 [US1] Escribir `.claude/hooks/test_agentes_skills.py` con los casos generales,
   parametrizados por una lista `REVISIONES` de pares (subagente, skill) que de momento
   tiene `revisor-codigo` y `revisar-codigo` (R12, FR-003, FR-004; debe fallar primero):
   - en el subagente, `tools` es exactamente `Read, Grep, Glob`, ni una más (sin `Agent`,
@@ -186,12 +186,12 @@ ningún archivo (Q7, Q10).
   - el comando inyectado no interpola `$ARGUMENTS` (R2.2) y no usa rutas absolutas (R2.3);
   - el cuerpo de la skill menciona la marca `CONTEXTO DE REVISIÓN`, la línea `RESUMEN` y
     la instrucción de leer la constitución con `Read` (R3).
-- [ ] T009 [P] [US1] Crear `.claude/agents/revisor-codigo.md` (FR-001, FR-003, FR-006,
+- [X] T009 [P] [US1] Crear `.claude/agents/revisor-codigo.md` (FR-001, FR-003, FR-006,
   R5; [contracts/revisiones.md](contracts/revisiones.md)): `tools: Read, Grep, Glob`; rol de
   revisor de calidad, errores y cumplimiento de la spec del ticket; solo reporta, no
   corrige ni propone parches; cada hallazgo con `archivo:línea`, severidad (`BLOQUEANTE` o
   `SUGERENCIA`) y razón; no repite valores sensibles; termina con la línea `RESUMEN`.
-- [ ] T010 [P] [US1] Crear `.claude/skills/revisar-codigo/SKILL.md` (FR-004, FR-005, R1, R2,
+- [X] T010 [P] [US1] Crear `.claude/skills/revisar-codigo/SKILL.md` (FR-004, FR-005, R1, R2,
   R4, R6): `context: fork`, `agent: revisor-codigo`,
   `argument-hint: "[carpeta del ticket, p. ej. specs/NNN-nombre]"` y `allowed-tools` solo
   con el comando de `preparar_revision.py`, con la ruta resuelta por la variable de la
@@ -200,7 +200,7 @@ ningún archivo (Q7, Q10).
   constitución, trata `specs/NNN-*/` como referencia que no cuenta para la cobertura, y
   pide `cobertura=incompleta` si falta la marca o no se puede leer un archivo de código o
   configuración. `$ARGUMENTS` solo en prosa.
-- [ ] T011 [US1] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
+- [X] T011 [US1] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(revision):
   subagente y skill de revisión de código`.
 
@@ -217,21 +217,21 @@ evidencia, con estados `cumple`, `incumple`, `no aplica` o `no verificada`.
 bloqueante y las demás con su estado (Q8); este ticket, sin código de producción, sale con
 las cinco `no aplica` (Q9).
 
-- [ ] T012 [US2] Ampliar `REVISIONES` en `.claude/hooks/test_agentes_skills.py` con el par
+- [X] T012 [US2] Ampliar `REVISIONES` en `.claude/hooks/test_agentes_skills.py` con el par
   `auditor-cumplimiento` y `auditar-cumplimiento` (debe fallar primero). Añadir al
   auditor: el cuerpo menciona las cinco reglas del principio I, los cuatro estados, la razón
   obligatoria de cada `no aplica` y que una regla sin evidencia nunca es `cumple`.
-- [ ] T013 [P] [US2] Crear `.claude/agents/auditor-cumplimiento.md` (FR-002, FR-003,
+- [X] T013 [P] [US2] Crear `.claude/agents/auditor-cumplimiento.md` (FR-002, FR-003,
   FR-007, R5, R7): `tools: Read, Grep, Glob`; verifica las cinco reglas del principio I de
   `.specify/memory/constitution.md` contra la spec, el código y los tests, con evidencia de
   archivo y línea. Una regla **aplica** si la spec del ticket la cita o si el diff toca
   código que la implementa; si no aplica, estado `no aplica` con esa razón; si aplica y no
   hay evidencia, `no verificada` y bloqueante. Sin código de producción, las cinco `no
   aplica`. Tabla de las cinco reglas y línea `RESUMEN` al final.
-- [ ] T014 [P] [US2] Crear `.claude/skills/auditar-cumplimiento/SKILL.md` (FR-004, FR-005,
+- [X] T014 [P] [US2] Crear `.claude/skills/auditar-cumplimiento/SKILL.md` (FR-004, FR-005,
   R1, R2): mismas reglas que T010, con `agent: auditor-cumplimiento` y la constitución como
   documento principal.
-- [ ] T015 [US2] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
+- [X] T015 [US2] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(revision):
   subagente y skill de auditoría de cumplimiento`.
 

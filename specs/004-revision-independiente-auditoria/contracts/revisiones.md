@@ -62,7 +62,8 @@ pueden invocarse a mano (`/revisar-codigo specs/NNN-nombre`), sin registrar vere
 
 | Aspecto | Contrato |
 |---------|----------|
-| Invocación | `uv run --no-project --python 3.12 --quiet <raíz>/.claude/hooks/preparar_revision.py` |
+| Invocación | `uv run --no-project --python 3.12 --quiet ${CLAUDE_PROJECT_DIR}/.claude/hooks/preparar_revision.py`. Las skills **conservan** la variable: skills.md la sustituye en el contenido de la skill y en las reglas Bash de `allowed-tools` |
+| Raíz | La calcula el script: `CLAUDE_PROJECT_DIR` si existe; si no, `git rev-parse --show-toplevel` desde el directorio actual; y si tampoco, el directorio actual. Desde una subcarpeta usa la raíz del repositorio, donde está `specs/` |
 | Entrada | ninguna; ni argumentos ni stdin. La rama y las rutas salen de git (R2) |
 | Salida | texto en stdout: base, lista de archivos, diff o aviso de omisión, ticket y constitución (R6) |
 | Código de salida | siempre 0; un fallo se dice en la salida con `CONTEXTO INCOMPLETO: <motivo>` |

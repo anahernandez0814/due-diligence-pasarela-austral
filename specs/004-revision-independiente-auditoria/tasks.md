@@ -126,11 +126,20 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
   - **Ampliado tras la parada A (hallazgo 2: formato estricto)**: `bloqueantes=٠` y
     `bloqueantes=０` (dígitos de otros alfabetos) → reporte no utilizable; el formato usa
     solo `[0-9]`.
+  - **Ampliado tras la parada C (hallazgo 1: la raíz no es el directorio actual)**: sin
+    `CLAUDE_PROJECT_DIR`, ejecutado desde una subcarpeta del repositorio, `registrar`
+    escribe el veredicto en la raíz del repositorio (`git rev-parse --show-toplevel`) y no
+    en la subcarpeta; con `CLAUDE_PROJECT_DIR` definida, manda esa; fuera de un repositorio y
+    sin la variable, usa el directorio actual y el error se reporta como hasta ahora (salida
+    2). La función `raiz()` lo resuelve en ese orden.
 - [X] T004 [P] Escribir `.claude/hooks/test_preparar_revision.py` (R4, R6, FR-005; debe
   fallar primero). Repositorios git temporales con un `origin` local. Casos:
   - la primera línea de la salida es exactamente `CONTEXTO DE REVISIÓN`;
   - **ampliado tras la parada A**: la salida contiene `Commit: <sha completo de HEAD>`,
     justo después de `Rama:`;
+  - **ampliado tras la parada C**: ejecutado desde una subcarpeta del repositorio y sin
+    `CLAUDE_PROJECT_DIR`, encuentra `specs/NNN-*/` en la raíz (`Ticket: specs/…`, sin
+    `CONTEXTO INCOMPLETO`), con la misma raíz que `veredicto.py`;
   - la base es la de `veredicto.base_de_fusion` (`git merge-base HEAD origin/main`), no el
     `main` local (con un `main` local desactualizado);
   - la lista de archivos trae estado y estadísticas, y marca los eliminados;
@@ -268,6 +277,13 @@ vez, en T036 (Q12, Q13).
 - [X] T016 [US3] Añadir a `.claude/hooks/test_agentes_skills.py` la comprobación de
   `/abrir-pr` (R12; debe fallar primero): ya no usa `Agent` ni `git diff`, declara las dos
   `Skill(...)` y el comando de `veredicto.py registrar`, y menciona `git fetch origin main`.
+  - **Ampliado tras la parada C** (hallazgos 1 y 2): `/abrir-pr` no usa
+    `${CLAUDE_PROJECT_DIR}` en ningún sitio (la variable no existe en la herramienta Bash);
+    el comando de registro y su regla de `allowed-tools` llevan la ruta relativa
+    `.claude/hooks/veredicto.py`; antes de registrar, cada línea `RESUMEN` se pasa solo si
+    coincide exactamente con `RESUMEN: bloqueantes=<dígitos> sugerencias=<dígitos>
+    cobertura=<completa|incompleta>` y, si no, se pasa `sin resumen`; y las skills sí
+    conservan la variable.
 - [X] T017 [US3] Reescribir la sección 2 de `.claude/commands/abrir-pr.md` y ajustar sus
   acciones según [contracts/abrir-pr.md](contracts/abrir-pr.md) (FR-008, FR-009, FR-010,
   FR-019, R11; hace pasar T016). Orden: comprobaciones sin cambios → `git fetch origin main`
@@ -281,7 +297,10 @@ vez, en T036 (Q12, Q13).
   entran `Skill(revisar-codigo)`, `Skill(auditar-cumplimiento)`, el comando de
   `veredicto.py registrar` y `Bash(git rev-parse:*)`. La descripción del PR cita el
   veredicto, **ese sha guardado**, los dos `RESUMEN` y los hallazgos no bloqueantes. No
-  quedan dos revisiones: se elimina el subagente `Plan`.
+  quedan dos revisiones: se elimina el subagente `Plan`. **Ajuste tras la parada C**: la
+  ruta del registro es relativa (`.claude/hooks/veredicto.py`, también en su regla de
+  `allowed-tools`) y cada línea `RESUMEN` se valida con el formato exacto antes de pasarla
+  (si no, `sin resumen`).
 - [X] T018 [US3] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks -k agentes_skills`, y commitear: `feat(abrir-pr):
   revisión independiente y veredicto en /abrir-pr`.

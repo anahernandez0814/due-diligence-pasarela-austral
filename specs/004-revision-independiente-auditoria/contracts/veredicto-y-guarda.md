@@ -9,7 +9,9 @@ Módulo con una interfaz de línea de comandos que `/abrir-pr` invoca por Bash.
 
 | Aspecto | Contrato |
 |---------|----------|
-| Invocación | `uv run --no-project --python 3.12 --quiet <raíz>/.claude/hooks/veredicto.py registrar --commit <sha> --codigo "<RESUMEN>" --auditoria "<RESUMEN>"` |
+| Invocación | `uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar --commit <sha> --codigo '<RESUMEN>' --auditoria '<RESUMEN>'`, ejecutada desde la raíz del repositorio. La ruta es **relativa**: `${CLAUDE_PROJECT_DIR}` no existe en la herramienta Bash (research R2.5) |
+| Raíz | La calculan los scripts: `CLAUDE_PROJECT_DIR` si existe; si no, `git rev-parse --show-toplevel` desde el directorio actual; y si tampoco, el directorio actual (el error se reporta como hasta ahora). Ejecutado desde una subcarpeta, el veredicto se escribe en la raíz del repositorio, donde la guarda lo busca |
+| Entradas | Las dos líneas llegan **ya validadas** por `/abrir-pr` (ver [abrir-pr.md](abrir-pr.md)): solo `RESUMEN: bloqueantes=<dígitos> sugerencias=<dígitos> cobertura=<completa\|incompleta>` o `sin resumen`, sin comillas posibles |
 | `--commit` | **Obligatorio**: el sha completo (hexadecimal, 40 o 64 caracteres) del commit que se revisó. Es el que `/abrir-pr` guardó antes de lanzar las skills. Ausente, abreviado o no hexadecimal: salida 2 sin escribir nada |
 | Commit cambiado | Si `--commit` no coincide con `HEAD`, **no escribe nada** y sale con 2, con este mensaje en stderr: `El commit cambió durante la revisión (revisado <7 caracteres>, actual <7 caracteres>): ejecute /abrir-pr de nuevo.` Sin archivo de veredicto, la guarda ya bloquea, así que no hace falta otro estado |
 | Qué hace | comprueba que `--commit` es `HEAD`, valida las dos líneas `RESUMEN` (formato estricto: dígitos `[0-9]`, no los de otros alfabetos), consolida, escribe `.claude/veredictos/<--commit>.json` y escribe el resultado. El veredicto queda atado al commit que se revisó, no al que exista al registrar |

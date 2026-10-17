@@ -97,7 +97,34 @@ no necesita Bash.
    con `disableSkillShellExecution`), no hay contexto fiable: lo reporta y declara
    `cobertura=incompleta` (R7). Así una inyección que no corrió no se confunde con un cambio
    vacío.
-4. `disable-model-invocation` no se usa: `/abrir-pr` invoca las skills con la herramienta
+5. **`${CLAUDE_PROJECT_DIR}` solo se sustituye en skills** (hallazgo de la parada C). Lo
+   probado y lo que dice la documentación:
+   - **Probado**: en la herramienta Bash la variable no existe. `echo` sale vacío y el
+     comando de `/abrir-pr` se convertía en `C:/Program Files/Git/.claude/hooks/veredicto.py`;
+     `uv` responde `Failed to spawn` y sale con 2. `/abrir-pr` se habría detenido siempre en
+     el registro.
+   - hooks.md: la variable se exporta a los hooks (y a los servidores MCP stdio y a los LSP
+     de los plugins).
+   - skills.md: "Claude Code substitutes `${CLAUDE_SKILL_DIR}` and `${CLAUDE_PROJECT_DIR}` in
+     two places: the skill's markdown content, and Bash rules in the `allowed-tools`
+     frontmatter".
+   - Para la herramienta Bash y para los slash commands **no está documentada**.
+   - permissions.md: las reglas Bash se comparan con el texto literal del comando.
+
+   **Decisión**: las skills **conservan** `${CLAUDE_PROJECT_DIR}` (es uno de los dos sitios
+   donde se sustituye y su patrón de `allowed-tools` también); `/abrir-pr`, que es un slash
+   command, usa la ruta **relativa** a la raíz del repositorio,
+   `.claude/hooks/veredicto.py`, y su regla de `allowed-tools` la lleva literal. Es un
+   comando que se ejecuta con la raíz del repositorio como directorio de trabajo (las
+   comprobaciones de la sección 1 parten de ahí).
+
+   **La raíz la calculan los scripts**, no el directorio actual: `veredicto.py` y
+   `preparar_revision.py` toman `CLAUDE_PROJECT_DIR` si existe; si no, `git rev-parse
+   --show-toplevel` desde el directorio actual; y si tampoco, el directorio actual (el error
+   se reporta como hasta ahora). Con el directorio actual a secas, ejecutado desde una
+   subcarpeta, el veredicto se escribiría donde la guarda no lo busca (y `specs/NNN-*` no se
+   encontraría).
+6. `disable-model-invocation` no se usa: `/abrir-pr` invoca las skills con la herramienta
    Skill y la doc dice que ese campo impide que Claude la cargue (skills.md: "Set to `true`
    to prevent Claude from automatically loading this skill"). No se arriesga la invocación.
 
@@ -400,7 +427,13 @@ subagente `Plan`) se **reemplaza**; no quedan dos revisiones (FR-019). Orden nue
 3. Skill `revisar-codigo` y skill `auditar-cumplimiento`, con la carpeta del ticket como
    argumento; cada una devuelve su reporte (con la línea `RESUMEN`).
 3a. Antes de las skills, `git rev-parse HEAD` y se guarda el sha: es el commit que se revisa.
-4. `veredicto.py registrar --commit <sha>` con las dos líneas (R7, R8). Si `HEAD` cambió
+4. `veredicto.py registrar --commit <sha>` con las dos líneas (R7, R8), con la ruta relativa
+   `.claude/hooks/veredicto.py` (R2.5). **Cada línea `RESUMEN` se valida antes de pasarla**: solo
+   se pasa si coincide exactamente con `RESUMEN: bloqueantes=<dígitos> sugerencias=<dígitos>
+   cobertura=<completa|incompleta>` (dígitos `0-9`), un texto que no puede contener comillas;
+   en cualquier otro caso se pasa `sin resumen`. El reporte lo escribe un subagente que lee
+   contenido del repositorio, y una línea con una comilla simple y un comando detrás pasaba las
+   tres guardas de terminal (hallazgo 2 de la parada C). Si `HEAD` cambió
    durante la revisión, no escribe nada y sale con 2 (el veredicto es del commit revisado,
    no del que exista al registrar). Con bloqueantes, se detiene, muestra los hallazgos y no
    hay push ni PR (FR-009).

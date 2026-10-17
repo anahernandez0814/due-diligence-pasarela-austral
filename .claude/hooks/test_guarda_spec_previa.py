@@ -619,3 +619,100 @@ def test_find_exec_con_documentos_se_permite(con_app, comando):
 def test_find_exec_sin_escrituras_en_main(con_app):
     repo = con_app(rama="main")
     assert bash(repo, 'find docs -name "*.md" -exec cat {} +') is None
+
+
+# --- Directorio de veredictos en cualquier rama (ticket #4: FR-020, R8) -----------------
+
+VEREDICTOS = ".claude/veredictos"
+FICHERO = f"{VEREDICTOS}/{'a' * 40}.json"
+MSG_VEREDICTOS = (
+    "El directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr."
+)
+MODIFICAN_VEREDICTOS = [
+    ("Write", {"file_path": FICHERO}),
+    ("Edit", {"file_path": FICHERO, "old_string": "a", "new_string": "b"}),
+    ("NotebookEdit", {"notebook_path": f"{VEREDICTOS}/x.ipynb", "new_source": "x"}),
+    ("Bash", {"command": f"echo '{{}}' > {FICHERO}"}),
+    ("Bash", {"command": f"echo '{{}}' >> {FICHERO}"}),
+    ("Bash", {"command": f"echo '{{}}' | tee {FICHERO}"}),
+    ("Bash", {"command": f"cp /tmp/x.json {FICHERO}"}),
+    ("Bash", {"command": f"cp /tmp/x.json {VEREDICTOS}/"}),
+    ("Bash", {"command": f"mv /tmp/x.json {FICHERO}"}),
+    ("Bash", {"command": f"mv {FICHERO} /tmp/x.json"}),
+    ("Bash", {"command": f"sed -i s/a/b/ {FICHERO}"}),
+    ("Bash", {"command": f"touch {FICHERO}"}),
+    ("Bash", {"command": f"rm {FICHERO}"}),
+    ("Bash", {"command": f"rm -r {VEREDICTOS}"}),
+    ("Bash", {"command": f"python -c \"open('{FICHERO}','w').write('{{}}')\""}),
+    ("Bash", {"command": f"python3.12 -c \"open('{VEREDICTOS}/x.json','w')\""}),
+    ("Bash", {"command": f"node -e \"require('fs').writeFileSync('{FICHERO}','{{}}')\""}),
+    ("Bash", {"command": f"bash -c 'echo > {FICHERO}'"}),
+    ("Bash", {"command": f'eval "echo x > {FICHERO}"'}),
+    ("Bash", {"command": f"python - <<'EOF'\nopen('{FICHERO}', 'w')\nEOF"}),
+    ("Bash", {"command": f"cat <<'EOF' | bash\necho x > {FICHERO}\nEOF"}),
+    ("Bash", {"command": f"echo ok && echo x > {FICHERO}"}),
+    ("Bash", {"command": f"echo x > .CLAUDE/Veredictos/{'a' * 40}.json"}),
+    ("PowerShell", {"command": f"Set-Content {FICHERO} '{{}}'"}),
+    ("PowerShell", {"command": f"Remove-Item {FICHERO}"}),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "datos"), MODIFICAN_VEREDICTOS)
+def test_veredictos_bloqueado_en_cualquier_rama(crear, rama, herramienta, datos):
+    repo = crear(rama=rama)
+    if "file_path" in datos:
+        datos = {**datos, "file_path": str(repo / datos["file_path"])}
+    if "notebook_path" in datos:
+        datos = {**datos, "notebook_path": str(repo / datos["notebook_path"])}
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, **datos)) == MSG_VEREDICTOS
+
+
+LEEN_VEREDICTOS = [
+    ("Bash", f"cat {FICHERO}"),
+    ("Bash", f"ls {VEREDICTOS}"),
+    ("Bash", f"head -n 3 {FICHERO}"),
+    ("Bash", f"git check-ignore -v {FICHERO}"),
+    ("PowerShell", f"Get-Content {FICHERO}"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), LEEN_VEREDICTOS)
+def test_leer_los_veredictos_se_permite(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) is None
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_la_herramienta_read_no_es_de_esta_guarda(crear, rama):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, "Read", file_path=str(repo / FICHERO))) is None
+
+
+REGISTRO = (
+    "uv run --no-project --python 3.12 --quiet .claude/hooks/veredicto.py registrar "
+    f"--commit {'a' * 40} --codigo 'RESUMEN: bloqueantes=0 sugerencias=0 cobertura=completa' "
+    "--auditoria 'sin resumen'"
+)
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_el_comando_de_registro_no_se_bloquea(crear, rama):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, "Bash", command=REGISTRO)) is None
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_otros_archivos_de_claude_siguen_su_regla_normal(crear, rama):
+    repo = crear(rama=rama)
+    comando = "echo x > .claude/otro-directorio/a.txt"
+    resultado = guarda_spec_previa.motivo(entrada(repo, "Bash", command=comando))
+    assert resultado != MSG_VEREDICTOS
+
+
+def test_un_nombre_parecido_no_cuenta_como_el_directorio_de_veredictos(crear):
+    repo = crear(rama="003-x")
+    for ruta in (".claude/veredictos-otros/x.json", ".claude/veredictosx", "veredictos/x.json"):
+        resultado = guarda_spec_previa.motivo(entrada(repo, "Bash", command=f"echo x > {ruta}"))
+        assert resultado != MSG_VEREDICTOS, ruta

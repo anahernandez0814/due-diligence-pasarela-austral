@@ -40,6 +40,10 @@ SETTINGS_LOCAL = (
     "desactivar las guardas. Edítalo fuera de Claude Code."
 )
 _SETTINGS_LOCAL = ".claude/settings.local.json"
+VEREDICTOS = (
+    "El directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr."
+)
+_VEREDICTOS = ".claude/veredictos"
 
 # --- Código protegido (data-model) ----------------------------------------------------
 
@@ -53,6 +57,21 @@ def _relativa(ruta: str) -> str | None:
     if texto.startswith("/") or re.match(r"^[a-z]:/", texto):
         return None
     return "/".join(p for p in texto.split("/") if p not in ("", "."))
+
+
+def ruta_privada(ruta: str) -> str | None:
+    """El mensaje de bloqueo si `ruta` es `.claude/settings.local.json` (FR-025 de #3) o está
+    en `.claude/veredictos/` (FR-020 de #4); None en otro caso.
+
+    Los dos se bloquean en cualquier rama: no se versionan, así que ningún PR vería el
+    cambio. `ruta` es relativa a la raíz y ya está normalizada.
+    """
+    if ruta == _SETTINGS_LOCAL:
+        return SETTINGS_LOCAL
+    relativa = _relativa(ruta)
+    if relativa and (relativa == _VEREDICTOS or relativa.startswith(_VEREDICTOS + "/")):
+        return VEREDICTOS
+    return None
 
 
 def es_protegido(ruta: str) -> bool:
@@ -431,8 +450,9 @@ def _protegidas_en_terminal(
             for ruta, tipo in destinos(texto, sin_escapes, base, inicio):
                 # settings.local.json se bloquea al escribir, borrar o mover, en cualquier
                 # rama (FR-025): no se versiona, así que ningún PR vería el cambio.
-                if ruta == _SETTINGS_LOCAL:
-                    return SETTINGS_LOCAL
+                privado = ruta_privada(ruta)
+                if privado:
+                    return privado
                 if (
                     es_protegido(ruta)
                     or (tipo == "copia" and _es_carpeta_protegida(ruta))
@@ -452,8 +472,9 @@ def _protegidas_en_terminal(
                 rutas.append(relativa)
             for nombrada in rutas_en_texto(codigo):
                 ruta = comun.normalizar_ruta(nombrada, base, carpeta)
-                if ruta == _SETTINGS_LOCAL:
-                    return SETTINGS_LOCAL
+                privado = ruta_privada(ruta)
+                if privado:
+                    return privado
                 if es_protegido(ruta):
                     rutas.append(ruta)
     return rutas
@@ -469,8 +490,9 @@ def motivo(entrada: dict) -> str | None:
     if herramienta in ("Write", "Edit", "NotebookEdit"):
         clave = "notebook_path" if herramienta == "NotebookEdit" else "file_path"
         ruta = comun.normalizar_ruta(datos.get(clave) or "", base, cwd)
-        if ruta == _SETTINGS_LOCAL:
-            return SETTINGS_LOCAL  # cualquier rama (FR-025)
+        privado = ruta_privada(ruta)
+        if privado:
+            return privado  # cualquier rama (FR-025 de #3 y FR-020 de #4)
         rutas = [ruta] if datos.get(clave) and es_protegido(ruta) else []
     elif herramienta in ("Bash", "PowerShell"):
         resultado = _protegidas_en_terminal(

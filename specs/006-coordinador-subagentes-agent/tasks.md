@@ -349,14 +349,17 @@ comprobación de forma del ciclo`.
   esta tarea.
   *Resultado (2026-10-17): `ruff format` y `ruff check` limpios; `src/due_diligence` 222 pasan; suite
   completa 2047 pasan en 4 min 19 s, incluido `test_revision_repositorio.py` sin hallazgos.*
-- [ ] T031 [MANUAL] Q2: la analista ejecuta `uv run python -m due_diligence.sondeo_aislamiento` (sin
+- [X] T031 [MANUAL] Q2: la analista ejecuta `uv run python -m due_diligence.sondeo_aislamiento` (sin
   `--herramientas`, que es Q3) en una sesión nueva en la raíz. Esperado: la tabla de Q2 (con `[]`, sin
   skills ni agentes del repositorio, 0 eventos de hooks, sin el título del `CLAUDE.md`; el control sí lo
   contiene). Q3 es `--herramientas`: la lista inicial de cada agente igual a la de R3.
   *Resultado (2026-10-17): Q3 (`--herramientas`) correcto, cada agente ve exactamente sus herramientas, código 0.
   Q2: skills, agentes y hooks se aíslan (con `[]`: ninguno y 0; control: 15 y 2), pero la comprobación del
   `CLAUDE.md` no discriminaba (buscaba «sí» en los primeros 20 caracteres, que empiezan con el resultado del
-  `Glob`). Corregida: pregunta por el título del documento de convenciones; la analista repite Q2.*
+  `Glob`). Corregida: pregunta por el título del documento de convenciones.
+  Q2 repetida con `3986cd5`: con `[]` la respuesta es `NO_LO_SÉ`, sin skills ni agentes del repositorio y
+  0 eventos de hooks; el control (`["project"]`) conoce el título del `CLAUDE.md`, con 15 skills o agentes
+  y 2 hooks. OK, código 0.*
 - [X] T032 [MANUAL] Q4 manual: `uv run python -m due_diligence.sondeo_aislamiento --limite`. Esperado:
   `LIMITE_SEGURIDAD`, el evento correspondiente y `ResultError` capturada sin romper el caso. Anotar
   el resultado aquí.
@@ -379,10 +382,18 @@ comprobación de forma del ciclo`.
   `categoria` sin iniciar y la pide (0,0277 USD); sin comercio, delega solo categoría y pide el
   identificador o el nombre (0,0122 USD). La prueba real halló cuatro fallos, corregidos en `f4ddcd6`,
   `950be3b` y el commit siguiente (re-delegación, afirmación sin fuente, cambio de comercio, tuteo).*
-- [ ] T034 Revisar que `git status` solo contiene cambios del ticket, que ningún archivo nuevo contiene
+- [X] T034 Revisar que `git status` solo contiene cambios del ticket, que ningún archivo nuevo contiene
   valores con forma real ni el nombre del archivo de variables de entorno, y commitear la
   documentación y las anotaciones de validación: `docs: documentación y validación del ticket #6`.
   Después, `/abrir-pr`.
+  *Revisión (2026-10-17): `git status` limpio antes de este commit y los 34 archivos de la rama son del
+  ticket (código y tests de `src/due_diligence/`, `specs/006-…`, `README.md`, `DECISIONES.md`,
+  `pyproject.toml` y `uv.lock`); `resultados/` no existe. En el código y los tests no aparece el nombre del
+  archivo de entorno: `load_dotenv()` va sin argumentos y `cargar_entorno` solo se llama desde
+  `__main__.py`. Búsqueda de valores con forma real (tarjetas, NIT, correos, claves): sin hallazgos; la
+  única coincidencia es la expresión de `test_sin_control_propio.py` que *detecta* claves. El nombre del
+  archivo de entorno sí aparece en la documentación (`plan.md`, `research.md`, README), como en los tickets
+  anteriores. `docs/bitacora-decisiones.md` no se tocó.*
 
 ---
 

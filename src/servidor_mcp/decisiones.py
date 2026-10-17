@@ -10,7 +10,7 @@ hook del SDK (ticket #7), no el servidor.
 import json
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +39,7 @@ _REQUERIDOS_ESCALAMIENTO: dict[str, type | tuple[type, ...]] = {
 
 
 def _ahora() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now().astimezone()
 
 
 def carpeta_resultados() -> Path:

@@ -149,7 +149,8 @@ def test_entradas_invalidas_dan_entrada_invalida_no_reintentable(argumentos):
 
 
 def test_el_minimo_de_tres_caracteres_es_solo_para_el_nombre():
-    assert consultar_registro_mercantil(nombre="sas").is_error is False
+    assert consultar_registro_mercantil(nombre="abc").is_error is False
+    assert consultar_registro_mercantil(nombre="sas").is_error is True  # solo la forma jurídica
     assert consultar_registro_mercantil(identificador="X1").is_error is False
 
 
@@ -168,3 +169,38 @@ def test_nunca_lanza_con_un_archivo_corrupto(tmp_path, monkeypatch):
     monkeypatch.setattr(datos, "DIRECTORIO_DATOS", tmp_path)
     resultado = consultar_registro_mercantil(nombre="Tienda Verde")
     assert resultado.structured_content["tipo"] == "datos_no_disponibles"
+
+
+@pytest.mark.parametrize(
+    "nombre",
+    ["Almacén Mirador SAS", "Almacén Mirador S.A.S.", "ALMACEN MIRADOR sas", "almacen mirador"],
+)
+def test_el_mensaje_natural_con_forma_juridica_devuelve_las_dos_coincidencias(nombre):
+    cuerpo = _cuerpo(consultar_registro_mercantil(nombre=nombre))
+    assert cuerpo["coincidencias"] == ["CO-AM-0004", "CO-AM-0005"]
+    assert len(cuerpo["hechos"]) == 4
+
+
+def test_una_forma_juridica_distinta_a_la_del_comercio_tambien_coincide():
+    cuerpo = _cuerpo(consultar_registro_mercantil(nombre="Ferretería Río Fino Ltda."))
+    assert cuerpo["coincidencias"] == ["CO-RF-0006"]
+
+
+def test_con_forma_juridica_el_nombre_mas_especifico_sigue_acotando():
+    cuerpo = _cuerpo(consultar_registro_mercantil(nombre="Almacén Mirador Norte SAS"))
+    assert cuerpo["coincidencias"] == ["CO-AM-0005"]
+
+
+@pytest.mark.parametrize("solo", ["SAS", "S.A.S.", "sa", "Ltda.", "S. en C.", "ab SAS"])
+def test_solo_la_forma_juridica_da_entrada_invalida(solo):
+    resultado = consultar_registro_mercantil(nombre=solo)
+    assert resultado.is_error is True
+    cuerpo = resultado.structured_content
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert cuerpo["reintentable"] is False
+
+
+@pytest.mark.parametrize("identificador", ["co-tv-0001", "Co-Tv-0001", " CO-TV-0001 "])
+def test_el_identificador_no_distingue_mayusculas(identificador):
+    cuerpo = _cuerpo(consultar_registro_mercantil(identificador=identificador))
+    assert cuerpo["coincidencias"] == ["CO-TV-0001"]

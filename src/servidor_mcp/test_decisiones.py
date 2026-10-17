@@ -6,7 +6,7 @@ Todas fijan `PASARELA_RESULTADOS_DIR` en `tmp_path`: ninguna escribe en `resulta
 import json
 import os
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -322,3 +322,29 @@ def test_si_falla_el_reemplazo_no_queda_un_archivo_a_medias(carpeta, monkeypatch
     cuerpo = _error(registrar_informe(**_informe()))
     assert cuerpo["tipo"] == "error_de_almacenamiento"
     assert [a for a in carpeta.rglob("*") if a.is_file()] == []
+
+
+# --- fecha de registro en hora local -------------------------------------------------------
+
+
+def test_la_hora_por_defecto_es_la_local_con_su_desfase(monkeypatch):
+    monkeypatch.undo()  # quita el reloj fijo del fixture
+    antes = datetime.now().astimezone()
+    ahora = decisiones._ahora()
+    despues = datetime.now().astimezone()
+    assert ahora.tzinfo is not None
+    assert ahora.utcoffset() == antes.utcoffset() == despues.utcoffset()
+    assert antes <= ahora <= despues
+
+
+def test_la_fecha_de_registro_es_la_de_la_hora_local_y_no_la_utc(monkeypatch):
+    # 23:30 en UTC-5 ya es el día siguiente en UTC; la fecha de registro es la local.
+    local = datetime(2026, 10, 17, 23, 30, tzinfo=timezone(timedelta(hours=-5)))
+    monkeypatch.setattr(decisiones, "_ahora", lambda: local)
+    cuerpo = registrar_informe(**_informe()).structured_content
+    assert cuerpo["hechos"][0]["metadatos"]["fecha"] == "2026-10-17"
+    assert cuerpo["metadatos"]["fecha"] == "2026-10-17"
+    identificador = cuerpo["hechos"][0]["contenido"]["id"]
+    carpeta = decisiones.carpeta_resultados()
+    guardado = json.loads((carpeta / "informes" / f"{identificador}.json").read_text("utf-8"))
+    assert guardado["registrado_en"] == "2026-10-17T23:30:00-05:00"

@@ -12,7 +12,7 @@ from mcp.types import CallToolResult
 
 from servidor_mcp import datos
 from servidor_mcp.entradas import exactamente_uno, texto_obligatorio
-from servidor_mcp.normalizar import igual
+from servidor_mcp.normalizar import igual, igual_identificador
 from servidor_mcp.respuestas import error, hecho, respuesta
 
 TIPOS = ("comercio", "persona")
@@ -46,7 +46,7 @@ def consultar_listas_restrictivas(
         if entrada["tipo"] != tipo_normalizado:
             return False
         if clave == "identificador":
-            return entrada["identificador"] == texto
+            return igual_identificador(entrada["identificador"], texto)
         return igual(entrada["nombre"], texto)
 
     hechos = [

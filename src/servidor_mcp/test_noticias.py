@@ -124,3 +124,16 @@ def test_un_archivo_de_datos_ausente_da_datos_no_disponibles(tmp_path, monkeypat
     cuerpo = buscar_noticias(identificador="CO-AM-0005").structured_content
     assert cuerpo["tipo"] == "datos_no_disponibles"
     assert cuerpo["reintentable"] is False
+
+
+@pytest.mark.parametrize("identificador", ["co-am-0005", "Co-Am-0005"])
+def test_el_identificador_no_distingue_mayusculas(identificador):
+    cuerpo = _cuerpo(buscar_noticias(identificador=identificador))
+    assert cuerpo["resultado"] == "coincidencias"
+
+
+def test_en_noticias_el_nombre_es_completo_con_su_forma_juridica():
+    con = _cuerpo(buscar_noticias(nombre="Almacén Mirador Norte SAS"))
+    sin = _cuerpo(buscar_noticias(nombre="Almacén Mirador Norte"))
+    assert con["resultado"] == "coincidencias"
+    assert sin["resultado"] == "sin_coincidencias"

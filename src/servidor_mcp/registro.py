@@ -12,7 +12,7 @@ from mcp.types import CallToolResult
 
 from servidor_mcp import datos
 from servidor_mcp.entradas import exactamente_uno
-from servidor_mcp.normalizar import contiene, cumple_minimo
+from servidor_mcp.normalizar import contiene_en_registro, cumple_minimo, igual_identificador
 from servidor_mcp.respuestas import error, hecho, respuesta
 
 
@@ -47,11 +47,11 @@ def consultar_registro_mercantil(nombre: Any = None, identificador: Any = None) 
     if clave == "identificador":
 
         def coincide(comercio: dict[str, Any]) -> bool:
-            return comercio["identificador"] == texto
+            return igual_identificador(comercio["identificador"], texto)
     else:
 
         def coincide(comercio: dict[str, Any]) -> bool:
-            return contiene(texto, comercio["nombre"])
+            return contiene_en_registro(texto, comercio["nombre"])
 
     identificadores = sorted(
         {c["identificador"] for f in fuentes for c in f["comercios"] if coincide(c)}

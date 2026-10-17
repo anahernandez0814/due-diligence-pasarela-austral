@@ -134,3 +134,18 @@ def test_un_archivo_de_datos_ausente_da_datos_no_disponibles(tmp_path, monkeypat
     assert resultado.is_error is True
     assert resultado.structured_content["tipo"] == "datos_no_disponibles"
     assert resultado.structured_content["reintentable"] is False
+
+
+@pytest.mark.parametrize("identificador", ["pe-0003", "Pe-0003"])
+def test_el_identificador_no_distingue_mayusculas(identificador):
+    cuerpo = _cuerpo(consultar_listas_restrictivas(tipo="persona", identificador=identificador))
+    assert cuerpo["resultado"] == "coincidencias"
+
+
+def test_en_listas_el_nombre_es_completo_con_su_forma_juridica():
+    con = _cuerpo(
+        consultar_listas_restrictivas(tipo="comercio", nombre="Importadora Sombra S.A.S.")
+    )
+    sin = _cuerpo(consultar_listas_restrictivas(tipo="comercio", nombre="Importadora Sombra"))
+    assert con["resultado"] == "coincidencias"
+    assert sin["resultado"] == "sin_coincidencias"

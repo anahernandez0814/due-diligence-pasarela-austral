@@ -6,7 +6,7 @@ Mapa caso→dato: `specs/005-servidor-mcp-pasarela/data-model.md`.
 """
 
 from servidor_mcp import datos
-from servidor_mcp.normalizar import contiene, igual
+from servidor_mcp.normalizar import contiene, contiene_en_registro, igual
 
 
 def _comercios():
@@ -130,3 +130,14 @@ def test_datos_adicionales_mencion_en_noticias_sin_estar_en_listas():
     nombre = _comercios()["CO-AM-0005"][0][1]["nombre"]
     assert _noticias_que_mencionan("CO-AM-0005", nombre)
     assert not _entidades_en_listas("CO-AM-0005", nombre)
+
+
+def test_datos_del_caso_d_con_el_mensaje_natural_del_analista():
+    # «Almacén Mirador SAS» (con su forma jurídica) también coincide con los dos comercios.
+    for mensaje in ("Almacén Mirador SAS", "Almacén Mirador S.A.S."):
+        coinciden = {
+            identificador
+            for identificador, registros in _comercios().items()
+            if contiene_en_registro(mensaje, registros[0][1]["nombre"])
+        }
+        assert coinciden == {"CO-AM-0004", "CO-AM-0005"}

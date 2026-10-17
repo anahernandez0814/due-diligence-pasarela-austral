@@ -13,7 +13,7 @@ from mcp.types import CallToolResult
 
 from servidor_mcp import datos
 from servidor_mcp.entradas import exactamente_uno
-from servidor_mcp.normalizar import igual
+from servidor_mcp.normalizar import igual, igual_identificador
 from servidor_mcp.respuestas import SERVICIO_NO_DISPONIBLE, error, hecho, respuesta
 
 VARIABLE_FALLA = "PASARELA_FALLA_NOTICIAS"
@@ -41,7 +41,7 @@ def buscar_noticias(nombre: Any = None, identificador: Any = None) -> CallToolRe
 
     def menciona(entidad: dict[str, Any]) -> bool:
         if clave == "identificador":
-            return entidad["identificador"] == texto
+            return igual_identificador(entidad["identificador"], texto)
         return igual(entidad["nombre"], texto)
 
     hechos = [

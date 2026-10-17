@@ -137,7 +137,7 @@ explícito que recibe cada subagente (FR-002 a FR-004, SC-002).
 
 **Prueba independiente**: se inspeccionan las opciones y los prompts construidos, sin modelo (Q3).
 
-- [ ] T009 [US2] Escribir `src/due_diligence/test_configuracion.py` (R2, R3, R8, R9). Casos: toda
+- [X] T009 [US2] Escribir `src/due_diligence/test_configuracion.py` (R2, R3, R8, R9). Casos: toda
   opción de `opciones_base` lleva `setting_sources=[]`, `tools=[]` y `strict_mcp_config=True`;
   `allowed_tools` exactos por agente según la tabla de R3 (coordinador:
   `mcp__delegacion__delegar_frente`, `mcp__pasarela__registrar_informe`,
@@ -152,14 +152,14 @@ explícito que recibe cada subagente (FR-002 a FR-004, SC-002).
   `PASARELA_FALLA_NOTICIAS` y `PASARELA_RESULTADOS_DIR` si están en el entorno. `max_turns` es una
   constante documentada y **no** aparece fuera de `configuracion.py` (la comprobación del código
   completo es T026). `cargar_entorno` existe, **importar el paquete no la llama** (Q6) y, con `configuracion.load_dotenv` parcheado con `monkeypatch`, se comprueba **solo** que `cargar_entorno()` la llama con `override=False`. **Ningún test ejecuta la carga real** (R8): no leen ni dependen del archivo de entorno del desarrollador.
-- [ ] T010 [US2] Crear `src/due_diligence/configuracion.py` (R2, R3, R8, R9): constantes de modelos y
+- [X] T010 [US2] Crear `src/due_diligence/configuracion.py` (R2, R3, R8, R9): constantes de modelos y
   sus variables de entorno, nombres completos de herramientas, `servidor_pasarela(entorno)`,
   `opciones_base(...)` (única función que construye `ClaudeAgentOptions`, con `setting_sources=[]`,
   `tools=[]`, `strict_mcp_config=True`, `cwd` en la raíz), `opciones_coordinador(...)`,
   `opciones_subagente(frente, ...)` y `cargar_entorno()` con `load_dotenv(override=False)` **sin
   argumentos**. `max_turns` como constante `MAX_TURNOS_SEGURIDAD`, con un comentario que diga que es
   solo una protección de seguridad y no controla el ciclo (FR-011). Hace pasar T009.
-- [ ] T011 [P] [US2] Escribir `src/due_diligence/test_contexto.py` (R11, FR-004, FR-005). El `prompt`
+- [X] T011 [P] [US2] Escribir `src/due_diligence/test_contexto.py` (R11, FR-004, FR-005). El `prompt`
   de cada subagente se construye solo con los campos que su frente necesita: `registro` y `noticias`,
   `identificador` o `nombre`; `categoria`, la categoría; `listas`, el comercio y el representante
   **del estado**. Un campo de otro frente pasado en la entrada **no aparece** en el prompt; el prompt
@@ -167,9 +167,9 @@ explícito que recibe cada subagente (FR-002 a FR-004, SC-002).
   solicitud con una frase marcadora que no debe aparecer). Sin el dato necesario se devuelve un error
   `frente_rechazado` que nombra el dato, no un prompt con un valor inventado. El `system_prompt` es
   fijo por frente, en español, y menciona su herramienta.
-- [ ] T012 [US2] Crear `src/due_diligence/contexto.py` con `construir_contexto(frente, entrada,
+- [X] T012 [US2] Crear `src/due_diligence/contexto.py` con `construir_contexto(frente, entrada,
   estado)` y las instrucciones fijas por frente (`system_prompt`), según R11. Hace pasar T011.
-- [ ] T013 [P] [US2] Crear `src/due_diligence/sondeo_aislamiento.py` (R2, Q2), ejecutable con
+- [X] T013 [P] [US2] Crear `src/due_diligence/sondeo_aislamiento.py` (R2, Q2), ejecutable con
   `uv run python -m due_diligence.sondeo_aislamiento`: construye sus opciones con `dataclasses.replace(opciones_base(...), tools=["Glob"])` (**`opciones_base` no gana ningún parámetro**: solo el sondeo activa la herramienta integrada), hace un `Glob` inofensivo y pregunta por las instrucciones del proyecto; repite con
   `setting_sources=["project"]` como control; imprime la tabla de Q2 y sale con código ≠ 0 si con `[]`
   aparece una skill o agente del repositorio, un evento de hooks o contenido del `CLAUDE.md`. Opción

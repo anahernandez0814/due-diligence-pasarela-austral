@@ -56,8 +56,13 @@ herramienta `mcp__pasarela__…` de su frente.
 ## Clasificación del fin del ciclo
 
 ```text
-clasificar(subtype, stop_reason, is_error, terminal_reason) -> Terminacion
+clasificar(subtype, stop_reason, is_error, terminal_reason) -> Clasificacion
 ```
+
+`Clasificacion` agrupa la `Terminacion` con los tres valores originales (`subtype`, `stop_reason`,
+`terminal_reason`) y `is_error`; su propiedad `detalle` es el texto que lleva el evento. Hay tres
+formas de producirla: `clasificar_resultado(ResultMessage)`, `clasificar_error(ResultError)` y
+`sin_resultado()` (el flujo acabó sin `ResultMessage` ni error).
 
 | Entrada | Resultado |
 |---------|-----------|

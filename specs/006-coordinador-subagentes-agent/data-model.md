@@ -15,7 +15,9 @@ Los cuatro frentes son constantes del paquete (`frentes.py`), no datos del caso.
 
 ## Situación de un frente
 
-`sin_iniciar` → `en_curso` → `terminado` | `no_terminado`, o `sin_iniciar` → `rechazado`
+`sin_iniciar` → `en_curso` → `terminado` | `no_terminado`, o `sin_iniciar` → `rechazado`.
+Un frente `rechazado` puede volver a `en_curso` (o seguir `rechazado`) cuando se reintenta la
+delegación: es el caso de `listas` pedida antes de que el registro terminara.
 
 - `sin_iniciar`: el coordinador aún no lo delegó.
 - `en_curso`: hay un evento `frente_inicio` y aún no `frente_fin`.
@@ -50,6 +52,7 @@ Lo que devuelve un ejecutor al terminar un subagente.
 | `resumen` | texto del modelo, solo informativo; **no se usa para decidir** |
 | `terminacion` | `Terminacion` (R5) |
 | `detalle_terminacion` | `subtype`, `stop_reason` y `terminal_reason` originales |
+| `coste_usd` | `total_cost_usd` del `ResultMessage` del subagente; `None` si no llegó. Solo informativo (validación manual, quickstart Q5) |
 
 El **contenido** y los **metadatos** (fuente y fecha) están en `Consulta.resultado`, separados como
 los entrega el servidor: `hechos[].contenido`, `hechos[].metadatos` y `metadatos`. El estado no los
@@ -101,5 +104,5 @@ necesita (R11).
 ## Caso
 
 Agrupa `EstadoCaso`, `RegistroEventos`, el ejecutor, los `hooks` opcionales y las opciones del
-coordinador. Se crea con `Caso(...)` y se ejecuta con `await caso.ejecutar(solicitud)`; la función
+coordinador y expone `coste_usd` (el `total_cost_usd` del coordinador). Se crea con `Caso(...)` y se ejecuta con `await caso.ejecutar(solicitud)`; la función
 `ejecutar_caso(solicitud, …)` los combina para el uso normal (contrato en `contracts/caso.md`).

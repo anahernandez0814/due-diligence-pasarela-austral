@@ -9,6 +9,11 @@ para el coordinador: `mcp__delegacion__delegar_frente`. Es la **única** vía de
   y no hay solape *(medido, research R4)*. Un test comprueba la anotación.
 - Se construye **por caso** con una referencia al `Caso` (estado, eventos, ejecutor): no hay estado de
   módulo (FR-014).
+- La lógica vive en la clase `Delegador(estado, eventos, ejecutor, opciones_subagente)`
+  (`src/due_diligence/delegacion.py`): `delegar(entrada)` hace lo descrito abajo, `herramienta` es la
+  `SdkMcpTool` con la anotación y `servidor()` el servidor en proceso `delegacion`. Si falta un dato del
+  frente, el contexto (`contexto.construir_contexto`) lanza `FrenteRechazado` y el delegador lo traduce
+  en un `frente_rechazado`.
 
 ## Entrada
 

@@ -2,7 +2,10 @@
 name = "due-diligence-pasarela-austral"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "mcp>=2.3,<3",
+    "pydantic>=2",
+]
 
 [dependency-groups]
 dev = ["pytest", "ruff"]

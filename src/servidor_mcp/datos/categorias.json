@@ -1,0 +1,18 @@
+{
+  "ficticio": true,
+  "aviso": "Datos ficticios para las pruebas de Pasarela Austral. El catálogo de categorías y sus niveles es inventado para el escenario.",
+  "fuente": "Catálogo Ficticio de Categorías de Riesgo",
+  "fecha_corte": "2026-09-30",
+  "categorias": [
+    {"nombre": "apuestas", "nivel": "alto"},
+    {"nombre": "criptoactivos", "nivel": "alto"},
+    {"nombre": "suplementos dietarios", "nivel": "alto"},
+    {"nombre": "venta de medicamentos", "nivel": "alto"},
+    {"nombre": "viajes y turismo", "nivel": "medio"},
+    {"nombre": "electrodomésticos", "nivel": "medio"},
+    {"nombre": "ropa y accesorios", "nivel": "bajo"},
+    {"nombre": "restaurantes y alimentos preparados", "nivel": "bajo"},
+    {"nombre": "tecnología y software", "nivel": "bajo"},
+    {"nombre": "educación en línea", "nivel": "bajo"}
+  ]
+}

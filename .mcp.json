@@ -7,6 +7,11 @@
         "Authorization": "Bearer ${GITHUB_PAT}",
         "X-MCP-Toolsets": "repos,issues,pull_requests,projects"
       }
+    },
+    "pasarela": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--quiet", "python", "-m", "servidor_mcp"]
     }
   }
 }

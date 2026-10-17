@@ -116,6 +116,34 @@ Necesita el binario `github-mcp-server` en el PATH. Configúrela solo para usted
 local (`claude mcp add-json github '<json>' --scope local`); no modifique ni commitee el
 `.mcp.json` del equipo.
 
+## Servidor MCP de la pasarela
+
+El servidor `pasarela` ([src/servidor_mcp/](src/servidor_mcp/)) simula, con **datos ficticios**,
+las fuentes de la pasarela y sus dos canales de decisión. Está registrado en
+[.mcp.json](.mcp.json) junto al de GitHub y aprobado en `.claude/settings.json`, sin
+credenciales. Las decisiones están en la entrada 6 de [DECISIONES.md](DECISIONES.md).
+
+| Herramienta | Qué hace |
+|-------------|----------|
+| `consultar_registro_mercantil` | Busca un comercio por nombre o identificador en dos fuentes registrales; devuelve todas las coincidencias, sin elegir. |
+| `consultar_listas_restrictivas` | Verifica un comercio o una persona; coincide solo por nombre completo o identificador. |
+| `buscar_noticias` | Busca menciones en un corpus de noticias; una mención no es una coincidencia en listas. |
+| `consultar_riesgo_categoria` | Devuelve el nivel de riesgo (alto, medio o bajo) de una categoría. |
+| `registrar_informe` | Registra el informe con su recomendación; uno de los dos canales de decisión. |
+| `escalar_a_cumplimiento` | Escala el caso con un resumen autosuficiente; el otro canal de decisión. |
+
+- **Antes de abrir Claude Code**: ejecute `uv sync`. El servidor se lanza con
+  `uv run --quiet python -m servidor_mcp`; abra Claude Code **siempre en la raíz** del repositorio.
+- **Comprobarlo**: en una sesión nueva, `/mcp` debe mostrar `github` y `pasarela` conectados, sin
+  pedir aprobación, y las seis herramientas `mcp__pasarela__*`.
+- **`PASARELA_FALLA_NOTICIAS=1`** simula la caída del servicio de noticias: `buscar_noticias`
+  devuelve un error reintentable y las demás herramientas siguen respondiendo. Se lee en cada
+  llamada, pero un servidor ya lanzado hereda el entorno de Claude Code al arrancar.
+- **`PASARELA_RESULTADOS_DIR`** fija la carpeta de los informes y los casos escalados. Por defecto
+  es `resultados/` en la raíz, que git ignora.
+- **Los datos son ficticios**: nombres inventados, dominios `.example` y ningún documento, NIT o
+  tarjeta con forma real. Cada archivo de `src/servidor_mcp/datos/` lo declara.
+
 ## Guardas del entorno
 
 Claude Code trabaja con cuatro guardas y un hook de formato, registrados en

@@ -9,7 +9,7 @@ recibido.
 
 from typing import Any
 
-from mcp_types import CallToolResult
+from mcp.types import CallToolResult
 
 from servidor_mcp.respuestas import error
 
@@ -92,6 +92,8 @@ def campos_obligatorios(
     faltan (`campos_obligatorios_ausentes`, con `campos_faltantes`); si no falta ninguno, todos los
     de tipo incorrecto (`entrada_invalida`). Devuelve `None` si todo está bien.
     """
+    if not isinstance(entrada, dict):
+        return error("entrada_invalida", "La entrada debe ser un objeto.", False)
     faltantes = [nombre for nombre in requeridos if _vacio(entrada.get(nombre))]
     if faltantes:
         lista = ", ".join(f"«{nombre}»" for nombre in faltantes)

@@ -184,3 +184,12 @@ def test_los_validadores_nunca_lanzan_con_valores_raros():
         assert objeto_obligatorio(valor, "x")[1] is not None
         assert exactamente_uno(valor, None)[1] is not None
         assert campos_obligatorios({"comercio": valor}, {"comercio": dict}) is not None
+
+
+@pytest.mark.parametrize("no_objeto", [None, "texto", 5, 3.5, ["a"], ("a",)])
+def test_campos_obligatorios_con_una_entrada_que_no_es_un_objeto(no_objeto):
+    cuerpo = _error(campos_obligatorios(no_objeto, REQUERIDOS))
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert cuerpo["reintentable"] is False
+    assert "objeto" in cuerpo["mensaje"]
+    assert "campos_faltantes" not in cuerpo

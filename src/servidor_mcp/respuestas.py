@@ -8,7 +8,7 @@ contenido estructurado, para el cliente que solo lee texto. Los errores llevan
 import json
 from typing import Any
 
-from mcp_types import CallToolResult, TextContent
+from mcp.types import CallToolResult, TextContent
 
 SERVICIO_NO_DISPONIBLE = "servicio_no_disponible"
 

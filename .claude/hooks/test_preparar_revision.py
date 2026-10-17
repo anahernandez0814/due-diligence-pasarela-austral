@@ -219,3 +219,13 @@ def test_preparar_y_veredicto_calculan_la_misma_raiz(repo, monkeypatch):
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(repo / "src")
     assert preparar_revision.raiz() == veredicto.raiz()
+
+
+def test_el_umbral_es_la_mitad_del_mayor_tamano_que_llego_completo():
+    # Q4(a): 29 000 bytes llegaron en línea y 30 000 ya no (vista previa de 2 KB y una ruta).
+    assert preparar_revision.UMBRAL_SALIDA == 14_500
+    assert preparar_revision.UMBRAL_SALIDA * 2 <= 29_000
+
+
+def test_la_salida_por_omision_respeta_el_umbral(repo):
+    assert len(preparar_revision.construir(repo).encode("utf-8")) <= preparar_revision.UMBRAL_SALIDA

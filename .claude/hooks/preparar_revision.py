@@ -24,8 +24,9 @@ import veredicto
 raiz = veredicto.raiz
 
 MARCA = "CONTEXTO DE REVISIÓN"
-# Provisional: la fija T031 en la mitad del techo medido en Q4 (R4).
-UMBRAL_SALIDA = 30_000
+# La mitad del mayor tamaño que llegó completo a la inyección (Q4(a): 29 000 bytes en línea;
+# con 30 000 ya llega solo una vista previa y una ruta). T031, R4.
+UMBRAL_SALIDA = 14_500
 CONSTITUCION = ".specify/memory/constitution.md"
 DOCUMENTOS_DEL_TICKET = ("spec.md", "plan.md", "tasks.md")
 

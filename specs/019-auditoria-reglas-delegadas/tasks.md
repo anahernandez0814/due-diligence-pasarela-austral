@@ -232,7 +232,7 @@ lo vuelve a poner en verde.
 
 ## Phase 6: Documentación
 
-- [ ] T016 Añadir **una viñeta** a la entrada 5 de `DECISIONES.md` («Revisión independiente y
+- [X] T016 Añadir **una viñeta** a la entrada 5 de `DECISIONES.md` («Revisión independiente y
   puerta de PR»), sin entrada nueva y sin recortar nada por el límite de páginas (R8), con:
   - el criterio de la regla delegada: se delega solo con número de ticket en la spec, prevalece
     sobre el código que solo aporta datos o clasificación, no sobre el que la contradice ni

@@ -717,12 +717,27 @@ def test_un_nombre_parecido_no_cuenta_como_el_directorio_de_veredictos(crear):
 
 # --- Copias que ocultan los nombres y borrar .claude entera (parada D, hallazgo 3) ----------
 
-COPIA_OPACA = guarda_spec_previa.COPIA_OPACA
+COPIA_A_CLAUDE = guarda_spec_previa.COPIA_A_CLAUDE
 BORRAR_CLAUDE = guarda_spec_previa.BORRAR_CLAUDE
 
 COPIAS_OPACAS = [
     ("Bash", "cp -r /tmp/falso/. .claude"),
     ("Bash", "cp -a /tmp/falso/. .claude/"),
+    # Regla sobre el destino: no se mira el origen (segunda ronda de la parada D)
+    ("Bash", "cp -rT /tmp/falso .claude"),
+    ("Bash", "cp -r --no-target-directory /tmp/falso .claude"),
+    ("Bash", "cp -R /tmp/falso/ .claude"),
+    ("Bash", "cp -r /tmp/falso .claude"),
+    ("Bash", "cp -r /tmp/falso .claude/"),
+    ("Bash", "cp -r src-dir .claude/"),
+    ("Bash", "cp -aT /tmp/falso .claude"),
+    ("Bash", "mv -T /tmp/falso .claude"),
+    ("Bash", "mv /tmp/falso .claude"),
+    ("Bash", "mv archivo.txt .claude/"),
+    ("Bash", "cp -R /tmp/falso/ ."),
+    ("Bash", "cp -rT /tmp/falso ."),
+    ("Bash", "cp -r --no-target-directory /tmp/falso ./"),
+    ("PowerShell", r"Copy-Item -Recurse C:	mpalso .claude"),
     ("Bash", "cp -r /tmp/falso/* .claude/"),
     ("Bash", "cp -R /tmp/falso/. .claude"),
     ("Bash", "cp -rf /tmp/falso/* .claude"),
@@ -764,7 +779,7 @@ def test_copiar_o_mover_hacia_claude_sin_saber_los_nombres_se_bloquea(
     crear, rama, herramienta, comando
 ):
     repo = crear(rama=rama)
-    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == COPIA_OPACA
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == COPIA_A_CLAUDE
 
 
 @pytest.mark.parametrize("rama", ["main", "003-x"])
@@ -775,8 +790,9 @@ def test_borrar_o_mover_claude_entera_se_bloquea(crear, rama, herramienta, coman
 
 
 def test_los_mensajes_explican_el_motivo_y_la_salida():
-    assert "veredicto" in COPIA_OPACA
-    assert "Nombra" in COPIA_OPACA
+    assert "veredicto" in COPIA_A_CLAUDE
+    assert "subdirectorio" in COPIA_A_CLAUDE
+    assert "origen" in COPIA_A_CLAUDE
     assert "veredicto" in BORRAR_CLAUDE
 
 
@@ -785,6 +801,13 @@ PERMITIDOS_JUNTO_A_CLAUDE = [
     ("Bash", "cp /tmp/falso/* .claude/"),
     ("Bash", "cp -r src-no-protegida dir-temporal/"),
     ("Bash", "cp -r /tmp/falso/. dir-temporal"),
+    # Hacia subcarpetas, la regla normal; hacia la raíz, solo la copia que oculta nombres
+    ("Bash", "cp -r /tmp/falso ."),
+    ("Bash", "cp -r /tmp/falso/algo ."),
+    ("Bash", "cp -r src-no-protegida .claude/agents/"),
+    ("Bash", "cp archivo .claude/"),
+    ("Bash", "mv archivo .claude/agents/x"),
+    ("Bash", "mv a.txt ./b.txt"),
     ("Bash", "cp -r /tmp/falso/* dir-temporal/"),
     ("Bash", "mv /tmp/*.log ."),
     ("Bash", "mv a.txt b.txt"),
@@ -804,11 +827,11 @@ PERMITIDOS_JUNTO_A_CLAUDE = [
 def test_lo_que_no_oculta_nombres_ni_borra_claude_se_permite(crear, rama, herramienta, comando):
     repo = crear(rama=rama)
     resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
-    assert resultado not in (COPIA_OPACA, BORRAR_CLAUDE, MSG_VEREDICTOS, MSG_LOCAL)
+    assert resultado not in (COPIA_A_CLAUDE, BORRAR_CLAUDE, MSG_VEREDICTOS, MSG_LOCAL)
 
 
 @pytest.mark.parametrize("rama", ["main", "003-x"])
-def test_cuando_el_nombre_aparece_sigue_bloqueandose_como_antes(crear, rama):
+def test_cuando_el_nombre_aparece_sigue_bloqueandose(crear, rama):
     repo = crear(rama=rama)
     (repo / ".claude").mkdir()  # como en el repositorio real, es una carpeta
     for herramienta, comando in (
@@ -816,4 +839,5 @@ def test_cuando_el_nombre_aparece_sigue_bloqueandose_como_antes(crear, rama):
         ("PowerShell", r"Move-Item C:\tmp\falso\veredictos .claude"),
     ):
         resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
-        assert resultado == MSG_VEREDICTOS, comando
+        # Lo bloquea la regla del destino o, si no, la del nombre (FR-020)
+        assert resultado in (COPIA_A_CLAUDE, MSG_VEREDICTOS), comando

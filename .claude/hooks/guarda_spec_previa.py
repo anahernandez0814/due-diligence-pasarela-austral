@@ -44,10 +44,10 @@ VEREDICTOS = (
     "El directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr."
 )
 _VEREDICTOS = ".claude/veredictos"
-COPIA_OPACA = (
-    "Copiar o mover hacia .claude con un origen cuyos nombres no se pueden saber (/. o "
-    "comodines) se bloquea en cualquier rama: podría crear un veredicto o desactivar las "
-    "guardas. Nombra los archivos."
+COPIA_A_CLAUDE = (
+    "Copiar de forma recursiva o mover hacia la carpeta .claude se bloquea en cualquier rama, "
+    "sin mirar el origen: podría crear un veredicto o desactivar las guardas. Usa un "
+    "subdirectorio (.claude/agents/…) o nombra los archivos."
 )
 BORRAR_CLAUDE = (
     ".claude no se borra ni se mueve entera desde Claude Code: contiene los veredictos y "
@@ -222,6 +222,20 @@ def _origen_opaco(fuente: str) -> bool:
     return texto.endswith("/.") or any(c in texto for c in "*?[")
 
 
+def _termina_en_barra(fuente: str) -> bool:
+    """En macOS y BSD, `cp -R origen/ destino` copia el contenido de `origen`."""
+    return fuente.endswith(("/", "\\"))
+
+
+def _sin_directorio_de_destino(args: list[str]) -> bool:
+    """`-T` o `--no-target-directory`, suelto o dentro de un grupo (`-rT`): el origen se
+    copia o se mueve *como* el destino, así que su contenido llega al destino."""
+    return any(
+        arg == "--no-target-directory" or (re.fullmatch(r"-[a-zA-Z]*T[a-zA-Z]*", arg) is not None)
+        for arg in args
+    )
+
+
 def _es_recursiva(args: list[str], powershell: bool) -> bool:
     """`cp -r`, `-R`, `-a`, `--recursive`, `--archive` o `-Recurse`."""
     for arg in args:
@@ -327,8 +341,10 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
     - `borrado`: se borra, se restaura desde git o es la fuente de un movimiento;
     - `borrado_carpeta`: lo mismo, y la ruta es una carpeta;
     - `claude_entera`: la ruta es `.claude` y se borra o se mueve entera;
-    - `opaca_cp` y `opaca_mv`: la ruta es el destino de una copia recursiva o de un
-      movimiento cuyo origen no deja saber qué nombres llegan (`/.` o comodines).
+    - `copia_recursiva` y `movimiento`: la ruta es el destino de una copia recursiva o de
+      un movimiento, sin mirar el origen;
+    - `copia_oculta`: lo mismo, y el origen oculta los nombres que llegan (`/.`, comodines,
+      barra final o `-T`/`--no-target-directory`).
 
     Las rutas se resuelven tras los `cd` del propio comando (revisiones D y E).
     """
@@ -370,12 +386,15 @@ def destinos(texto: str, powershell: bool, base: Path, cwd: Path) -> Iterator[tu
                     yield from borrado_directo(f)
             if destino is None:
                 continue
-            if any(_origen_opaco(f) for f in fuentes):
-                # Con un origen opaco no se ven los nombres que llegan (parada D).
-                if nombre in _MOVIMIENTO:
-                    yield resolver(destino), "opaca_mv"
-                elif _es_recursiva(args, powershell):
-                    yield resolver(destino), "opaca_cp"
+            # La regla es sobre el destino, no sobre el origen (parada D, segunda ronda).
+            if nombre in _MOVIMIENTO:
+                yield resolver(destino), "movimiento"
+            elif _es_recursiva(args, powershell):
+                yield resolver(destino), "copia_recursiva"
+                if any(
+                    _origen_opaco(f) or _termina_en_barra(f) for f in fuentes
+                ) or _sin_directorio_de_destino(args):
+                    yield resolver(destino), "copia_oculta"
             if carpeta or es_carpeta(destino):
                 yield resolver(destino), "copia"
                 for fuente in fuentes:
@@ -497,10 +516,10 @@ def _protegidas_en_terminal(
                 privado = ruta_privada(ruta)
                 if privado:
                     return privado
-                if (tipo == "opaca_mv" and ruta == ".claude") or (
-                    tipo == "opaca_cp" and ruta in (".claude", "")
+                if (tipo in ("copia_recursiva", "movimiento") and ruta == ".claude") or (
+                    tipo == "copia_oculta" and ruta == ""
                 ):
-                    return COPIA_OPACA
+                    return COPIA_A_CLAUDE
                 if tipo == "claude_entera":
                     return BORRAR_CLAUDE
                 if (

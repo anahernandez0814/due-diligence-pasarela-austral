@@ -23,6 +23,23 @@ Instrucciones comunes del cuerpo de cada subagente:
 - No repite valores sensibles si los encuentra: dice el tipo y la ubicación.
 - Termina con la línea `RESUMEN` (formato abajo).
 
+## Qué cuenta para la cobertura
+
+Hallazgo de T030: con las instrucciones anteriores, el revisor contó la documentación de
+referencia y «no ejecutar los tests» como faltas de cobertura, y en el #4 (7 archivos de código,
++893 líneas, y 6 de tests, +1834) no leyó los tests: `/abrir-pr` nunca habría aprobado el
+ticket. La regla, que repiten los dos subagentes y las dos skills:
+
+| | Qué |
+|---|---|
+| **Cuentan** | El código y la configuración de la lista: `src/**`, `.claude/hooks/*.py`, `.claude/settings.json`, `.mcp.json`, `.claude/agents/`, `.claude/skills/` y `.claude/commands/`; y los tests (`test_*.py`). Cualquier otro archivo de la lista que no sea referencia cuenta también; los generados (`uv.lock`) se leen por secciones. Se leen **enteros**; los tests, por secciones si hace falta |
+| **Son referencia y no cuentan** | `specs/NNN-*/`, `README.md`, `DECISIONES.md` y `.claude/rules/`. Se leen por secciones o con `Grep` para contrastar; leerlos a medias no reduce la cobertura |
+| **No ejecutar tests** | **Nunca reduce la cobertura**: el revisor no tiene Bash. No se reporta como falta ni como hallazgo |
+| **Leído a medias** | Un archivo que cuenta y que se leyó a medias se nombra en el reporte, con las líneas leídas, y entonces la cobertura **sí** es incompleta |
+
+**Plan de lectura**, en este orden: (1) la lista de archivos del contexto, (2) el código y la
+configuración, (3) los tests, y solo entonces (4) el reporte.
+
 ## Skills (`.claude/skills/<nombre>/SKILL.md`)
 
 Frontmatter común:

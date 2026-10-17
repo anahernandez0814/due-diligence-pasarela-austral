@@ -109,6 +109,9 @@ nombre aparece (`cp -r …/veredictos .claude/`, `Move-Item`), ya se bloqueaba.
 - La mutación GraphQL leída de un archivo (`-F query=@archivo`, `--input`) y otros clientes HTTP
   (`curl`, etc.) con el token de `gh`: son rodeos deliberados.
 - Commits de otras personas empujados después del último `fetch` (R9).
+- Con `create_pull_request` **no se comparan `owner` ni `repo` con `origin`**: la guarda solo
+  comprueba el prefijo de `head` contra `owner`. Un PR hacia otro repositorio con una rama del
+  mismo nombre pasaría.
 - La validación de la línea `RESUMEN` antes de pasarla es una **instrucción de `/abrir-pr`,
   no código**. Que se ejecutara un comando ajeno exigiría tres fallos a la vez: un contenido
   manipulado que hace al revisor escribir una comilla en la línea `RESUMEN`, el modelo

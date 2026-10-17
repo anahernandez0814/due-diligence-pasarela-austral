@@ -446,7 +446,7 @@ validación en sesión (fase 8).
 **Purpose**: validar de extremo a extremo con una sesión nueva. Se hace con la implementación
 **commiteada**. Los escenarios están en el [quickstart](quickstart.md).
 
-- [ ] T029 [MANUAL] La analista abre una **sesión nueva** de Claude Code en la raíz, tras
+- [X] T029 [MANUAL] La analista abre una **sesión nueva** de Claude Code en la raíz, tras
   `uv sync`, y comprueba con `/hooks` las entradas (cinco `PreToolUse` y una `PostToolUse`) y
   con `/agents` los dos subagentes. Crea desde fuera de Claude Code el `.env.local` que
   pide Q5, la rama temporal `prueba-revision` desde la del ticket y el **clon desechable**
@@ -463,7 +463,7 @@ existen.
   si la constitución llega por `@import`, el techo real de la salida inyectada. **Q4(b) es
   manual en parte**: la analista abre Claude Code **en el clon desechable**, con
   `git update-ref refs/remotes/origin/main b7d5f48^1` dentro del clon, y ejecuta
-  `/revisar-codigo`; el diff es el del #3 más el del #4 (41 archivos, ≈ 475 KB, medido) y
+  `/revisar-codigo`; el diff es el del #3 más el del #4 (56 archivos, ≈ 663 KB, medido el 2026-10-16) y
   debe terminar con `cobertura=completa`. No sirve el rango `b7d5f48^1..5225965` (vacío)
   ni un worktree (movería el `origin/main` real).
 - [ ] T031 Fijar `UMBRAL_SALIDA` en `.claude/hooks/preparar_revision.py` en **la mitad del
@@ -571,3 +571,61 @@ subagentes y la puerta con el cliente real.
 - `CLAUDE.md` no cambia. No se editan las skills de Spec Kit.
 - Los resultados de Q1 a Q17 se anotan al pie de este archivo, en una sección "Resultados de
   la validación", al ejecutarlos.
+
+---
+
+## Resultados de la validación
+
+Sesión nueva del 2026-10-16, rama `004-revision-independiente-auditoria`, Windows.
+
+### Notas de T029
+
+- `/agents` ya no existe en esta versión de Claude Code («The /agents wizard has been
+  removed»). Los subagentes se comprueban en Q1 y Q3; las skills `/revisar-codigo` y
+  `/auditar-cumplimiento` aparecen como (project).
+- `/hooks` muestra cinco `PreToolUse` [Project] (incluida `guarda_pr`) y una `PostToolUse`
+  [Project]. Los hooks [User] y [Plugin] que se ven son del equipo de la analista, no del
+  proyecto.
+- El diff de Q4(b) medido hoy es de 56 archivos y ≈ 663 KB (no 41 y 475 KB).
+
+### Q1 (parcial: desde la raíz)
+
+- `/revisar-codigo specs/004-revision-independiente-auditoria` desde la raíz: la inyección con
+  `${CLAUDE_PROJECT_DIR}` se resolvió y corrió sin pedir permiso; el revisor recibió el
+  contexto con la marca `CONTEXTO DE REVISIÓN`, sin `CONTEXTO INCOMPLETO`, y el aviso de diff
+  omitido por tamaño. Terminó con `RESUMEN: bloqueantes=2 sugerencias=3 cobertura=incompleta`
+  (los bloqueantes eran T030 a T036 aún abiertas; la cobertura quedó incompleta porque no
+  leyó los archivos de test).
+- Pendiente: desde una subcarpeta y desde un clon en otra ruta.
+
+### Q2
+
+- El revisor dispone solo de `Read`, `Grep` y `Glob` (más la herramienta de entrega del
+  informe). No tiene Bash, Write, Edit ni Agent; ninguno de los cuatro intentos fue posible y
+  `prueba-q2.txt` no se creó. El diseño de R2 se mantiene.
+
+### Q3
+
+- La constitución y el `CLAUDE.md` del proyecto llegan al subagente en su contexto inicial
+  (por el `@import`): citó la primera línea del principio I sin usar `Read`, `Grep` ni `Glob`.
+  Dato para `DECISIONES.md` (R3); el diseño sigue pidiendo leerla con `Read`.
+
+### Q4(a)
+
+Medido con la skill temporal `medir-salida` (inyección `` !`...` `` que imprime líneas de 89
+bytes ASCII y termina con `FIN-<n>`), una invocación por tamaño, el 2026-10-16:
+
+| Tamaño pedido (bytes) | Resultado |
+|---|---|
+| 20 000 | en línea, completa (`FIN-20000`) |
+| 29 000 | en línea, completa (`FIN-29000`) |
+| 30 000 | **no llega en línea**: vista previa de 2 KB y ruta a un archivo (`Output too large (29.7KB)`); sin `FIN-` |
+| 40 000 | **no llega en línea**: vista previa de 2 KB y ruta a un archivo (`Output too large (39.6KB)`); sin `FIN-` |
+
+- Techo real: entre 29 000 y 30 000 bytes; en la práctica, 30 000 es el límite (coincide con el
+  valor provisional). Por encima, el modelo no recibe el contenido sino una vista previa de
+  2 KB y una ruta, sin aviso de truncado distinto de ese mensaje.
+- Para T031: la mitad del techo es ≈ 14 500 bytes (mitad del mayor tamaño confirmado en
+  línea, 29 000). El provisional de 30 000 es el techo, no su mitad, y debe bajarse.
+- La skill temporal `medir-salida` sigue en `.claude/skills/medir-salida/` hasta que lleguen
+  Q4(b) y Q1 desde el clon y desde una subcarpeta; se borra después (y no se commitea).

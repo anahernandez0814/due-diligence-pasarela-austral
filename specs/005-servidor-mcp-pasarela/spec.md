@@ -96,10 +96,11 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 ### Edge Cases
 
 - Búsqueda con texto vacío o solo con espacios: error estructurado no reintentable que pide un nombre o identificador.
+- Nombre buscado en el registro con menos de 3 caracteres una vez normalizado: error estructurado no reintentable. El mínimo de 3 caracteres es **solo para el nombre**: un identificador desconocido, aunque sea corto, da «sin coincidencias».
 - Nombres que difieren solo en mayúsculas, tildes, espacios repetidos o puntuación (por ejemplo, «S.A.S.» y «SAS»): se tratan como el mismo nombre al normalizar.
 - Identificador con formato desconocido: respuesta de "sin coincidencias", no un error del servicio.
 - Persona o comercio consultado en listas con un nombre parcialmente parecido a una entrada de la lista: no se declara coincidencia por parecido; solo por coincidencia del nombre completo normalizado o del identificador.
-- Una herramienta recibe un tipo de entidad que no admite (por ejemplo, una persona en una herramienta solo de comercios): error estructurado no reintentable.
+- Un tipo distinto de comercio o persona en `consultar_listas_restrictivas`: error estructurado no reintentable.
 - Archivo de datos ausente o corrupto: error estructurado del servidor, indicado como no reintentable, sin respuestas parciales presentadas como completas.
 - Carpeta de resultados inexistente al registrar un informe: se crea; si no se puede escribir, error estructurado.
 - Dos informes para el mismo comercio: ambos se conservan, cada uno con su identificador.
@@ -135,7 +136,7 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 - **Fuente registral**: origen de un dato del registro; cada dato lleva la fuente de la que procede.
 - **Entrada de lista restrictiva**: comercio o persona que figura en una lista ficticia, con el nombre de la lista y su fecha.
 - **Noticia**: mención ficticia con titular, fecha, fuente y las entidades que menciona.
-- **Categoría de negocio**: nombre y nivel de riesgo (alto o no alto).
+- **Categoría de negocio**: nombre y nivel de riesgo (alto, medio o bajo).
 - **Informe**: resultado del due diligence de un comercio, con su recomendación, hallazgos por frente con fuentes y cobertura alcanzada.
 - **Caso escalado**: caso enviado a un oficial de cumplimiento con un resumen estructurado y su causa.
 - **Error estructurado**: tipo de fallo, mensaje en español, indicador de si es reintentable y lo que se alcanzó a obtener (puede ir vacío).
@@ -157,6 +158,7 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 - El destinatario directo de las herramientas son los agentes del ticket #6; el analista las ve a través de ellos.
 - Las herramientas simulan las fuentes: no hacen validaciones de negocio de orden ni escalan por sí solas; las reglas I.1 e I.2 las garantizan los hooks del ticket #7.
 - La normalización de nombres ignora mayúsculas, tildes, espacios repetidos y puntuación (S.A.S. = SAS). En `consultar_registro_mercantil`, un nombre coincide si el texto buscado normalizado está contenido en el nombre normalizado del comercio, y se devuelven todas las coincidencias. En `consultar_listas_restrictivas` solo hay coincidencia por nombre completo normalizado o por identificador, nunca parcial.
+- En `buscar_noticias` la coincidencia es la misma que en las listas: nombre completo normalizado o identificador de las entidades que menciona cada noticia, nunca parcial.
 - La categoría de negocio la aporta el analista en su solicitud; el registro mercantil no la devuelve. Por eso la consulta de riesgo recibe la categoría como entrada y el comercio no la lleva como dato del registro.
 - "Nivel no alto" puede tener valores propios (por ejemplo, bajo y medio) siempre que ninguno sea alto; los valores exactos los fija el plan.
 - Las categorías conocidas distintas de las cuatro de alto riesgo incluyen al menos dos (por ejemplo, de bajo y de medio riesgo).

@@ -214,17 +214,17 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
 **Objetivo**: los tres frentes independientes. **Prueba independiente**: `uv run pytest
 src/servidor_mcp/test_listas.py src/servidor_mcp/test_noticias.py src/servidor_mcp/test_riesgo.py`.
 
-- [ ] T021 [P] [US2] Escribir `src/servidor_mcp/test_listas.py` (FR-005, R3): `PE-0003` como `persona`
+- [X] T021 [P] [US2] Escribir `src/servidor_mcp/test_listas.py` (FR-005, R3): `PE-0003` como `persona`
   coincide por identificador, y el nombre completo en otras mayúsculas y sin tildes también;
   un nombre **parcial** no coincide; el mismo nombre con `tipo` `comercio` no coincide;
   `CO-TV-0001` y `CO-TA-0002` dan `sin_coincidencias` con `metadatos` que nombran **todas** las
   listas y cuya `fecha` es la `fecha_corte` más antigua de las listas consultadas (`2026-09-20`),
   mientras cada hecho de una coincidencia conserva la de su lista; `tipo` ausente, distinto de
   `comercio` o `persona`, o ambos o ninguno de nombre e identificador, dan `entrada_invalida`.
-- [ ] T022 [US2] Implementar `src/servidor_mcp/listas.py` con `consultar_listas_restrictivas(tipo,
+- [X] T022 [US2] Implementar `src/servidor_mcp/listas.py` con `consultar_listas_restrictivas(tipo,
   nombre, identificador)`: un hecho por lista que coincide, con el nombre de la lista y su
   fuente. Pasa T021.
-- [ ] T023 [P] [US2] Escribir `src/servidor_mcp/test_noticias.py` (FR-006, FR-012, R5): `CO-AM-0005`
+- [X] T023 [P] [US2] Escribir `src/servidor_mcp/test_noticias.py` (FR-006, FR-012, R5): `CO-AM-0005`
   devuelve la noticia con titular, url y fuente, y **la `fecha` del hecho es la de la noticia**
   mientras `metadatos.fecha` es la `fecha_corte` del corpus; una persona o comercio sin menciones
   da `sin_coincidencias` con `metadatos`; **`CO-AM-0005` aparece en noticias y no en listas** (US2,
@@ -232,17 +232,17 @@ src/servidor_mcp/test_listas.py src/servidor_mcp/test_noticias.py src/servidor_m
   `servicio_no_disponible` con `reintentable: true` y `obtenido` vacío; con `"0"` o cualquier
   valor distinto de `"1"` funciona; **en la misma instancia**, activar y desactivar la variable
   entre dos llamadas cambia el resultado (R5: se lee en cada llamada).
-- [ ] T024 [US2] Implementar `src/servidor_mcp/noticias.py` con `buscar_noticias(nombre,
+- [X] T024 [US2] Implementar `src/servidor_mcp/noticias.py` con `buscar_noticias(nombre,
   identificador)`, leyendo `os.environ.get("PASARELA_FALLA_NOTICIAS") == "1"` **dentro de la
   función**, nunca al importar. Pasa T023.
-- [ ] T025 [P] [US2] Escribir `src/servidor_mcp/test_riesgo.py` (FR-007, R4): nivel `alto`
+- [X] T025 [P] [US2] Escribir `src/servidor_mcp/test_riesgo.py` (FR-007, R4): nivel `alto`
   **exactamente** para las cuatro categorías del enunciado y ninguna otra conocida es `alto`;
   la comparación es normalizada (`Suplementos Dietarios`, `suplementos  dietarios`); una
   categoría desconocida devuelve `categoria_desconocida` con **un hecho** cuyo `contenido` es
   `{categoria, categorias_conocidas}`, **sin `nivel`**, con la fuente y la `fecha_corte` de
   `categorias.json`; una conocida devuelve un hecho con `{categoria, nivel}`; vacía o de tipo
   incorrecto da `entrada_invalida`; toda respuesta lleva `metadatos`.
-- [ ] T026 [US2] Implementar `src/servidor_mcp/riesgo.py` con `consultar_riesgo_categoria(categoria)` y
+- [X] T026 [US2] Implementar `src/servidor_mcp/riesgo.py` con `consultar_riesgo_categoria(categoria)` y
   `categorias_conocidas()`, que la descripción de la herramienta usará. Pasa T025. Al final de la
   fase: `uv run ruff format .`, `uv run ruff check .` y commit
   `feat(servidor_mcp): consultas de registro, listas, noticias y riesgo`.

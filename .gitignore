@@ -30,3 +30,6 @@ build/
 
 # Veredictos de la revisión previa al PR (ticket #4)
 .claude/veredictos/
+
+# Informes y casos escalados del servidor MCP (ticket #5)
+resultados/

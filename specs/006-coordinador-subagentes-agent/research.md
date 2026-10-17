@@ -292,6 +292,11 @@ no necesita. Con `setting_sources=[]` y `tools=[]` (R2, R3), el agente no tiene 
    garantía; la cierra el #7. Se declara en el plan.
 9. **Coste en frío del coordinador** (R9, R14): la primera llamada con herramientas de la hora escribe
    un prefijo grande en la caché.
+10. **`listas` en curso mientras el registro se repite**. Si el registro se vuelve a ejecutar y su
+   comercio cambia, `listas` ya terminado pasa a `no_terminado` («el comercio del registro cambió; vuelva
+   a delegar listas»). Pero un `listas` que **sigue en curso** en ese momento no se invalida: terminará con
+   resultados del comercio anterior. Es un riesgo residual: lo cubre el hook del #7 (el nombre o
+   identificador de cada consulta de listas debe coincidir con el comercio del estado, punto 7).
 
 ## R14. Sondeo de la opción (a): `query()` anidado y herramienta lenta *(medido)*
 

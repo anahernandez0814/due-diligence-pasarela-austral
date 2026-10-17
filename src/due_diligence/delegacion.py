@@ -56,6 +56,8 @@ MOTIVO_REGISTRO_PRIMERO = (
     "pedir listas cuando termine."
 )
 
+MOTIVO_COMERCIO_CAMBIO = "El comercio del registro cambió; vuelva a delegar listas."
+
 ESQUEMA = {
     "type": "object",
     "properties": {
@@ -306,12 +308,32 @@ class Delegador:
         situacion, motivo = self._evaluar(frente, resultado)
         self.estado.cambiar_situacion(frente, situacion, motivo)
         if frente is Frente.REGISTRO:
+            anterior = self.estado.comercio
             self._fijar_comercio(situacion, motivo, resultado)
+            if self.estado.comercio != anterior:
+                self._invalidar_listas()
         detalle = f"{situacion.value}: {resultado.detalle_terminacion}"
         self.eventos.registrar(TIPO_FRENTE_FIN, frente, f"{detalle}. {motivo}".strip())
         respuesta = self._respuesta(frente, situacion, motivo, resultado)
         self._respuestas[frente] = respuesta
         return respuesta
+
+    def _invalidar_listas(self) -> None:
+        """El comercio del registro cambió: lo que `listas` encontró era de otro comercio.
+
+        Pasa a `no_terminado` y olvida su entrada, para que volver a delegarla se ejecute aunque el
+        comercio coincida con uno anterior. Un `listas` en curso no se toca (R13.10).
+        """
+        if self.estado.situacion(Frente.LISTAS) not in (
+            Situacion.TERMINADO,
+            Situacion.NO_TERMINADO,
+        ):
+            return
+        self.estado.cambiar_situacion(Frente.LISTAS, Situacion.NO_TERMINADO, MOTIVO_COMERCIO_CAMBIO)
+        self._contextos.pop(Frente.LISTAS, None)
+        self.eventos.registrar(
+            TIPO_FRENTE_FIN, Frente.LISTAS, f"no_terminado: {MOTIVO_COMERCIO_CAMBIO}"
+        )
 
     def _fijar_comercio(
         self, situacion: Situacion, motivo: str, resultado: ResultadoFrente

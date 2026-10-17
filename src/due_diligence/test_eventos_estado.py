@@ -123,6 +123,7 @@ def test_todos_los_frentes_empiezan_sin_iniciar():
         (Situacion.RECHAZADO, Situacion.RECHAZADO),
         (Situacion.TERMINADO, Situacion.EN_CURSO),
         (Situacion.NO_TERMINADO, Situacion.EN_CURSO),
+        (Situacion.TERMINADO, Situacion.NO_TERMINADO),
     ],
 )
 def test_transiciones_permitidas(origen, destino):
@@ -141,7 +142,6 @@ def test_transiciones_permitidas(origen, destino):
         (Situacion.EN_CURSO, Situacion.SIN_INICIAR),
         (Situacion.EN_CURSO, Situacion.RECHAZADO),
         (Situacion.NO_TERMINADO, Situacion.TERMINADO),
-        (Situacion.TERMINADO, Situacion.NO_TERMINADO),
     ],
 )
 def test_transiciones_no_permitidas_se_rechazan(origen, destino):

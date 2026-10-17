@@ -635,3 +635,69 @@ def test_si_las_fuentes_difieren_solo_en_la_fecha_el_comercio_se_deriva_igual():
     listas, estado, _ = _registro_y_listas(registro=registro)
     assert estado.comercio == COMERCIO_ESPERADO
     assert listas["situacion"] == "terminado"
+
+
+# ------------------------------------------------------------------ el comercio cambia
+
+
+def _registro_cambia_de_comercio():
+    otro = comercio_del_registro(
+        "CO-PL-0003",
+        "Pago Latino SAS",
+        {"nombre": "Mario Quispe Vargas", "identificador": "PE-0099"},
+    )
+    registros = iter([resultado_registro(), resultado_registro([otro])])
+    return _crear(
+        resultados={
+            Frente.REGISTRO: lambda contexto: next(registros),
+            Frente.LISTAS: lambda contexto: resultado_listas(
+                [
+                    consulta_listas("comercio", identificador="CO-PL-0003"),
+                    consulta_listas("persona", identificador="PE-0099"),
+                ]
+                if "CO-PL-0003" in contexto
+                else None
+            ),
+        }
+    )
+
+
+def test_si_el_registro_cambia_de_comercio_listas_deja_de_estar_terminado_y_se_reintenta():
+    delegador, estado, registro, ejecutor = _registro_cambia_de_comercio()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    assert _delegar(delegador, frente="listas")["situacion"] == "terminado"
+
+    _delegar(delegador, frente="registro", identificador="CO-PL-0003")
+
+    assert estado.comercio["identificador"] == "CO-PL-0003"
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    assert (
+        estado.motivo(Frente.LISTAS) == "El comercio del registro cambió; vuelva a delegar listas."
+    )
+    ultimo = [e for e in registro.eventos() if e.frente is Frente.LISTAS][-1]
+    assert ultimo.tipo == TIPO_FRENTE_FIN and "cambió" in ultimo.detalle
+
+    nueva = _delegar(delegador, frente="listas")
+    assert nueva["situacion"] == "terminado"
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 2
+    assert "CO-PL-0003" in ejecutor.llamadas_de(Frente.LISTAS)[1].contexto
+
+
+def test_si_el_registro_se_repite_y_el_comercio_no_cambia_listas_sigue_terminado():
+    delegador, estado, _, _ = _crear()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    _delegar(delegador, frente="registro", nombre="Tienda Verde SAS")
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
+def test_volver_al_comercio_anterior_tampoco_reutiliza_el_resultado_viejo_de_listas():
+    delegador, _, _, ejecutor = _registro_cambia_de_comercio()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    _delegar(delegador, frente="registro", identificador="CO-PL-0003")
+    _delegar(delegador, frente="listas")
+    delegador._ejecutor.resultados[Frente.REGISTRO] = resultado_registro()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 3

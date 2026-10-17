@@ -321,14 +321,14 @@ src/servidor_mcp/test_decisiones.py`.
 - [X] T031 [P] [US5] Crear `src/servidor_mcp/CLAUDE.md` con las convenciones del servidor (FR-015):
   `MCPServer` y no `FastMCP`, errores estructurados con `CallToolResult`, parámetros opcionales,
   nada en stdout, datos solo ficticios, variables `PASARELA_*`, tests junto al código.
-- [ ] T032 [P] [US5] Añadir a `.claude/hooks/test_configuracion.py` la comprobación de que
+- [X] T032 [P] [US5] Añadir a `.claude/hooks/test_configuracion.py` la comprobación de que
   `enabledMcpjsonServers` contiene `github` y `pasarela`, de que `.mcp.json` tiene el bloque
   `pasarela` de tipo `stdio` con `command: uv`, y de que ese bloque **no** contiene `${`, `env` ni
   nada con forma de credencial (R7, FR-016). Debe fallar antes de T033 y T034.
-- [ ] T033 [US5] Añadir a `.mcp.json` el bloque `pasarela` con la **primera opción de R7**:
+- [X] T033 [US5] Añadir a `.mcp.json` el bloque `pasarela` con la **primera opción de R7**:
   `{"type": "stdio", "command": "uv", "args": ["run", "--quiet", "python", "-m", "servidor_mcp"]}`,
   sin variables ni `env`.
-- [ ] T034 [US5] Añadir `"pasarela"` a `enabledMcpjsonServers` de `.claude/settings.json`, que queda
+- [X] T034 [US5] Añadir `"pasarela"` a `enabledMcpjsonServers` de `.claude/settings.json`, que queda
   `["github", "pasarela"]` (R7, SC-007). Pasa T032. Al final: `uv run ruff format .`,
   `uv run ruff check .`, `uv run pytest` y commit `feat(servidor_mcp): servidor MCP y registro en Claude Code`.
 

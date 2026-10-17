@@ -244,3 +244,30 @@ def test_las_entradas_de_los_hooks_de_3_no_cambian():
     por_script = {script(h): m for m, h in entradas("PreToolUse")}
     for nombre, matcher in esperadas.items():
         assert por_script[nombre] == matcher
+
+
+# --- Servidor MCP de la pasarela (ticket #5, R7, FR-016) --------------------------------------
+
+MCP_JSON = json.loads((RAIZ / ".mcp.json").read_text(encoding="utf-8"))
+PASARELA = MCP_JSON["mcpServers"].get("pasarela", {})
+
+
+def test_el_servidor_de_la_pasarela_esta_aprobado_junto_al_de_github():
+    # Sin esto, el servidor del proyecto queda pendiente de aprobación y no conecta (SC-007).
+    assert "github" in CONFIGURACION["enabledMcpjsonServers"]
+    assert "pasarela" in CONFIGURACION["enabledMcpjsonServers"]
+
+
+def test_mcp_json_registra_la_pasarela_junto_a_github_por_stdio_con_uv():
+    assert {"github", "pasarela"} <= set(MCP_JSON["mcpServers"])
+    assert PASARELA["type"] == "stdio"
+    assert PASARELA["command"] == "uv"
+    assert PASARELA["args"] == ["run", "--quiet", "python", "-m", "servidor_mcp"]
+
+
+def test_el_bloque_de_la_pasarela_no_lleva_variables_ni_env_ni_credenciales():
+    assert PASARELA  # el bloque existe
+    texto = json.dumps(PASARELA)
+    assert "${" not in texto  # no se da por hecho que ${CLAUDE_PROJECT_DIR} se expanda (R7)
+    assert "env" not in PASARELA
+    assert not re.search(r"gh[pousr]_|github_pat_|sk-ant-|AKIA|-----BEGIN", texto)

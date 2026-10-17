@@ -389,7 +389,7 @@ CUENTAN = [
     ".claude/commands/",
     "`test_*.py`",
 ]
-REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/"]
+REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/", "uv.lock"]
 PASOS_DE_LECTURA = [
     "1. La lista de archivos",
     "2. El código y la configuración",
@@ -461,3 +461,194 @@ def test_el_plan_de_lectura_va_en_orden_y_el_reporte_al_final(nombre, cuerpo):
     assert "plan de lectura" in cuerpo.lower()
     posiciones = [cuerpo.index(paso) for paso in PASOS_DE_LECTURA]
     assert posiciones == sorted(posiciones), nombre
+
+
+# --- Coherencia entre los archivos de la puerta (FR-013, R4) ------------------------------
+
+
+def seccion(cuerpo: str, encabezado: str, origen: str = "el texto") -> str:
+    """Texto de la sección `## <encabezado>`, hasta el siguiente `## ` o el final.
+
+    Se normaliza (espacios, tabuladores y saltos de línea colapsados en un solo espacio y sin
+    extremos): ajustar las líneas de un archivo no produce un falso fallo, una palabra distinta
+    sí. Si la sección no existe, falla nombrando el origen.
+    """
+    lineas = cuerpo.splitlines()
+    marca = f"## {encabezado}"
+    inicio = next((i for i, linea in enumerate(lineas) if linea.rstrip() == marca), None)
+    if inicio is None:
+        raise AssertionError(f"{origen}: falta la sección «{encabezado}»")
+    fin = next((i for i in range(inicio + 1, len(lineas)) if lineas[i].startswith("## ")), None)
+    cuerpo_de_la_seccion = lineas[inicio + 1 : fin]
+    return " ".join(" ".join(cuerpo_de_la_seccion).split())
+
+
+def test_seccion_llega_hasta_el_siguiente_encabezado():
+    texto = "# Título\n\n## Uno\nprimera\nsegunda\n\n## Dos\notra\n"
+    assert seccion(texto, "Uno") == "primera segunda"
+    assert seccion(texto, "Dos") == "otra"
+
+
+def test_seccion_llega_hasta_el_final_si_es_la_ultima():
+    assert seccion("## Última\nfin del archivo\n", "Última") == "fin del archivo"
+
+
+def test_seccion_no_confunde_un_encabezado_de_nivel_tres_con_el_fin():
+    texto = "## Uno\nantes\n### Detalle\ndentro\n## Dos\nfuera\n"
+    assert seccion(texto, "Uno") == "antes ### Detalle dentro"
+
+
+def test_dos_secciones_que_difieren_en_una_palabra_no_son_iguales():
+    a = "## Regla\nla delegación exime de implementar\n"
+    b = "## Regla\nla delegación exime de conservar\n"
+    assert seccion(a, "Regla") != seccion(b, "Regla")
+
+
+def test_dos_secciones_que_difieren_solo_en_espacios_o_saltos_de_linea_son_iguales():
+    a = "## Regla\nla delegación exime\nde implementar\n"
+    b = "## Regla\n  la   delegación\texime de   implementar  \n\n"
+    assert seccion(a, "Regla") == seccion(b, "Regla")
+
+
+def test_una_seccion_inexistente_falla_nombrando_el_origen():
+    with pytest.raises(AssertionError, match=r"agente auditor.*falta la sección «Regla»"):
+        seccion("## Otra\ntexto\n", "Regla", origen="agente auditor")
+
+
+# --- Cuándo aplica una regla (FR-001 a FR-005, FR-011, FR-012; R1, R2) ---------------------
+
+ENCABEZADO_APLICA = "Cuándo aplica una regla"
+FRASES_DE_APLICABILIDAD = [
+    "con su número",
+    "no es delegarla",
+    "delegada al ticket #N en la spec",
+    "Delegar exime de implementar la regla, no de violarla",
+    "no de conservar",
+    "borra o debilita",
+    "bloqueante",
+]
+
+
+def instrucciones_del_auditor():
+    """Los dos textos que dicen cuándo aplica una regla: el agente y su skill."""
+    return [
+        ("agente auditor-cumplimiento", cargar_agente("auditor-cumplimiento")[1]),
+        ("skill auditar-cumplimiento", cargar_skill("auditar-cumplimiento")[1]),
+    ]
+
+
+IDS_DEL_AUDITOR = [nombre for nombre, _ in instrucciones_del_auditor()]
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_la_regla_de_aplicabilidad_dice_lo_que_exige_la_spec(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    for frase in FRASES_DE_APLICABILIDAD:
+        assert " ".join(frase.split()) in texto, f"{nombre}: falta «{frase}»"
+
+
+def test_la_skill_remite_a_la_seccion_y_no_resume_la_regla_aparte():
+    _, cuerpo = cargar_skill("auditar-cumplimiento")
+    normal = " ".join(cuerpo.split())
+    assert f"con la sección «{ENCABEZADO_APLICA}»" in normal
+    # La regla se dice una sola vez: en la sección, no también en el paso 3 (R1).
+    assert normal.count("el diff toca código o tests que la implementan o la prueban") == 1
+
+
+def test_la_seccion_de_aplicabilidad_de_la_skill_no_menciona_spec_md():
+    # La skill exige nombrar la constitución antes que spec.md.
+    _, cuerpo = cargar_skill("auditar-cumplimiento")
+    assert "spec.md" not in seccion(cuerpo, ENCABEZADO_APLICA, origen="skill auditar-cumplimiento")
+
+
+# --- uv.lock es referencia y no cuenta para la cobertura (FR-006, FR-007; R3) --------------
+
+ENCABEZADO_COBERTURA = "Qué cuenta para la cobertura"
+
+
+def viñetas_de_cobertura(cuerpo: str, origen: str) -> tuple[str, str]:
+    """`(Cuentan, Son referencia y no cuentan)` del bloque de cobertura, ya normalizado."""
+    texto = seccion(cuerpo, ENCABEZADO_COBERTURA, origen=origen)
+    cuentan = texto[texto.index("**Cuentan**") : texto.index("**Son referencia y no cuentan**")]
+    referencia = texto[
+        texto.index("**Son referencia y no cuentan**") : texto.index(
+            "**No ejecutar tests nunca reduce la cobertura**"
+        )
+    ]
+    return cuentan, referencia
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_uv_lock_es_referencia_y_no_cuenta_para_la_cobertura(nombre, cuerpo):
+    cuentan, referencia = viñetas_de_cobertura(cuerpo, nombre)
+    assert "uv.lock" in referencia, f"{nombre}: uv.lock debe figurar entre la referencia"
+    assert "uv.lock" not in cuentan, f"{nombre}: uv.lock no debe figurar entre los que cuentan"
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_ningun_archivo_generado_se_lee_por_secciones_como_archivo_que_cuenta(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_COBERTURA, origen=nombre)
+    assert "se leen por secciones" not in viñetas_de_cobertura(cuerpo, nombre)[0]
+    assert "generados (`uv.lock`) se leen por secciones" not in texto
+
+
+# --- Los cuatro archivos de la puerta dicen lo mismo (FR-005, FR-008, FR-013; SC-004) ------
+
+
+def agrupar_por_texto(secciones: dict[str, str]) -> str:
+    """Describe qué archivos coinciden y cuáles difieren, para el mensaje de fallo."""
+    grupos: dict[str, list[str]] = {}
+    for nombre, texto in secciones.items():
+        grupos.setdefault(texto, []).append(nombre)
+    return " | ".join(" + ".join(nombres) for nombres in grupos.values())
+
+
+def test_el_bloque_de_cobertura_es_igual_en_los_cuatro_archivos():
+    bloques = {
+        nombre: seccion(cuerpo, ENCABEZADO_COBERTURA, origen=nombre)
+        for nombre, cuerpo in instrucciones_de_cobertura()
+    }
+    assert len(bloques) == 4
+    assert len(set(bloques.values())) == 1, (
+        f"«{ENCABEZADO_COBERTURA}» difiere entre los archivos de la puerta: "
+        f"{agrupar_por_texto(bloques)}"
+    )
+
+
+def test_la_regla_de_aplicabilidad_es_igual_en_el_agente_y_en_la_skill_del_auditor():
+    reglas = {
+        nombre: seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+        for nombre, cuerpo in instrucciones_del_auditor()
+    }
+    assert len(reglas) == 2
+    assert len(set(reglas.values())) == 1, (
+        f"«{ENCABEZADO_APLICA}» difiere entre el agente y la skill del auditor: "
+        f"{agrupar_por_texto(reglas)}"
+    )
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_la_delegacion_exige_el_numero_del_ticket(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    assert "con su número" in texto
+    assert "no es delegarla" in texto
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_delegar_no_exime_de_conservar_lo_que_ya_garantiza_la_regla(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    assert "no de conservar" in texto
+    assert "borra o debilita" in texto
+
+
+def test_el_mensaje_de_fallo_nombra_los_archivos_que_difieren():
+    mensaje = agrupar_por_texto({"agente A": "uno", "skill A": "uno", "agente B": "dos"})
+    assert mensaje == "agente A + skill A | agente B"

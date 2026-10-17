@@ -96,8 +96,10 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 ### Edge Cases
 
 - Búsqueda con texto vacío o solo con espacios: error estructurado no reintentable que pide un nombre o identificador.
-- Nombre buscado en el registro con menos de 3 caracteres una vez normalizado: error estructurado no reintentable. El mínimo de 3 caracteres es **solo para el nombre**: un identificador desconocido, aunque sea corto, da «sin coincidencias».
+- Nombre buscado en el registro con menos de 3 caracteres una vez normalizado y sin la forma jurídica final (por ejemplo, solo «SAS»): error estructurado no reintentable. El mínimo de 3 caracteres es **solo para el nombre**: un identificador desconocido, aunque sea corto, da «sin coincidencias».
 - Nombres que difieren solo en mayúsculas, tildes, espacios repetidos o puntuación (por ejemplo, «S.A.S.» y «SAS»): se tratan como el mismo nombre al normalizar.
+- Forma jurídica al final del nombre (SAS, SA, Ltda, EU, SCA, S. en C.): en el registro se ignora, tanto en el texto buscado como en el nombre del comercio. «Almacén Mirador SAS» y «Almacén Mirador» devuelven las mismas coincidencias.
+- Identificador escrito en minúsculas (`co-tv-0001`): coincide con el mismo identificador en mayúsculas, en el registro, las listas y las noticias.
 - Identificador con formato desconocido: respuesta de "sin coincidencias", no un error del servicio.
 - Persona o comercio consultado en listas con un nombre parcialmente parecido a una entrada de la lista: no se declara coincidencia por parecido; solo por coincidencia del nombre completo normalizado o del identificador.
 - Un tipo distinto de comercio o persona en `consultar_listas_restrictivas`: error estructurado no reintentable.
@@ -157,7 +159,7 @@ El servidor queda registrado en la configuración compartida del proyecto, junto
 
 - El destinatario directo de las herramientas son los agentes del ticket #6; el analista las ve a través de ellos.
 - Las herramientas simulan las fuentes: no hacen validaciones de negocio de orden ni escalan por sí solas; las reglas I.1 e I.2 las garantizan los hooks del ticket #7.
-- La normalización de nombres ignora mayúsculas, tildes, espacios repetidos y puntuación (S.A.S. = SAS). En `consultar_registro_mercantil`, un nombre coincide si el texto buscado normalizado está contenido en el nombre normalizado del comercio, y se devuelven todas las coincidencias. En `consultar_listas_restrictivas` solo hay coincidencia por nombre completo normalizado o por identificador, nunca parcial.
+- La normalización de nombres ignora mayúsculas, tildes, espacios repetidos y puntuación (S.A.S. = SAS). En `consultar_registro_mercantil`, un nombre coincide si el texto buscado normalizado está contenido en el nombre normalizado del comercio, y se devuelven todas las coincidencias; **se ignoran las formas jurídicas al final del nombre** (SAS, SA, Ltda, EU, SCA, S. en C.), en el texto buscado y en el nombre del comercio, y el mínimo de 3 caracteres se cuenta después de quitarlas. Así el mensaje natural del analista, «Almacén Mirador SAS», devuelve las dos coincidencias del caso (d). En `consultar_listas_restrictivas` solo hay coincidencia por nombre completo normalizado o por identificador, nunca parcial.
 - En `buscar_noticias` la coincidencia es la misma que en las listas: nombre completo normalizado o identificador de las entidades que menciona cada noticia, nunca parcial.
 - La categoría de negocio la aporta el analista en su solicitud; el registro mercantil no la devuelve. Por eso la consulta de riesgo recibe la categoría como entrada y el comercio no la lleva como dato del registro.
 - "Nivel no alto" puede tener valores propios (por ejemplo, bajo y medio) siempre que ninguno sea alto; los valores exactos los fija el plan.

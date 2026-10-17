@@ -61,11 +61,20 @@ conocía el equipo antes del ticket.
   5. colapsar los espacios repetidos y recortar.
 - **Registro mercantil**: el texto buscado normalizado debe estar **contenido** como
   subcadena en el nombre normalizado; se devuelven todas las coincidencias, en orden de
-  identificador. Con `identificador` la coincidencia es exacta.
+  identificador. Con `identificador` la coincidencia es exacta, **sin distinguir mayúsculas**
+  (también en listas y noticias).
+- **Forma jurídica final, solo en el registro**: `sin_forma_juridica()` quita del final del
+  nombre normalizado `sas`, `sa`, `ltda`, `eu`, `sca` y `s en c` (de «S. en C.»), en el texto
+  buscado y en el nombre del comercio. Motivo: «Almacén Mirador SAS» solo devolvía
+  `CO-AM-0004` (`almacen mirador sas` no está contenido en `almacen mirador norte sas`) y el
+  caso (d) no se reproducía con el mensaje natural del analista. Listas y noticias siguen con el
+  nombre completo, forma jurídica incluida, para no ampliar coincidencias donde la precisión
+  importa (I.2).
 - **Listas restrictivas y noticias**: igualdad del nombre completo normalizado, o del
   identificador. Nunca parcial.
 - **Mínimo de 3 caracteres, solo para `nombre`** (decisión validada por la analista y recogida
-  en la spec): el nombre buscado debe tener **al menos 3 caracteres normalizados**; con menos,
+  en la spec): el nombre buscado debe tener **al menos 3 caracteres normalizados, contados después de quitar la forma jurídica final** (`SAS` solo no cumple);
+  con menos,
   `entrada_invalida` no reintentable. Sin mínimo, `a` devolvería todo el registro. **No aplica al
   `identificador`**: uno desconocido, aunque sea corto, da `sin_coincidencias`.
 - **Noticias** (decisión validada y recogida en la spec): se aplica la regla de las listas

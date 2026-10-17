@@ -63,9 +63,9 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 ## `consultar_registro_mercantil`
 
 - **Entrada**: `nombre` **o** `identificador` (exactamente uno; con los dos o con ninguno,
-  `entrada_invalida`). El texto se normaliza (R3). **El mínimo de 3 caracteres normalizados es
+  `entrada_invalida`). El texto se normaliza (R3) y **se ignora la forma jurídica final** (SAS, SA, Ltda, EU, SCA, S. en C.) en el texto buscado y en el nombre del comercio. **El mínimo de 3 caracteres normalizados, contados después de quitarla, es
   solo para `nombre`**: un `identificador` desconocido, aunque sea corto, da `sin_coincidencias`.
-- **Coincidencia**: por `identificador`, exacta. Por `nombre`, el texto normalizado contenido en
+- **Coincidencia**: por `identificador`, exacta **sin distinguir mayúsculas** (`co-tv-0001` coincide). Por `nombre`, el texto normalizado, sin su forma jurídica final, contenido en
   el nombre normalizado.
 - **Respuesta**: `resultado` es `coincidencias` o `sin_coincidencias`. Los hechos son **uno por
   comercio y fuente**, y el nivel superior añade `coincidencias`: la lista de identificadores de
@@ -101,7 +101,7 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 
 - **Entrada**: `tipo` (`comercio` o `persona`) y `nombre` **o** `identificador` (exactamente
   uno).
-- **Coincidencia**: nombre completo normalizado igual, o identificador igual, entre entradas del
+- **Coincidencia**: nombre completo normalizado igual (**con** su forma jurídica), o identificador igual sin distinguir mayúsculas, entre entradas del
   mismo `tipo`. Nunca parcial.
 - **Respuesta**: `coincidencias` (un hecho por lista que coincide, con el nombre de la lista, su
   fuente y su `fecha_corte`) o `sin_coincidencias`. Siempre se consultan todas las listas:
@@ -120,7 +120,7 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 ## `buscar_noticias`
 
 - **Entrada**: `nombre` **o** `identificador` (exactamente uno).
-- **Coincidencia**: nombre completo normalizado igual, o identificador igual, entre las entidades
+- **Coincidencia**: nombre completo normalizado igual (**con** su forma jurídica), o identificador igual sin distinguir mayúsculas, entre las entidades
   mencionadas por cada noticia (R3).
 - **Respuesta**: `coincidencias` (un hecho por noticia: contenido con titular y url; metadatos
   del hecho con la fuente y **la fecha de la noticia**) o `sin_coincidencias`. `metadatos.fecha`

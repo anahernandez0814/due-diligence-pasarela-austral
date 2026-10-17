@@ -42,7 +42,7 @@ Lo que imprime `preparar_revision.py` y las skills inyectan.
 | Archivos | lista de cambiados, con estado y estadísticas (`numstat`); los eliminados, marcados |
 | Marca | primera línea fija: `CONTEXTO DE REVISIÓN`; si el subagente no la ve, `cobertura=incompleta` |
 | Commit | `Commit: <sha completo de HEAD>`, justo después de `Rama:`; es el commit revisado |
-| Diff | completo si **toda la salida** queda por debajo de `UMBRAL_SALIDA` (provisional, 30 000 bytes; Q4 lo ajusta); si no, una línea que dice que se omitió |
+| Diff | completo si **toda la salida** queda por debajo de `UMBRAL_SALIDA` (14 500 bytes: la mitad del mayor tamaño que llegó completo, Q4(a)); si no, una línea que dice que se omitió |
 | Ticket | carpeta `specs/NNN-*/` y rutas de `spec.md`, `plan.md` y `tasks.md`; sus archivos van marcados como **referencia** y no cuentan para la cobertura |
 | Constitución | ruta de `.specify/memory/constitution.md` |
 | Estado | `CONTEXTO INCOMPLETO: <motivo>` si algo falla; el script termina siempre con 0 |

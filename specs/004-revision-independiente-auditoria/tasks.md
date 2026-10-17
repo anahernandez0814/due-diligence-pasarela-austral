@@ -159,8 +159,8 @@ verificación del cierre de #4 la hace el paso 0 del siguiente `/siguiente-ticke
   `/abrir-pr` no nombra el directorio.
 - [X] T006 Implementar `.claude/hooks/preparar_revision.py` (solo biblioteca estándar; R4,
   R6, FR-005; hace pasar T004). Importa `base_de_fusion` de `veredicto.py` para usar la
-  misma base. Constante `UMBRAL_SALIDA`, provisional en 30 000 bytes; T031 la fija en la
-  mitad del techo medido en Q4. Sin argumentos ni stdin; siempre sale con 0.
+  misma base. Constante `UMBRAL_SALIDA`, provisional en 30 000 bytes; T031 la fijó en
+  14 500, la mitad del techo medido en Q4(a). Sin argumentos ni stdin; siempre sale con 0.
 - [X] T007 Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check .claude/hooks` y
   `uv run pytest .claude/hooks`, y commitear los archivos de T002 a T006: `feat(hooks):
   registro del veredicto y preparación del contexto de revisión`.
@@ -466,7 +466,7 @@ existen.
   `/revisar-codigo`; el diff es el del #3 más el del #4 (56 archivos, ≈ 663 KB, medido el 2026-10-16) y
   debe terminar con `cobertura=completa`. No sirve el rango `b7d5f48^1..5225965` (vacío)
   ni un worktree (movería el `origin/main` real).
-- [ ] T031 Fijar `UMBRAL_SALIDA` en `.claude/hooks/preparar_revision.py` en **la mitad del
+- [X] T031 Fijar `UMBRAL_SALIDA` en `.claude/hooks/preparar_revision.py` en **la mitad del
   techo medido en Q4** (A2) y el test de T004 que lo fija; y, si Q1 pide otra variable o
   patrón, corregir las dos skills y `/abrir-pr`. Si no hace falta ningún cambio, se anota.
   Commit nuevo: `fix(revision): ajuste con las comprobaciones de la sesión`.
@@ -627,5 +627,42 @@ bytes ASCII y termina con `FIN-<n>`), una invocación por tamaño, el 2026-10-16
   2 KB y una ruta, sin aviso de truncado distinto de ese mensaje.
 - Para T031: la mitad del techo es ≈ 14 500 bytes (mitad del mayor tamaño confirmado en
   línea, 29 000). El provisional de 30 000 es el techo, no su mitad, y debe bajarse.
-- La skill temporal `medir-salida` sigue en `.claude/skills/medir-salida/` hasta que lleguen
-  Q4(b) y Q1 desde el clon y desde una subcarpeta; se borra después (y no se commitea).
+- La skill temporal `medir-salida` se borró y no se commiteó (T031).
+
+### Q4(b) y Q1 desde el clon (`C:\Temp\clon-q4`)
+
+Con las instrucciones anteriores a las correcciones de cobertura:
+
+- `RESUMEN: bloqueantes=2 sugerencias=2 cobertura=incompleta`; diff omitido: sí.
+- Bloqueantes: T029 a T036 abiertas y `UMBRAL_SALIDA` provisional (esperables).
+- No cubrió: los tests del #4, el código del #3, `.claude/rules`, `README`, `DECISIONES`, 330 de
+  las 586 líneas de `guarda_spec_previa.py`, y «no ejecutó tests».
+- Hallazgo de la analista: el revisor no sabía qué cuenta para la cobertura. Contó la
+  documentación de referencia y «no ejecutar tests» (no tiene Bash), y en Q1 (solo el #4: 7
+  archivos de código, +893 líneas, y 6 de tests, +1834) no leyó los tests. `/abrir-pr` nunca
+  habría aprobado el ticket. Corregido en `884adee` (contrato), `e20e9f4` (subagentes y skills)
+  y `f1d9b0c` (`UMBRAL_SALIDA = 14_500`).
+
+### Q1 desde la subcarpeta `specs`
+
+- Pendiente: el mensaje de la analista trajo la marca `<COMPLETE AQUÍ>`; lo completa ella.
+
+### T030, revisión en la raíz tras las correcciones (2026-10-16, HEAD `f1d9b0c`)
+
+`/revisar-codigo specs/004-revision-independiente-auditoria` desde la raíz:
+
+- `RESUMEN: bloqueantes=1 sugerencias=8 cobertura=completa`. El contexto llegó completo, leyó
+  enteros el código, la configuración y los tests, y no contó «no ejecutar tests» ni la
+  documentación de referencia como faltas. Con el diff omitido por tamaño, la cobertura
+  completa se consigue con el plan de lectura.
+- El bloqueante es el esperado: T030 a T036 abiertas.
+- Sugerencias: 3 eran defectos reales y se corrigieron en `db40b84`: un literal corrupto (un
+  tabulador y un salto de página) en un test de `test_guarda_spec_previa.py`; que
+  `settings.local.json` se comparaba sin `casefold` (en Windows y macOS `.claude/Settings.local.json`
+  escapaba); y que `gh api -p x …/pulls -X POST` tomaba `x` como endpoint.
+- Quedan como sugerencias, sin corregir: `cp /tmp/falso/* .claude/` sin `-r` sigue permitido (no
+  crea directorios, así que no afecta a los veredictos, pero sí podría sobrescribir
+  `settings.local.json`); `_nombre` repetida en tres módulos; con unos 140 archivos la lista se
+  agrupa por directorio y entonces la cobertura es incompleta; y el bloque de cobertura repetido
+  en cuatro archivos.
+

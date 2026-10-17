@@ -15,7 +15,7 @@ de negocio, y que esa exigencia la haga cumplir un hook, no una instrucción:
   `auditar-cumplimiento`, cada una ligada a su subagente con `agent:` (R1). Preparan el
   contexto con un script inyectado antes de crear el subagente (R2): lista de archivos con
   estadísticas siempre y el diff completo solo si toda la salida cabe en `UMBRAL_SALIDA`
-  (provisional, 30 000 bytes; Q4 lo ajusta) (R4, R6). La salida empieza con la marca
+  (14 500 bytes: la mitad del mayor tamaño que llegó completo, Q4(a)) (R4, R6). La salida empieza con la marca
   `CONTEXTO DE REVISIÓN`. Los documentos del ticket no cuentan para la cobertura. El
   subagente no necesita Bash.
 - **Consolidación en `/abrir-pr`**: ejecuta las dos skills, valida la línea `RESUMEN` de cada

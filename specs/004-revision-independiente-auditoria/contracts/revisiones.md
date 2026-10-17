@@ -87,7 +87,7 @@ pueden invocarse a mano (`/revisar-codigo specs/NNN-nombre`), sin registrar vere
 | Red | ninguna; usa `origin/main` ya actualizado por `/abrir-pr` |
 | Marca | la primera línea de la salida es `CONTEXTO DE REVISIÓN` (R2.4) |
 | Commit | la línea `Commit: <sha completo de HEAD>` va justo después de `Rama:`: es el commit que se revisa y al que `/abrir-pr` ata el veredicto |
-| Umbral | `UMBRAL_SALIDA` (provisional, 30 000 bytes, ajustable tras Q4) sobre **toda** la salida: el diff completo solo si la salida total queda por debajo; marca, lista y rutas se emiten siempre |
+| Umbral | `UMBRAL_SALIDA` (14 500 bytes: la mitad del mayor tamaño que llegó completo en Q4(a)) sobre **toda** la salida: el diff completo solo si la salida total queda por debajo; marca, lista y rutas se emiten siempre |
 | Referencia | los archivos de `specs/NNN-*/` van marcados como referencia y no cuentan para la cobertura |
 
 ## Formato del reporte

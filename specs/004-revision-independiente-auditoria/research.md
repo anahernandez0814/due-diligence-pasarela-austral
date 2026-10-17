@@ -162,8 +162,8 @@ de archivos, rutas del ticket y diff), no solo al diff: lo que Claude Code mide 
 completa del comando. El script emite **siempre** la marca, la lista con estadísticas y las
 rutas; añade el diff completo **solo si la salida total sigue por debajo de
 `UMBRAL_SALIDA`**, que vale **la mitad del techo medido** de la herramienta Bash (el margen
-es ese 50 %). Valor provisional hasta medirlo: 30 000 bytes; Q4 mide el techo real y T031
-fija el valor definitivo. Por encima, la salida indica que el
+es ese 50 %). Medido en Q4(a): 29 000 bytes llegan en línea y 30 000 ya no, así que el valor es
+14 500 bytes (T031). Por encima, la salida indica que el
 diff se omitió y el revisor lee los archivos de la lista con `Read` y `Grep`. Si la lista y
 las rutas por sí solas superaran el umbral (PR con cientos de archivos), la lista se agrupa
 por directorio con sus totales y se dice así.

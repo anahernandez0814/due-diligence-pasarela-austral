@@ -288,7 +288,7 @@ FR-014, SC-006).
 
 **Prueba independiente**: un caso con subagentes simulados y la lectura del estado y de los eventos.
 
-- [ ] T024 [US5] Añadir a `src/due_diligence/test_coordinador.py` y `test_eventos_estado.py`. Un caso
+- [X] T024 [US5] Añadir a `src/due_diligence/test_coordinador.py` y `test_eventos_estado.py`. Un caso
   terminado: el estado contiene por cada frente su resultado (contenido separado de `fuente` y
   `fecha`, sin mezclar ni reescribir) y las consultas realizadas (US5-1); cada evento tiene marca,
   frente y tipo, y la lista queda ordenada por `secuencia` (US5-2); un frente cuyo ejecutor termina
@@ -298,7 +298,7 @@ FR-014, SC-006).
   estado ni los eventos de uno aparecen en el otro (FR-014); un hook simulado que recibe el `Caso` por
   cierre puede leer el estado de cada frente (R7). A partir de los eventos de un caso completo se
   reconstruye el orden (SC-006): se compara con la secuencia esperada de tipos y frentes.
-- [ ] T025 [US5] Ajustar lo que falte en `eventos.py`, `estado.py`, `delegacion.py` y `coordinador.py`
+- [X] T025 [US5] Ajustar lo que falte en `eventos.py`, `estado.py`, `delegacion.py` y `coordinador.py`
   para hacer pasar T024 (sin variables de módulo, copias en `instantanea()` y `eventos()`, estado de
   cada frente actualizado en cada transición).
 

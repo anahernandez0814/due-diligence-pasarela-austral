@@ -17,9 +17,21 @@ from due_diligence.coordinador import (
     ejecutar_caso,
 )
 from due_diligence.estado import Situacion
-from due_diligence.eventos import TIPO_CASO_INICIADO, TIPO_TERMINACION
+from due_diligence.eventos import (
+    TIPO_CASO_INICIADO,
+    TIPO_DELEGACION,
+    TIPO_FRENTE_FIN,
+    TIPO_FRENTE_INICIO,
+    TIPO_TERMINACION,
+)
 from due_diligence.frentes import FRENTES, Frente
-from due_diligence.simulacion import EjecutorSimulado
+from due_diligence.simulacion import (
+    EjecutorSimulado,
+    resultado_frente,
+    resultado_listas,
+    terminacion_anomala,
+)
+from due_diligence.simulacion import consulta as consulta_de_frente
 from due_diligence.terminacion import Terminacion
 
 SOLICITUD = (
@@ -49,7 +61,11 @@ def _fin(subtype="success", stop_reason="end_turn", is_error=False, terminal="co
 
 
 def _coordinador_simulado(
-    delegaciones, fin=None, error_final=None, texto="Resumen para el analista."
+    delegaciones,
+    fin=None,
+    error_final=None,
+    texto="Resumen para el analista.",
+    en_un_turno=False,
 ):
     """Un `query()` del coordinador que delega como lo haría el SDK y termina como se le diga."""
     llamadas = []
@@ -57,7 +73,10 @@ def _coordinador_simulado(
 
     async def consulta(*, prompt, options=None):
         llamadas.append((prompt, options))
-        if delegaciones:
+        if delegaciones and en_un_turno:
+            delegador = caso_ref["caso"].delegador
+            await asyncio.gather(*(delegador.delegar(d) for d in delegaciones))
+        elif delegaciones:
             delegador = caso_ref["caso"].delegador
             independientes = [d for d in delegaciones if d["frente"] != "listas"]
             await asyncio.gather(*(delegador.delegar(d) for d in independientes))
@@ -80,10 +99,13 @@ def _caso(
     fin=None,
     error_final=None,
     texto="Resumen para el analista.",
+    en_un_turno=False,
     **kwargs,
 ):
     ejecutor = ejecutor or EjecutorSimulado()
-    consulta = _coordinador_simulado(delegaciones, fin=fin, error_final=error_final, texto=texto)
+    consulta = _coordinador_simulado(
+        delegaciones, fin=fin, error_final=error_final, texto=texto, en_un_turno=en_un_turno
+    )
     caso = Caso(ejecutor=ejecutor, consulta=consulta, **kwargs)
     consulta.caso_ref["caso"] = caso
     return caso, ejecutor, consulta
@@ -269,3 +291,158 @@ def test_dos_ejecuciones_de_la_misma_solicitud_son_dos_casos():
     uno, _, _ = _caso([])
     otro, _, _ = _caso([])
     assert uno.estado is not otro.estado and uno.eventos() is not otro.eventos()
+
+
+# ------------------------------------------------------------ estado y eventos del caso (US5)
+
+TODO_EL_EJEMPLO = [*DELEGACIONES_DEL_EJEMPLO, {"frente": "listas"}]
+
+
+def _caso_completo(**kwargs):
+    """El ejemplo completo con los cuatro frentes pedidos en el mismo turno."""
+    return _caso(TODO_EL_EJEMPLO, en_un_turno=True, **kwargs)
+
+
+def test_el_estado_de_un_caso_terminado_tiene_el_resultado_y_las_consultas_de_cada_frente():
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    estado = caso.estado
+
+    assert set(estado.resultados) == set(Frente)
+    assert len(estado.consultas) == 5  # registro, noticias, categoría y las dos de listas
+    for frente in Frente:
+        assert estado.situacion(frente) is Situacion.TERMINADO
+    for consulta in estado.consultas:
+        assert consulta.valido and consulta.resultado["metadatos"]["fuentes"]
+        assert consulta.resultado["metadatos"]["fecha"]
+        for hecho in consulta.resultado["hechos"]:
+            # El contenido y los metadatos (fuente y fecha) llegan separados y no se mezclan.
+            assert "fuente" not in hecho["contenido"] and "fecha" not in hecho["contenido"]
+            assert hecho["metadatos"]["fuente"] and hecho["metadatos"]["fecha"]
+
+
+def test_cada_evento_tiene_marca_frente_y_tipo_y_la_lista_va_ordenada_por_secuencia():
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    eventos = caso.eventos()
+    assert [e.secuencia for e in eventos] == list(range(1, len(eventos) + 1))
+    assert all(e.marca.tzinfo is not None and e.tipo and e.detalle for e in eventos)
+    for frente in Frente:
+        tipos = [e.tipo for e in eventos if e.frente is frente]
+        assert tipos == [TIPO_DELEGACION, TIPO_FRENTE_INICIO, TIPO_FRENTE_FIN]
+
+
+def test_un_frente_que_termina_de_forma_anomala_figura_no_terminado_y_no_como_terminado():
+    anomalo = resultado_frente(
+        Frente.NOTICIAS, [consulta_de_frente(Frente.NOTICIAS)], terminacion_anomala()
+    )
+    caso, _, _ = _caso_completo(ejecutor=EjecutorSimulado(resultados={Frente.NOTICIAS: anomalo}))
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.estado.situacion(Frente.NOTICIAS) is Situacion.NO_TERMINADO
+    assert caso.estado.situacion(Frente.REGISTRO) is Situacion.TERMINADO
+    assert "no_terminado" in next(
+        e.detalle
+        for e in caso.eventos()
+        if e.tipo == TIPO_FRENTE_FIN and e.frente is Frente.NOTICIAS
+    )
+
+
+def test_la_instantanea_durante_la_ejecucion_marca_los_frentes_sin_terminar_como_en_curso():
+    vistas = []
+    referencia = {}
+
+    def espiar(_contexto):
+        vistas.append(referencia["caso"].estado.instantanea())
+        return resultado_frente(Frente.NOTICIAS)
+
+    ejecutor = EjecutorSimulado(retardo=0.02, resultados={Frente.NOTICIAS: espiar})
+    caso, _, _ = _caso_completo(ejecutor=ejecutor)
+    referencia["caso"] = caso
+    asyncio.run(caso.ejecutar(SOLICITUD))
+
+    instantanea = vistas[0]
+    assert instantanea.situacion(Frente.NOTICIAS) is Situacion.EN_CURSO
+    assert Frente.NOTICIAS not in instantanea.resultados  # sin resultado vacío mientras corre
+    assert instantanea.situacion(Frente.CATEGORIA) is Situacion.EN_CURSO
+    assert instantanea.terminacion is None
+    # La copia es independiente: lo que ocurrió después no la cambia.
+    assert caso.estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO
+    assert instantanea.situacion(Frente.NOTICIAS) is Situacion.EN_CURSO
+
+
+def test_dos_casos_con_la_misma_solicitud_son_independientes():
+    caido = resultado_frente(
+        Frente.NOTICIAS, [consulta_de_frente(Frente.NOTICIAS)], terminacion_anomala()
+    )
+    uno, ejecutor_uno, _ = _caso_completo()
+    otro, ejecutor_otro, _ = _caso_completo(
+        ejecutor=EjecutorSimulado(resultados={Frente.NOTICIAS: caido})
+    )
+
+    async def los_dos():
+        await asyncio.gather(uno.ejecutar(SOLICITUD), otro.ejecutar(SOLICITUD))
+
+    asyncio.run(los_dos())
+
+    assert uno.estado is not otro.estado
+    assert uno.estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO
+    assert otro.estado.situacion(Frente.NOTICIAS) is Situacion.NO_TERMINADO
+    assert len(uno.estado.consultas) == 5
+    assert len(ejecutor_uno.llamadas) == 4 and len(ejecutor_otro.llamadas) == 4
+    secuencias_uno = {e.secuencia for e in uno.eventos()}
+    assert secuencias_uno == set(range(1, len(secuencias_uno) + 1))  # cada caso cuenta desde 1
+    assert [e.detalle for e in uno.eventos()] != [e.detalle for e in otro.eventos()]
+
+
+def test_un_hook_que_recibe_el_caso_por_cierre_lee_el_estado_de_cada_frente():
+    """Así leerá el estado un hook del #7 (R7): por cierre, sin pasarlo por el modelo."""
+    lecturas = []
+    referencia = {}
+
+    def hook_simulado(_contexto):
+        estado = referencia["caso"].estado
+        lecturas.append(
+            ({f: estado.situacion(f) for f in Frente}, estado.comercio, estado.motivo_comercio)
+        )
+        return resultado_listas()
+
+    caso, _, _ = _caso_completo(
+        ejecutor=EjecutorSimulado(resultados={Frente.LISTAS: hook_simulado})
+    )
+    referencia["caso"] = caso
+    asyncio.run(caso.ejecutar(SOLICITUD))
+
+    situaciones, comercio, _ = lecturas[0]
+    assert situaciones[Frente.REGISTRO] is Situacion.TERMINADO  # ya terminó cuando empieza listas
+    assert situaciones[Frente.LISTAS] is Situacion.EN_CURSO
+    assert comercio["identificador"] == "CO-TV-0001"
+
+
+def test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos():
+    """SC-006: la secuencia de tipos y frentes cuenta lo que pasó, sin abrir el código."""
+    retardos = {
+        Frente.REGISTRO: 0.05,
+        Frente.NOTICIAS: 0.15,
+        Frente.CATEGORIA: 0.25,
+        Frente.LISTAS: 0.01,
+    }
+    caso, _, _ = _caso_completo(ejecutor=EjecutorSimulado(retardos=retardos))
+    asyncio.run(caso.ejecutar(SOLICITUD))
+
+    esperado = [
+        (TIPO_CASO_INICIADO, None),
+        (TIPO_DELEGACION, Frente.REGISTRO),
+        (TIPO_FRENTE_INICIO, Frente.REGISTRO),
+        (TIPO_DELEGACION, Frente.NOTICIAS),
+        (TIPO_FRENTE_INICIO, Frente.NOTICIAS),
+        (TIPO_DELEGACION, Frente.CATEGORIA),
+        (TIPO_FRENTE_INICIO, Frente.CATEGORIA),
+        (TIPO_FRENTE_FIN, Frente.REGISTRO),
+        (TIPO_DELEGACION, Frente.LISTAS),
+        (TIPO_FRENTE_INICIO, Frente.LISTAS),
+        (TIPO_FRENTE_FIN, Frente.LISTAS),
+        (TIPO_FRENTE_FIN, Frente.NOTICIAS),
+        (TIPO_FRENTE_FIN, Frente.CATEGORIA),
+        (TIPO_TERMINACION, None),
+    ]
+    assert [(e.tipo, e.frente) for e in caso.eventos()] == esperado

@@ -309,14 +309,14 @@ del caso`.
 
 ## Fase 9: Sin control propio del ciclo y punto de entrada
 
-- [ ] T026 [P] Escribir `src/due_diligence/test_sin_control_propio.py` (R5, R8, FR-010, FR-011, Q4,
+- [X] T026 [P] Escribir `src/due_diligence/test_sin_control_propio.py` (R5, R8, FR-010, FR-011, Q4,
   Q6). Con `ast` y lectura de texto sobre los módulos de `src/due_diligence/` (sin los `test_*.py`):
   ningún `while` en `coordinador.py` ni `ejecutor.py`; `max_turns` solo aparece en `configuracion.py`;
   ninguna decisión de continuar compara el texto de un mensaje (sin `in` ni `==` sobre `TextBlock.text`
   ni sobre `ResultMessage.result`); `cargar_entorno` solo se llama desde `__main__.py`; ningún módulo
   contiene el nombre del archivo de variables de entorno ni el literal de ninguna clave. Declarar en
   el docstring que es una comprobación de forma y no prueba la ausencia total (R5).
-- [ ] T027 Crear `src/due_diligence/__main__.py` (contrato `caso.md`, R8): lee la solicitud de los
+- [X] T027 Crear `src/due_diligence/__main__.py` (contrato `caso.md`, R8): lee la solicitud de los
   argumentos, llama a `cargar_entorno()`, ejecuta el caso con el modelo real e imprime los eventos en
   orden (`secuencia`, marca, tipo, frente, detalle) y el estado final de cada frente. Es el **único**
   lugar que carga el entorno. Hace pasar T026.

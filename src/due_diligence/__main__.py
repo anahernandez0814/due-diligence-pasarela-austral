@@ -1,0 +1,108 @@
+"""Punto de entrada manual: ejecuta un caso con el modelo real (contrato `caso.md`, R8).
+
+    uv run python -m due_diligence "<solicitud del analista>"
+
+Es el ÚNICO lugar que carga el entorno (`configuracion.cargar_entorno`): ni el paquete, ni
+`ejecutar_caso`, ni los tests lo hacen. Imprime los eventos en orden, la situación de cada frente y
+los números que se anotan en la validación (duración de cada frente, solape y coste). La interfaz
+de chat es del ticket #11.
+"""
+
+import asyncio
+import sys
+from collections.abc import Callable
+from datetime import datetime
+
+from due_diligence import configuracion
+from due_diligence.coordinador import Caso, ejecutar_caso
+from due_diligence.eventos import TIPO_FRENTE_FIN, TIPO_FRENTE_INICIO, Evento
+from due_diligence.frentes import Frente
+from due_diligence.terminacion import Terminacion
+
+USO = 'Uso: uv run python -m due_diligence "<solicitud del analista>"'
+INDEPENDIENTES = (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
+
+
+def _hora(marca: datetime) -> str:
+    return marca.strftime("%H:%M:%S.%f")[:-3]
+
+
+def _eventos_de(eventos: list[Evento], tipo: str) -> dict[Frente, Evento]:
+    return {e.frente: e for e in eventos if e.tipo == tipo and e.frente is not None}
+
+
+def duraciones(eventos: list[Evento]) -> dict[Frente, float]:
+    """Segundos entre el inicio y el fin de cada frente que terminó."""
+    inicios, fines = _eventos_de(eventos, TIPO_FRENTE_INICIO), _eventos_de(eventos, TIPO_FRENTE_FIN)
+    return {f: (fines[f].marca - inicios[f].marca).total_seconds() for f in inicios if f in fines}
+
+
+def hubo_solape(eventos: list[Evento]) -> bool | None:
+    """¿Los frentes independientes empezaron antes de que terminara alguno de ellos?
+
+    `None` si no empezó más de uno. Se lee de la secuencia de los eventos, no del reloj.
+    """
+    inicios, fines = _eventos_de(eventos, TIPO_FRENTE_INICIO), _eventos_de(eventos, TIPO_FRENTE_FIN)
+    empezados = [inicios[f].secuencia for f in INDEPENDIENTES if f in inicios]
+    terminados = [fines[f].secuencia for f in INDEPENDIENTES if f in fines]
+    if len(empezados) < 2:
+        return None
+    return not terminados or max(empezados) < min(terminados)
+
+
+def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
+    eventos = caso.eventos()
+    escribir("Eventos del caso:")
+    for evento in eventos:
+        frente = evento.frente.value if evento.frente else "-"
+        escribir(
+            f"{evento.secuencia:>3}  {_hora(evento.marca)}  {evento.tipo:<17} {frente:<10} "
+            f"{evento.detalle}"
+        )
+    escribir("")
+    escribir("Frentes:")
+    for frente, situacion in caso.estado.frentes.items():
+        motivo = caso.estado.motivo(frente)
+        escribir(f"  {frente.value:<10} {situacion.value}" + (f" ({motivo})" if motivo else ""))
+    escribir(f"  consultas realizadas: {len(caso.estado.consultas)}")
+    if caso.estado.comercio:
+        escribir(f"  comercio del registro: {caso.estado.comercio.get('identificador')}")
+    escribir("")
+    escribir("Números de la validación:")
+    for frente, segundos in duraciones(eventos).items():
+        escribir(f"  duración de {frente.value}: {segundos:.1f} s")
+    if len(eventos) > 1:
+        total = (eventos[-1].marca - eventos[0].marca).total_seconds()
+        escribir(f"  duración total del caso: {total:.1f} s")
+    escribir(f"  solape de registro, noticias y categoría: {hubo_solape(eventos)}")
+    costes = {"coordinador": caso.coste_usd}
+    for frente, resultado in caso.estado.resultados.items():
+        costes[frente.value] = resultado.coste_usd
+    for nombre, coste in costes.items():
+        escribir(f"  coste de {nombre}: {'sin dato' if coste is None else f'{coste:.4f} USD'}")
+    conocidos = [c for c in costes.values() if c is not None]
+    escribir(f"  coste total: {sum(conocidos):.4f} USD")
+    escribir("")
+    if caso.terminacion:
+        escribir(f"Terminación del caso: {caso.terminacion.terminacion.value}")
+    escribir("")
+    escribir("Respuesta del coordinador:")
+    escribir(caso.respuesta or "(sin respuesta)")
+
+
+def main(argumentos: list[str] | None = None) -> int:
+    solicitud = " ".join(sys.argv[1:] if argumentos is None else argumentos).strip()
+    if not solicitud:
+        print(USO, file=sys.stderr)
+        return 2
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    configuracion.cargar_entorno()
+    caso = asyncio.run(ejecutar_caso(solicitud))
+    imprimir_caso(caso)
+    normal = caso.terminacion is not None and caso.terminacion.terminacion is Terminacion.NORMAL
+    return 0 if normal else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

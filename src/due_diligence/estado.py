@@ -61,6 +61,7 @@ class ResultadoFrente:
     resumen: str  # texto del modelo: solo informativo, nunca decide nada
     terminacion: "Clasificacion | None"
     detalle_terminacion: str
+    coste_usd: float | None = None  # `total_cost_usd` del subagente, si el SDK lo informó
 
 
 @dataclass

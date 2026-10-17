@@ -87,6 +87,7 @@ class Caso:
             self.estado, self._eventos, ejecutor or EjecutorSDK(), self._opciones_subagente
         )
         self.respuesta = ""
+        self.coste_usd: float | None = None  # `total_cost_usd` del coordinador
 
     def eventos(self) -> list[Evento]:
         return self._eventos.eventos()
@@ -123,6 +124,7 @@ class Caso:
                             self.respuesta = bloque.text
                 elif isinstance(mensaje, ResultMessage):
                     clasificacion = clasificar_resultado(mensaje)
+                    self.coste_usd = mensaje.total_cost_usd
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:

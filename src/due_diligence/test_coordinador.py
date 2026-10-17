@@ -446,3 +446,21 @@ def test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos():
         (TIPO_TERMINACION, None),
     ]
     assert [(e.tipo, e.frente) for e in caso.eventos()] == esperado
+
+
+def test_el_coste_del_coordinador_se_toma_del_resultado():
+    con_coste = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="sesion-de-prueba",
+        stop_reason="end_turn",
+        total_cost_usd=0.25,
+        terminal_reason="completed",
+    )
+    caso, _, _ = _caso([], fin=con_coste)
+    assert caso.coste_usd is None
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.coste_usd == 0.25

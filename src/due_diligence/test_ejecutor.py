@@ -273,3 +273,21 @@ def test_las_opciones_y_el_prompt_se_pasan_sin_modificar():
     opciones = object()
     _, consulta = _ejecutar([_fin()], contexto="el contexto exacto", opciones=opciones)
     assert consulta.llamadas == [("el contexto exacto", opciones)]
+
+
+def test_el_coste_del_subagente_se_toma_del_resultado_y_sin_resultado_no_hay_coste():
+    con_coste = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="sesion-de-prueba",
+        stop_reason="end_turn",
+        total_cost_usd=0.0123,
+        terminal_reason="completed",
+    )
+    resultado, _ = _ejecutar([con_coste])
+    assert resultado.coste_usd == 0.0123
+    sin_resultado, _ = _ejecutar([_texto("sin cierre")])
+    assert sin_resultado.coste_usd is None

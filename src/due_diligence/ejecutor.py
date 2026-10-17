@@ -109,6 +109,7 @@ class EjecutorSDK:
         por_id: dict[str, Consulta] = {}
         resumen = ""
         clasificacion: Clasificacion | None = None
+        coste: float | None = None
         try:
             async for mensaje in self._consulta(prompt=contexto, options=opciones):
                 if isinstance(mensaje, AssistantMessage):
@@ -135,10 +136,13 @@ class EjecutorSDK:
                         consulta.error = error
                 elif isinstance(mensaje, ResultMessage):
                     clasificacion = clasificar_resultado(mensaje)
+                    coste = mensaje.total_cost_usd
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:
                 clasificacion = clasificar_error(error)
         if clasificacion is None:
             clasificacion = sin_resultado()
-        return ResultadoFrente(frente, consultas, resumen, clasificacion, clasificacion.detalle)
+        return ResultadoFrente(
+            frente, consultas, resumen, clasificacion, clasificacion.detalle, coste
+        )

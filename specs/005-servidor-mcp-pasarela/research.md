@@ -178,9 +178,10 @@ conocía el equipo antes del ticket.
 - **Coincidencias** (análisis I2): el registro añade en el nivel superior `coincidencias`, la
   lista de identificadores de comercio distintos, en orden. SC-004 y el caso (d) cuentan
   `coincidencias`, no `hechos`: `almacen mirador` da 2 coincidencias y 4 hechos.
-- **Fecha** (análisis I3): `metadatos.fecha` es la `fecha_corte` de la fuente; la `fecha` de cada
-  hecho es la de su origen (en noticias, la de la noticia; en los canales de decisión, la de
-  registro).
+- **Fecha** (análisis I3): `metadatos.fecha` es la `fecha_corte` de la fuente; **si la respuesta
+  consulta varias fuentes, la más antigua de ellas** (registro: `2026-09-28`; listas: la más
+  antigua de las listas), y cada hecho conserva la suya. La `fecha` de cada hecho es la de su
+  origen (en noticias, la de la noticia; en los canales de decisión, la de registro).
 - Ninguna coincidencia lleva un campo `elegida` ni un orden que sugiera preferencia: el
   orden es el del identificador.
 - Un test comprueba que ninguna respuesta contiene `contenido` con claves de metadatos

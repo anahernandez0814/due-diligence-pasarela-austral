@@ -24,7 +24,9 @@ el JSON de abajo (texto) y cuyo `structured_content` es el mismo objeto (R2).
   fuera de un hecho. Lo que una herramienta devuelve, por ejemplo un `id`, va en
   `hechos[].contenido`.
 - `metadatos.fecha` (nivel superior) es la `fecha_corte` de la fuente consultada (R8), no el
-  reloj. La `fecha` de **cada hecho** es la de su origen: en el registro, la `fecha_corte` de la
+  reloj. **Cuando la respuesta consulta varias fuentes, es la `fecha_corte` más antigua de ellas**
+  (la fecha hasta la que se puede garantizar todo lo respondido), y cada hecho conserva la suya.
+  La `fecha` de **cada hecho** es la de su origen: en el registro, la `fecha_corte` de la
   fuente registral; en noticias, **la fecha de la noticia**; en los canales de decisión, la fecha
   de registro.
 - Solo `consultar_registro_mercantil` añade `coincidencias` en el nivel superior (abajo).
@@ -72,7 +74,7 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
 
 ```json
 {"resultado": "coincidencias", "coincidencias": ["CO-AM-0004", "CO-AM-0005"], "hechos": ["…"],
- "metadatos": {"fuentes": ["…", "…"], "fecha": "2026-09-30"}}
+ "metadatos": {"fuentes": ["…", "…"], "fecha": "2026-09-28"}}
 ```
 
   Cada hecho:
@@ -101,8 +103,10 @@ contrato, **todos los parámetros se declaran opcionales y sin tipo estricto**
   uno).
 - **Coincidencia**: nombre completo normalizado igual, o identificador igual, entre entradas del
   mismo `tipo`. Nunca parcial.
-- **Respuesta**: `coincidencias` (un hecho por lista que coincide, con el nombre de la lista y su
-  fuente) o `sin_coincidencias`.
+- **Respuesta**: `coincidencias` (un hecho por lista que coincide, con el nombre de la lista, su
+  fuente y su `fecha_corte`) o `sin_coincidencias`. Siempre se consultan todas las listas:
+  `metadatos.fuentes` las nombra a todas y `metadatos.fecha` es la `fecha_corte` más antigua de
+  ellas (hoy `2026-09-20`).
 - **Descripción**:
   > Verifica un comercio o una persona (por ejemplo, el representante legal) contra las listas
   > restrictivas. Hay coincidencia solo por nombre completo idéntico (sin distinguir mayúsculas

@@ -186,7 +186,9 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
 
 - [ ] T019 [P] [US1] Escribir `src/servidor_mcp/test_registro.py` (FR-003, FR-004, FR-010, R3, R9):
   por identificador `CO-TV-0001` devuelve `coincidencias: ["CO-TV-0001"]`, con un hecho por fuente
-  y `metadatos` con fuente y `fecha_corte`; `almacen mirador` devuelve `coincidencias:
+  y `metadatos` con las dos fuentes y **`metadatos.fecha` = `2026-09-28`**, la `fecha_corte` más
+  antigua de las dos fuentes, mientras cada hecho conserva la suya (`2026-09-30` y `2026-09-28`);
+  `almacen mirador` devuelve `coincidencias:
   ["CO-AM-0004", "CO-AM-0005"]` (**2 coincidencias y 4 hechos**, uno por comercio y fuente; las
   coincidencias se cuentan en `coincidencias`, no en `hechos`), sin campo `elegida` ni nada que
   sugiera preferencia, en orden de identificador; `S.A.S.` equivale a `SAS`;
@@ -215,7 +217,9 @@ src/servidor_mcp/test_listas.py src/servidor_mcp/test_noticias.py src/servidor_m
 - [ ] T021 [P] [US2] Escribir `src/servidor_mcp/test_listas.py` (FR-005, R3): `PE-0003` como `persona`
   coincide por identificador, y el nombre completo en otras mayúsculas y sin tildes también;
   un nombre **parcial** no coincide; el mismo nombre con `tipo` `comercio` no coincide;
-  `CO-TV-0001` y `CO-TA-0002` dan `sin_coincidencias` con `metadatos`; `tipo` ausente, distinto de
+  `CO-TV-0001` y `CO-TA-0002` dan `sin_coincidencias` con `metadatos` que nombran **todas** las
+  listas y cuya `fecha` es la `fecha_corte` más antigua de las listas consultadas (`2026-09-20`),
+  mientras cada hecho de una coincidencia conserva la de su lista; `tipo` ausente, distinto de
   `comercio` o `persona`, o ambos o ninguno de nombre e identificador, dan `entrada_invalida`.
 - [ ] T022 [US2] Implementar `src/servidor_mcp/listas.py` con `consultar_listas_restrictivas(tipo,
   nombre, identificador)`: un hecho por lista que coincide, con el nombre de la lista y su

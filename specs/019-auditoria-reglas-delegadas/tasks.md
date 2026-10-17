@@ -204,7 +204,7 @@ los archivos (FR-013, SC-004).
 **Independent Test**: Q2: cambiar una palabra de una copia hace fallar el test, y restaurarla
 lo vuelve a poner en verde.
 
-- [ ] T014 [US3] En `.claude/hooks/test_agentes_skills.py`, bajo el encabezado de T003 y según
+- [X] T014 [US3] En `.claude/hooks/test_agentes_skills.py`, bajo el encabezado de T003 y según
   [contracts/test-coherencia.md](contracts/test-coherencia.md), apartado «Pruebas»:
   - **bloque de cobertura igual**: `Qué cuenta para la cobertura` existe en los dos agentes y en
     las dos skills y es igual en los cuatro (el mensaje de fallo nombra los archivos que
@@ -217,7 +217,7 @@ lo vuelve a poner en verde.
     delegarla»; **delegar no exime de conservar**: contiene «no de conservar» y «borra o
     debilita».
   Pasan desde que existen T005, T006 y T009 a T012. Origen: FR-005, FR-008, FR-013, SC-004, R4.
-- [ ] T015 [US3] **Q2**: en la rama, cambiar **una palabra** del bloque de cobertura de solo una
+- [X] T015 [US3] **Q2**: en la rama, cambiar **una palabra** del bloque de cobertura de solo una
   de las cuatro copias y ejecutar `uv run pytest .claude/hooks/test_agentes_skills.py`: debe
   fallar nombrando el archivo. Repetir con la sección `Cuándo aplica una regla` del agente del
   auditor. Deshacer cada cambio con `git restore` del archivo y comprobar que vuelve a pasar y
@@ -225,6 +225,8 @@ lo vuelve a poner en verde.
   de T014: `test(auditoria): los cuatro archivos de la puerta deben decir lo mismo`.
 
 **Checkpoint**: las tres historias completas.
+  **Resultado de T014**: 7 pruebas nuevas (bloque de cobertura igual en los cuatro, aplicabilidad igual en el agente y la skill del auditor, la delegación exige número y delegar no exime de conservar, en ambos textos, y el mensaje que nombra los archivos que difieren); `test_agentes_skills.py` pasa de 85 a **92 passed**. La comprobación de `uv.lock` como referencia ya la cubrían las pruebas de T008, por lo que no se duplicó.
+  **Resultado de T015 (Q2)**: (1) cambiar «para contrastar» por «para comparar» solo en `.claude/skills/revisar-codigo/SKILL.md`: **falla** `test_el_bloque_de_cobertura_es_igual_en_los_cuatro_archivos` con el mensaje «difiere entre los archivos de la puerta: agente revisor-codigo + agente auditor-cumplimiento + skill auditar-cumplimiento | skill revisar-codigo» (1 failed, 91 passed); (2) cambiar «prevalece» por «predomina» solo en `.claude/agents/auditor-cumplimiento.md`: **falla** `test_la_regla_de_aplicabilidad_es_igual_en_el_agente_y_en_la_skill_del_auditor` con «difiere entre el agente y la skill del auditor: agente auditor-cumplimiento | skill auditar-cumplimiento» (1 failed, 91 passed). Tras `git restore` de cada archivo vuelve a **92 passed** y `git status` solo muestra el test nuevo, sin commit en medio.
 
 ---
 

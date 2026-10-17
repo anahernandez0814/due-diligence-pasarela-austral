@@ -598,3 +598,57 @@ def test_ningun_archivo_generado_se_lee_por_secciones_como_archivo_que_cuenta(no
     texto = seccion(cuerpo, ENCABEZADO_COBERTURA, origen=nombre)
     assert "se leen por secciones" not in viñetas_de_cobertura(cuerpo, nombre)[0]
     assert "generados (`uv.lock`) se leen por secciones" not in texto
+
+
+# --- Los cuatro archivos de la puerta dicen lo mismo (FR-005, FR-008, FR-013; SC-004) ------
+
+
+def agrupar_por_texto(secciones: dict[str, str]) -> str:
+    """Describe qué archivos coinciden y cuáles difieren, para el mensaje de fallo."""
+    grupos: dict[str, list[str]] = {}
+    for nombre, texto in secciones.items():
+        grupos.setdefault(texto, []).append(nombre)
+    return " | ".join(" + ".join(nombres) for nombres in grupos.values())
+
+
+def test_el_bloque_de_cobertura_es_igual_en_los_cuatro_archivos():
+    bloques = {
+        nombre: seccion(cuerpo, ENCABEZADO_COBERTURA, origen=nombre)
+        for nombre, cuerpo in instrucciones_de_cobertura()
+    }
+    assert len(bloques) == 4
+    assert len(set(bloques.values())) == 1, (
+        f"«{ENCABEZADO_COBERTURA}» difiere entre los archivos de la puerta: "
+        f"{agrupar_por_texto(bloques)}"
+    )
+
+
+def test_la_regla_de_aplicabilidad_es_igual_en_el_agente_y_en_la_skill_del_auditor():
+    reglas = {
+        nombre: seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+        for nombre, cuerpo in instrucciones_del_auditor()
+    }
+    assert len(reglas) == 2
+    assert len(set(reglas.values())) == 1, (
+        f"«{ENCABEZADO_APLICA}» difiere entre el agente y la skill del auditor: "
+        f"{agrupar_por_texto(reglas)}"
+    )
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_la_delegacion_exige_el_numero_del_ticket(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    assert "con su número" in texto
+    assert "no es delegarla" in texto
+
+
+@pytest.mark.parametrize(("nombre", "cuerpo"), instrucciones_del_auditor(), ids=IDS_DEL_AUDITOR)
+def test_delegar_no_exime_de_conservar_lo_que_ya_garantiza_la_regla(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_APLICA, origen=nombre)
+    assert "no de conservar" in texto
+    assert "borra o debilita" in texto
+
+
+def test_el_mensaje_de_fallo_nombra_los_archivos_que_difieren():
+    mensaje = agrupar_por_texto({"agente A": "uno", "skill A": "uno", "agente B": "dos"})
+    assert mensaje == "agente A + skill A | agente B"

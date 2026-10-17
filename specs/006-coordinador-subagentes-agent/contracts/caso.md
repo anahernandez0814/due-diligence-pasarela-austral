@@ -25,7 +25,7 @@ await caso.ejecutar(solicitud) # ejecuta el ciclo del coordinador
 | `caso.eventos()` | lista de `Evento` ordenada por `secuencia` |
 | `caso.terminacion` | `Terminacion` del ciclo del coordinador, o `None` mientras corre |
 
-Un frente sin terminar figura como `en_curso`, `no_terminado` o `no_iniciado`, nunca con un resultado
+Un frente sin terminar figura como `en_curso`, `no_terminado` o `rechazado`, nunca con un resultado
 vacío (spec, US5-3).
 
 ## Opciones del SDK que construye el paquete
@@ -41,6 +41,13 @@ Una sola función (`configuracion.opciones_base`) fija, para **coordinador y sub
 | `model` | coordinador y subagentes por separado (R9) | coste y calidad |
 | `max_turns` | protección de seguridad, **solo aquí** | no controla el ciclo (R5) |
 | `cwd` | raíz del repositorio | el servidor `pasarela` encuentra sus datos |
+
+El sondeo de aislamiento (Q2) construye sus opciones con `dataclasses.replace(opciones_base(...),
+tools=["Glob"])`: `opciones_base` **no tiene ningún parámetro** para herramientas integradas.
+
+Instrucciones del coordinador: le **prohíben** llamar a `registrar_informe` y `escalar_a_cumplimiento` en
+este ticket (son del #9 y del #10). Las dos herramientas siguen en su `allowed_tools` (FR-002). Es una
+instrucción, no una garantía: la garantía son los hooks del #7 (plan, desviación temporal de II).
 
 Herramientas de cada agente (R3): coordinador `mcp__delegacion__delegar_frente`,
 `mcp__pasarela__registrar_informe`, `mcp__pasarela__escalar_a_cumplimiento`; cada subagente, la

@@ -102,6 +102,10 @@ llamadas de 2 s a una herramienta en proceso:
   caso) y recién entonces empieza. Si el registro terminó sin una coincidencia única o no se delegó,
   `listas` **no se ejecuta** y devuelve un error estructurado no reintentable (FR-013). Esto es el
   orden de ejecución; la garantía dura de I.1 e I.2 sigue siendo de los hooks del #7.
+- **Que se hagan las dos consultas de listas lo comprueba el código** (FR-005): tras el subagente,
+  `delegar_frente` verifica en `estado.consultas` que hay una por el comercio y otra por el representante
+  (si hay), con `igual()` de `servidor_mcp.normalizar` y no con igualdad exacta; si falta una, el frente
+  queda `no_terminado` con el motivo.
 - **Los datos de listas van del estado al prompt del subagente de listas** (FR-005): el comercio y el
   representante se toman del resultado del registro guardado, no de lo que el coordinador transcriba.
   Así «tal como los devolvió el registro» se cumple en lo que el código entrega. **Que el nombre que
@@ -149,8 +153,7 @@ contrato del #5 como texto (`resultado`, `hechos[].contenido`, `hechos[].metadat
 **Decisión**: el ejecutor recoge, de cada `ToolUseBlock` y su `ToolResultBlock`, la **consulta**
 (herramienta y argumentos) y el **resultado** (el JSON del servidor, parseado). Eso es lo que entra
 en el estado (FR-007, FR-008): contenido separado de metadatos por construcción, **sin pasar por el
-texto del modelo**, que solo se guarda como `resumen` informativo. Un resultado que no es un JSON del
-contrato queda marcado como `resultado_invalido` y no se presenta como completo.
+texto del modelo**, que solo se guarda como `resumen` informativo. Un resultado que no es un JSON del contrato queda marcado como `resultado_invalido` y no se presenta como completo. **Si la herramienta devuelve el error estructurado de la pasarela** (`is_error`; `error`, `tipo`, `reintentable`, `obtenido`), se conserva en la `Consulta` sin reescribir, el frente queda `no_terminado` y `frente_no_terminado` propaga su `reintentable` en vez de fijar `false`. La política de reintentos es del #8.
 
 ## R7. Estado del caso y registro de eventos: en memoria, accesibles por referencia
 
@@ -162,7 +165,7 @@ opciones de cada subagente** (cada `query()` es una sesión aparte y no los here
 hooks de negocio; solo deja ese punto de extensión y el estado legible.
 
 **Eventos**: `Evento(secuencia, marca, tipo, frente, detalle)`. Tipos: `caso_iniciado`, `delegacion`,
-`frente_inicio`, `frente_fin`, `frente_no_iniciado`, `terminacion`. `secuencia` (entero creciente,
+`frente_inicio`, `frente_fin`, `frente_rechazado`, `terminacion`. `secuencia` (entero creciente,
 asignado bajo un candado) da orden estable aunque dos marcas coincidan. La `marca` es una fecha y hora
 UTC con zona; el reloj se inyecta para los tests. La interfaz (#11) consume `eventos()` en orden.
 
@@ -238,7 +241,7 @@ la herramienta, qué no hace y que debe responder con un resumen de una o dos l�
 
 | Frente | Recibe (solo esto) | Falta algo |
 |--------|--------------------|-----------|
-| Registro | `identificador` o `nombre` | `frente_no_iniciado`: pide el dato |
+| Registro | `identificador` o `nombre` | `frente_rechazado`: pide el dato |
 | Noticias | `identificador` o `nombre` del comercio | ídem |
 | Riesgo | `categoria` | ídem; no se inventa una categoría |
 | Listas | comercio (`identificador`, `nombre`) y representante (`nombre`, `identificador`) **del resultado del registro** | sin coincidencia única: no se ejecuta |
@@ -282,7 +285,12 @@ no necesita. Con `setting_sources=[]` y `tools=[]` (R2, R3), el agente no tiene 
    cambiar el argumento al llamar a la herramienta. Que el nombre o identificador de cada llamada a
    `consultar_listas_restrictivas` coincida con el del estado lo comprobará un hook `PreToolUse` del
    #7, junto con I.1 (comercio identificado de forma unívoca). El #6 no lo comprueba.
-8. **Coste en frío del coordinador** (R9, R14): la primera llamada con herramientas de la hora escribe
+8. **Desviación temporal de II: herramientas de decisión sin guarda**. El coordinador conserva
+   `registrar_informe` y `escalar_a_cumplimiento` (FR-002) y están pre-aprobadas, pero no hay hooks hasta el
+   #7. Mitigación: la instrucción del coordinador se las prohíbe en este ticket (son del #9 y del #10) y Q5
+   comprueba que no hubo llamadas y que `resultados/` no tiene archivos nuevos. Es una instrucción, no una
+   garantía; la cierra el #7. Se declara en el plan.
+9. **Coste en frío del coordinador** (R9, R14): la primera llamada con herramientas de la hora escribe
    un prefijo grande en la caché.
 
 ## R14. Sondeo de la opción (a): `query()` anidado y herramienta lenta *(medido)*

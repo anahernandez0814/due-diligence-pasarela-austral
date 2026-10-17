@@ -67,9 +67,9 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 ## Fase 1: Setup
 
-- [ ] T001 Confirmar que la rama es `006-coordinador-subagentes-agent` y commitear este
+- [X] T001 Confirmar que la rama es `006-coordinador-subagentes-agent` y commitear este
   `specs/006-coordinador-subagentes-agent/tasks.md` (`docs(specs): tareas del ticket #6`), para que
-  `guarda_spec_previa` deje editar el código protegido.
+  `guarda_spec_previa` deje editar el código protegido. *(Hecha en `4a3cb22`.)*
 - [ ] T002 Añadir las dependencias con `uv add "claude-agent-sdk>=0.2.168,<0.3" "python-dotenv>=1.2,<2"`
   (actualiza `pyproject.toml` y `uv.lock`, R10). Comprobar con
   `uv run python -c "import claude_agent_sdk, dotenv, mcp_types"` y
@@ -80,30 +80,30 @@ cierre de #6 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 ## Fase 2: Fundamentos (bloquean todas las historias)
 
-**Propósito**: eventos, estado y la tabla de frentes, que usan todas las historias. Tests primero.
+**Propósito**: la tabla de frentes, los eventos y el estado, que usan todas las historias. T003 va primero porque `estado.py` y los tests usan `Frente`. Tests primero en eventos y estado.
 
-- [ ] T003 [P] Escribir `src/due_diligence/test_eventos_estado.py` (R7, data-model). Casos de
-  `RegistroEventos`: `secuencia` creciente desde 1 y única aun con 100 eventos registrados desde
-  tareas `asyncio` concurrentes; con un reloj inyectado que devuelve siempre la misma marca, el orden
-  lo da `secuencia`; `marca` es UTC con zona; `eventos()` devuelve una copia ordenada; tipos válidos
-  (`caso_iniciado`, `delegacion`, `frente_inicio`, `frente_fin`, `frente_no_iniciado`,
-  `terminacion`) y un tipo desconocido se rechaza. Casos de `EstadoCaso`: todos los frentes empiezan
-  `sin_iniciar`; transiciones permitidas `sin_iniciar → en_curso → terminado | no_terminado` y
-  `sin_iniciar → no_iniciado`, y una transición no permitida se rechaza; `instantanea()` devuelve una
-  copia (modificarla no cambia el estado); `comercio` empieza `None`.
-- [ ] T004 [P] Crear `src/due_diligence/eventos.py` con `Evento` (`secuencia`, `marca`, `tipo`,
-  `frente`, `detalle`; dataclass congelada) y `RegistroEventos` (`registrar(tipo, frente=None,
-  detalle="")` bajo un `threading.Lock`, reloj inyectable `Callable[[], datetime]` por defecto
-  `datetime.now(UTC)`, `eventos()`). Tipos como constantes. Hace pasar la parte de eventos de T003.
-- [ ] T005 [P] Crear `src/due_diligence/estado.py` con `Consulta`, `ResultadoFrente` y `EstadoCaso`
-  tal como los define `data-model.md`: situación de cada frente, `resultados`, `consultas`, `comercio`
-  y `terminacion`; `instantanea()` (copia profunda); un frente sin terminar **nunca** figura con un
-  resultado vacío (US5-3). Un `EstadoCaso` por `Caso`, sin variables de módulo (FR-014). Hace pasar la
-  parte de estado de T003.
-- [ ] T006 [P] Crear `src/due_diligence/frentes.py` con `Frente` (`registro`, `listas`, `noticias`,
+- [ ] T003 Crear `src/due_diligence/frentes.py` con `Frente` (`registro`, `listas`, `noticias`,
   `categoria`) y la tabla de `data-model.md`: herramienta de la pasarela de cada frente (nombre corto
   y completo `mcp__pasarela__<herramienta>`), dependencia (`listas` depende de `registro`) y campos
   de contexto que cada frente necesita. Se prueba con `test_configuracion.py` (T009).
+- [ ] T004 Escribir `src/due_diligence/test_eventos_estado.py` (R7, data-model). Casos de
+  `RegistroEventos`: `secuencia` creciente desde 1 y única aun con 100 eventos registrados desde
+  tareas `asyncio` concurrentes; con un reloj inyectado que devuelve siempre la misma marca, el orden
+  lo da `secuencia`; `marca` es UTC con zona; `eventos()` devuelve una copia ordenada; tipos válidos
+  (`caso_iniciado`, `delegacion`, `frente_inicio`, `frente_fin`, `frente_rechazado`,
+  `terminacion`) y un tipo desconocido se rechaza. Casos de `EstadoCaso`: todos los frentes empiezan
+  `sin_iniciar`; transiciones permitidas `sin_iniciar → en_curso → terminado | no_terminado` y
+  `sin_iniciar → rechazado`, y una transición no permitida se rechaza; `instantanea()` devuelve una
+  copia (modificarla no cambia el estado); `comercio` empieza `None`.
+- [ ] T005 [P] Crear `src/due_diligence/eventos.py` con `Evento` (`secuencia`, `marca`, `tipo`,
+  `frente`, `detalle`; dataclass congelada) y `RegistroEventos` (`registrar(tipo, frente=None,
+  detalle="")` bajo un `threading.Lock`, reloj inyectable `Callable[[], datetime]` por defecto
+  `datetime.now(UTC)`, `eventos()`). Tipos como constantes. Hace pasar la parte de eventos de T004.
+- [ ] T006 [P] Crear `src/due_diligence/estado.py` con `Consulta`, `ResultadoFrente` y `EstadoCaso`
+  tal como los define `data-model.md`: situación de cada frente, `resultados`, `consultas`, `comercio`
+  y `terminacion`; `instantanea()` (copia profunda); un frente sin terminar **nunca** figura con un
+  resultado vacío (US5-3). Un `EstadoCaso` por `Caso`, sin variables de módulo (FR-014). Hace pasar la
+  parte de estado de T004.
 
 ---
 
@@ -151,8 +151,7 @@ explícito que recibe cada subagente (FR-002 a FR-004, SC-002).
   `pasarela` se declara con `sys.executable -m servidor_mcp` y `cwd` en la raíz, y reenvía
   `PASARELA_FALLA_NOTICIAS` y `PASARELA_RESULTADOS_DIR` si están en el entorno. `max_turns` es una
   constante documentada y **no** aparece fuera de `configuracion.py` (la comprobación del código
-  completo es T026). `cargar_entorno` existe pero **importar el paquete no la llama** (Q6) y no
-  falla si no hay archivo de entorno.
+  completo es T026). `cargar_entorno` existe, **importar el paquete no la llama** (Q6) y, con `configuracion.load_dotenv` parcheado con `monkeypatch`, se comprueba **solo** que `cargar_entorno()` la llama con `override=False`. **Ningún test ejecuta la carga real** (R8): no leen ni dependen del archivo de entorno del desarrollador.
 - [ ] T010 [US2] Crear `src/due_diligence/configuracion.py` (R2, R3, R8, R9): constantes de modelos y
   sus variables de entorno, nombres completos de herramientas, `servidor_pasarela(entorno)`,
   `opciones_base(...)` (única función que construye `ClaudeAgentOptions`, con `setting_sources=[]`,
@@ -166,17 +165,16 @@ explícito que recibe cada subagente (FR-002 a FR-004, SC-002).
   **del estado**. Un campo de otro frente pasado en la entrada **no aparece** en el prompt; el prompt
   no contiene el texto de la solicitud del analista ni nada de la conversación (se comprueba con una
   solicitud con una frase marcadora que no debe aparecer). Sin el dato necesario se devuelve un error
-  `frente_no_iniciado` que nombra el dato, no un prompt con un valor inventado. El `system_prompt` es
+  `frente_rechazado` que nombra el dato, no un prompt con un valor inventado. El `system_prompt` es
   fijo por frente, en español, y menciona su herramienta.
 - [ ] T012 [US2] Crear `src/due_diligence/contexto.py` con `construir_contexto(frente, entrada,
   estado)` y las instrucciones fijas por frente (`system_prompt`), según R11. Hace pasar T011.
 - [ ] T013 [P] [US2] Crear `src/due_diligence/sondeo_aislamiento.py` (R2, Q2), ejecutable con
-  `uv run python -m due_diligence.sondeo_aislamiento`: usa **las opciones de `opciones_base`**, hace un
-  `Glob` inofensivo y pregunta por las instrucciones del proyecto; repite con
+  `uv run python -m due_diligence.sondeo_aislamiento`: construye sus opciones con `dataclasses.replace(opciones_base(...), tools=["Glob"])` (**`opciones_base` no gana ningún parámetro**: solo el sondeo activa la herramienta integrada), hace un `Glob` inofensivo y pregunta por las instrucciones del proyecto; repite con
   `setting_sources=["project"]` como control; imprime la tabla de Q2 y sale con código ≠ 0 si con `[]`
   aparece una skill o agente del repositorio, un evento de hooks o contenido del `CLAUDE.md`. Opción
   `--herramientas` (lista inicial de cada agente frente a R3) y `--limite` (`max_turns=1`, imprime la
-  clasificación `LIMITE_SEGURIDAD`, Q4). No corre en `pytest`: es manual (T033, T034).
+  clasificación `LIMITE_SEGURIDAD`, Q4). No corre en `pytest`: es manual (T031 y T032).
 
 **Punto de control**: `uv run pytest src/due_diligence`; `uv run ruff format .` y `uv run ruff check .`.
 Commit: `feat(due_diligence): eventos, estado, clasificación del fin del ciclo y opciones aisladas`.
@@ -198,7 +196,7 @@ qué se delegó y con qué datos (SC-001).
   argumentos y `resultado` parseado, `valido=True` y el contenido separado de los metadatos tal como
   llega; un resultado que no es JSON del contrato → `resultado=None`, `valido=False`; el texto del
   modelo solo llena `resumen`; el `ResultMessage` final se clasifica con `terminacion` y el detalle;
-  si el flujo termina lanzando `ResultError` tras el `ResultMessage`, **no se vuelve a clasificar**; si
+  un `ToolResultBlock` con `is_error` y el JSON de error de la pasarela (`error`, `tipo`, `mensaje`, `reintentable`, `obtenido`; por ejemplo `servicio_no_disponible` con `reintentable` verdadero) → la `Consulta` **conserva ese error tal como llegó, con su `reintentable`**, y no se marca como resultado inválido (G2); si el flujo termina lanzando `ResultError` tras el `ResultMessage`, **no se vuelve a clasificar**; si
   la lanza sin haber entregado el mensaje, se clasifica con los atributos de la excepción. Las
   opciones se pasan sin modificar.
 - [ ] T015 [US1] Crear `src/due_diligence/ejecutor.py` con el protocolo `EjecutorSubagente` y
@@ -207,14 +205,14 @@ qué se delegó y con qué datos (SC-001).
   consume el flujo con `async for`. Hace pasar T014.
 - [ ] T016 [US1] Escribir `src/due_diligence/test_delegacion.py`, parte de US1 (contrato
   `delegacion.md`). Con un ejecutor simulado: `registro` con `identificador` delega y devuelve
-  `resultados` con el JSON tal cual; sin `identificador` ni `nombre`, `frente_no_iniciado` no
+  `resultados` con el JSON tal cual; sin `identificador` ni `nombre`, `frente_rechazado` no
   reintentable que nombra el dato, y no se lanza ningún subagente (US1-3: sin identificador pero con
   nombre, delega con el nombre y no inventa un identificador); `categoria` sin categoría →
-  `frente_no_iniciado` (US1-4); un frente ya `en_curso` o `terminado` no lanza un segundo subagente y
+  `frente_rechazado` (US1-4); un frente ya `en_curso` o `terminado` no lanza un segundo subagente y
   devuelve el resultado guardado; un campo de otro frente no se reenvía; un `frente` inválido →
   `entrada_invalida`. Eventos: `delegacion` antes de `frente_inicio` antes de `frente_fin`, y
-  `frente_no_iniciado` con el motivo. Un frente con terminación anómala → error `frente_no_terminado`
-  con `obtenido` que conserva las consultas alcanzadas (puede ir vacío).
+  `frente_rechazado` con el motivo. Un frente con terminación anómala → error `frente_no_terminado`
+  con `obtenido` que conserva las consultas alcanzadas (puede ir vacío). Un frente cuya consulta devolvió el error estructurado de la pasarela → `frente_no_terminado` con **el `reintentable` de ese error** (`true` con noticias caídas, `false` si el error lo trae así) y el error en `obtenido`: no se fija un valor (G2; la política de reintento es del #8).
 - [ ] T017 [US1] Crear `src/due_diligence/delegacion.py` (R4, contrato `delegacion.md`): función que
   construye, por caso, el servidor en proceso `delegacion` con la herramienta `delegar_frente`
   (`create_sdk_mcp_server`) cerrando sobre el `Caso`; parámetros validados dentro, respuesta y errores
@@ -226,14 +224,14 @@ qué se delegó y con qué datos (SC-001).
   ejecutor simulado: con la solicitud del ejemplo, los `allowed_tools` y `disallowed_tools` del
   coordinador son exactamente los de R3 y ninguna herramienta de fuentes es invocable por él; el
   coordinador delega `registro`, `noticias` y `categoria` con los datos de la solicitud (SC-001); la
-  terminación del coordinador queda en el estado y como evento `terminacion`; `hooks` se reparte a las
+  terminación del coordinador queda en el estado y como evento `terminacion`; las instrucciones del coordinador **prohíben** llamar a `registrar_informe` y `escalar_a_cumplimiento` (se comprueba el texto), y las dos herramientas siguen en su `allowed_tools` (FR-002); `hooks` se reparte a las
   opciones del coordinador **y** a las de cada subagente (R7); `ejecutar_caso` no llama a
   `cargar_entorno`; con una solicitud sin ningún dato identificable no se delega ningún frente y la
   respuesta pide el dato (spec, edge case).
 - [ ] T019 [US1] Crear `src/due_diligence/coordinador.py` con `Caso` (`estado`, `eventos()`,
   `terminacion`, `ejecutar(solicitud)`), `ejecutar_caso(...)` y las instrucciones de sistema del
   coordinador en español (delegar los frentes independientes **juntos en la misma respuesta**, nunca
-  consultar fuentes, no inventar datos, ante varias coincidencias no elegir). `Caso` crea el servidor
+  consultar fuentes, no inventar datos, ante varias coincidencias no elegir, y **no llamar a `registrar_informe` ni a `escalar_a_cumplimiento` en este ticket**: son del #9 y del #10, aunque las herramientas sigan disponibles por FR-002; es una instrucción, no una garantía: la cierran los hooks del #7, desviación temporal de II declarada en el plan). `Caso` crea el servidor
   de delegación y las opciones con `configuracion`, consume el flujo del coordinador con `async for`
   y clasifica el `ResultMessage` con `terminacion` (captura `ResultError` como en T015). Hace pasar
   T018.
@@ -259,7 +257,7 @@ modelo real).
   `listas` hasta el `frente_fin` del registro (US3-2, US3-3); si el registro termina antes que
   `noticias`, `listas` empieza después del `frente_fin` del registro y sin esperar a `noticias`
   (US3-4: no se bloquea por los demás frentes); `listas` sin haber delegado el registro →
-  `frente_no_iniciado` (no espera indefinidamente). Un ejecutor simulado que lanza una excepción en
+  `frente_rechazado` (no espera indefinidamente). Un ejecutor simulado que lanza una excepción en
   `registro` no deja `listas` esperando para siempre.
 - [ ] T021 [US3] Implementar en `src/due_diligence/delegacion.py` la anotación `readOnlyHint=True` y la
   espera de `listas`: un `asyncio.Event` por frente del caso, que `listas` espera antes de empezar y
@@ -285,11 +283,10 @@ comprueban las dos consultas.
   estado con su resultado y fuente (US4-1). Sin `representante_legal` en el registro, se consulta solo
   al comercio y el resultado lo declara (US4-3). **Varias coincidencias** (`coincidencias` con dos
   identificadores), `sin_coincidencias` y un resultado del registro inválido → `estado.comercio` es
-  `None`, `listas` no se ejecuta y devuelve `frente_no_iniciado` con el motivo; el coordinador no elige
-  una coincidencia (FR-013).
+  `None`, `listas` no se ejecuta y devuelve `frente_rechazado` con el motivo; el coordinador no elige una coincidencia (FR-013). **El ejecutor simulado de `listas` que consulta solo al comercio** (o solo al representante) deja el frente `no_terminado` con el motivo («falta la consulta del representante» o «del comercio»). Los nombres se comparan con `igual()` de `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`), **no con igualdad exacta**: una consulta con otra capitalización, sin tildes o con otra forma jurídica **cuenta**, y un nombre distinto **no**; sin representante en el registro basta la consulta del comercio (FR-005, SC-004).
 - [ ] T023 [US4] Implementar en `src/due_diligence/estado.py` la derivación de `comercio` a partir del
   resultado válido del registro (solo con una coincidencia única) y en `delegacion.py` el uso de
-  `estado.comercio` como contexto de `listas`, con los eventos de `frente_no_iniciado`. Hace pasar T022.
+  `estado.comercio` como contexto de `listas`, con los eventos de `frente_rechazado`, y tras el subagente de `listas` la comprobación en `estado.consultas` de la consulta del comercio y, si hay, la del representante, con `igual()` de `servidor_mcp.normalizar` (y `igual_identificador`); si falta una, el frente queda `no_terminado` con el motivo (G1). Hace pasar T022.
 
 **Punto de control**: pytest, ruff. Commit: `feat(due_diligence): paralelismo de frentes y listas con
 comercio y representante`.
@@ -370,7 +367,7 @@ comprobación de forma del ciclo`.
   `LIMITE_SEGURIDAD`, el evento correspondiente y `ResultError` capturada sin romper el caso. Anotar
   el resultado aquí.
 - [ ] T033 [MANUAL] Q5: el caso de ejemplo completo con el modelo real, **dos veces seguidas** (frío y
-  caliente). Esperado: los seis puntos de Q5 leyendo solo el registro de eventos. Anotar duración total
+  caliente). Esperado: los ocho puntos de Q5 leyendo solo el registro de eventos, incluido que **no hubo llamadas a `registrar_informe` ni a `escalar_a_cumplimiento`** y que `resultados/` no tiene archivos nuevos (se compara el listado antes y después; C1), y que `listas` hizo la consulta del comercio y la de su representante (G1). «Frío» = la primera ejecución sin otra ejecución ni sondeo en la hora previa; si no se puede garantizar, se anota (A1). Después, **dos solicitudes manuales más** (Q5b, G3): una **sin categoría** y otra **sin nombre ni identificador**; anotar qué hizo el coordinador (frentes delegados, si inventó algún dato, qué pidió al analista). SC-001 se valida a mano. Anotar duración total
   frente a la suma de frentes, si registro, noticias y categoría salieron en el mismo turno, y el coste
   en frío y en caliente, con los cuatro subagentes en Sonnet 5.5 (R9; la analista estimó 0,01 a 0,02 USD
   más por caso que con Haiku). Completar T029 con esos números y **dejarlos en el resumen final de
@@ -394,7 +391,7 @@ comprobación de forma del ciclo`.
 
 ## Oportunidades de paralelismo
 
-- Fase 2: T003 primero; después T004, T005 y T006 en paralelo (archivos distintos).
+- Fase 2: T003 y T004 en orden (el test usa `Frente`); después T005 y T006 en paralelo (archivos distintos).
 - Fase 4: T011 (test de contexto) en paralelo con T009 (test de configuración); T013 (sondeo) en
   paralelo con T012.
 - Fase 5: T014 (test del ejecutor) en paralelo con T016 una vez hechos los fundamentos.
@@ -413,17 +410,17 @@ comprobación de forma del ciclo`.
 
 | Requisito | Tareas |
 |-----------|--------|
-| FR-001, FR-002 | T006, T009, T010, T016 a T019 |
+| FR-001, FR-002 | T003, T009, T010, T016 a T019 |
 | FR-003 | T009, T010, T013 |
 | FR-004 | T009 a T012, T013 |
 | FR-005 | T011, T022, T023 |
 | FR-006 | T020, T021, T033 |
-| FR-007 | T005, T014, T015, T024 |
-| FR-008 | T003, T005, T024, T025 |
-| FR-009 | T003, T004, T024 |
+| FR-007 | T006, T014, T015, T024 |
+| FR-008 | T004, T006, T024, T025 |
+| FR-009 | T004, T005, T024 |
 | FR-010 a FR-012 | T007, T008, T009, T010, T026, T032 |
 | FR-013 | T016, T018, T022, T023 |
-| FR-014 | T003, T005, T024 |
+| FR-014 | T004, T006, T024 |
 | FR-015, FR-016 | todas (reglas generales), T028, T029 |
 | SC-001, SC-002 | T009, T016, T018 |
 | SC-003 | T020, T021, T033 |

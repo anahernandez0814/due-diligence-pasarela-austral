@@ -151,8 +151,8 @@ El ciclo agéntico lo ejecuta el Claude Agent SDK: el código del proyecto no le
 - **Subagente**: agente especializado en un frente, con herramientas limitadas a ese frente y un contexto recibido de forma explícita.
 - **Delegación**: encargo del coordinador a un subagente, con el contexto explícito que ese frente necesita.
 - **Resultado de frente**: lo que devuelve un subagente, con el contenido separado de los metadatos (fuente y fecha).
-- **Estado del caso**: resultado de cada frente, consultas realizadas y situación de cada frente (sin iniciar, en curso, terminado, no terminado).
-- **Evento**: registro con marca de tiempo de una delegación, del inicio de un frente, del fin de un frente o de una terminación anómala.
+- **Estado del caso**: resultado de cada frente, consultas realizadas y situación de cada frente (sin iniciar: aún no delegado; en curso; terminado; no terminado; rechazado: la delegación se rechazó con un motivo, por ejemplo por falta de un dato).
+- **Evento**: registro con marca de tiempo de una delegación, del inicio de un frente, del fin de un frente, de un frente rechazado o de la terminación de un ciclo (normal, anómala o límite de seguridad).
 - **Razón de parada**: motivo por el que el modelo detuvo su respuesta (pidió una herramienta o delegación, terminó su turno, se cortó por límite); es lo que gobierna el ciclo.
 
 ## Success Criteria *(mandatory)*

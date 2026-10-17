@@ -25,7 +25,7 @@ Esperado: todo en verde, con los tests nuevos de `src/due_diligence/` y la suite
 uv run python -m due_diligence.sondeo_aislamiento
 ```
 
-El sondeo usa las **mismas opciones** que el coordinador (`opciones_base`), pide un `Glob` inofensivo y
+El sondeo construye sus opciones con `dataclasses.replace(opciones_base(...), tools=["Glob"])`: son las del paquete, salvo que solo el sondeo activa la herramienta integrada para pedir un `Glob` inofensivo, y
 pregunta por las instrucciones del proyecto; repite con `setting_sources=["project"]` como control.
 Esperado, en una tabla impresa:
 
@@ -72,11 +72,22 @@ Esperado, leyendo **solo** el registro de eventos impreso (SC-006):
    devolvió el registro.
 5. Cuatro frentes `terminado`, con terminación `NORMAL`, y la terminación del coordinador `NORMAL`.
 6. Ningún intento de herramienta ajena; el coordinador no llamó a ninguna herramienta de fuentes.
+7. **Ninguna llamada a `registrar_informe` ni a `escalar_a_cumplimiento`**: el coordinador las tiene, pero su instrucción se las prohíbe en este ticket (plan, desviación temporal de II). `resultados/` **no tiene archivos nuevos** (se compara el listado antes y después).
+8. En `listas`, el registro de eventos muestra **dos consultas**: la del comercio y la de su representante legal (el código lo comprueba; si falta una, el frente queda `no_terminado`).
 
 Se anota en `DECISIONES.md` (6.2): duración total frente a la suma de frentes (un frente tarda ≈ 5 s,
-R14) y el coste del caso (`total_cost_usd` del coordinador y de los subagentes), **en frío y en caliente**:
+R14) y el coste del caso (`total_cost_usd` del coordinador y de los subagentes), **en frío y en caliente** («frío» = la primera ejecución sin otra ejecución ni sondeo en la hora previa; si no se puede garantizar, se anota):
 la primera ejecución de la hora paga la escritura en caché del coordinador (≈ 0,13 USD con Sonnet,
 R14.3) y la segunda, no. Con esos números se confirma o se cambia el modelo del coordinador (R9).
+
+### Q5b. Dos solicitudes más (manual, modelo real; US1-3, US1-4, SC-001)
+
+El camino feliz no demuestra lo que el coordinador hace con datos ausentes. Se ejecutan, con el mismo comando, dos solicitudes más y se anota **qué hizo el coordinador** (frentes delegados, si inventó algún dato, qué pidió al analista) leyendo el registro de eventos y el estado:
+
+1. **Sin categoría**: «Necesito el due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001. ¿Lo podemos habilitar esta semana?». Esperado: delega registro y noticias; **no** delega riesgo de categoría con una categoría inventada (`rechazado` o sin delegar, con constancia); listas después del registro.
+2. **Sin nombre ni identificador**: «Necesito el due diligence de un comercio de suplementos dietarios.». Esperado: no delega ningún frente de comercio y pide al analista el dato que falta.
+
+SC-001 («delega exactamente los cuatro frentes con los datos de la solicitud») se **valida a mano** con Q5; la prueba automática solo comprueba el cableado con un coordinador simulado.
 
 ## Q6. El entorno se carga solo desde el punto de entrada (automático)
 

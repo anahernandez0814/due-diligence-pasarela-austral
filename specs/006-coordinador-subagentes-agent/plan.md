@@ -62,7 +62,7 @@ ficticios del #5; el código no controla el ciclo (FR-010); herramientas mínima
 | I.2, I.3 | No aplica al ticket | Las garantizan los hooks del #7; aquí no se escala ni se habilita. |
 | I.4 (fuente en cada afirmación) | Cumple | El resultado de cada frente conserva `contenido` y `metadatos` del servidor, capturados de la llamada (R6). |
 | I.5 (fuente caída no se presenta como completa) | Parcial, por diseño | Un frente no terminado figura como tal en el estado; una terminación anómala o el límite de seguridad quedan como eventos y no como fin normal (R5). La cobertura declarada es del #8. |
-| II (garantizado vs. sugerido) | Cumple | Aislamiento, herramientas por agente, orden de listas y clasificación del fin están en código y con tests. Lo que depende del modelo (pedir los tres frentes juntos) se declara como límite (R4, R13). |
+| II (garantizado vs. sugerido) | Cumple, con una desviación temporal | Aislamiento, herramientas por agente, orden de listas y clasificación del fin están en código y con tests. Lo que depende del modelo (pedir los tres frentes juntos) se declara como límite (R4, R13). **Desviación temporal**: el coordinador conserva `registrar_informe` y `escalar_a_cumplimiento` (FR-002), pre-aprobadas y sin guarda hasta los hooks del #7 (Complexity Tracking). |
 | III (arquitectura) | Cumple | Coordinador + 4 subagentes, herramientas solo de su frente, contexto explícito, paralelo con listas tras el registro, ciclo por `stop_reason` sin contador ni búsqueda de texto, contenido separado de metadatos. El error estructurado del subagente es del #8; aquí se conserva lo obtenido. |
 | IV | Cumple | Solo se consumen las fuentes por el servidor `pasarela`; las decisiones, solo por sus dos herramientas, que solo el coordinador tiene. |
 | V | No aplica | El escalamiento con criterio es del #10. |
@@ -72,7 +72,7 @@ ficticios del #5; el código no controla el ciclo (FR-010); herramientas mínima
 | IX | Cumple | Issue #6, rama propia, spec, plan y tareas antes del código. |
 | X | Cumple | pytest junto al código, ruff tras cada edición, revisión previa en `/abrir-pr`. Los casos (a)–(g) completos son del #12. |
 
-**Desviaciones**: ninguna. No hay Complexity Tracking.
+**Desviaciones**: una temporal, de II (Complexity Tracking).
 
 **Re-evaluación tras el diseño**: sin cambios. El único punto que roza el principio III («no controlar
 con un número fijo de iteraciones») es `max_turns`; la constitución lo permite como protección y el
@@ -129,4 +129,10 @@ que el #7 (hooks), el #8 (fallas) y el #11 (interfaz) amplíen sin reescribir.
 
 ## Complexity Tracking
 
-No hay violaciones que justificar.
+Una desviación **temporal** del principio II, que cierran los hooks del #7:
+
+| Desviación | Por qué hace falta | Alternativa descartada |
+|------------|--------------------|------------------------|
+| El coordinador tiene `registrar_informe` y `escalar_a_cumplimiento` (pre-aprobadas) y ningún hook las protege hasta el #7. Las reglas I.2 e I.3 (escalar con coincidencia en listas; nunca habilitar automáticamente una categoría de alto riesgo) y la obligación de no consultar listas sin comercio identificado (I.1) dependen entonces del orden en código (R4) y de la instrucción del coordinador. | FR-002 fija que el coordinador conserva las dos herramientas y los tickets #9 y #10 las usan. | Quitárselas al coordinador: contradice FR-002 y obligaría a rehacer el #9 y el #10. |
+
+**Mitigación en este ticket** (instrucción, no garantía): las instrucciones del coordinador le prohíben llamar a esas dos herramientas (T019); Q5 y T033 comprueban que no hubo llamadas y que `resultados/` no tiene archivos nuevos. **Cierre**: los hooks del SDK del #7 (reglas I.1, I.2 e I.3). Hasta entonces el coordinador no se expone a un analista real: la interfaz es del #11.

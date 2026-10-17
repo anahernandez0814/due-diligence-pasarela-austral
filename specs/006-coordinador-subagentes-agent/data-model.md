@@ -15,17 +15,15 @@ Los cuatro frentes son constantes del paquete (`frentes.py`), no datos del caso.
 
 ## Situación de un frente
 
-`sin_iniciar` → `en_curso` → `terminado` | `no_terminado` | `no_iniciado`
+`sin_iniciar` → `en_curso` → `terminado` | `no_terminado`, o `sin_iniciar` → `rechazado`
 
 - `sin_iniciar`: el coordinador aún no lo delegó.
 - `en_curso`: hay un evento `frente_inicio` y aún no `frente_fin`.
-- `terminado`: el subagente terminó con una terminación **normal** y su resultado es válido.
-- `no_terminado`: el subagente terminó de forma anómala o por el límite de seguridad (R5), o su
-  resultado no es válido (R6). Conserva lo que alcanzó a obtener, que puede ir vacío (spec, US5-3).
-- `no_iniciado`: la delegación se rechazó (falta un dato, `listas` sin coincidencia única del registro).
-  Lleva el motivo.
+- `terminado`: el subagente terminó con una terminación **normal**, sus resultados son válidos, **ninguna consulta devolvió un error estructurado de la pasarela** y, en `listas`, están hechas todas las consultas que exige la entidad (comercio y, si lo hay, representante).
+- `no_terminado`: el subagente terminó de forma anómala o por el límite de seguridad (R5), su resultado no es válido (R6), una consulta devolvió un error estructurado de la pasarela o faltó una consulta obligatoria de `listas` (R4). Conserva lo que alcanzó a obtener, que puede ir vacío (spec, US5-3).
+- `rechazado`: la delegación se rechazó antes de lanzar al subagente (falta un dato, `listas` sin coincidencia única del registro). Lleva el motivo. No es `sin_iniciar`: este es «aún no delegado».
 
-Un frente `no_terminado` o `no_iniciado` **nunca** figura con un resultado vacío: el estado dice que no
+Un frente `no_terminado` o `rechazado` **nunca** figura con un resultado vacío: el estado dice que no
 terminó. El manejo (reintento, cobertura declarada) es del #8.
 
 ## Consulta
@@ -39,6 +37,7 @@ Una llamada a una herramienta de la pasarela hecha por un subagente.
 | `argumentos` | los que usó el subagente |
 | `resultado` | el JSON de la pasarela (contrato del #5), ya parseado; `None` si no era un JSON válido |
 | `valido` | `True` si `resultado` es un objeto con `resultado`, `hechos` y `metadatos` |
+| `error` | el error estructurado de la pasarela, tal como llegó (`error`, `tipo`, `mensaje`, `reintentable`, `obtenido`), si la herramienta devolvió uno (`is_error` del `ToolResultBlock`); `None` si no. Se conserva sin reescribir, con su `reintentable` (R6) |
 
 ## ResultadoFrente
 
@@ -79,7 +78,7 @@ mezcla ni los reescribe (FR-007).
 |-------|-----------|
 | `secuencia` | entero creciente desde 1, único por caso; da orden estable aunque coincidan las marcas |
 | `marca` | fecha y hora UTC con zona (reloj inyectable en los tests) |
-| `tipo` | `caso_iniciado`, `delegacion`, `frente_inicio`, `frente_fin`, `frente_no_iniciado`, `terminacion` |
+| `tipo` | `caso_iniciado`, `delegacion`, `frente_inicio`, `frente_fin`, `frente_rechazado`, `terminacion` |
 | `frente` | frente al que se refiere, o `None` (`caso_iniciado`, `terminacion` del coordinador) |
 | `detalle` | texto en español para la interfaz; en `terminacion` y `frente_fin`, la clasificación y los valores originales de `subtype`, `stop_reason` y `terminal_reason` |
 

@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions, SdkMcpTool, create_sdk_mcp_server, tool
+from mcp_types import ToolAnnotations
 
 from due_diligence.contexto import FrenteRechazado, construir_contexto
 from due_diligence.ejecutor import EjecutorSubagente
@@ -41,6 +42,11 @@ DESCRIPCION = (
     "solo los datos que el frente necesita y nunca inventes uno: si falta, la delegación se "
     "rechaza. Esta herramienta no consulta fuentes por sí misma, no registra el informe ni escala "
     "el caso."
+)
+
+MOTIVO_REGISTRO_PRIMERO = (
+    "Listas necesita el resultado del registro mercantil: delega primero el registro y vuelve a "
+    "pedir listas cuando termine."
 )
 
 ESQUEMA = {
@@ -105,7 +111,14 @@ class Delegador:
     # ------------------------------------------------------------ servidor en proceso
 
     def _crear_herramienta(self) -> SdkMcpTool[Any]:
-        @tool(HERRAMIENTA_DELEGAR, DESCRIPCION, ESQUEMA)
+        # readOnlyHint: delegar un frente no modifica nada fuera del caso, y es la señal que el SDK
+        # usa para ejecutar en paralelo las llamadas de un mismo turno (R4). Sin ella las serializa.
+        @tool(
+            HERRAMIENTA_DELEGAR,
+            DESCRIPCION,
+            ESQUEMA,
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
         async def delegar_frente(args: dict[str, Any]) -> dict[str, Any]:
             respuesta = await self.delegar(args)
             return {
@@ -133,6 +146,11 @@ class Delegador:
         if repetida is not None:
             return repetida
 
+        if frente is Frente.LISTAS:
+            previa = await self._esperar_al_registro()
+            if previa is not None:
+                return previa
+
         try:
             contexto = construir_contexto(frente, entrada, self.estado)
         except FrenteRechazado as rechazo:
@@ -150,10 +168,25 @@ class Delegador:
             return self._respuestas[frente]
         return None
 
-    def _rechazar(self, frente: Frente, motivo: str) -> dict[str, Any]:
+    def _rechazar(self, frente: Frente, motivo: str, reintentable: bool = False) -> dict[str, Any]:
         self.estado.cambiar_situacion(frente, Situacion.RECHAZADO, motivo)
         self.eventos.registrar(TIPO_FRENTE_RECHAZADO, frente, motivo)
-        return _error("frente_rechazado", motivo, False, {"frente": frente.value})
+        return _error("frente_rechazado", motivo, reintentable, {"frente": frente.value})
+
+    async def _esperar_al_registro(self) -> dict[str, Any] | None:
+        """El orden de `listas` (R4): espera al registro en curso; sin iniciar, se rechaza.
+
+        Devuelve una respuesta si `listas` no debe seguir (rechazo reintentable, o ya delegada
+        mientras esperaba) y `None` si puede continuar. Los rechazos por varias coincidencias,
+        ninguna o un registro que no terminó no son reintentables: salen de `construir_contexto`.
+        """
+        situacion = self.estado.situacion(Frente.REGISTRO)
+        if situacion in (Situacion.SIN_INICIAR, Situacion.RECHAZADO):
+            return self._rechazar(Frente.LISTAS, MOTIVO_REGISTRO_PRIMERO, reintentable=True)
+        if situacion is Situacion.EN_CURSO:
+            await self._hecho[Frente.REGISTRO].wait()
+            return await self._si_ya_delegado(Frente.LISTAS)
+        return None
 
     async def _ejecutar(self, frente: Frente, contexto: str) -> dict[str, Any]:
         self.eventos.registrar(TIPO_DELEGACION, frente, f"Se delega el frente {frente.value}.")

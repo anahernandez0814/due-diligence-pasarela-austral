@@ -292,3 +292,120 @@ def test_el_manejador_devuelve_el_json_como_texto_y_marca_el_error():
     mal = asyncio.run(delegador.herramienta.handler({"frente": "categoria"}))
     assert mal["is_error"] is True
     assert json.loads(mal["content"][0]["text"])["tipo"] == "frente_rechazado"
+
+
+# ------------------------------------------------------------ paralelismo y orden de listas (US3)
+
+MENSAJE_REGISTRO_PRIMERO = "delega primero el registro y vuelve a pedir listas cuando termine"
+
+
+async def _a_la_vez(delegador, *entradas):
+    return await asyncio.gather(*(delegador.delegar(e) for e in entradas))
+
+
+def _secuencia(registro, tipo, frente):
+    return next(e.secuencia for e in registro.eventos() if e.tipo == tipo and e.frente is frente)
+
+
+REGISTRO = {"frente": "registro", "identificador": "CO-TV-0001"}
+NOTICIAS = {"frente": "noticias", "identificador": "CO-TV-0001"}
+CATEGORIA = {"frente": "categoria", "categoria": "suplementos dietarios"}
+LISTAS = {"frente": "listas"}
+
+
+def test_la_herramienta_esta_anotada_como_de_solo_lectura_para_que_el_sdk_la_solape():
+    delegador, _, _, _ = _crear()
+    anotaciones = delegador.herramienta.annotations
+    assert anotaciones is not None and anotaciones.read_only_hint is True
+
+
+def test_registro_noticias_y_categoria_se_solapan():
+    delegador, _, registro, ejecutor = _crear(retardo=0.05)
+    asyncio.run(_a_la_vez(delegador, REGISTRO, NOTICIAS, CATEGORIA))
+    inicios = [
+        _secuencia(registro, TIPO_FRENTE_INICIO, f)
+        for f in (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
+    ]
+    fines = [
+        _secuencia(registro, TIPO_FRENTE_FIN, f)
+        for f in (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
+    ]
+    assert max(inicios) < min(fines)  # los tres empiezan antes de que termine cualquiera
+    llamadas = ejecutor.llamadas
+    assert all(a.inicio < b.fin for a in llamadas for b in llamadas)
+
+
+def test_registro_y_luego_listas_en_el_mismo_gather_listas_espera_al_fin_del_registro():
+    delegador, estado, registro, ejecutor = _crear(retardo=0.05)
+    asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
+    assert _secuencia(registro, TIPO_FRENTE_INICIO, Frente.LISTAS) > _secuencia(
+        registro, TIPO_FRENTE_FIN, Frente.REGISTRO
+    )
+    assert _secuencia(registro, TIPO_DELEGACION, Frente.LISTAS) > _secuencia(
+        registro, TIPO_FRENTE_FIN, Frente.REGISTRO
+    )
+    assert (
+        ejecutor.llamadas_de(Frente.LISTAS)[0].inicio
+        >= ejecutor.llamadas_de(Frente.REGISTRO)[0].fin
+    )
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
+def test_listas_antes_que_registro_se_rechaza_con_reintentable_y_se_reintenta():
+    delegador, estado, registro, ejecutor = _crear(retardo=0.02)
+    listas, reg = asyncio.run(_a_la_vez(delegador, LISTAS, REGISTRO))
+
+    assert listas["error"] is True and listas["tipo"] == "frente_rechazado"
+    assert listas["reintentable"] is True
+    assert MENSAJE_REGISTRO_PRIMERO in listas["mensaje"]
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+    assert estado.situacion(Frente.LISTAS) is Situacion.RECHAZADO
+    assert reg["situacion"] == "terminado"
+    assert TIPO_FRENTE_INICIO not in [
+        e.tipo for e in registro.eventos() if e.frente is Frente.LISTAS
+    ]
+
+    # El reintento, ya terminado el registro, se ejecuta.
+    reintento = asyncio.run(delegador.delegar(LISTAS))
+    assert reintento["situacion"] == "terminado"
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 1
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
+def test_listas_sin_haber_delegado_el_registro_se_rechaza_con_reintentable():
+    delegador, _, _, ejecutor = _crear()
+    respuesta = _delegar(delegador, **LISTAS)
+    assert respuesta["tipo"] == "frente_rechazado" and respuesta["reintentable"] is True
+    assert MENSAJE_REGISTRO_PRIMERO in respuesta["mensaje"]
+    assert ejecutor.llamadas == []
+
+
+def test_con_el_registro_rechazado_por_falta_de_dato_listas_se_rechaza_con_reintentable():
+    delegador, estado, _, _ = _crear()
+    assert _delegar(delegador, frente="registro")["tipo"] == "frente_rechazado"
+    respuesta = _delegar(delegador, **LISTAS)
+    assert respuesta["tipo"] == "frente_rechazado" and respuesta["reintentable"] is True
+    assert estado.situacion(Frente.LISTAS) is Situacion.RECHAZADO
+
+
+def test_si_el_registro_termina_antes_que_noticias_listas_no_espera_a_noticias():
+    delegador, _, registro, _ = _crear(retardos={Frente.REGISTRO: 0.01, Frente.NOTICIAS: 0.3})
+    asyncio.run(_a_la_vez(delegador, NOTICIAS, REGISTRO, LISTAS))
+    inicio_listas = _secuencia(registro, TIPO_FRENTE_INICIO, Frente.LISTAS)
+    assert inicio_listas > _secuencia(registro, TIPO_FRENTE_FIN, Frente.REGISTRO)
+    assert inicio_listas < _secuencia(registro, TIPO_FRENTE_FIN, Frente.NOTICIAS)
+
+
+def test_si_el_registro_falla_con_una_excepcion_listas_no_espera_para_siempre():
+    delegador, estado, _, _ = _crear(
+        retardo=0.02, excepciones={Frente.REGISTRO: RuntimeError("falló")}
+    )
+
+    async def con_limite():
+        return await asyncio.wait_for(_a_la_vez(delegador, REGISTRO, LISTAS), timeout=5)
+
+    registro_resp, listas = asyncio.run(con_limite())
+    assert registro_resp["tipo"] == "frente_no_terminado"
+    assert estado.situacion(Frente.REGISTRO) is Situacion.NO_TERMINADO
+    assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
+    assert estado.situacion(Frente.LISTAS) is Situacion.RECHAZADO

@@ -249,20 +249,8 @@ de subagentes`.
 **Prueba independiente**: eventos de un caso con subagentes simulados con retardo (Q5 lo repite con el
 modelo real).
 
-- [ ] T020 [US3] Añadir a `src/due_diligence/test_delegacion.py` (R4, R12). Con un ejecutor simulado
-  que espera 0,05 s y registra inicio y fin: `asyncio.gather` de `registro`, `noticias` y `categoria`
-  → los tres `frente_inicio` ocurren antes de cualquier `frente_fin` (solape, US3-1);
-  la herramienta `delegar_frente` está anotada con `readOnlyHint=True` (se lee de la herramienta
-  registrada); `listas` pedida **en el mismo `gather`** que el registro → no hay `frente_inicio` de
-  `listas` hasta el `frente_fin` del registro (US3-2, US3-3); si el registro termina antes que
-  `noticias`, `listas` empieza después del `frente_fin` del registro y sin esperar a `noticias`
-  (US3-4: no se bloquea por los demás frentes); `listas` sin haber delegado el registro →
-  `frente_rechazado` (no espera indefinidamente). Un ejecutor simulado que lanza una excepción en
-  `registro` no deja `listas` esperando para siempre.
-- [ ] T021 [US3] Implementar en `src/due_diligence/delegacion.py` la anotación `readOnlyHint=True` y la
-  espera de `listas`: un `asyncio.Event` por frente del caso, que `listas` espera antes de empezar y
-  que se activa **siempre** (también si el registro termina de forma anómala o con excepción). Hace
-  pasar T020.
+- [X] T020 [US3] Añadir a `src/due_diligence/test_delegacion.py` (R4, R12). Con un ejecutor simulado con retardo: `asyncio.gather` de `registro`, `noticias` y `categoria` → los tres `frente_inicio` ocurren antes de cualquier `frente_fin` (solape, US3-1); la herramienta `delegar_frente` está anotada con `readOnlyHint=True` (se lee de la herramienta registrada). **Los dos órdenes de la carrera** en el mismo `gather`: `registro` y luego `listas` → `listas` espera y no hay `frente_inicio` de `listas` hasta el `frente_fin` del registro (US3-2, US3-3); `listas` y luego `registro` → `listas` se rechaza con `reintentable: true` y el mensaje «delega primero el registro y vuelve a pedir listas cuando termine», y el **reintento** de `listas` tras el fin del registro se ejecuta. Si el registro termina antes que `noticias`, `listas` empieza después del `frente_fin` del registro y sin esperar a `noticias` (US3-4). Un ejecutor simulado que lanza una excepción en `registro` no deja `listas` esperando para siempre (`listas` se rechaza, `reintentable: false`). Con el registro rechazado por falta de dato, `listas` se rechaza con `reintentable: true`.
+- [X] T021 [US3] Implementar en `src/due_diligence/delegacion.py` la anotación `ToolAnnotations(readOnlyHint=True)` (de `mcp_types`) en la herramienta y el orden de `listas`: un `asyncio.Event` por frente del caso. Si el registro está en curso, `listas` espera a su fin (el evento se activa **siempre**, también si el registro termina de forma anómala o con excepción); si está `sin_iniciar` o `rechazado`, `listas` se rechaza con `reintentable: true` y el mensaje «delega primero el registro y vuelve a pedir listas cuando termine». Los rechazos por varias coincidencias, ninguna o un registro que no terminó siguen siendo `reintentable: false`. Hace pasar T020.
 
 ---
 
@@ -283,10 +271,10 @@ comprueban las dos consultas.
   estado con su resultado y fuente (US4-1). Sin `representante_legal` en el registro, se consulta solo
   al comercio y el resultado lo declara (US4-3). **Varias coincidencias** (`coincidencias` con dos
   identificadores), `sin_coincidencias` y un resultado del registro inválido → `estado.comercio` es
-  `None`, `listas` no se ejecuta y devuelve `frente_rechazado` con el motivo; el coordinador no elige una coincidencia (FR-013). **El ejecutor simulado de `listas` que consulta solo al comercio** (o solo al representante) deja el frente `no_terminado` con el motivo («falta la consulta del representante» o «del comercio»). Los nombres se comparan con `igual()` de `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`), **no con igualdad exacta**: una consulta con otra capitalización, sin tildes o con otra forma jurídica **cuenta**, y un nombre distinto **no**; sin representante en el registro basta la consulta del comercio (FR-005, SC-004).
+  `None`, `listas` no se ejecuta y devuelve `frente_rechazado` con el motivo; el coordinador no elige una coincidencia (FR-013). **El ejecutor simulado de `listas` que consulta solo al comercio** (o solo al representante) deja el frente `no_terminado` con el motivo («falta la consulta del representante» o «del comercio»). Se compara el nombre completo con `igual()` de `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`) **y el tipo de cada consulta** (`comercio` para el comercio, `persona` para el representante). `igual()` es **estricto**: otra capitalización o sin tildes **cuenta**; **otra forma jurídica o un nombre parcial no cuentan** (la pasarela busca por el nombre completo: sería un falso negativo, «Ernesto Calderón» no es «Ernesto Calderón Ibarra»); una consulta con el tipo cambiado no cuenta; sin representante en el registro basta la consulta del comercio (FR-005, SC-004).
 - [ ] T023 [US4] Implementar en `src/due_diligence/estado.py` la derivación de `comercio` a partir del
   resultado válido del registro (solo con una coincidencia única) y en `delegacion.py` el uso de
-  `estado.comercio` como contexto de `listas`, con los eventos de `frente_rechazado`, y tras el subagente de `listas` la comprobación en `estado.consultas` de la consulta del comercio y, si hay, la del representante, con `igual()` de `servidor_mcp.normalizar` (y `igual_identificador`); si falta una, el frente queda `no_terminado` con el motivo (G1). Hace pasar T022.
+  `estado.comercio` como contexto de `listas`, con los eventos de `frente_rechazado`, y tras el subagente de `listas` la comprobación en `estado.consultas` de la consulta del comercio y, si hay, la del representante, con `igual()` de `servidor_mcp.normalizar` (y `igual_identificador`) y el **tipo** de cada consulta (`comercio` para el comercio, `persona` para el representante); si falta una, el frente queda `no_terminado` con el motivo (G1). Hace pasar T022.
 
 **Punto de control**: pytest, ruff. Commit: `feat(due_diligence): paralelismo de frentes y listas con
 comercio y representante`.

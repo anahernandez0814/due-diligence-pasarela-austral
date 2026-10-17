@@ -28,10 +28,9 @@ el frente necesita (data-model, tabla de frentes); los demás se ignoran, no se 
 1. **Valida** `frente` y los datos del frente. Falta algo → `frente_rechazado`, error no
    reintentable que nombra el dato (nunca se inventa un valor).
 2. **`listas` espera al registro**: si el registro está en curso, la llamada **espera** a que termine
-   (evento `frente_fin` del registro) antes de empezar; si el registro no se delegó, `rechazado`. Con
+   (evento `frente_fin` del registro) antes de empezar; si el registro está sin iniciar (o fue rechazado), `listas` se rechaza con `reintentable: true` y el mensaje «delega primero el registro y vuelve a pedir listas cuando termine» (pasa con llamadas del mismo turno, que llegan con 0,1 a 0,3 s de diferencia); el coordinador la repite cuando el registro termine. Con
    el registro terminado:
-   - sin **coincidencia única** (varias, ninguna o resultado inválido) → `frente_rechazado`, error no
-     reintentable; el coordinador **no elige** una coincidencia (FR-013);
+   - sin **coincidencia única** (varias, ninguna o resultado inválido) → `frente_rechazado`, error **no reintentable** (a diferencia del rechazo por registro sin iniciar); el coordinador **no elige** una coincidencia (FR-013);
    - con coincidencia única, el contexto es `estado.comercio` (comercio y representante, tal como los
      devolvió el registro, **sin pasar por el modelo**): van **del estado al prompt del subagente de
      listas**. Que el nombre que el subagente consulta coincida con el del estado **no lo comprueba este
@@ -40,9 +39,7 @@ el frente necesita (data-model, tabla de frentes); los demás se ignoran, no se 
 3. **Registra** `delegacion` y, al lanzar al subagente, `frente_inicio` con el contexto.
 4. **Ejecuta** al subagente con el ejecutor del caso. Mientras tanto otras llamadas pueden correr.
    En `listas`, al terminar **comprueba en `estado.consultas`** que hay una consulta por el comercio y,
-   si hay representante, otra por el representante, comparando los nombres con `igual()` de
-   `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`), **no con igualdad
-   exacta**. Si falta alguna, el frente queda `no_terminado` con el motivo («falta la consulta del
+   si hay representante, otra por el representante, comparando el nombre completo con `igual()` de `servidor_mcp.normalizar` (y los identificadores con `igual_identificador`) y el **tipo** de cada consulta: `comercio` para el comercio y `persona` para el representante. `igual()` es **estricto**: ignora mayúsculas, tildes y puntuación, pero no la forma jurídica ni acepta un nombre parcial, porque la pasarela busca por el nombre completo (otra forma sería un falso negativo y no cuenta). Si falta alguna, el frente queda `no_terminado` con el motivo («falta la consulta del
    representante» o «del comercio»). Esto comprueba que se hicieron las dos consultas; que el nombre
    sea exactamente el del estado lo comprueba el hook del #7 (research R13.7).
 5. **Registra** `frente_fin` con la terminación clasificada, guarda el `ResultadoFrente` en el estado y
@@ -86,12 +83,13 @@ Terminación no normal o frente no iniciado, como error estructurado:
 
 - La herramienta está anotada `readOnlyHint`.
 - Tres llamadas simultáneas a `registro`, `noticias` y `categoria` se solapan en el tiempo.
-- `listas`, pedida junto a `registro` o antes, empieza **después** del fin del registro.
+- `listas`, pedida en el mismo turno que `registro` y después de él, empieza **después** del fin del registro. Pedida antes de que el registro se delegue, se rechaza con `reintentable: true` y mensaje «delega primero el registro…»; al repetirla cuando el registro termina, se ejecuta.
+- Los rechazos de `listas` por varias coincidencias, ninguna o un registro que no terminó son `reintentable: false`.
 - `listas` recibe en su prompt el comercio y el representante **del estado**, aunque el modelo pase
   otros datos. (Que el subagente consulte exactamente esos nombres es del #7.)
 - Sin coincidencia única, `listas` no se ejecuta y no hay `frente_inicio` de `listas`.
 - Una llamada con un campo de otro frente no lo reenvía al subagente.
 - Un frente repetido no lanza dos subagentes.
 - Si el subagente de `listas` consulta solo al comercio o solo al representante, el frente queda
-  `no_terminado` con el motivo; las mayúsculas, tildes y la forma jurídica no cuentan como diferencia.
+  `no_terminado` con el motivo; las mayúsculas y las tildes no cuentan como diferencia, pero **la forma jurídica sí** (`igual()` es estricto) y el tipo de la consulta debe corresponder a la entidad (`comercio` o `persona`).
 - Un error estructurado de la pasarela queda en la `Consulta` y su `reintentable` llega al coordinador.

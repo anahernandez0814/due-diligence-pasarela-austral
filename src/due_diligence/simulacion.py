@@ -110,6 +110,25 @@ def resultado_registro(
     )
 
 
+def consulta_listas(tipo: str, **argumento: str) -> Consulta:
+    """Una consulta de listas restrictivas por `nombre` o `identificador`, con su `tipo`."""
+    return consulta(
+        Frente.LISTAS,
+        {"tipo": tipo, **argumento},
+        respuesta_del_contrato("sin_coincidencias", [], [], fuente="Lista Restrictiva Ficticia"),
+    )
+
+
+def resultado_listas(consultas: list[Consulta] | None = None) -> ResultadoFrente:
+    """El resultado de listas: por defecto, la consulta del comercio y la de su representante."""
+    if consultas is None:
+        consultas = [
+            consulta_listas("comercio", identificador="CO-TV-0001"),
+            consulta_listas("persona", identificador=REPRESENTANTE["identificador"]),
+        ]
+    return resultado_frente(Frente.LISTAS, consultas)
+
+
 @dataclass
 class LlamadaSimulada:
     frente: Frente
@@ -158,4 +177,6 @@ class EjecutorSimulado:
             return resultado
         if frente is Frente.REGISTRO:
             return resultado_registro()
+        if frente is Frente.LISTAS:
+            return resultado_listas()
         return resultado_frente(frente)

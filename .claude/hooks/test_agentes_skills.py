@@ -15,8 +15,11 @@ RAIZ = Path(__file__).resolve().parents[2]
 AGENTES = RAIZ / ".claude" / "agents"
 SKILLS = RAIZ / ".claude" / "skills"
 
-# (subagente, skill): se amplía con el auditor en la fase de US2.
-REVISIONES = [("revisor-codigo", "revisar-codigo")]
+# (subagente, skill).
+REVISIONES = [
+    ("revisor-codigo", "revisar-codigo"),
+    ("auditor-cumplimiento", "auditar-cumplimiento"),
+]
 
 HERRAMIENTAS_DE_LECTURA = {"Read", "Grep", "Glob"}
 INYECCION = re.compile(r"!`([^`]+)`")
@@ -170,3 +173,50 @@ def test_la_skill_trata_los_documentos_del_ticket_como_referencia_y_la_lista_agr
     assert "referencia" in cuerpo
     assert "agrupada por directorio" in cuerpo
     assert "cobertura=incompleta" in cuerpo
+
+
+# --- Auditor de cumplimiento (US2) --------------------------------------------------
+
+REGLAS = ["I.1", "I.2", "I.3", "I.4", "I.5"]
+ESTADOS = ["cumple", "incumple", "no aplica", "no verificada"]
+
+
+def test_el_auditor_conoce_las_cinco_reglas_del_principio_i():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    for regla in REGLAS:
+        assert regla in cuerpo
+    assert "I.6" not in cuerpo
+
+
+def test_el_auditor_declara_los_cuatro_estados():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    for estado in ESTADOS:
+        assert f"`{estado}`" in cuerpo
+
+
+def test_el_auditor_exige_razon_en_cada_no_aplica_y_nunca_cumple_sin_evidencia():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    assert "razón" in cuerpo
+    assert "evidencia" in cuerpo
+    assert "nunca" in cuerpo.lower()
+    assert "no verificada" in cuerpo
+    assert "bloqueante" in cuerpo.lower()
+
+
+def test_el_auditor_define_cuando_aplica_una_regla():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    assert "la spec del ticket la cita" in cuerpo
+    assert "el diff toca código que la implementa" in cuerpo
+    assert "sin código de producción" in cuerpo.lower()
+
+
+def test_el_auditor_pide_la_tabla_de_las_cinco_reglas():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    assert "| Regla | Estado |" in cuerpo
+    assert CONSTITUCION in cuerpo
+
+
+def test_la_skill_de_auditoria_pone_la_constitucion_como_documento_principal():
+    _, cuerpo = cargar_skill("auditar-cumplimiento")
+    assert cuerpo.index(CONSTITUCION) < cuerpo.index("spec.md")
+    assert "las cinco reglas" in cuerpo

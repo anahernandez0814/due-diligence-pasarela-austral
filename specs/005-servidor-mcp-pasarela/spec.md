@@ -20,7 +20,7 @@ El analista (o el agente que trabaja para él) busca un comercio por nombre o id
 
 **Acceptance Scenarios**:
 
-1. **Given** el comercio del ejemplo (Tienda Verde SAS, `CO-TV-0001`), **When** se consulta por su identificador, **Then** devuelve una única coincidencia con fecha de constitución, representante legal y estado, y con la fuente y la fecha de consulta separadas del contenido.
+1. **Given** el comercio del ejemplo (Tienda Verde SAS, `CO-TV-0001`), **When** se consulta por su identificador, **Then** devuelve una única coincidencia con fecha de constitución, representante legal y estado, y con la fuente y la fecha de corte de la fuente separadas del contenido.
 2. **Given** dos comercios con nombres casi idénticos, **When** se busca un texto que, normalizado, está contenido en el nombre normalizado de ambos, **Then** devuelve ambas coincidencias, cada una con su identificador, y ninguna marcada como elegida.
 3. **Given** un comercio cuyas dos fuentes registrales difieren en la fecha de constitución, **When** se consulta, **Then** la respuesta incluye ambas fechas, cada una atribuida a su fuente, sin escoger una.
 4. **Given** un nombre o identificador que no existe, **When** se consulta, **Then** la respuesta indica de forma explícita que no hay coincidencias (no es un error del servicio).

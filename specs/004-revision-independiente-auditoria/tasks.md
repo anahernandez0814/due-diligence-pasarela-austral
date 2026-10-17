@@ -322,7 +322,7 @@ MCP de GitHub y por la terminal, y nadie puede escribir el directorio de veredic
 POST se bloquean; con veredicto aprobado del commit publicado, se permiten (por stdin;
 Q11, Q14, Q16).
 
-- [ ] T019 [P] [US4] Escribir `.claude/hooks/test_guarda_pr.py` (R10, FR-012 a FR-014,
+- [X] T019 [P] [US4] Escribir `.claude/hooks/test_guarda_pr.py` (R10, FR-012 a FR-014,
   FR-016; debe fallar primero). Repositorios git temporales con un `origin` local y
   veredictos escritos con `veredicto.py`. Casos:
   - **MCP**: `mcp__github__create_pull_request` sin veredicto, con bloqueantes, aprobado
@@ -344,37 +344,37 @@ Q11, Q14, Q16).
   - **Extremo a extremo** por stdin: salida 2 con una sola línea `[guarda_pr] <motivo>. <qué
     hacer>.` en stderr, y nada en stdout al permitir;
   - **Tiempo** (SC-004, A1): una llamada en caliente, desde la segunda, tarda menos de 1 s.
-- [ ] T020 [US4] Implementar `.claude/hooks/guarda_pr.py` (solo biblioteca estándar;
+- [X] T020 [US4] Implementar `.claude/hooks/guarda_pr.py` (solo biblioteca estándar;
   [contracts/veredicto-y-guarda.md](contracts/veredicto-y-guarda.md); R9, R10; hace pasar
   T019). Interfaz común de #3 con `comun.ejecutar` y `comun.bloquear`, y el extractor de
   texto ejecutable de `comun.py` para `gh` envuelto. Comprobación en el orden del
   contrato: rama del PR = rama actual → `origin/<rama>` existe → es igual a HEAD → existe
   el veredicto → es `aprobado`. Compara con la referencia local, nunca con `git ls-remote`.
-- [ ] T021 [P] [US4] Ampliar `.claude/hooks/test_configuracion.py` **solo con tests**, que
+- [X] T021 [P] [US4] Ampliar `.claude/hooks/test_configuracion.py` **solo con tests**, que
   deben fallar primero (FR-016, R10, R12, R8): la guarda está registrada con `onFailure:
   "block"`, `timeout: 10` y el matcher es la lista exacta
   `Bash|PowerShell|mcp__github__create_pull_request`; `permissions.deny` incluye
   `Edit(/.claude/veredictos/**)` junto a la de `settings.local.json`; y el resto de las
   entradas de #3 no cambia. No toca `settings.json`.
-- [ ] T022 [P] [US4] Ampliar `.claude/hooks/test_guarda_spec_previa.py` con la protección del
+- [X] T022 [P] [US4] Ampliar `.claude/hooks/test_guarda_spec_previa.py` con la protección del
   directorio de veredictos (FR-020, R8; debe fallar primero): se bloquea en cualquier rama
   (también en una rama de ticket con sus documentos) escribir, editar, notebook, `>` y
   `>>`, `tee`, `cp`, `mv`, `sed -i`, `touch` y código en línea (`python -c`, `node -e`,
   `bash -c`, `eval`, heredoc a un intérprete) que lo nombre; se permite leerlo (`Read`,
   `cat`); el comando `uv run … veredicto.py registrar …` no se bloquea. Mensaje: `El
   directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr.`
-- [ ] T023 [US4] Ampliar `.claude/hooks/guarda_spec_previa.py` (FR-020, R8; hace pasar T022):
+- [X] T023 [US4] Ampliar `.claude/hooks/guarda_spec_previa.py` (FR-020, R8; hace pasar T022):
   añadir `.claude/veredictos/**` al mismo tratamiento que `.claude/settings.local.json`
   (FR-025 de #3), con las mismas vías y sin distinguir rama, pero permitiendo la lectura.
   Leer antes el código de FR-025 y reutilizarlo; no duplicar el recorrido de comandos.
-- [ ] T024 [US4] Registrar la guarda y la denegación en `.claude/settings.json` (FR-016,
+- [X] T024 [US4] Registrar la guarda y la denegación en `.claude/settings.json` (FR-016,
   R8, R10; hace pasar T021): la entrada `PreToolUse` de
   [contracts/veredicto-y-guarda.md](contracts/veredicto-y-guarda.md), con el matcher
   `Bash|PowerShell|mcp__github__create_pull_request`, `timeout: 10` y `onFailure: "block"`;
   y `Edit(/.claude/veredictos/**)` en `permissions.deny`, junto a la de
   `settings.local.json`, sin reordenar la lista. **Esta es la tarea en que la guarda
   empieza a actuar** (ver "Reglas para todas las tareas"); va después de T017.
-- [ ] T025 [US4] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
+- [X] T025 [US4] Ejecutar `uv run ruff format .claude/hooks`, `uv run ruff check
   .claude/hooks` y `uv run pytest .claude/hooks` (la suite completa), con y sin
   `PYTHONUTF8` y `PYTHONIOENCODING`, y commitear por partes: `feat(hooks): guarda de
   creación de PR` (T019, T020, T021 y T024) y `feat(hooks): protección del directorio de
@@ -403,7 +403,10 @@ validación en sesión (fase 8).
   registrar` con `RESUMEN` inventados; (2) crear el PR fuera de Claude Code, alias de `gh`
   y construcciones que el extractor no reconoce; (3) commits empujados por otra persona
   tras el último `fetch`; (4) `Read` del subagente y `guarda_secretos`; (5) la calidad de
-  la revisión depende del modelo. Añadir una nota en la entrada 3 ("la revisión de
+  la revisión depende del modelo; (6) la validación de la línea `RESUMEN` antes de pasarla es
+  una instrucción de `/abrir-pr`, no código (contrato, "Límites declarados"); (7) la ruta
+  relativa del registro exige ejecutarlo desde la raíz y, si no, `/abrir-pr` se detiene sin
+  push ni PR (falla cerrado). Añadir una nota en la entrada 3 ("la revisión de
   transición de `/abrir-pr` queda reemplazada por #4"). Los resultados de Q1 a Q6 se añaden
   en T033.
 - [ ] T027 [P] Añadir una frase en la sección "Ciclo de un ticket" de `README.md`:

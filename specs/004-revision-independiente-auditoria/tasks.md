@@ -337,6 +337,12 @@ Q11, Q14, Q16).
     → se bloquean sin veredicto; el mismo endpoint con GET, y `repos/<o>/<r>/pulls/1`, se
     permiten;
   - **Permitidos sin comprobar**: `gh pr view`, `gh pr list`, `gh pr status`, `git status`;
+  - **Ampliado tras la parada D** (hallazgos 1 y 2): `gh pr new` (el alias oficial de
+    `gh pr create`), con sus opciones (`--fill`, `--head`, `-H`) y en todos los envoltorios
+    de `gh pr create`, se bloquea y se permite igual que él; y `gh api` con el endpoint como
+    URL completa (`https://api.github.com/repos/<o>/<r>/pulls`, con `https://<host>/api/v3/…`
+    de GitHub Enterprise y con `?query`) con POST explícito o implícito se bloquea, mientras
+    que la URL con GET, la de una subruta (`…/pulls/1`) y la de otro recurso se permiten;
   - **Publicación** (R9): sin `origin/<rama>`, con `origin/<rama>` distinta de HEAD
     (bloquea), y con la rama actual distinta de la del PR;
   - **Fallo cerrado**: una excepción propia sale con 2; un script que sale con 1 queda
@@ -363,6 +369,15 @@ Q11, Q14, Q16).
   `bash -c`, `eval`, heredoc a un intérprete) que lo nombre; se permite leerlo (`Read`,
   `cat`); el comando `uv run … veredicto.py registrar …` no se bloquea. Mensaje: `El
   directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr.`
+  - **Ampliado tras la parada D** (hallazgo 3), en cualquier rama, también para
+    `settings.local.json` (FR-025 de #3): se bloquea copiar o mover hacia `.claude` (o hacia
+    la raíz con copia recursiva) cuando no se pueden saber los nombres que llegan:
+    `cp -r /tmp/falso/. .claude`, `cp -a /tmp/falso/. .claude/`,
+    `cp -r /tmp/falso/* .claude/`, `Copy-Item -Recurse C:\tmp\falso\* .claude`; y borrar o
+    mover `.claude` entera: `rm -rf .claude`, `Remove-Item -Recurse -Force .claude`,
+    `mv .claude x`. Se siguen permitiendo `cp archivo .claude/otro-directorio/`, `ls .claude`
+    y `cp -r src/otro dir-temporal/`, y se sigue bloqueando cuando el nombre aparece
+    (`cp -r …/veredictos .claude/`, `Move-Item`).
 - [X] T023 [US4] Ampliar `.claude/hooks/guarda_spec_previa.py` (FR-020, R8; hace pasar T022):
   añadir `.claude/veredictos/**` al mismo tratamiento que `.claude/settings.local.json`
   (FR-025 de #3), con las mismas vías y sin distinguir rama, pero permitiendo la lectura.
@@ -406,7 +421,10 @@ validación en sesión (fase 8).
   la revisión depende del modelo; (6) la validación de la línea `RESUMEN` antes de pasarla es
   una instrucción de `/abrir-pr`, no código (contrato, "Límites declarados"); (7) la ruta
   relativa del registro exige ejecutarlo desde la raíz y, si no, `/abrir-pr` se detiene sin
-  push ni PR (falla cerrado). Añadir una nota en la entrada 3 ("la revisión de
+  push ni PR (falla cerrado); (8) la mutación GraphQL leída de un archivo (`-F query=@archivo`,
+  `--input`) y otros clientes HTTP (`curl`, etc.) con el token de `gh`, que son rodeos
+  deliberados; (9) los alias propios de `gh` (`gh alias set`): el alias oficial `gh pr new`
+  sí se bloquea. Añadir una nota en la entrada 3 ("la revisión de
   transición de `/abrir-pr` queda reemplazada por #4"). Los resultados de Q1 a Q6 se añaden
   en T033.
 - [ ] T027 [P] Añadir una frase en la sección "Ciclo de un ticket" de `README.md`:

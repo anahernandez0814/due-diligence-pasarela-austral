@@ -36,8 +36,8 @@ estándar.
 | Vía | Entrada reconocida | Rama del PR |
 |-----|--------------------|-------------|
 | MCP | `tool_name == mcp__github__create_pull_request` | `tool_input.head`, normalizada: si viene como `propietario:rama`, el prefijo debe coincidir con `tool_input.owner` (sin distinguir mayúsculas) y se toma la rama; con otro prefijo (PR desde un fork) se bloquea |
-| `gh pr create` | `gh` con `pr create` como primeros no-opciones, en el comando exterior, en los interiores (`bash -c`, `eval`, heredocs) y tras lanzadores (`xargs`, `sudo`, `env -S`…) | `--head` / `-H` o la rama actual |
-| `gh api` | endpoint `repos/<o>/<r>/pulls` (sin subrutas) con POST explícito (`-X POST`, `--method POST`) o implícito (`-f`, `-F`, `--field`, `--raw-field`, `--input`); y `graphql` con `createPullRequest` | la rama actual |
+| `gh pr create` / `gh pr new` | `gh` con `pr create` o `pr new` (su alias oficial: `gh pr create --help` muestra `ALIASES: gh pr new`) como primeros no-opciones, en el comando exterior, en los interiores (`bash -c`, `eval`, heredocs) y tras lanzadores (`xargs`, `sudo`, `env -S`…) | `--head` / `-H` o la rama actual |
+| `gh api` | endpoint `repos/<o>/<r>/pulls` (sin subrutas), **como ruta o como URL completa** (`https://<host>/repos/<o>/<r>/pulls`, también con el prefijo `/api/v3/` de GitHub Enterprise), con POST explícito (`-X POST`, `--method POST`) o implícito (`-f`, `-F`, `--field`, `--raw-field`, `--input`); y `graphql` con `createPullRequest` | la rama actual |
 
 Se permiten sin comprobar: `gh pr view`, `gh pr list`, `gh pr status`, `gh api` con GET y
 cualquier otro comando (FR-014).
@@ -80,12 +80,29 @@ en código en línea `.claude/veredictos/**`, con las vías que ya vigila para
 así que no se bloquea. Mensaje: `[guarda_spec_previa] El directorio de veredictos solo lo
 escribe el registro de la revisión. Ejecuta /abrir-pr.`
 
+**Copias y borrados que no dejan ver los nombres** (hallazgo 3 de la parada D). En cualquier
+rama, `guarda_spec_previa` bloquea también:
+
+- **copiar o mover hacia la carpeta `.claude`** (o hacia la raíz con copia recursiva) cuando no
+  se pueden saber los nombres que llegan: un origen terminado en `/.` o con comodines
+  (`cp -r /tmp/falso/. .claude/`, `cp -a /tmp/falso/. .claude/`, `cp -r /tmp/falso/* .claude/`,
+  `Copy-Item -Recurse C:\tmp\falso\* .claude`). Con ese origen, un JSON preparado fuera del
+  repositorio con el sha de `HEAD` quedaría como veredicto aprobado sin que la guarda viera su
+  nombre;
+- **borrar o mover `.claude` entera** (`rm -rf .claude`, `Remove-Item -Recurse -Force .claude`,
+  `mv .claude x`).
+
+Vale también para `settings.local.json` (FR-025 de #3), que está en la misma carpeta. Cuando el
+nombre aparece (`cp -r …/veredictos .claude/`, `Move-Item`), ya se bloqueaba.
+
 ### Límites declarados
 
 - Invocar `veredicto.py registrar` con `RESUMEN` inventados: la puerta no lo distingue de una
   revisión real (R8). Escribir el archivo a mano ya no es residual.
-- Creación fuera de Claude Code, alias de `gh` y construcciones que el extractor de #3 no
-  reconoce (R10).
+- Creación fuera de Claude Code, alias propios de `gh` (`gh alias set`) y construcciones que
+  el extractor de #3 no reconoce (R10). El alias oficial `gh pr new` sí se bloquea.
+- La mutación GraphQL leída de un archivo (`-F query=@archivo`, `--input`) y otros clientes HTTP
+  (`curl`, etc.) con el token de `gh`: son rodeos deliberados.
 - Commits de otras personas empujados después del último `fetch` (R9).
 - La validación de la línea `RESUMEN` antes de pasarla es una **instrucción de `/abrir-pr`,
   no código**. Que se ejecutara un comando ajeno exigiría tres fallos a la vez: un contenido

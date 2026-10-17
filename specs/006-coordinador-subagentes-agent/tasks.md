@@ -189,7 +189,7 @@ Commit: `feat(due_diligence): eventos, estado, clasificación del fin del ciclo 
 **Prueba independiente**: con un ejecutor simulado se procesa la solicitud del ejemplo y se comprueba
 qué se delegó y con qué datos (SC-001).
 
-- [ ] T014 [P] [US1] Escribir `src/due_diligence/test_ejecutor.py` (R6, R5). `EjecutorSDK` recibe la
+- [X] T014 [P] [US1] Escribir `src/due_diligence/test_ejecutor.py` (R6, R5). `EjecutorSDK` recibe la
   función de consulta inyectable (`consulta=query` por defecto) y se prueba con un flujo simulado de
   mensajes del SDK: un `AssistantMessage` con un `ToolUseBlock` y un `UserMessage` con un
   `ToolResultBlock` cuyo contenido es el JSON del contrato del #5 → una `Consulta` con herramienta,
@@ -199,11 +199,11 @@ qué se delegó y con qué datos (SC-001).
   un `ToolResultBlock` con `is_error` y el JSON de error de la pasarela (`error`, `tipo`, `mensaje`, `reintentable`, `obtenido`; por ejemplo `servicio_no_disponible` con `reintentable` verdadero) → la `Consulta` **conserva ese error tal como llegó, con su `reintentable`**, y no se marca como resultado inválido (G2); si el flujo termina lanzando `ResultError` tras el `ResultMessage`, **no se vuelve a clasificar**; si
   la lanza sin haber entregado el mensaje, se clasifica con los atributos de la excepción. Las
   opciones se pasan sin modificar.
-- [ ] T015 [US1] Crear `src/due_diligence/ejecutor.py` con el protocolo `EjecutorSubagente` y
+- [X] T015 [US1] Crear `src/due_diligence/ejecutor.py` con el protocolo `EjecutorSubagente` y
   `EjecutorSDK` (R6, contrato `caso.md`): un `query()` por subagente con `prompt` y opciones dados, y
   la captura de `ToolUseBlock` y `ToolResultBlock` como `Consulta`. Sin `while` ni contadores: se
   consume el flujo con `async for`. Hace pasar T014.
-- [ ] T016 [US1] Escribir `src/due_diligence/test_delegacion.py`, parte de US1 (contrato
+- [X] T016 [US1] Escribir `src/due_diligence/test_delegacion.py`, parte de US1 (contrato
   `delegacion.md`). Con un ejecutor simulado: `registro` con `identificador` delega y devuelve
   `resultados` con el JSON tal cual; sin `identificador` ni `nombre`, `frente_rechazado` no
   reintentable que nombra el dato, y no se lanza ningún subagente (US1-3: sin identificador pero con
@@ -213,13 +213,13 @@ qué se delegó y con qué datos (SC-001).
   `entrada_invalida`. Eventos: `delegacion` antes de `frente_inicio` antes de `frente_fin`, y
   `frente_rechazado` con el motivo. Un frente con terminación anómala → error `frente_no_terminado`
   con `obtenido` que conserva las consultas alcanzadas (puede ir vacío). Un frente cuya consulta devolvió el error estructurado de la pasarela → `frente_no_terminado` con **el `reintentable` de ese error** (`true` con noticias caídas, `false` si el error lo trae así) y el error en `obtenido`: no se fija un valor (G2; la política de reintento es del #8).
-- [ ] T017 [US1] Crear `src/due_diligence/delegacion.py` (R4, contrato `delegacion.md`): función que
+- [X] T017 [US1] Crear `src/due_diligence/delegacion.py` (R4, contrato `delegacion.md`): función que
   construye, por caso, el servidor en proceso `delegacion` con la herramienta `delegar_frente`
   (`create_sdk_mcp_server`) cerrando sobre el `Caso`; parámetros validados dentro, respuesta y errores
   con la forma del contrato; registra los eventos de la sección «Comportamiento»; usa
   `contexto.construir_contexto`. En este paso se implementa la delegación de un frente sin la espera
   de `listas` (fases 6 y 7). Hace pasar T016.
-- [ ] T018 [US1] Escribir `src/due_diligence/test_coordinador.py` (contrato `caso.md`, FR-001,
+- [X] T018 [US1] Escribir `src/due_diligence/test_coordinador.py` (contrato `caso.md`, FR-001,
   FR-002). `Caso.ejecutar(solicitud)` con un `query` del coordinador simulado (inyectable) y un
   ejecutor simulado: con la solicitud del ejemplo, los `allowed_tools` y `disallowed_tools` del
   coordinador son exactamente los de R3 y ninguna herramienta de fuentes es invocable por él; el
@@ -228,7 +228,7 @@ qué se delegó y con qué datos (SC-001).
   opciones del coordinador **y** a las de cada subagente (R7); `ejecutar_caso` no llama a
   `cargar_entorno`; con una solicitud sin ningún dato identificable no se delega ningún frente y la
   respuesta pide el dato (spec, edge case).
-- [ ] T019 [US1] Crear `src/due_diligence/coordinador.py` con `Caso` (`estado`, `eventos()`,
+- [X] T019 [US1] Crear `src/due_diligence/coordinador.py` con `Caso` (`estado`, `eventos()`,
   `terminacion`, `ejecutar(solicitud)`), `ejecutar_caso(...)` y las instrucciones de sistema del
   coordinador en español (delegar los frentes independientes **juntos en la misma respuesta**, nunca
   consultar fuentes, no inventar datos, ante varias coincidencias no elegir, y **no llamar a `registrar_informe` ni a `escalar_a_cumplimiento` en este ticket**: son del #9 y del #10, aunque las herramientas sigan disponibles por FR-002; es una instrucción, no una garantía: la cierran los hooks del #7, desviación temporal de II declarada en el plan). `Caso` crea el servidor

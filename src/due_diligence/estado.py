@@ -108,3 +108,49 @@ class EstadoCaso:
     def instantanea(self) -> "EstadoCaso":
         """Copia independiente: modificarla no cambia el estado del caso."""
         return copy.deepcopy(self)
+
+
+def derivar_comercio(resultado: dict[str, Any] | None) -> tuple[dict[str, Any] | None, str]:
+    """(comercio, motivo) a partir del resultado del registro, tal como lo devolvió (FR-005).
+
+    Solo hay comercio con una coincidencia única y sin contradicción entre las fuentes registrales
+    en el nombre o el representante legal (principio I.4: no se elige entre fuentes). Si no, el
+    comercio es `None` y el motivo dice por qué.
+    """
+    if not isinstance(resultado, dict) or not isinstance(resultado.get("hechos"), list):
+        return None, "El resultado del registro mercantil no tiene la forma esperada."
+    coincidencias = resultado.get("coincidencias") or []
+    if resultado.get("resultado") != "coincidencias" or not coincidencias:
+        return None, "El registro mercantil no devolvió ninguna coincidencia."
+    if len(coincidencias) != 1:
+        return None, (
+            "El registro mercantil devolvió varias coincidencias "
+            f"({', '.join(map(str, coincidencias))}): "
+            "no se elige una; hace falta el identificador."
+        )
+    contenidos = [
+        h.get("contenido", {})
+        for h in resultado["hechos"]
+        if isinstance(h, dict) and h.get("contenido", {}).get("identificador") == coincidencias[0]
+    ]
+    if not contenidos:
+        return None, "El resultado del registro mercantil no trae el comercio de la coincidencia."
+    versiones = {(c.get("nombre"), _clave(c.get("representante_legal"))) for c in contenidos}
+    if len(versiones) != 1:
+        return None, (
+            "Las fuentes registrales difieren en el nombre o el representante legal: "
+            "no se elige una."
+        )
+    primero = contenidos[0]
+    representante = primero.get("representante_legal")
+    return {
+        "identificador": primero.get("identificador"),
+        "nombre": primero.get("nombre"),
+        "representante_legal": dict(representante) if representante else None,
+    }, ""
+
+
+def _clave(representante: Any) -> tuple[Any, Any] | None:
+    if not representante:
+        return None
+    return representante.get("nombre"), representante.get("identificador")

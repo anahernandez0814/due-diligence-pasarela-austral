@@ -651,7 +651,8 @@ Con las instrucciones anteriores a las correcciones de cobertura:
 
 ### Q1 desde la subcarpeta `specs`
 
-- Pendiente: el mensaje de la analista trajo la marca `<COMPLETE AQUÍ>`; lo completa ella.
+- **Resultado (la analista, parada F)**: con Claude Code abierto en `specs`, `/hooks` no muestra ninguna entrada del proyecto (las guardas no se cargan) y `/revisar-codigo` falla con `Failed to spawn D:/AIReadyOrquestador/specs/.claude/hooks/preparar_revision.py`. Se declara como requisito (README, `CLAUDE.md` y residual 8 en `DECISIONES.md`): Claude Code se abre siempre en la raíz. La skill no cambia.
+- **Límite declarado**: con unos 140 archivos la lista se agrupa y la cobertura sale incompleta; recomendación: tickets pequeños (residual 9 en `DECISIONES.md`).
 
 ### T030, revisión en la raíz tras las correcciones (2026-10-16, HEAD `f1d9b0c`)
 

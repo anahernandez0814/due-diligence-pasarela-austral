@@ -103,6 +103,10 @@ secret-tool store --label=GITHUB_PAT service github_pat
 export GITHUB_PAT="$(secret-tool lookup service github_pat)"   # en el perfil
 ```
 
+**Abra Claude Code siempre en la raíz del repositorio.** Desde una subcarpeta (por ejemplo
+`specs`) Claude Code no carga la configuración del proyecto: las guardas no actúan y
+`/revisar-codigo` falla al no encontrar `.claude/hooks/preparar_revision.py`.
+
 **Comprobarlo.** En una sesión nueva de Claude Code en la raíz del repositorio, ejecute
 `/mcp`: `github` debe aparecer conectado, sin pedir aprobación.
 

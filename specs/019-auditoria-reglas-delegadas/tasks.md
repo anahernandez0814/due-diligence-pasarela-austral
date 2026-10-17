@@ -247,13 +247,16 @@ lo vuelve a poner en verde.
 
 ## Phase 7: Calidad
 
-- [ ] T017 **Q1**: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` completo, con y
+- [X] T017 **Q1**: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` completo, con y
   sin `PYTHONUTF8` y `PYTHONIOENCODING`. Esperado: todo en verde y los tests existentes sin
   editar, salvo lo permitido (FR-010, SC-006). Si algo falla, corregir con un commit nuevo.
-- [ ] T018 **Q6**: `git diff --stat main...HEAD`: ninguna línea de `veredicto.py`, `guarda_pr.py`,
+- [X] T018 **Q6**: `git diff --stat main...HEAD`: ninguna línea de `veredicto.py`, `guarda_pr.py`,
   `preparar_revision.py` ni de sus tests. Los archivos cambiados son los dos agentes, las dos
   skills, `test_agentes_skills.py`, `DECISIONES.md` y `specs/019-*/`. Anotar el resultado
   (FR-009, SC-005).
+
+  **Resultado de T017 (Q1)**: `uv run ruff format .` (100 archivos sin cambios) y `uv run ruff check .` limpios; `uv run pytest` completo **sin** `PYTHONUTF8` ni `PYTHONIOENCODING`: **1467 passed** en 246 s; **con** `PYTHONUTF8=1` y `PYTHONIOENCODING=utf-8`: **1467 passed** en 243 s. Los tests existentes no se editaron, salvo ampliar `REFERENCIA` con `uv.lock`.
+  **Resultado de T018 (Q6)**: `git diff --stat main...HEAD`: 15 archivos, +1487 −33; ninguna línea de `veredicto.py`, `guarda_pr.py`, `preparar_revision.py` ni de sus tests. Cambiados: los dos agentes, las dos skills, `test_agentes_skills.py`, `DECISIONES.md` y `specs/019-*/`.
 
 ---
 

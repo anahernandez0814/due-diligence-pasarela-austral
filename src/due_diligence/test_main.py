@@ -93,7 +93,7 @@ def test_con_solicitud_carga_el_entorno_una_vez_antes_de_ejecutar_y_lo_imprime_t
         "terminado",
         "Terminación del caso: normal",
         "Resumen para el analista.",
-        "solape de registro, noticias y categoría: True",
+        "solape entre los frentes independientes delegados: sí",
         "coste de coordinador: 0.5000 USD",
         "coste de noticias: 0.0100 USD",
         "coste total: 0.5100 USD",
@@ -165,3 +165,8 @@ def test_una_re_delegacion_no_cambia_el_solape_ni_la_duracion_del_primer_ciclo()
     )
     assert principal.hubo_solape(eventos) is True
     assert principal.duraciones(eventos)[Frente.CATEGORIA] == 2.0
+
+
+def test_sin_dos_frentes_independientes_el_solape_se_imprime_como_no_aplica():
+    assert principal._si_no(None) == "no aplica"
+    assert principal._si_no(True) == "sí" and principal._si_no(False) == "no"

@@ -17,6 +17,7 @@ TIPO_DELEGACION_REPETIDA = "delegacion_repetida"
 TIPO_FRENTE_INICIO = "frente_inicio"
 TIPO_FRENTE_FIN = "frente_fin"
 TIPO_FRENTE_RECHAZADO = "frente_rechazado"
+TIPO_FRENTE_INVALIDADO = "frente_invalidado"
 TIPO_TERMINACION = "terminacion"
 
 TIPOS = frozenset(
@@ -27,6 +28,7 @@ TIPOS = frozenset(
         TIPO_FRENTE_INICIO,
         TIPO_FRENTE_FIN,
         TIPO_FRENTE_RECHAZADO,
+        TIPO_FRENTE_INVALIDADO,
         TIPO_TERMINACION,
     }
 )

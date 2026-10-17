@@ -113,7 +113,7 @@ El ciclo agéntico lo ejecuta el Claude Agent SDK: el código del proyecto no le
 
 ### Edge Cases
 
-- Solicitud sin ningún dato identificable del comercio (ni nombre ni identificador): el coordinador no delega ningún frente y pide al analista el dato que falta.
+- Solicitud sin ningún dato identificable del comercio (ni nombre ni identificador): el coordinador no delega los frentes que necesitan el comercio y pide el dato que falta (delegar la categoría, si viene en la solicitud, es correcto).
 - El registro mercantil devuelve varias coincidencias: el coordinador no elige una ni delega listas con una de ellas; pedir el identificador al analista es del ticket #10, aquí solo se garantiza que no se elige.
 - El registro mercantil devuelve que no hay coincidencias: el frente de listas no se delega con datos inventados; queda sin iniciar y consta en el estado.
 - Un subagente devuelve un error: el estado lo conserva con lo que se alcanzó a obtener; el manejo de fallas (reintentos, cobertura declarada) es del ticket #8.

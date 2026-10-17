@@ -37,6 +37,7 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "frente_inicio",
         "frente_fin",
         "frente_rechazado",
+        "frente_invalidado",
         "terminacion",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS

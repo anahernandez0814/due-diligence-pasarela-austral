@@ -158,9 +158,8 @@ representante legal tal como los devolvió el registro. Las decisiones están en
 - **Ejecutar un caso con el modelo real** (gasta tokens):
   `uv run python -m due_diligence "<solicitud del analista>"`. Imprime los eventos con su hora, la
   situación de cada frente, la duración de cada uno, si hubo solape, el coste y la respuesta del
-  coordinador. **Coste**: cada agente envía unos 30 000 tokens de prefijo al llamar a una herramienta;
-  con Sonnet 5.5 una ejecución en frío cuesta del orden de 0,13 USD por agente y las siguientes, con la
-  caché caliente, centavos. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
+  coordinador. **Coste**: en la validación real, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
+  diferencia apreciable entre frío y caliente. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
 - **Modelos**: `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` (por defecto
   `claude-sonnet-5-5`). El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
   por la razón de parada del modelo.

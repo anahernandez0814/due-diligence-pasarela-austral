@@ -207,7 +207,7 @@ poder cambiar uno sin tocar el otro ni el código.
 - **Medido** (R14.3): una llamada mínima sin herramientas cuesta ≈ 0,005 USD con Sonnet 5.5; cuando el
   coordinador llama a una herramienta en proceso, el SDK escribe en la caché un prefijo de unos
   30 000 tokens (≈ 0,129 USD con Sonnet en frío, ≈ 0,004 en caliente). Un caso en frío con Sonnet
-  cuesta **del orden de 0,13 USD** y en caliente (misma hora), del orden de 0,01 a 0,03; el coste lo
+  cuesta **del orden de 0,13 USD** *(corregido en 14.4: en el caso real, ≈ 0,06 USD)* y en caliente (misma hora), del orden de 0,01 a 0,03; el coste lo
   domina el coordinador, no los subagentes.
 
 **Alternativas descartadas**:
@@ -354,3 +354,9 @@ en proceso, y no con una consulta sin herramientas) **no se ha identificado**; n
 **Para las tareas**: el ejecutor real hace `query()` desde dentro de la herramienta y el `cwd` de cada
 subagente es la raíz del repositorio; el test automático sigue usando el ejecutor simulado. Q5 repite
 esta medición con el caso completo.
+
+**14.4. Corrección con la validación real (T033, 2026-10-17).** El prefijo de ≈ 30 000 tokens de 14.3 **no
+apareció en el caso completo**. Tres ejecuciones con Sonnet 5.5 en los cinco agentes costaron 0,0656,
+0,0569 (frío) y 0,0577 USD (caliente): **unos 0,06 USD por caso**, con el coordinador entre 0,026 y 0,034
+y cada subagente entre 0,006 y 0,011, sin diferencia apreciable entre frío y caliente. Las cifras de
+≈ 0,13 USD de R9 y 14.3 valen para el sondeo aislado, no para el caso real.

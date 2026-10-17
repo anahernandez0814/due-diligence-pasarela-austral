@@ -42,10 +42,15 @@ def duraciones(eventos: list[Evento]) -> dict[Frente, float]:
     return {f: (fines[f].marca - inicios[f].marca).total_seconds() for f in inicios if f in fines}
 
 
+def _si_no(valor: bool | None) -> str:
+    return "no aplica" if valor is None else ("sí" if valor else "no")
+
+
 def hubo_solape(eventos: list[Evento]) -> bool | None:
     """¿Los frentes independientes empezaron antes de que terminara alguno de ellos?
 
-    `None` si no empezó más de uno. Se lee de la secuencia de los eventos, no del reloj.
+    Solo cuenta los que se delegaron. `None` (se imprime «no aplica») si no empezó más de uno.
+    Se lee de la secuencia de los eventos, no del reloj.
     """
     inicios, fines = _eventos_de(eventos, TIPO_FRENTE_INICIO), _eventos_de(eventos, TIPO_FRENTE_FIN)
     empezados = [inicios[f].secuencia for f in INDEPENDIENTES if f in inicios]
@@ -79,7 +84,8 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     if len(eventos) > 1:
         total = (eventos[-1].marca - eventos[0].marca).total_seconds()
         escribir(f"  duración total del caso: {total:.1f} s")
-    escribir(f"  solape de registro, noticias y categoría: {hubo_solape(eventos)}")
+    solape = hubo_solape(eventos)
+    escribir(f"  solape entre los frentes independientes delegados: {_si_no(solape)}")
     costes = {"coordinador": caso.coste_usd}
     for frente, resultado in caso.estado.resultados.items():
         costes[frente.value] = resultado.coste_usd

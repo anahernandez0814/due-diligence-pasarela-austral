@@ -333,7 +333,7 @@ comprobación de forma del ciclo`.
   archivo local no versionado, sin nombrar valores), cómo cambiar los modelos con
   `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES`, y el aviso del coste en frío del
   coordinador (R14.3).
-- [ ] T029 [P] Añadir a `DECISIONES.md` una viñeta de este ticket (una línea por decisión, **sin
+- [X] T029 [P] Añadir a `DECISIONES.md` una viñeta de este ticket (una línea por decisión, **sin
   recortar entradas existentes**): opción (a) y el ejecutor inyectable (R1), `setting_sources=[]` (R2),
   `allowed_tools` más `disallowed_tools` (R3), `readOnlyHint` y orden de listas en código (R4),
   clasificación por `subtype` y `stop_reason` (R5), `python-dotenv` solo desde el punto de entrada
@@ -349,20 +349,36 @@ comprobación de forma del ciclo`.
   esta tarea.
   *Resultado (2026-10-17): `ruff format` y `ruff check` limpios; `src/due_diligence` 222 pasan; suite
   completa 2047 pasan en 4 min 19 s, incluido `test_revision_repositorio.py` sin hallazgos.*
-- [ ] T031 [MANUAL] Q2: la analista ejecuta `uv run python -m due_diligence.sondeo_aislamiento
-  --herramientas` en una sesión nueva en la raíz. Esperado: la tabla de Q2 (con `[]`, sin skills ni
-  agentes del repositorio, 0 eventos de hooks, sin contenido del `CLAUDE.md`) y la lista inicial de
-  herramientas de cada agente igual a la de R3. Anotar el resultado aquí.
-- [ ] T032 [MANUAL] Q4 manual: `uv run python -m due_diligence.sondeo_aislamiento --limite`. Esperado:
+- [ ] T031 [MANUAL] Q2: la analista ejecuta `uv run python -m due_diligence.sondeo_aislamiento` (sin
+  `--herramientas`, que es Q3) en una sesión nueva en la raíz. Esperado: la tabla de Q2 (con `[]`, sin
+  skills ni agentes del repositorio, 0 eventos de hooks, sin el título del `CLAUDE.md`; el control sí lo
+  contiene). Q3 es `--herramientas`: la lista inicial de cada agente igual a la de R3.
+  *Resultado (2026-10-17): Q3 (`--herramientas`) correcto, cada agente ve exactamente sus herramientas, código 0.
+  Q2: skills, agentes y hooks se aíslan (con `[]`: ninguno y 0; control: 15 y 2), pero la comprobación del
+  `CLAUDE.md` no discriminaba (buscaba «sí» en los primeros 20 caracteres, que empiezan con el resultado del
+  `Glob`). Corregida: pregunta por el título del documento de convenciones; la analista repite Q2.*
+- [X] T032 [MANUAL] Q4 manual: `uv run python -m due_diligence.sondeo_aislamiento --limite`. Esperado:
   `LIMITE_SEGURIDAD`, el evento correspondiente y `ResultError` capturada sin romper el caso. Anotar
   el resultado aquí.
-- [ ] T033 [MANUAL] Q5: el caso de ejemplo completo con el modelo real, **dos veces seguidas** (frío y
+  *Resultado (2026-10-17): `LIMITE_SEGURIDAD` con `subtype=error_max_turns` y `stop_reason=tool_use`; `ResultError`
+  capturada; código 0.*
+- [X] T033 [MANUAL] Q5: el caso de ejemplo completo con el modelo real, **dos veces seguidas** (frío y
   caliente). Esperado: los ocho puntos de Q5 leyendo solo el registro de eventos, incluido que **no hubo llamadas a `registrar_informe` ni a `escalar_a_cumplimiento`** y que `resultados/` no tiene archivos nuevos (se compara el listado antes y después; C1), y que `listas` hizo la consulta del comercio y la de su representante (G1). «Frío» = la primera ejecución sin otra ejecución ni sondeo en la hora previa; si no se puede garantizar, se anota (A1). Después, **dos solicitudes manuales más** (Q5b, G3): una **sin categoría** y otra **sin nombre ni identificador**; anotar qué hizo el coordinador (frentes delegados, si inventó algún dato, qué pidió al analista). SC-001 se valida a mano. Anotar duración total
   frente a la suma de frentes, si registro, noticias y categoría salieron en el mismo turno, y el coste
   en frío y en caliente, con los cuatro subagentes en Sonnet 5.5 (R9; la analista estimó 0,01 a 0,02 USD
   más por caso que con Haiku). Completar T029 con esos números y **dejarlos en el resumen final de
   `/speckit-implement`** (duración total, solape, coste en frío y en caliente): la analista los usará para
   la bitácora 6.2. Si el coste en frío del coordinador no es aceptable, avisar a la analista antes de cerrar.
+  *Resultado (2026-10-17): Q5, 8 de 8 puntos en tres ejecuciones; solape sí, unos 6 a 7 s por frente, sin
+  llamadas a `registrar_informe` ni `escalar_a_cumplimiento` y `resultados/` no existe (sin informes).
+  22:31 (instrucciones anteriores): 29,6 s y 0,0656 USD (coordinador 0,0338; registro 0,0080; noticias 0,0062;
+  categoría 0,0074; listas 0,0102). 22:53 en frío con `f4ddcd6`: 28,0 s y 0,0569 USD (coordinador 0,0257).
+  23:00 en caliente con `950be3b`: 25,5 s y 0,0577 USD (coordinador 0,0261; registro 0,0081; categoría
+  0,0066; noticias 0,0063; listas 0,0106). Sin diferencia apreciable entre frío y caliente: el prefijo de
+  R14.3 no apareció en el caso completo. Q5b: sin categoría, delega registro, noticias y listas, deja
+  `categoria` sin iniciar y la pide (0,0277 USD); sin comercio, delega solo categoría y pide el
+  identificador o el nombre (0,0122 USD). La prueba real halló cuatro fallos, corregidos en `f4ddcd6`,
+  `950be3b` y el commit siguiente (re-delegación, afirmación sin fuente, cambio de comercio, tuteo).*
 - [ ] T034 Revisar que `git status` solo contiene cambios del ticket, que ningún archivo nuevo contiene
   valores con forma real ni el nombre del archivo de variables de entorno, y commitear la
   documentación y las anotaciones de validación: `docs: documentación y validación del ticket #6`.

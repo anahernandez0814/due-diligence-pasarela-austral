@@ -164,6 +164,14 @@ def test_la_categoria_es_el_sector_sin_canal_y_lo_desconocido_se_confirma_en_las
     assert "pide confirmación al analista" in INSTRUCCIONES_COORDINADOR
 
 
+def test_el_coordinador_trata_de_usted_y_no_menciona_tickets_al_analista():
+    assert "de usted" in INSTRUCCIONES_COORDINADOR
+    assert "aún no está disponible" in PROHIBICION_DECISION
+    assert "ticket" not in PROHIBICION_DECISION.lower()
+    # La única mención a «tickets» es la orden de no mencionarlos.
+    assert INSTRUCCIONES_COORDINADOR.lower().count("ticket") == 1
+
+
 def test_las_opciones_del_coordinador_llevan_el_servidor_de_delegacion_del_caso():
     caso, _, _ = _caso([])
     opciones = caso.opciones_coordinador()

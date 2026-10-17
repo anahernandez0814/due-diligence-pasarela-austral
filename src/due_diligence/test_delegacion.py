@@ -15,6 +15,7 @@ from due_diligence.eventos import (
     TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_FRENTE_INVALIDADO,
     TIPO_FRENTE_RECHAZADO,
     RegistroEventos,
 )
@@ -675,7 +676,10 @@ def test_si_el_registro_cambia_de_comercio_listas_deja_de_estar_terminado_y_se_r
         estado.motivo(Frente.LISTAS) == "El comercio del registro cambió; vuelva a delegar listas."
     )
     ultimo = [e for e in registro.eventos() if e.frente is Frente.LISTAS][-1]
-    assert ultimo.tipo == TIPO_FRENTE_FIN and "cambió" in ultimo.detalle
+    assert ultimo.tipo == TIPO_FRENTE_INVALIDADO and "cambió" in ultimo.detalle
+    assert [e.tipo for e in registro.eventos() if e.frente is Frente.LISTAS].count(
+        TIPO_FRENTE_FIN
+    ) == 1
 
     nueva = _delegar(delegador, frente="listas")
     assert nueva["situacion"] == "terminado"

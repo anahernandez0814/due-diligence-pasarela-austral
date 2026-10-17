@@ -28,6 +28,7 @@ from due_diligence.eventos import (
     TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_FRENTE_INVALIDADO,
     TIPO_FRENTE_RECHAZADO,
     RegistroEventos,
 )
@@ -331,9 +332,7 @@ class Delegador:
             return
         self.estado.cambiar_situacion(Frente.LISTAS, Situacion.NO_TERMINADO, MOTIVO_COMERCIO_CAMBIO)
         self._contextos.pop(Frente.LISTAS, None)
-        self.eventos.registrar(
-            TIPO_FRENTE_FIN, Frente.LISTAS, f"no_terminado: {MOTIVO_COMERCIO_CAMBIO}"
-        )
+        self.eventos.registrar(TIPO_FRENTE_INVALIDADO, Frente.LISTAS, MOTIVO_COMERCIO_CAMBIO)
 
     def _fijar_comercio(
         self, situacion: Situacion, motivo: str, resultado: ResultadoFrente

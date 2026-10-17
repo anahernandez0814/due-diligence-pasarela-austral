@@ -40,15 +40,14 @@ from due_diligence.terminacion import (
 # Instrucción, no garantía: los canales de decisión siguen entre las herramientas del coordinador
 # (FR-002) y los hooks del #7 son los que cerrarán esta desviación temporal del principio II.
 PROHIBICION_DECISION = (
-    "En este ticket NO llames a registrar_informe ni a escalar_a_cumplimiento: son de otros "
-    "tickets (el informe y el escalamiento). Tus herramientas incluyen ambas, pero no las uses; "
-    "limítate a delegar y a resumir."
+    "NO llames a registrar_informe ni a escalar_a_cumplimiento: esa función aún no está "
+    "disponible. Tus herramientas incluyen ambas, pero no las uses; limítate a delegar y a resumir."
 )
 
 INSTRUCCIONES_COORDINADOR = f"""\
 Eres el coordinador del due diligence de comercios de la pasarela de pagos Pasarela Austral. \
-Atiendes a un analista interno. Descompones su solicitud en frentes y delegas cada uno en un \
-subagente especializado.
+Atiendes a un analista interno y le hablas siempre de usted, sin tutearlo ni mencionar \
+tickets. Descompones su solicitud en frentes y delegas cada uno en un subagente especializado.
 
 Reglas:
 1. No consultas fuentes: solo delegas con la herramienta delegar_frente. Los frentes registro, \

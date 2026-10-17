@@ -26,16 +26,17 @@ uv run python -m due_diligence.sondeo_aislamiento
 ```
 
 El sondeo construye sus opciones con `dataclasses.replace(opciones_base(...), tools=["Glob"])`: son las del paquete, salvo que solo el sondeo activa la herramienta integrada para pedir un `Glob` inofensivo, y
-pregunta por las instrucciones del proyecto; repite con `setting_sources=["project"]` como control.
+pregunta por el título del documento de convenciones del equipo, que solo está en el `CLAUDE.md`
+(«Si no lo sabes, responde exactamente NO_LO_SÉ»); repite con `setting_sources=["project"]` como control.
 Esperado, en una tabla impresa:
 
-| Opciones | Skills del repo | Agentes del repo | Eventos de hooks | ¿Conoce `CLAUDE.md`? |
+| Opciones | Skills del repo | Agentes del repo | Eventos de hooks | ¿Título del `CLAUDE.md`? |
 |----------|-----------------|------------------|------------------|----------------------|
-| `setting_sources=[]` (las del paquete) | ninguna | solo integrados | 0 | no |
-| `["project"]` (control) | `siguiente-ticket` | `auditor-cumplimiento`, `revisor-codigo` | ≥ 1 | sí |
+| `setting_sources=[]` (las del paquete) | ninguna | solo integrados | 0 | no (`NO_LO_SÉ`) |
+| `["project"]` (control) | `siguiente-ticket` | `auditor-cumplimiento`, `revisor-codigo` | ≥ 1 | sí («convenciones del equipo») |
 
 Falla (código de salida ≠ 0) si con `[]` aparece cualquier skill o agente del repositorio, algún evento
-de hooks o contenido del `CLAUDE.md`. Resultado de la investigación: R2.
+de hooks o el título del `CLAUDE.md`, y también si el control no lo contiene (el sondeo no discrimina). Resultado de la investigación: R2.
 
 ## Q3. Herramientas por agente (automático, más una comprobación manual)
 

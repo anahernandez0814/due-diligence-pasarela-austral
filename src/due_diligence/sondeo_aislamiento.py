@@ -34,9 +34,12 @@ from due_diligence.frentes import (
 )
 from due_diligence.terminacion import Terminacion, clasificar_error, clasificar_resultado
 
+# La respuesta solo está en el CLAUDE.md del proyecto: sin él, el agente no puede acertarla.
+NO_SE = "NO_LO_SÉ"
+TITULO_DEL_CLAUDE_MD = "convenciones del equipo"
 PROMPT_AISLAMIENTO = (
-    "Usa Glob con el patrón 'specs/006-*/spec.md' y luego dime si conoces instrucciones de un "
-    "CLAUDE.md del proyecto (sí/no)."
+    "Usa Glob con el patrón 'specs/006-*/spec.md' y luego responde: ¿cuál es el título exacto del "
+    f"documento de convenciones del equipo? Si no lo sabes, responde exactamente {NO_SE}."
 )
 
 
@@ -96,7 +99,7 @@ async def sondeo_aislamiento() -> int:
     )
     propias = _nombres_del_repositorio("skills") | _nombres_del_repositorio("agents")
 
-    print(f"{'Opciones':45} {'skills/agentes del repo':25} {'hooks':>6}  ¿conoce CLAUDE.md?")
+    print(f"{'Opciones':45} {'skills/agentes del repo':25} {'hooks':>6}  ¿título del CLAUDE.md?")
     for o in (paquete, control):
         del_repo = sorted(propias & (set(o.skills) | set(o.agentes)))
         repo = ", ".join(del_repo) or "ninguno"
@@ -107,8 +110,12 @@ async def sondeo_aislamiento() -> int:
         errores.append("con [] aparecen skills o agentes del repositorio")
     if paquete.eventos_de_hooks:
         errores.append("con [] hubo eventos de hooks")
-    if "sí" in paquete.respuesta.lower()[:20]:
-        errores.append("con [] el agente dice conocer el CLAUDE.md")
+    if TITULO_DEL_CLAUDE_MD in paquete.respuesta.lower():
+        errores.append("con [] el agente conoce el contenido del CLAUDE.md")
+    if TITULO_DEL_CLAUDE_MD not in control.respuesta.lower():
+        errores.append(
+            "el control con ['project'] no conoce el título del CLAUDE.md: el sondeo no discrimina"
+        )
     if not (propias & (set(control.skills) | set(control.agentes))) or not control.eventos_de_hooks:
         errores.append(
             "el control con ['project'] no mostró skills, agentes ni hooks: el sondeo no discrimina"

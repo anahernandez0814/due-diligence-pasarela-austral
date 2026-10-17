@@ -43,8 +43,14 @@ Todo en español. Cada hallazgo, en una línea:
   incumplimiento de un principio de la constitución, un dato con forma real o una
   credencial, o un comportamiento obligatorio sin prueba.
 - **SUGERENCIA**: mejora que no impide el PR.
-- **Ningún hallazgo sin ubicación** (`archivo:línea`) ni sin razón. Si no puedes ubicar algo,
-  no lo reportes como bloqueante: ponlo como sugerencia y di qué no pudiste verificar.
+- **Ningún hallazgo sin ubicación** (`archivo:línea`) ni sin razón.
+- **Lo que falta** (un requisito sin implementar o sin prueba) no tiene línea en el código:
+  se ubica en el requisito, con `spec.md:línea` o `tasks.md:línea`, y es **BLOQUEANTE** si el
+  requisito es obligatorio (los de la constitución, los `FR-###` y los criterios de
+  aceptación del issue). No lo rebajes a sugerencia por no poder ubicarlo en el código: un
+  requisito obligatorio sin implementar impide abrir el PR.
+- Si algo no lo puedes verificar con tus herramientas, dilo y declara `cobertura=incompleta`;
+  no lo conviertas en un hallazgo que no sabes sostener.
 - **Valores sensibles**: si ves algo que parece una credencial, una tarjeta, un NIT o una
   cédula reales, di el tipo y la ubicación y **no repitas el valor**.
 

@@ -23,10 +23,13 @@ toma de allí el texto exacto del principio I; lo de abajo es un resumen para or
 
 ## Cuándo aplica una regla
 
-Una regla **aplica** al cambio si la spec del ticket la cita o si el diff toca código que la implementa.
-Si no aplica, su estado es `no aplica` y das **la razón**. Sin código de producción en el
-cambio (por ejemplo, solo configuración o documentación), las cinco reglas son `no aplica`,
-con esa razón, y eso no bloquea.
+Una regla **aplica** al cambio si la spec del ticket la cita o si el diff toca código o tests que la implementan o la prueban.
+Si no aplica, su estado es `no aplica` y das **la razón**. Sin código de producción ni tests de las reglas en el cambio (por ejemplo, solo configuración o documentación), las cinco reglas son `no aplica`, con esa razón, y eso no bloquea.
+
+Los tests cuentan: un cambio que solo borra o debilita el test de una regla **sí la toca**.
+Esa regla aplica, y si sin ese test ya no hay evidencia vigente en el código y en los tests,
+su estado es `no verificada` y es bloqueante. Nunca la des por `no aplica` porque no se
+tocó código de producción.
 
 ## Estados
 
@@ -69,7 +72,10 @@ Después, los hallazgos, uno por línea:
 ```
 
 Cada regla `incumple` o `no verificada` cuenta como un hallazgo **BLOQUEANTE** en el
-resumen. Ningún hallazgo sin ubicación ni sin razón. Si ves algo que parece una credencial,
+resumen. Ningún hallazgo sin ubicación ni sin razón. Lo que **falta** (un requisito sin
+implementar o sin prueba) no tiene línea en el código: se ubica en el requisito
+(`spec.md:línea` o `tasks.md:línea`) y es BLOQUEANTE si el requisito es obligatorio; no lo
+rebajes a sugerencia por no poder ubicarlo en el código. Si ves algo que parece una credencial,
 una tarjeta, un NIT o una cédula reales, di el tipo y la ubicación y no repitas el valor.
 
 ## Cobertura

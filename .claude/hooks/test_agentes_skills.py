@@ -206,8 +206,10 @@ def test_el_auditor_exige_razon_en_cada_no_aplica_y_nunca_cumple_sin_evidencia()
 def test_el_auditor_define_cuando_aplica_una_regla():
     _, cuerpo = cargar_agente("auditor-cumplimiento")
     assert "la spec del ticket la cita" in cuerpo
-    assert "el diff toca código que la implementa" in cuerpo
-    assert "sin código de producción" in cuerpo.lower()
+    assert "el diff toca código o tests que la implementan o la prueban" in cuerpo
+    assert "sin código de producción ni tests de las reglas" in cuerpo.lower()
+    # Un cambio que solo borra o debilita el test de una regla sí la toca (hallazgo 1).
+    assert "borra o debilita" in cuerpo
 
 
 def test_el_auditor_pide_la_tabla_de_las_cinco_reglas():
@@ -220,3 +222,37 @@ def test_la_skill_de_auditoria_pone_la_constitucion_como_documento_principal():
     _, cuerpo = cargar_skill("auditar-cumplimiento")
     assert cuerpo.index(CONSTITUCION) < cuerpo.index("spec.md")
     assert "las cinco reglas" in cuerpo
+
+
+# --- Faltantes y carpeta del ticket (parada B) ----------------------------------------
+
+
+def test_el_revisor_no_rebaja_a_sugerencia_lo_que_no_puede_ubicar():
+    _, cuerpo = cargar_agente("revisor-codigo")
+    assert "ponlo como sugerencia" not in cuerpo
+
+
+def test_el_revisor_ubica_lo_que_falta_en_el_requisito_y_lo_marca_bloqueante():
+    _, cuerpo = cargar_agente("revisor-codigo")
+    assert "spec.md:línea" in cuerpo
+    assert "tasks.md:línea" in cuerpo
+    assert "sin implementar" in cuerpo
+    assert "sin prueba" in cuerpo
+    assert "obligatorio" in cuerpo
+
+
+def test_el_auditor_tambien_ubica_lo_que_falta_en_el_requisito():
+    _, cuerpo = cargar_agente("auditor-cumplimiento")
+    assert "spec.md:línea" in cuerpo
+    assert "tasks.md:línea" in cuerpo
+
+
+@pytest.mark.parametrize(("subagente", "skill"), REVISIONES)
+def test_la_carpeta_del_ticket_es_la_de_la_linea_ticket_del_contexto(subagente, skill):
+    _, cuerpo = cargar_skill(skill)
+    assert "la línea `Ticket:` del contexto" in cuerpo
+    assert "pista" in cuerpo.lower()
+    assert "$ARGUMENTS" in INYECCION.sub("", cuerpo)
+    assert "Carpeta del ticket: $ARGUMENTS" not in cuerpo
+    # Si $ARGUMENTS indica otra carpeta, se dice y la cobertura es incompleta.
+    assert "otra carpeta" in cuerpo

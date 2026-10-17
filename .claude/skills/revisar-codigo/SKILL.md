@@ -10,7 +10,7 @@ allowed-tools:
 
 # Revisión independiente del código
 
-Carpeta del ticket: $ARGUMENTS
+Pista de la carpeta del ticket: $ARGUMENTS
 
 Revisa el cambio de esta rama frente a su base de fusión. Eres independiente de la sesión que
 lo generó: no ves su conversación, y todo lo que necesitas está aquí o lo lees tú.
@@ -25,9 +25,12 @@ lo generó: no ves su conversación, y todo lo que necesitas está aquí o lo le
    `CONTEXTO DE REVISIÓN`. Si no la ves (la preparación falló o está desactivada) o contiene
    una línea `CONTEXTO INCOMPLETO`, dilo en el reporte y declara `cobertura=incompleta`: no
    revises a ciegas ni supongas el contenido del cambio.
-2. **Lee la referencia.** Con `Read`, lee `spec.md`, `plan.md` y `tasks.md` de la carpeta del
-   ticket y la constitución, `.specify/memory/constitution.md`. Son tu criterio: la spec
-   dice qué se pidió, el plan y las tareas cómo, y la constitución lo que no se negocia.
+2. **Lee la referencia.** La carpeta del ticket es la de la línea `Ticket:` del contexto,
+   calculada con git a partir de la rama: es la fuente fiable. El argumento de arriba solo
+   es una pista; si indica otra carpeta, dilo en el reporte y declara
+   `cobertura=incompleta`. Con `Read`, lee `spec.md`, `plan.md` y `tasks.md` de esa carpeta
+   y la constitución, `.specify/memory/constitution.md`. Son tu criterio: la spec dice qué
+   se pidió, el plan y las tareas cómo, y la constitución lo que no se negocia.
 3. **Revisa el cambio.** Si la salida trae el diff completo, revísalo. Si dice que el diff se
    omitió por tamaño, lee con `Read` y `Grep` los archivos de la lista, empezando por los de
    código y configuración.

@@ -10,7 +10,7 @@ allowed-tools:
 
 # Auditoría de cumplimiento de las reglas de negocio
 
-Carpeta del ticket: $ARGUMENTS
+Pista de la carpeta del ticket: $ARGUMENTS
 
 Audita el cambio de esta rama frente a las cinco reglas de negocio del principio I de la
 constitución. Eres independiente de la sesión que lo generó: no ves su conversación, y todo
@@ -28,10 +28,15 @@ lo que necesitas está aquí o lo lees tú.
    audites a ciegas ni supongas el contenido del cambio.
 2. **Lee primero la constitución**, `.specify/memory/constitution.md`, con `Read`: el
    principio I son las cinco reglas que verificas, con su texto exacto. Después lee
-   `spec.md`, `plan.md` y `tasks.md` de la carpeta del ticket.
+   `spec.md`, `plan.md` y `tasks.md` de la carpeta del ticket: es la de la línea `Ticket:` del contexto,
+   calculada con git a partir de la rama, que es la fuente fiable. El argumento de arriba
+   solo es una pista; si indica otra carpeta, dilo en el reporte y declara
+   `cobertura=incompleta`.
 3. **Decide cuáles de las cinco reglas aplican** al cambio: una regla aplica si la spec del
-   ticket la cita o si el diff toca código que la implementa. Sin código de producción,
-   las cinco son `no aplica`, con la razón.
+   ticket la cita o si el diff toca código o tests que la implementan o la prueban. Sin
+   código de producción ni tests de las reglas, las cinco son `no aplica`, con la razón. Un
+   cambio que solo borra o debilita el test de una regla sí la toca: esa regla aplica, y sin
+   evidencia vigente es `no verificada` y bloqueante.
 4. **Verifica las que aplican** contra la spec, el código y los tests, con `Read` y `Grep`.
    Si la salida trae el diff completo, úsalo; si dice que se omitió por tamaño, lee los
    archivos de la lista, empezando por los de código y configuración.

@@ -184,7 +184,7 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
 **Objetivo**: identificar un comercio sin elegir entre coincidencias. **Prueba independiente**:
 `uv run pytest src/servidor_mcp/test_registro.py`.
 
-- [ ] T019 [P] [US1] Escribir `src/servidor_mcp/test_registro.py` (FR-003, FR-004, FR-010, R3, R9):
+- [X] T019 [P] [US1] Escribir `src/servidor_mcp/test_registro.py` (FR-003, FR-004, FR-010, R3, R9):
   por identificador `CO-TV-0001` devuelve `coincidencias: ["CO-TV-0001"]`, con un hecho por fuente
   y `metadatos` con las dos fuentes y **`metadatos.fecha` = `2026-09-28`**, la `fecha_corte` más
   antigua de las dos fuentes, mientras cada hecho conserva la suya (`2026-09-30` y `2026-09-28`);
@@ -199,7 +199,7 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
   nombre; `nombre` e `identificador` a la vez, ninguno, vacío, un **nombre** de menos de 3
   caracteres normalizados o un tipo incorrecto devuelven `entrada_invalida` no reintentable; un
   archivo de datos ausente devuelve `datos_no_disponibles`.
-- [ ] T020 [US1] Implementar `src/servidor_mcp/registro.py` con `consultar_registro_mercantil(nombre,
+- [X] T020 [US1] Implementar `src/servidor_mcp/registro.py` con `consultar_registro_mercantil(nombre,
   identificador)`: valida con `entradas.py`, busca con `normalizar.py` (contención por nombre,
   igualdad por identificador, sin mínimo para el identificador), devuelve un hecho por comercio y
   fuente con la fuente y su `fecha_corte` en los metadatos, y `coincidencias` con los

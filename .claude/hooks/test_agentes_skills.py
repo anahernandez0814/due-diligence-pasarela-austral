@@ -389,7 +389,7 @@ CUENTAN = [
     ".claude/commands/",
     "`test_*.py`",
 ]
-REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/"]
+REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/", "uv.lock"]
 PASOS_DE_LECTURA = [
     "1. La lista de archivos",
     "2. El código y la configuración",
@@ -559,3 +559,42 @@ def test_la_seccion_de_aplicabilidad_de_la_skill_no_menciona_spec_md():
     # La skill exige nombrar la constitución antes que spec.md.
     _, cuerpo = cargar_skill("auditar-cumplimiento")
     assert "spec.md" not in seccion(cuerpo, ENCABEZADO_APLICA, origen="skill auditar-cumplimiento")
+
+
+# --- uv.lock es referencia y no cuenta para la cobertura (FR-006, FR-007; R3) --------------
+
+ENCABEZADO_COBERTURA = "Qué cuenta para la cobertura"
+
+
+def viñetas_de_cobertura(cuerpo: str, origen: str) -> tuple[str, str]:
+    """`(Cuentan, Son referencia y no cuentan)` del bloque de cobertura, ya normalizado."""
+    texto = seccion(cuerpo, ENCABEZADO_COBERTURA, origen=origen)
+    cuentan = texto[texto.index("**Cuentan**") : texto.index("**Son referencia y no cuentan**")]
+    referencia = texto[
+        texto.index("**Son referencia y no cuentan**") : texto.index(
+            "**No ejecutar tests nunca reduce la cobertura**"
+        )
+    ]
+    return cuentan, referencia
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_uv_lock_es_referencia_y_no_cuenta_para_la_cobertura(nombre, cuerpo):
+    cuentan, referencia = viñetas_de_cobertura(cuerpo, nombre)
+    assert "uv.lock" in referencia, f"{nombre}: uv.lock debe figurar entre la referencia"
+    assert "uv.lock" not in cuentan, f"{nombre}: uv.lock no debe figurar entre los que cuentan"
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_ningun_archivo_generado_se_lee_por_secciones_como_archivo_que_cuenta(nombre, cuerpo):
+    texto = seccion(cuerpo, ENCABEZADO_COBERTURA, origen=nombre)
+    assert "se leen por secciones" not in viñetas_de_cobertura(cuerpo, nombre)[0]
+    assert "generados (`uv.lock`) se leen por secciones" not in texto

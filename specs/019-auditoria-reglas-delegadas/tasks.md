@@ -156,7 +156,7 @@ archivos; el resto del bloque no cambia.
 
 ### Tests de US2 (deben fallar antes de T009 a T012)
 
-- [ ] T008 [US2] En `.claude/hooks/test_agentes_skills.py`, junto a las pruebas de cobertura
+- [X] T008 [US2] En `.claude/hooks/test_agentes_skills.py`, junto a las pruebas de cobertura
   existentes y con `seccion` de T003, parametrizado en los cuatro textos de
   `instrucciones_de_cobertura()`:
   - en la sección `Qué cuenta para la cobertura`, `uv.lock` aparece en la viñeta «Son
@@ -170,25 +170,27 @@ archivos; el resto del bloque no cambia.
   lo que falla antes del cambio es la comprobación de **posición** de la prueba nueva. Origen:
   FR-006, FR-007, R3, R5, contrato «Bloque 1». Deben fallar con el texto actual: ejecutar y
   anotar los fallos.
+  **Resultado de T008**: con el texto anterior fallaron 8 pruebas (`test_uv_lock_es_referencia_y_no_cuenta_para_la_cobertura` y `test_ningun_archivo_generado_se_lee_por_secciones_como_archivo_que_cuenta`, cada una en los cuatro textos). `REFERENCIA` ganó `uv.lock`.
 
 ### Implementación de US2
 
-- [ ] T009 [P] [US2] En `.claude/agents/revisor-codigo.md`, sustituir la sección `## Qué cuenta
+- [X] T009 [P] [US2] En `.claude/agents/revisor-codigo.md`, sustituir la sección `## Qué cuenta
   para la cobertura` por el texto exacto del «Bloque 1» de
   [contracts/texto-de-la-puerta.md](contracts/texto-de-la-puerta.md): quita «los generados
   (`uv.lock`) se leen por secciones» de **Cuentan** y añade «y los archivos generados por
   herramientas (`uv.lock`)» a **Son referencia y no cuentan**. Nada más.
-- [ ] T010 [P] [US2] El mismo cambio en `.claude/skills/revisar-codigo/SKILL.md`.
-- [ ] T011 [US2] El mismo cambio en `.claude/agents/auditor-cumplimiento.md` (después de T005:
+- [X] T010 [P] [US2] El mismo cambio en `.claude/skills/revisar-codigo/SKILL.md`.
+- [X] T011 [US2] El mismo cambio en `.claude/agents/auditor-cumplimiento.md` (después de T005:
   es el mismo archivo).
-- [ ] T012 [US2] El mismo cambio en `.claude/skills/auditar-cumplimiento/SKILL.md` (después de
+- [X] T012 [US2] El mismo cambio en `.claude/skills/auditar-cumplimiento/SKILL.md` (después de
   T006: es el mismo archivo).
-- [ ] T013 [US2] Ejecutar `uv run pytest .claude/hooks/test_agentes_skills.py`: los tests de
+- [X] T013 [US2] Ejecutar `uv run pytest .claude/hooks/test_agentes_skills.py`: los tests de
   T008 pasan, los existentes siguen en verde; `uv run ruff format .claude/hooks` y
   `uv run ruff check .claude/hooks` limpios. Commit: `fix(auditoria): uv.lock pasa a archivo de
   referencia en los cuatro archivos de la puerta`. Después, **PARADA A**: entregar a la analista
   `git diff main...HEAD -- .claude/agents .claude/skills` y la salida de los tests, y esperar su
   confirmación antes de seguir.
+  **Resultado de T013**: `test_agentes_skills.py` 85 passed (77 + 8 de US2); `ruff format .claude/hooks` y `ruff check .claude/hooks` limpios. El mismo reemplazo se aplicó a los cuatro archivos y cada uno coincidía exactamente una vez.
 
 **Checkpoint**: US1 y US2 completas. Los cuatro archivos de la puerta tienen el texto final.
 

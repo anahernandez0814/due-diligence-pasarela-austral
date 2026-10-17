@@ -99,11 +99,10 @@ una tarjeta, un NIT o una cédula reales, di el tipo y la ubicación y no repita
 - **Cuentan**: el código y la configuración de la lista (`src/**`, `.claude/hooks/*.py`,
   `.claude/settings.json`, `.mcp.json`, `.claude/agents/`, `.claude/skills/` y
   `.claude/commands/`) y los tests (`test_*.py`). Se leen enteros; los tests, por secciones si
-  hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta; los
-  generados (`uv.lock`) se leen por secciones.
-- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md` y
-  `.claude/rules/`. Léelos por secciones o con `Grep` para contrastar; leerlos a medias no
-  reduce la cobertura.
+  hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta.
+- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`,
+  `.claude/rules/` y los archivos generados por herramientas (`uv.lock`). Léelos por secciones
+  o con `Grep` para contrastar; leerlos a medias no reduce la cobertura.
 - **No ejecutar tests nunca reduce la cobertura**: no tienes Bash. No lo reportes como falta
   ni como hallazgo.
 - **Un archivo que cuenta y que leíste a medias** lo nombras en el reporte, con

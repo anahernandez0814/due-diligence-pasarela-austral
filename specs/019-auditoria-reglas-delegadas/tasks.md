@@ -266,7 +266,7 @@ lo vuelve a poner en verde.
 del modelo: cada escenario se corre **una vez** y se anota lo que salió. Requiere la rama
 commiteada hasta T018. Los escenarios y sus reglas están en el [quickstart](quickstart.md).
 
-- [ ] T019 Preparar el clon desechable y las ramas de prueba con un script **fuera del
+- [X] T019 Preparar el clon desechable y las ramas de prueba con un script **fuera del
   repositorio** (carpeta de scratchpad, no se versiona; `git clone <repo local> clon-019`, sin
   `git push` nunca):
   - **Q3**: en la rama `005-servidor-mcp-pasarela` del clon, `git merge --no-ff
@@ -284,6 +284,7 @@ commiteada hasta T018. Los escenarios y sus reglas están en el [quickstart](qui
     «al ticket #7») y un commit que borra `test_regla.py`.
   Cada rama `098-*` nace de `main` del clon (una sola carpeta `specs/098-*`). `uv sync` en el
   clon. Datos ficticios. Entregar a la analista la ruta del clon y el comando de cada escenario.
+  **Resultado de T019**: clon en `C:\Users\ana.hernandez\AppData\Local\Temp\claude\D--AIReadyOrquestador\326bdc06-818e-4d19-80f7-aac699694e93\scratchpad\clon-019` (script `preparar-clon-019.sh` en el mismo scratchpad, fuera del repositorio; el remoto del clon no admite push). Q3: rama `005-servidor-mcp-pasarela` con `git merge --no-ff` de `origin/019-auditoria-reglas-delegadas` (sin conflictos) y la línea 161 de su spec corregida a «I.1, I.2 e I.3 … del ticket #7». Q4: rama `098-delegada-contradice`. Q5: `main` del clon con `src/prueba_098/` (regla y test), `origin/main` avanzado con `git update-ref`, y rama `098-borra-test` que borra `test_regla.py`. `preparar_revision.py` verificado en las tres ramas: salida 0, sin `CONTEXTO INCOMPLETO`, carpeta del ticket correcta; el diff de la 005 se omite por tamaño (58 archivos) y el de las dos `098` es completo.
 - [ ] T020 [MANUAL] **Q3** (SC-001): sesión nueva en la raíz del clon, en la rama 005 del merge:
   `/auditar-cumplimiento specs/005-servidor-mcp-pasarela`. Esperado: I.1, I.2 e I.3 `no aplica`
   con la razón «delegada al ticket #7»; I.4 e I.5 `cumple`; 0 bloqueantes de las tres primeras.

@@ -410,13 +410,10 @@ def test_mensaje_de_un_borrado_en_main(crear):
 # --- Carpetas, git checkout, git mv, cd y truncate (T017b) ----------------------------
 
 AMPLIACION = [
-    ("Bash", "rm -rf .claude"),
     ("Bash", "rm -rf ."),
     ("Bash", "git restore ."),
     ("Bash", "git checkout -- ."),
     ("Bash", "git checkout 003-x -- .claude"),
-    ("Bash", "mv .claude .claude-viejo"),
-    ("PowerShell", "Remove-Item -Recurse .claude"),
     ("Bash", "rm -rf src/app/"),
     ("Bash", "git checkout 003-x .claude/settings.json"),
     ("Bash", "git checkout HEAD src/app/a.py"),
@@ -716,3 +713,107 @@ def test_un_nombre_parecido_no_cuenta_como_el_directorio_de_veredictos(crear):
     for ruta in (".claude/veredictos-otros/x.json", ".claude/veredictosx", "veredictos/x.json"):
         resultado = guarda_spec_previa.motivo(entrada(repo, "Bash", command=f"echo x > {ruta}"))
         assert resultado != MSG_VEREDICTOS, ruta
+
+
+# --- Copias que ocultan los nombres y borrar .claude entera (parada D, hallazgo 3) ----------
+
+COPIA_OPACA = guarda_spec_previa.COPIA_OPACA
+BORRAR_CLAUDE = guarda_spec_previa.BORRAR_CLAUDE
+
+COPIAS_OPACAS = [
+    ("Bash", "cp -r /tmp/falso/. .claude"),
+    ("Bash", "cp -a /tmp/falso/. .claude/"),
+    ("Bash", "cp -r /tmp/falso/* .claude/"),
+    ("Bash", "cp -R /tmp/falso/. .claude"),
+    ("Bash", "cp -rf /tmp/falso/* .claude"),
+    ("Bash", "cp --recursive /tmp/falso/. .claude/"),
+    ("Bash", "cp -r /tmp/falso/. ."),
+    ("Bash", "cp -r /tmp/falso/* ./"),
+    ("Bash", "cp -r /tmp/falso/. -t .claude"),
+    ("Bash", "mv /tmp/falso/* .claude/"),
+    ("Bash", "mv /tmp/falso/. .claude"),
+    ("Bash", "bash -c 'cp -r /tmp/falso/. .claude'"),
+    ("Bash", 'eval "cp -r /tmp/falso/* .claude/"'),
+    ("Bash", "sudo cp -r /tmp/falso/. .claude"),
+    ("Bash", "echo ok && cp -r /tmp/falso/. .claude/"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item -Recurse -Path C:\tmp\falso\* -Destination .claude"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* ."),
+    ("PowerShell", "cp -Recurse /tmp/falso/* .claude"),
+    ("PowerShell", r"Move-Item C:\tmp\falso\* .claude"),
+]
+
+BORRAN_CLAUDE_ENTERA = [
+    ("Bash", "rm -rf .claude"),
+    ("Bash", "rm -r .claude/"),
+    ("Bash", "rm -rf ./.claude"),
+    ("Bash", "mv .claude x"),
+    ("Bash", "mv .claude/ /tmp/x"),
+    ("Bash", "mv .claude .claude-viejo"),
+    ("PowerShell", "Remove-Item -Recurse .claude"),
+    ("Bash", "bash -c 'rm -rf .claude'"),
+    ("Bash", "echo ok && rm -rf .claude"),
+    ("PowerShell", "Remove-Item -Recurse -Force .claude"),
+    ("PowerShell", "Move-Item .claude x"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), COPIAS_OPACAS)
+def test_copiar_o_mover_hacia_claude_sin_saber_los_nombres_se_bloquea(
+    crear, rama, herramienta, comando
+):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == COPIA_OPACA
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), BORRAN_CLAUDE_ENTERA)
+def test_borrar_o_mover_claude_entera_se_bloquea(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    assert guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando)) == BORRAR_CLAUDE
+
+
+def test_los_mensajes_explican_el_motivo_y_la_salida():
+    assert "veredicto" in COPIA_OPACA
+    assert "Nombra" in COPIA_OPACA
+    assert "veredicto" in BORRAR_CLAUDE
+
+
+PERMITIDOS_JUNTO_A_CLAUDE = [
+    ("Bash", "cp archivo.txt .claude/otro-directorio/"),
+    ("Bash", "cp /tmp/falso/* .claude/"),
+    ("Bash", "cp -r src-no-protegida dir-temporal/"),
+    ("Bash", "cp -r /tmp/falso/. dir-temporal"),
+    ("Bash", "cp -r /tmp/falso/* dir-temporal/"),
+    ("Bash", "mv /tmp/*.log ."),
+    ("Bash", "mv a.txt b.txt"),
+    ("Bash", "rm .claude/otro-directorio/a.txt"),
+    ("Bash", "rm -rf dir-temporal"),
+    ("Bash", "rm -rf .claude-no-es-esta"),
+    ("Bash", "ls .claude"),
+    ("Bash", "cat .claude/settings.json"),
+    ("PowerShell", r"Copy-Item C:\tmp\falso\* .claude"),
+    ("PowerShell", r"Copy-Item -Recurse C:\tmp\falso\* dir-temporal"),
+    ("PowerShell", "Remove-Item -Recurse -Force dir-temporal"),
+]
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+@pytest.mark.parametrize(("herramienta", "comando"), PERMITIDOS_JUNTO_A_CLAUDE)
+def test_lo_que_no_oculta_nombres_ni_borra_claude_se_permite(crear, rama, herramienta, comando):
+    repo = crear(rama=rama)
+    resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+    assert resultado not in (COPIA_OPACA, BORRAR_CLAUDE, MSG_VEREDICTOS, MSG_LOCAL)
+
+
+@pytest.mark.parametrize("rama", ["main", "003-x"])
+def test_cuando_el_nombre_aparece_sigue_bloqueandose_como_antes(crear, rama):
+    repo = crear(rama=rama)
+    (repo / ".claude").mkdir()  # como en el repositorio real, es una carpeta
+    for herramienta, comando in (
+        ("Bash", "cp -r /tmp/falso/veredictos .claude/"),
+        ("PowerShell", r"Move-Item C:\tmp\falso\veredictos .claude"),
+    ):
+        resultado = guarda_spec_previa.motivo(entrada(repo, herramienta, command=comando))
+        assert resultado == MSG_VEREDICTOS, comando

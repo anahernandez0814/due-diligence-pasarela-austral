@@ -5,6 +5,7 @@ Cada prueba crea un repositorio git en `tmp_path` y sus ramas.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,12 +21,20 @@ def git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
+@pytest.fixture(scope="module")
+def plantilla(tmp_path_factory):
+    """Repositorio git vacío, creado una vez por módulo y copiado en cada prueba."""
+    carpeta = tmp_path_factory.mktemp("plantilla-spec-previa")
+    git(carpeta, "init", "-q")
+    return carpeta
+
+
 @pytest.fixture
-def crear(tmp_path, monkeypatch):
+def crear(plantilla, tmp_path, monkeypatch):
     """Crea el repositorio con la rama y las carpetas de specs pedidas."""
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
-    git(tmp_path, "init", "-q")
+    shutil.copytree(plantilla, tmp_path, dirs_exist_ok=True)
 
     def _crear(rama="099-x", carpetas=("099-x",), documentos=DOCUMENTOS, separada=False):
         if separada:

@@ -15,7 +15,7 @@ from pathlib import Path
 import guarda_pr
 import pytest
 import veredicto
-from repositorio_pruebas import confirmar, crear_repo, escribir, git
+from repositorio_pruebas import confirmar, copiar_plantilla, crear_repo, escribir, git
 
 SCRIPT = Path(__file__).with_name("guarda_pr.py")
 LIMPIO = "RESUMEN: bloqueantes=0 sugerencias=0 cobertura=completa"
@@ -26,13 +26,21 @@ REPOSITORIO = "due-diligence-pasarela-austral"
 ENDPOINT = f"repos/{PROPIETARIO}/{REPOSITORIO}/pulls"
 
 
-@pytest.fixture
-def repo(tmp_path, monkeypatch):
-    """Rama del ticket con un cambio, publicada en `origin`, sin veredicto."""
-    trabajo = crear_repo(tmp_path, RAMA)
+@pytest.fixture(scope="module")
+def plantilla(tmp_path_factory):
+    """Rama del ticket con un cambio, publicada en `origin`, sin veredicto; una vez por módulo."""
+    carpeta = tmp_path_factory.mktemp("plantilla-guarda-pr")
+    trabajo = crear_repo(carpeta, RAMA)
     escribir(trabajo, "src/a.py", "x = 1\n")
     confirmar(trabajo, "cambio")
     git(trabajo, "push", "-q", "-u", "origin", RAMA)
+    return carpeta
+
+
+@pytest.fixture
+def repo(plantilla, tmp_path, monkeypatch):
+    """Copia de la plantilla: rama del ticket con un cambio, publicada, sin veredicto."""
+    trabajo = copiar_plantilla(plantilla, tmp_path)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(trabajo))
     return trabajo
 

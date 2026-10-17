@@ -5,6 +5,7 @@ módulo de pruebas: pytest solo recoge `test_*.py`.
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -63,4 +64,17 @@ def crear_repo(tmp_path: Path, rama: str = "004-demo") -> Path:
     confirmar(trabajo, "inicio")
     git(trabajo, "push", "-q", "-u", "origin", "main")
     git(trabajo, "switch", "-q", "-c", rama)
+    return trabajo
+
+
+def copiar_plantilla(plantilla: Path, destino: Path) -> Path:
+    """Copia el repositorio de plantilla de `crear_repo` en `destino` y devuelve su `trabajo`.
+
+    La plantilla se crea una vez por módulo (`scope="module"`) y se copia en cada prueba, que
+    es mucho más barato que ejecutar git de nuevo. `origin` se repunta al `origen.git` de la
+    copia: si no, las pruebas que empujan modificarían el origen de la plantilla.
+    """
+    shutil.copytree(plantilla, destino, dirs_exist_ok=True)
+    trabajo = destino / "trabajo"
+    git(trabajo, "remote", "set-url", "origin", str(destino / "origen.git"))
     return trabajo

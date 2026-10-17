@@ -256,7 +256,7 @@ src/servidor_mcp/test_listas.py src/servidor_mcp/test_noticias.py src/servidor_m
 **Objetivo**: los dos canales de decisión. **Prueba independiente**: `uv run pytest
 src/servidor_mcp/test_decisiones.py`.
 
-- [ ] T027 [P] [US3] Escribir `src/servidor_mcp/test_decisiones.py` (FR-008, FR-009, R6, R11), con
+- [X] T027 [P] [US3] Escribir `src/servidor_mcp/test_decisiones.py` (FR-008, FR-009, R6, R11), con
   `PASARELA_RESULTADOS_DIR` apuntando a `tmp_path`: `registrar_informe` completo guarda
   `informes/INF-<8 hex>.json` y devuelve `informe_registrado` con **un hecho cuyo `contenido` es
   `{id}`** y metadatos con la fuente «Registro local de informes (ficticio)» y la fecha de
@@ -272,7 +272,7 @@ src/servidor_mcp/test_decisiones.py`.
   si no se puede escribir (un archivo ocupa el lugar de la carpeta) da `error_de_almacenamiento`;
   sin la variable definida la ruta por defecto es `resultados/` en la raíz, comprobada **sin
   escribir** (solo la ruta calculada); no queda ningún archivo temporal.
-- [ ] T028 [US3] Implementar `src/servidor_mcp/decisiones.py` con `registrar_informe(...)` y
+- [X] T028 [US3] Implementar `src/servidor_mcp/decisiones.py` con `registrar_informe(...)` y
   `escalar_a_cumplimiento(...)`: validación con `entradas.py`, carpeta desde
   `PASARELA_RESULTADOS_DIR` (por defecto `resultados/` a partir de `Path(__file__)`, R6), expuesta
   por la función `carpeta_resultados()`, que usa T027 para comprobar la ruta por defecto sin

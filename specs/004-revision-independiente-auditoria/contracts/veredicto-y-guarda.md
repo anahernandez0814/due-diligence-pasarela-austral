@@ -91,6 +91,12 @@ cualquiera de ellos dejaba un veredicto aprobado sin que la guarda viera su nomb
 - **hacia la carpeta `.claude` misma**: toda copia recursiva (`cp -r`, `-R`, `-a`, `-rT`,
   `--recursive`, `--archive`, `Copy-Item -Recurse`) y todo movimiento (`mv`, `mv -T`,
   `Move-Item`) se bloquea, **sin mirar el origen**;
+- **hacia la carpeta `.claude` misma, con un origen opaco aunque no sea recursiva**
+  (hallazgo de la parada F): `cp /tmp/x/* .claude/`, `cp /tmp/x/settings.local.* .claude/` y
+  `Copy-Item C:\tmp\x\* .claude\` salían con 0 en cualquier rama y colocaban un
+  `settings.local.json` falso. Un origen con comodines (`*`, `?`, `[`) no deja ver qué
+  nombres llegan, así que se bloquea. Siguen permitidos `cp /tmp/x/*.md .claude/agents/`
+  (hacia una subcarpeta) y `cp nota.md .claude/` (nombre literal, sin comodín);
 - **hacia subcarpetas** (`.claude/agents/…`): la regla normal;
 - **hacia la raíz**: la copia recursiva con origen opaco (terminado en `/.` o con comodines),
   con `-T` o `--no-target-directory`, o con el origen terminado en barra (`/`);

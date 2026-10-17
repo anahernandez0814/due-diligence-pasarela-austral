@@ -384,6 +384,12 @@ Q11, Q14, Q16).
     `ls .claude`, `cp -r src/otro dir-temporal/` y `cp -r /tmp/falso .` (sin barra, que copia la
     carpeta entera con su nombre), y se sigue bloqueando cuando el nombre aparece
     (`cp -r …/veredictos .claude/`, `Move-Item`).
+  - **Ampliado tras la parada F** (hallazgo): hacia la carpeta `.claude` misma, también se
+    bloquea la copia **no recursiva** con origen que lleva comodines: `cp /tmp/x/* .claude/`,
+    `cp /tmp/x/settings.local.* .claude/`, `Copy-Item C:\tmp\x\* .claude\` (antes salían con 0 y
+    colocaban un `settings.local.json` falso). Siguen permitidos `cp /tmp/x/*.md
+    .claude/agents/` y `cp nota.md .claude/`. Los tests que permitían `cp /tmp/falso/*
+    .claude/` y `Copy-Item C:\tmp\falso\* .claude` pasan a la lista de bloqueados.
 - [X] T023 [US4] Ampliar `.claude/hooks/guarda_spec_previa.py` (FR-020, R8; hace pasar T022):
   añadir `.claude/veredictos/**` al mismo tratamiento que `.claude/settings.local.json`
   (FR-025 de #3), con las mismas vías y sin distinguir rama, pero permitiendo la lectura.

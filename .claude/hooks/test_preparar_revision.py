@@ -187,3 +187,18 @@ def test_el_script_usa_claude_project_dir_si_esta_definida(repo, tmp_path):
 
 def test_el_script_no_recibe_argumentos():
     assert "sys.argv" not in SCRIPT.read_text(encoding="utf-8")
+
+
+def test_la_salida_trae_el_commit_completo_de_head_justo_despues_de_la_rama(repo):
+    lineas = preparar_revision.construir(repo).splitlines()
+    posicion = next(i for i, x in enumerate(lineas) if x.startswith("Rama:"))
+    assert lineas[posicion + 1] == f"Commit: {git(repo, 'rev-parse', 'HEAD')}"
+
+
+def test_el_commit_cambia_con_un_commit_nuevo(repo):
+    antes = preparar_revision.construir(repo)
+    escribir(repo, "src/nuevo.py", "z = 3\n")
+    nuevo = confirmar(repo, "otro commit")
+    despues = preparar_revision.construir(repo)
+    assert f"Commit: {nuevo}" in despues
+    assert f"Commit: {nuevo}" not in antes

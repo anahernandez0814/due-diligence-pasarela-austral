@@ -24,7 +24,7 @@ CON_BLOQUEANTES = "con bloqueantes"
 DIRECTORIO = Path(".claude") / "veredictos"
 
 _RESUMEN = re.compile(
-    r"RESUMEN: bloqueantes=(\d+) sugerencias=(\d+) cobertura=(completa|incompleta)"
+    r"RESUMEN: bloqueantes=([0-9]+) sugerencias=([0-9]+) cobertura=(completa|incompleta)"
 )
 _SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
@@ -140,12 +140,27 @@ def leer(raiz: Path, sha: str) -> dict | None:
     return datos
 
 
-def registrar(raiz: Path, codigo: str, auditoria: str) -> tuple[str, str | None]:
-    """Consolida los dos reportes, escribe el veredicto del commit actual y lo devuelve."""
+class CommitCambiado(RuntimeError):
+    """`HEAD` ya no es el commit que se revisó: el veredicto no se escribe."""
+
+
+def registrar(raiz: Path, commit: str, codigo: str, auditoria: str) -> tuple[str, str | None]:
+    """Consolida los dos reportes y escribe el veredicto del commit **revisado**.
+
+    `commit` es el sha completo que `/abrir-pr` guardó antes de lanzar las revisiones. Si no
+    es un sha hexadecimal completo, lanza ValueError; si ya no es `HEAD`, lanza
+    CommitCambiado. En los dos casos no escribe nada: sin archivo, la guarda bloquea.
+    """
     raiz = Path(raiz)
+    destino = ruta_veredicto(raiz, commit)
     codigo_git, sha = git(raiz, "rev-parse", "HEAD")
     if codigo_git != 0:
         raise RuntimeError("no se pudo leer el commit actual: ¿es un repositorio git?")
+    if sha != commit:
+        raise CommitCambiado(
+            f"El commit cambió durante la revisión (revisado {commit[:7]}, actual {sha[:7]}): "
+            "ejecute /abrir-pr de nuevo."
+        )
     _, rama = git(raiz, "branch", "--show-current")
     resumen_codigo = parsear_resumen(codigo)
     resumen_auditoria = parsear_resumen(auditoria)
@@ -158,7 +173,6 @@ def registrar(raiz: Path, codigo: str, auditoria: str) -> tuple[str, str | None]
         "codigo": resumen_codigo,
         "auditoria": resumen_auditoria,
     }
-    destino = ruta_veredicto(raiz, sha)
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps(datos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return veredicto, motivo
@@ -174,14 +188,22 @@ def _raiz() -> Path:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="veredicto.py", description=__doc__.splitlines()[0])
     subcomandos = parser.add_subparsers(dest="orden", required=True)
-    registro = subcomandos.add_parser("registrar", help="registra el veredicto del commit actual")
+    registro = subcomandos.add_parser("registrar", help="registra el veredicto del commit revisado")
+    registro.add_argument(
+        "--commit", required=True, help="sha completo del commit revisado; tiene que ser HEAD"
+    )
     registro.add_argument("--codigo", required=True, help="reporte o línea RESUMEN de la revisión")
     registro.add_argument(
         "--auditoria", required=True, help="reporte o línea RESUMEN de la auditoría"
     )
     argumentos = parser.parse_args(argv)
     try:
-        veredicto, motivo = registrar(_raiz(), argumentos.codigo, argumentos.auditoria)
+        veredicto, motivo = registrar(
+            _raiz(), argumentos.commit, argumentos.codigo, argumentos.auditoria
+        )
+    except CommitCambiado as error:
+        print(error, file=sys.stderr)
+        return 2
     except (OSError, RuntimeError, ValueError) as error:
         print(f"No se pudo registrar el veredicto: {error}", file=sys.stderr)
         return 2

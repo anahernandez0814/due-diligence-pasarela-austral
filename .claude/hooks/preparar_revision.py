@@ -115,6 +115,11 @@ def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
 
     _, rama = veredicto.git(raiz, "branch", "--show-current")
     salida.append(f"Rama: {rama or '(ninguna)'}")
+    codigo_head, sha = veredicto.git(raiz, "rev-parse", "HEAD")
+    if codigo_head == 0 and sha:
+        salida.append(f"Commit: {sha}")
+    else:
+        incompleto.append("no se pudo leer el commit actual (HEAD)")
     base = veredicto.base_de_fusion(raiz)
     if base is None:
         incompleto.append(

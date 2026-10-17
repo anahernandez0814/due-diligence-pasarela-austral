@@ -22,7 +22,7 @@ viven en código y no en el prompt:
   (`error_max_turns` trae `stop_reason=tool_use` *(medido)*, por eso el `subtype` va primero).
 - **Estado y eventos** (R6, R7): se capturan de las llamadas a herramientas, no del texto, y quedan
   accesibles por referencia para los hooks del #7.
-- **Modelos** (R9): Sonnet 5.5 para el coordinador, Haiku 5.5 para los subagentes; **.env** con
+- **Modelos** (R9): Sonnet 5.5 para el coordinador y para los cuatro subagentes; **.env** con
   `python-dotenv` solo desde el punto de entrada (R8).
 
 No hay hooks de negocio (#7), manejo de fallas (#8), informe (#9), escalamiento (#10) ni interfaz (#11).

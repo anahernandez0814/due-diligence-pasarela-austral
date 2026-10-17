@@ -92,4 +92,5 @@ archivos nuevos. Los tests de este ticket usan solo los identificadores y nombre
 ## Criterios de salida
 
 Q1, Q3, Q4, Q6 y Q7 en verde; Q2 y Q5 con la tabla y el registro de eventos esperados, anotados en
-`tasks.md`; `DECISIONES.md` y la bitácora 6.2 actualizados (modelos, coste medido, hallazgos de R2 a R5).
+`tasks.md`; `DECISIONES.md` actualizado (modelos, coste medido, hallazgos de R2 a R5). La bitácora
+6.2 la actualiza la analista desde otro chat, con los números que deja el resumen del implement.

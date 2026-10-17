@@ -72,10 +72,10 @@ exacta de cada agente con la esperada; el sondeo la compara con la lista real de
 | Agente | `allowed_tools` | Modelo |
 |--------|-----------------|--------|
 | Coordinador | `mcp__delegacion__delegar_frente`, `mcp__pasarela__registrar_informe`, `mcp__pasarela__escalar_a_cumplimiento` | Sonnet 5.5 |
-| Registro | `mcp__pasarela__consultar_registro_mercantil` | Haiku 5.5 |
-| Listas | `mcp__pasarela__consultar_listas_restrictivas` | Haiku 5.5 |
-| Noticias | `mcp__pasarela__buscar_noticias` | Haiku 5.5 |
-| Riesgo | `mcp__pasarela__consultar_riesgo_categoria` | Haiku 5.5 |
+| Registro | `mcp__pasarela__consultar_registro_mercantil` | Sonnet 5.5 |
+| Listas | `mcp__pasarela__consultar_listas_restrictivas` | Sonnet 5.5 |
+| Noticias | `mcp__pasarela__buscar_noticias` | Sonnet 5.5 |
+| Riesgo | `mcp__pasarela__consultar_riesgo_categoria` | Sonnet 5.5 |
 
 El coordinador lleva `disallowed_tools` con las cuatro herramientas de fuentes. Como `.mcp.json` no se
 carga con `setting_sources=[]`, el servidor `pasarela` se declara en las opciones (`sys.executable -m
@@ -181,35 +181,47 @@ CLI que usa el SDK también acepta la sesión de Claude Code del usuario; en los
 investigación funcionó así, sin clave. `ANTHROPIC_API_KEY` es lo que cubre una máquina sin sesión.
 El test `test_configuracion` comprueba que ningún módulo salvo `__main__` llama a `cargar_entorno`.
 
-## R9. Modelos: Sonnet 5.5 para el coordinador, Haiku 5.5 para los subagentes
+## R9. Modelos: Sonnet 5.5 para el coordinador y para los cuatro subagentes
 
-**Decisión**: coordinador `claude-sonnet-5-5`; subagentes `claude-haiku-5-5`, con identificadores
-completos (no los alias `sonnet` y `haiku`, que pueden resolver a otro modelo con el tiempo). Ambos
-se pueden sustituir con `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES`, sin tocar código.
+**Decisión** (analista, 2026-10-17): el coordinador y los cuatro subagentes usan `claude-sonnet-5-5`,
+con identificador completo (no el alias `sonnet`, que puede resolver a otro modelo con el tiempo). El
+modelo del coordinador y el de los subagentes se leen de variables de entorno distintas
+(`PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES`), con el mismo valor por defecto, para
+poder cambiar uno sin tocar el otro ni el código.
 
 **Razón**:
-- **Los subagentes solo consultan su fuente**: una llamada a una herramienta con argumentos
-  conocidos (el código los fija en el prompt) y un resumen corto. Es trabajo de clasificar y copiar,
-  donde un modelo pequeño es suficiente y 4 llamadas por caso multiplican el coste y la latencia.
-- **El coordinador** decide qué datos extraer de una solicitud en lenguaje natural, qué frentes
-  delegar y, en #9 y #10, redactará recomendaciones y resúmenes al oficial: ahí la calidad importa
-  más que el coste. No se elige el modelo más grande porque **las decisiones obligatorias no
-  dependen del modelo**: las garantizan los hooks (principio II) y el orden lo hace cumplir la
-  herramienta (R4).
-- **Medido** (una llamada mínima, sin herramientas): Sonnet 5.5 ≈ 0,005 USD; Haiku 5.5 ≈ 0,0002 USD,
-  unas 20 veces menos. **Corrección tras R14**: cuando el coordinador llama a una herramienta en
-  proceso, el SDK escribe en la caché un prefijo de unos 30 000 tokens (≈ 0,129 USD con Sonnet en frío,
-  ≈ 0,006 con Haiku, ≈ 0,004 con Sonnet si la caché está caliente). Con dos subagentes Haiku el coste
-  de estos fue ≈ 0,0003. Un caso en frío con Sonnet cuesta **del orden de 0,13 USD**, no de centavos;
-  en caliente (misma hora), del orden de 0,01. El coste real de un caso completo se mide en frío y en
-  caliente en Q5 y se anota en `DECISIONES.md` y la bitácora 6.2. Si el coste en frío importa, la
-  decisión se revisa con esos números (R14).
-- **Alternativa descartada**: Opus 5.5 para el coordinador. Mejora el razonamiento, pero aquí no es el
-  cuello de botella y encarece cada caso sin una necesidad medida. Si #9 o #10 muestran que el
-  coordinador falla en el resumen al oficial, se sube con la variable de entorno y se documenta.
+- **Más fidelidad al copiar datos**: aunque un subagente solo hace una llamada a su herramienta y
+  resume, tiene que copiar sin alterar el identificador, el nombre y el representante que el código le
+  entrega (R4, R11). Un error ahí cambia lo que se consulta. Se acepta pagar un modelo más capaz a cambio
+  de esa fidelidad.
+- **Coste estimado por la analista**: unos **0,01 a 0,02 USD más por caso** respecto de subagentes en
+  Haiku. Es una estimación: el coste real de un caso completo, con los cuatro subagentes en Sonnet, se
+  mide en frío y en caliente en Q5 (T034) y se anota en `DECISIONES.md`.
+- **El coordinador** decide qué datos extraer de una solicitud en lenguaje natural, qué frentes delegar
+  y, en #9 y #10, redactará recomendaciones y resúmenes al oficial. No se elige el modelo más grande
+  porque **las decisiones obligatorias no dependen del modelo**: las garantizan los hooks (principio II)
+  y el orden lo hace cumplir la herramienta (R4).
+- **Medido** (R14.3): una llamada mínima sin herramientas cuesta ≈ 0,005 USD con Sonnet 5.5; cuando el
+  coordinador llama a una herramienta en proceso, el SDK escribe en la caché un prefijo de unos
+  30 000 tokens (≈ 0,129 USD con Sonnet en frío, ≈ 0,004 en caliente). Un caso en frío con Sonnet
+  cuesta **del orden de 0,13 USD** y en caliente (misma hora), del orden de 0,01 a 0,03; el coste lo
+  domina el coordinador, no los subagentes.
 
-**Dónde se documenta**: bitácora 6.2 (pasa de «pendiente» a decidido) y una viñeta breve en
-`DECISIONES.md`, con una línea por decisión, sin recortar entradas existentes.
+**Alternativas descartadas**:
+- **Haiku 5.5 para los subagentes**: más barato y rápido. Medido con el mismo servidor: una llamada
+  mínima ≈ 0,0002 USD (unas 20 veces menos que Sonnet) y los dos frentes del sondeo de R14.1,
+  ≈ 0,0003 USD en total, con ≈ 5 s por frente. Se descarta por la fidelidad al copiar datos, no por
+  falta de capacidad para la tarea.
+- **Haiku 5.5 para el coordinador**: ≈ 0,006 USD en frío con una llamada a una herramienta en proceso.
+  Se descarta porque el coordinador es el que interpreta la solicitud y, más adelante, redacta.
+- **Opus 5.5 para el coordinador**: mejora el razonamiento, pero aquí no es el cuello de botella y
+  encarece cada caso sin una necesidad medida. Si #9 o #10 muestran que el coordinador falla en el
+  resumen al oficial, se sube con la variable de entorno y se documenta.
+
+**Dónde se documenta**: una viñeta breve en `DECISIONES.md`, con una línea por decisión y sin recortar
+entradas existentes. La bitácora `docs/bitacora-decisiones.md` (sección 6.2) **no se edita en este
+ticket**: la actualiza la analista desde otro chat. Para eso, tras T034 el resumen de `/speckit-implement`
+deja los números medidos (duración, solape, coste en frío y en caliente).
 
 ## R10. Dependencias
 
@@ -276,7 +288,8 @@ no necesita. Con `setting_sources=[]` y `tools=[]` (R2, R3), el agente no tiene 
 ## R14. Sondeo de la opción (a): `query()` anidado y herramienta lenta *(medido)*
 
 Entorno temporal fuera del repositorio, `claude-agent-sdk` 0.2.168, sin leer `.env`. Coordinador con
-Sonnet 5.5 y subagentes con Haiku 5.5 reales contra el servidor `pasarela` del #5. **Nada falló: la
+Sonnet 5.5 y subagentes con Haiku 5.5 reales contra el servidor `pasarela` del #5 (el sondeo se hizo
+con Haiku en los subagentes por coste; la decisión final es Sonnet para todos, R9). **Nada falló: la
 opción (a) se mantiene.**
 
 **14.1. `delegar_frente` lanza un `query()` de subagente desde dentro de la herramienta, con el
@@ -317,12 +330,13 @@ habrá que medirlo entonces.
 La causa exacta del prefijo de ≈ 30 000 tokens (aparece cuando el coordinador usa una herramienta
 en proceso, y no con una consulta sin herramientas) **no se ha identificado**; no depende de
 `setting_sources` ni de `skills`. Implicaciones:
-- Los **subagentes** salen baratos con Haiku; el coste de un caso lo domina **el coordinador**.
+- Los **subagentes** con Haiku salieron baratos (≈ 0,0003 USD los dos); con Sonnet (R9) costarán más
+  y se miden en Q5. El coste de un caso lo domina **el coordinador**.
 - En frío (la primera vez de cada hora) un caso con Sonnet cuesta del orden de **0,13 USD**; en
   caliente, del orden de 0,01 USD. Con Haiku como coordinador, ≈ 0,006 en frío.
 - No cambia la opción (a). Sí obliga a **medir en Q5 el coste de un caso completo en frío y en caliente**
-  y a decidir con esos números el modelo del coordinador (R9). El plan mantiene Sonnet 5.5 por calidad
-  y lo deja sustituible por variable de entorno.
+  y a anotar esos números. El plan mantiene Sonnet 5.5 para el coordinador y los subagentes (R9) y lo deja
+  sustituible por variable de entorno.
 
 **Para las tareas**: el ejecutor real hace `query()` desde dentro de la herramienta y el `cwd` de cada
 subagente es la raíz del repositorio; el test automático sigue usando el ejecutor simulado. Q5 repite

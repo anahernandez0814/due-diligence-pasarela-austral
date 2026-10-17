@@ -290,7 +290,7 @@ src/servidor_mcp/test_decisiones.py`.
 **Objetivo**: el servidor por protocolo y conectado junto al de GitHub. **Prueba independiente**:
 `uv run pytest src/servidor_mcp/test_servidor.py` y Q6.
 
-- [ ] T029 [P] [US5] Escribir `src/servidor_mcp/test_servidor.py` con el **cliente en memoria** del SDK
+- [X] T029 [P] [US5] Escribir `src/servidor_mcp/test_servidor.py` con el **cliente en memoria** del SDK
   (`from mcp.client import Client`, R12). Lista **exactamente** las seis herramientas; cada
   descripción contiene las frases de R10 (una mención en noticias no es una coincidencia en
   listas restrictivas; varias coincidencias no autorizan a elegir una; `registrar_informe` y
@@ -310,7 +310,7 @@ src/servidor_mcp/test_decisiones.py`.
   herramientas responden con normalidad por el protocolo. **Español** (FR-018): las descripciones
   y los mensajes de error de las seis herramientas están en español (sin las palabras
   `required`, `invalid` ni `error executing`).
-- [ ] T030 [US5] Implementar `src/servidor_mcp/servidor.py` (`MCPServer("pasarela")`, las seis herramientas
+- [X] T030 [US5] Implementar `src/servidor_mcp/servidor.py` (`MCPServer("pasarela")`, las seis herramientas
   con `@servidor.tool()`, `-> CallToolResult`, parámetros `Annotated[Any, Field(description=...)] =
   None`, `try/except` que convierte lo inesperado en `error_interno` no reintentable, y las
   descripciones del contrato). **`servidor.py` llama a las funciones por módulo**
@@ -318,7 +318,7 @@ src/servidor_mcp/test_decisiones.py`.
   `noticias`, `riesgo` y `decisiones`), nunca con `from .registro import f`, para que el
   `monkeypatch` de T029 actúe. Y `src/servidor_mcp/__main__.py` (`servidor.run()`, stdio). Nada se
   imprime en stdout. Pasa T029.
-- [ ] T031 [P] [US5] Crear `src/servidor_mcp/CLAUDE.md` con las convenciones del servidor (FR-015):
+- [X] T031 [P] [US5] Crear `src/servidor_mcp/CLAUDE.md` con las convenciones del servidor (FR-015):
   `MCPServer` y no `FastMCP`, errores estructurados con `CallToolResult`, parámetros opcionales,
   nada en stdout, datos solo ficticios, variables `PASARELA_*`, tests junto al código.
 - [ ] T032 [P] [US5] Añadir a `.claude/hooks/test_configuracion.py` la comprobación de que

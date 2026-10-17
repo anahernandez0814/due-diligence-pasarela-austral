@@ -1,0 +1,26 @@
+{
+  "ficticio": true,
+  "aviso": "Datos ficticios para las pruebas de Pasarela Austral. Ninguna lista, comercio ni persona es real; cualquier parecido con la realidad es casual.",
+  "fecha_corte": "2026-09-25",
+  "listas": [
+    {
+      "lista": "Lista Restrictiva Ficticia A",
+      "fuente": "Autoridad Ficticia de Control A",
+      "fecha_corte": "2026-09-25",
+      "entradas": [
+        {"tipo": "persona", "nombre": "Ernesto Calderón Ibarra", "identificador": "PE-0003"},
+        {"tipo": "persona", "nombre": "Mateo Ríos Cabrera", "identificador": "PE-0090"},
+        {"tipo": "comercio", "nombre": "Importadora Sombra SAS", "identificador": "CO-IS-0090"}
+      ]
+    },
+    {
+      "lista": "Lista Restrictiva Ficticia B",
+      "fuente": "Autoridad Ficticia de Control B",
+      "fecha_corte": "2026-09-20",
+      "entradas": [
+        {"tipo": "comercio", "nombre": "Comercializadora Niebla SAS", "identificador": "CO-CN-0091"},
+        {"tipo": "persona", "nombre": "Dalia Montenegro Rivas", "identificador": "PE-0091"}
+      ]
+    }
+  ]
+}

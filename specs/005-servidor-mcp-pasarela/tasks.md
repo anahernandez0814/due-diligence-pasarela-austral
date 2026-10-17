@@ -132,14 +132,14 @@ verificación del cierre de #5 la hace el paso 0 del siguiente `/siguiente-ticke
 **Objetivo**: los datos de `data-model.md`. **Prueba independiente**: `uv run pytest
 src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
 
-- [ ] T012 [P] [US4] Ampliar `src/servidor_mcp/test_datos.py` con los **datos reales** (FR-013, FR-014,
+- [X] T012 [P] [US4] Ampliar `src/servidor_mcp/test_datos.py` con los **datos reales** (FR-013, FR-014,
   data-model «Reglas de validación»): cada archivo de `datos/` es `ficticio: true` con `aviso` y
   `fecha_corte`; las URL terminan en `.example`; ningún valor tiene 6 o más dígitos seguidos
   (`\d{6,}`); los identificadores de comercio cumplen `^CO-[A-Z]{2}-\d{4}$` y los de persona
   `^PE-\d{4}$`; `estado` es `activo`, `suspendido` o `cancelado`; `categorias.json` tiene nivel
   `alto` **exactamente** para `apuestas`, `criptoactivos`, `suplementos dietarios` y
-  `venta de medicamentos`, y nueve categorías en total.
-- [ ] T013 [P] [US4] Crear `src/servidor_mcp/datos/registro_rmf_sur.json` y
+  `venta de medicamentos`, y diez categorías en total.
+- [X] T013 [P] [US4] Crear `src/servidor_mcp/datos/registro_rmf_sur.json` y
   `src/servidor_mcp/datos/registro_rufe.json` (FR-004, FR-013, R8). Fuentes «Registro Mercantil
   Ficticio del Sur» y «Registro Único Ficticio de Empresas». Seis comercios en **las dos**
   fuentes con los mismos datos, salvo la fecha de `CO-RF-0006` (`2016-03-14` en RMF-Sur y
@@ -148,17 +148,17 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
   `CO-AM-0004` Almacén Mirador SAS; `CO-AM-0005` Almacén Mirador Norte SAS; `CO-RF-0006`
   Ferretería Río Fino SAS. Cada comercio con `fecha_constitucion`, `estado` y
   `representante_legal {nombre, identificador}`. **Sin categoría de negocio** (ajuste 4).
-- [ ] T014 [P] [US4] Crear `src/servidor_mcp/datos/listas_restrictivas.json`: «Lista Restrictiva
+- [X] T014 [P] [US4] Crear `src/servidor_mcp/datos/listas_restrictivas.json`: «Lista Restrictiva
   Ficticia A» y «B»; `PE-0003` como **persona** en la A; ni `CO-PL-0003` ni `CO-TV-0001` ni
   `CO-TA-0002` en ninguna lista (caso c, a y b).
-- [ ] T015 [P] [US4] Crear `src/servidor_mcp/datos/noticias.json`: fuente «Diario Ficticio del Sur»,
+- [X] T015 [P] [US4] Crear `src/servidor_mcp/datos/noticias.json`: fuente «Diario Ficticio del Sur»,
   noticias con `id`, `titular`, `fecha`, `url` en `.example` y `menciona[]`. Una menciona a
   `CO-AM-0005` y **ninguna** menciona a `CO-TV-0001` ni a `CO-TA-0002`.
-- [ ] T016 [P] [US4] Crear `src/servidor_mcp/datos/categorias.json` con las nueve categorías de
+- [X] T016 [P] [US4] Crear `src/servidor_mcp/datos/categorias.json` con las diez categorías de
   `data-model.md`: `alto` (apuestas, criptoactivos, suplementos dietarios, venta de
   medicamentos), `medio` (viajes y turismo, electrodomésticos) y `bajo` (ropa y accesorios,
   restaurantes y alimentos preparados, tecnología y software, educación en línea).
-- [ ] T017 [US4] Escribir `src/servidor_mcp/test_datos_casos.py`: un test **«datos del caso (x)»**
+- [X] T017 [US4] Escribir `src/servidor_mcp/test_datos_casos.py`: un test **«datos del caso (x)»**
   por cada caso (a)–(g) según el mapa de `data-model.md`. **Solo prueba que los datos reproducen
   el caso**; los casos completos son del #12.
   (a) `CO-TV-0001` en el registro, sin entradas en listas ni noticias, y «suplementos dietarios»
@@ -170,7 +170,7 @@ src/servidor_mcp/test_datos.py src/servidor_mcp/test_datos_casos.py`.
   que no existe hasta T020; (f) sin
   datos nuevos: existe al menos un comercio al que aplicar la variable; (g) `CO-RF-0006` tiene
   dos fechas distintas, cada una en su fuente. Pasa con T013 a T016.
-- [ ] T018 [US4] `uv run ruff format .`, `uv run ruff check .`, `uv run pytest src/servidor_mcp` y
+- [X] T018 [US4] `uv run ruff format .`, `uv run ruff check .`, `uv run pytest src/servidor_mcp` y
   `uv run pytest .claude/hooks/test_revision_repositorio.py`. **Antes de ejecutar esa revisión,
   `git add src/servidor_mcp/datos/`**: recorre `git ls-files` y, con los JSON sin versionar, pasaría
   sin leerlos (SC-006). Después, commit `feat(servidor_mcp): datos ficticios de los casos`.

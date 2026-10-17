@@ -1,6 +1,7 @@
 """Pruebas del cargador de datos ficticios (R8) y, más abajo, de los datos reales."""
 
 import json
+import re
 
 import pytest
 
@@ -124,3 +125,90 @@ def test_registros_devuelve_las_dos_fuentes_registrales(tmp_path, monkeypatch):
     _escribir(tmp_path / "registro_rmf_sur.json", _valido(fuente="A", comercios=[]))
     _escribir(tmp_path / "registro_rufe.json", _valido(fuente="B", comercios=[]))
     assert [r["fuente"] for r in datos.registros()] == ["A", "B"]
+
+
+# --- datos reales (FR-013, FR-014, data-model «Reglas de validación») -------------------------
+
+ARCHIVOS = [
+    "registro_rmf_sur.json",
+    "registro_rufe.json",
+    "listas_restrictivas.json",
+    "noticias.json",
+    "categorias.json",
+]
+ALTO_RIESGO = {
+    "apuestas",
+    "criptoactivos",
+    "suplementos dietarios",
+    "venta de medicamentos",
+}
+
+
+def _claves_con_valor(valor, nombre):
+    """Los valores de todas las claves `nombre`, a cualquier profundidad."""
+    if isinstance(valor, dict):
+        for clave, v in valor.items():
+            if clave == nombre:
+                yield v
+            yield from _claves_con_valor(v, nombre)
+    elif isinstance(valor, list):
+        for v in valor:
+            yield from _claves_con_valor(v, nombre)
+
+
+def _real(nombre):
+    return cargar(datos.DIRECTORIO_DATOS / nombre)
+
+
+@pytest.mark.parametrize("nombre", ARCHIVOS)
+def test_cada_archivo_es_ficticio_con_aviso_y_fecha_de_corte(nombre):
+    contenido = _real(nombre)
+    assert contenido["ficticio"] is True
+    assert "ficticio" in contenido["aviso"].lower()
+    assert contenido["fecha_corte"]
+
+
+@pytest.mark.parametrize("nombre", ARCHIVOS)
+def test_ningun_valor_tiene_seis_o_mas_digitos_seguidos(nombre):
+    texto = (datos.DIRECTORIO_DATOS / nombre).read_text(encoding="utf-8")
+    assert not re.search(r"\d{6,}", texto)
+
+
+@pytest.mark.parametrize("nombre", ARCHIVOS)
+def test_las_url_son_de_dominio_example(nombre):
+    texto = (datos.DIRECTORIO_DATOS / nombre).read_text(encoding="utf-8")
+    for host in re.findall(r"https?://([^/\s\"']+)", texto):
+        assert host.endswith(".example"), host
+
+
+def test_los_identificadores_tienen_el_formato_propio():
+    for nombre in ARCHIVOS:
+        for identificador in _claves_con_valor(_real(nombre), "identificador"):
+            assert re.fullmatch(r"CO-[A-Z]{2}-\d{4}|PE-\d{4}", identificador), identificador
+
+
+def test_los_comercios_de_las_fuentes_registrales_tienen_id_de_comercio():
+    for nombre in ("registro_rmf_sur.json", "registro_rufe.json"):
+        comercios = _real(nombre)["comercios"]
+        assert comercios
+        for c in comercios:
+            assert re.fullmatch(r"CO-[A-Z]{2}-\d{4}", c["identificador"])
+            assert re.fullmatch(r"PE-\d{4}", c["representante_legal"]["identificador"])
+            assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", c["fecha_constitucion"])
+            assert c["estado"] in {"activo", "suspendido", "cancelado"}
+            assert "categoria" not in c  # la categoría la aporta el analista
+
+
+def test_las_fuentes_registrales_tienen_nombre_de_fuente_distinto():
+    fuentes = [r["fuente"] for r in datos.registros()]
+    assert len(set(fuentes)) == 2
+    assert all("Ficticio" in f for f in fuentes)
+
+
+def test_alto_riesgo_es_exactamente_el_del_enunciado():
+    categorias = _real("categorias.json")["categorias"]
+    assert len(categorias) == 10
+    altas = {c["nombre"] for c in categorias if c["nivel"] == "alto"}
+    assert altas == ALTO_RIESGO
+    assert {c["nivel"] for c in categorias} == {"alto", "medio", "bajo"}
+    assert len({c["nombre"] for c in categorias}) == 10

@@ -1,0 +1,35 @@
+{
+  "ficticio": true,
+  "aviso": "Datos ficticios para las pruebas de Pasarela Austral. Ninguna noticia, medio, comercio ni persona es real; cualquier parecido con la realidad es casual.",
+  "fuente": "Diario Ficticio del Sur",
+  "fecha_corte": "2026-09-30",
+  "noticias": [
+    {
+      "id": "N-0001",
+      "titular": "Almacén Mirador Norte inaugura una sucursal en la zona industrial",
+      "fecha": "2026-03-18",
+      "url": "https://diario.example/noticias/n-0001",
+      "menciona": [
+        {"nombre": "Almacén Mirador Norte SAS", "identificador": "CO-AM-0005"}
+      ]
+    },
+    {
+      "id": "N-0002",
+      "titular": "La Cooperativa Ficticia del Valle abre su convocatoria anual",
+      "fecha": "2026-05-07",
+      "url": "https://diario.example/noticias/n-0002",
+      "menciona": [
+        {"nombre": "Cooperativa Ficticia del Valle", "identificador": "CO-CV-0092"}
+      ]
+    },
+    {
+      "id": "N-0003",
+      "titular": "Renata Olmedo Sáenz, invitada a la feria de comercio del sur",
+      "fecha": "2026-07-22",
+      "url": "https://diario.example/noticias/n-0003",
+      "menciona": [
+        {"nombre": "Renata Olmedo Sáenz", "identificador": "PE-0004"}
+      ]
+    }
+  ]
+}

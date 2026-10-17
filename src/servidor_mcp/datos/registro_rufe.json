@@ -1,0 +1,50 @@
+{
+  "ficticio": true,
+  "aviso": "Datos ficticios para las pruebas de Pasarela Austral. Ningún comercio, persona ni fuente es real; cualquier parecido con la realidad es casual.",
+  "fuente": "Registro Único Ficticio de Empresas",
+  "fecha_corte": "2026-09-28",
+  "comercios": [
+    {
+      "identificador": "CO-TV-0001",
+      "nombre": "Tienda Verde SAS",
+      "fecha_constitucion": "2019-04-12",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Lucía Ferrer Montalvo", "identificador": "PE-0001"}
+    },
+    {
+      "identificador": "CO-TA-0002",
+      "nombre": "Taller Aurora SAS",
+      "fecha_constitucion": "2018-08-03",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Tomás Valdivia Arce", "identificador": "PE-0002"}
+    },
+    {
+      "identificador": "CO-PL-0003",
+      "nombre": "Panadería Luna Nueva SAS",
+      "fecha_constitucion": "2020-01-20",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Ernesto Calderón Ibarra", "identificador": "PE-0003"}
+    },
+    {
+      "identificador": "CO-AM-0004",
+      "nombre": "Almacén Mirador SAS",
+      "fecha_constitucion": "2017-06-15",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Renata Olmedo Sáenz", "identificador": "PE-0004"}
+    },
+    {
+      "identificador": "CO-AM-0005",
+      "nombre": "Almacén Mirador Norte SAS",
+      "fecha_constitucion": "2021-02-09",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Gaspar Linares Ibáñez", "identificador": "PE-0005"}
+    },
+    {
+      "identificador": "CO-RF-0006",
+      "nombre": "Ferretería Río Fino SAS",
+      "fecha_constitucion": "2017-09-02",
+      "estado": "activo",
+      "representante_legal": {"nombre": "Valeria Ontiveros Pardo", "identificador": "PE-0006"}
+    }
+  ]
+}

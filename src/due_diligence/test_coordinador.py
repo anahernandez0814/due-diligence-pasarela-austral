@@ -6,6 +6,7 @@ el cableado (herramientas, delegación, estado, terminación), no lo que decidir
 
 import asyncio
 
+import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 from claude_agent_sdk._errors import ResultError
 
@@ -271,6 +272,16 @@ def test_el_limite_de_seguridad_y_la_result_error_posterior_no_rompen_el_caso():
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.terminacion.terminacion is Terminacion.LIMITE_SEGURIDAD
     assert "error_max_turns" in caso.eventos()[-1].detalle
+
+
+def test_otra_excepcion_del_sdk_registra_la_terminacion_anomala_y_se_relanza():
+    caso, _, _ = _caso([], error_final=ConnectionError("sin conexión"))
+    # El error llega tras el ResultMessage, pero una excepción que no es ResultError no se traga.
+    with pytest.raises(ConnectionError):
+        asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+    ultimo = caso.eventos()[-1]
+    assert ultimo.tipo == TIPO_TERMINACION and "ConnectionError" in ultimo.detalle
 
 
 # ------------------------------------------------------------------ hooks y entorno (R7, R8)

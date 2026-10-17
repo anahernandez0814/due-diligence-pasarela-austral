@@ -25,7 +25,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk._errors import ResultError
 
 from due_diligence.estado import Consulta, ResultadoFrente
-from due_diligence.frentes import Frente
+from due_diligence.frentes import FRENTES, Frente
 from due_diligence.terminacion import (
     Clasificacion,
     clasificar_error,
@@ -107,6 +107,8 @@ class EjecutorSDK:
     ) -> ResultadoFrente:
         consultas: list[Consulta] = []
         por_id: dict[str, Consulta] = {}
+        ajenas: set[str] = set()
+        propia = FRENTES[frente].herramienta_completa
         resumen = ""
         clasificacion: Clasificacion | None = None
         coste: float | None = None
@@ -115,6 +117,9 @@ class EjecutorSDK:
                 if isinstance(mensaje, AssistantMessage):
                     for bloque in mensaje.content:
                         if isinstance(bloque, ToolUseBlock):
+                            if bloque.name != propia:  # herramienta ajena: no es una consulta
+                                ajenas.add(bloque.id)
+                                continue
                             nueva = Consulta(
                                 frente, bloque.name, dict(bloque.input), None, False, None
                             )
@@ -125,6 +130,8 @@ class EjecutorSDK:
                 elif isinstance(mensaje, UserMessage) and isinstance(mensaje.content, list):
                     for bloque in mensaje.content:
                         if not isinstance(bloque, ToolResultBlock):
+                            continue
+                        if bloque.tool_use_id in ajenas:
                             continue
                         resultado, error = interpretar_resultado(bloque.content, bloque.is_error)
                         consulta = por_id.get(bloque.tool_use_id)

@@ -57,7 +57,7 @@ terminado o no terminado, se compara la **entrada** (el contexto construido) con
 a ejecutar el frente (`delegacion` con «otra entrada», nuevo `frente_inicio` y `frente_fin`). Lo hallado
 en la validación real: el coordinador corrigió la categoría y recibió el resultado anterior. Si el registro se vuelve a ejecutar y el comercio del estado cambia, `listas` ya terminado (o no terminado)
 pasa a `no_terminado` con el motivo «el comercio del registro cambió; vuelva a delegar listas», con su evento
-`frente_fin`, y su entrada se olvida para que el reintento se ejecute (caso (c): sin esto, el resultado era
+`frente_invalidado` (no `frente_fin`), y su entrada se olvida para que el reintento se ejecute (caso (c): sin esto, el resultado era
 de otro comercio). Un `listas` en curso no se invalida (research R13.10). La política
 de cuándo reintentar un frente `no_terminado` es del #8.
 

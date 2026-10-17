@@ -22,6 +22,7 @@ from due_diligence.frentes import Frente
 from due_diligence.terminacion import Terminacion
 
 HERRAMIENTA = "mcp__pasarela__consultar_registro_mercantil"
+LISTAS = "mcp__pasarela__consultar_listas_restrictivas"
 
 RESULTADO_DEL_CONTRATO = {
     "resultado": "coincidencias",
@@ -194,8 +195,8 @@ def test_un_error_que_no_es_json_con_is_error_no_se_pierde():
 def test_las_consultas_conservan_el_orden_y_el_texto_solo_llena_el_resumen():
     resultado, _ = _ejecutar(
         [
-            _uso("t1", {"tipo": "comercio", "identificador": "CO-TV-0001"}, "mcp__pasarela__x"),
-            _uso("t2", {"tipo": "persona", "nombre": "Lucía Ferrer Montalvo"}, "mcp__pasarela__x"),
+            _uso("t1", {"tipo": "comercio", "identificador": "CO-TV-0001"}, LISTAS),
+            _uso("t2", {"tipo": "persona", "nombre": "Lucía Ferrer Montalvo"}, LISTAS),
             _respuesta_de_herramienta("t1", json.dumps(RESULTADO_DEL_CONTRATO)),
             _respuesta_de_herramienta("t2", json.dumps(RESULTADO_DEL_CONTRATO)),
             _texto("Sin coincidencias en ninguna lista."),
@@ -206,6 +207,31 @@ def test_las_consultas_conservan_el_orden_y_el_texto_solo_llena_el_resumen():
     assert [c.argumentos["tipo"] for c in resultado.consultas] == ["comercio", "persona"]
     assert resultado.resumen == "Sin coincidencias en ninguna lista."
     assert all(c.frente is Frente.LISTAS for c in resultado.consultas)
+
+
+def test_solo_las_llamadas_a_la_herramienta_del_frente_se_guardan_como_consulta():
+    resultado, _ = _ejecutar(
+        [
+            _uso("t1", {"identificador": "CO-TV-0001"}, "mcp__pasarela__registrar_informe"),
+            _uso("t2", {"identificador": "CO-TV-0001"}),
+            _respuesta_de_herramienta("t1", json.dumps(RESULTADO_DEL_CONTRATO)),
+            _respuesta_de_herramienta("t2", json.dumps(RESULTADO_DEL_CONTRATO)),
+            _fin(),
+        ]
+    )
+    assert [c.herramienta for c in resultado.consultas] == [HERRAMIENTA]
+    assert resultado.consultas[0].argumentos == {"identificador": "CO-TV-0001"}
+
+
+def test_un_intento_con_herramienta_ajena_no_deja_consultas():
+    resultado, _ = _ejecutar(
+        [
+            _uso("t1", {"nombre": "x"}, "mcp__pasarela__buscar_noticias"),
+            _respuesta_de_herramienta("t1", json.dumps(RESULTADO_DEL_CONTRATO)),
+            _fin(),
+        ]
+    )
+    assert resultado.consultas == []
 
 
 def test_un_resultado_sin_consulta_conocida_se_conserva_sin_herramienta():

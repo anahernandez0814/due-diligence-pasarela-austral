@@ -390,6 +390,20 @@ def test_registro_y_luego_listas_en_el_mismo_gather_listas_espera_al_fin_del_reg
     assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
 
 
+def test_dos_listas_mientras_corre_el_registro_lanzan_un_solo_subagente_y_responden_igual():
+    delegador, estado, registro, ejecutor = _crear(retardo=0.05)
+    reg, primera, segunda = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS, LISTAS))
+
+    assert reg["situacion"] == "terminado"
+    assert "error" not in primera and primera["situacion"] == "terminado"
+    assert primera == segunda
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 1
+    assert [e.tipo for e in registro.eventos() if e.frente is Frente.LISTAS].count(
+        TIPO_FRENTE_INICIO
+    ) == 1
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
 def test_listas_antes_que_registro_se_rechaza_con_reintentable_y_se_reintenta():
     delegador, estado, registro, ejecutor = _crear(retardo=0.02)
     listas, reg = asyncio.run(_a_la_vez(delegador, LISTAS, REGISTRO))
@@ -633,6 +647,83 @@ def test_si_las_fuentes_difieren_solo_en_la_fecha_el_comercio_se_deriva_igual():
         "coincidencias", [comercio_del_registro(), otra_fecha], ["CO-TV-0001"]
     )
     registro = resultado_frente(Frente.REGISTRO, [consulta(Frente.REGISTRO, {}, respuesta)])
+    listas, estado, _ = _registro_y_listas(registro=registro)
+    assert estado.comercio == COMERCIO_ESPERADO
+    assert listas["situacion"] == "terminado"
+
+
+def test_caso_g_el_estado_conserva_las_dos_fechas_de_constitucion_cada_una_con_su_fuente():
+    # CO-RF-0006: dos fuentes con fechas distintas; el sistema no elige ninguna (principio I.4).
+    rmf, rufe = "Registro Mercantil Ficticio del Sur", "Registro Único Ficticio de Empresas"
+    base = comercio_del_registro("CO-RF-0006", "Ferretería Río Fino SAS", None)
+    hechos = [
+        {
+            "contenido": {**base, "fecha_constitucion": fecha},
+            "metadatos": {"fuente": fuente, "fecha": "2026-09-30"},
+        }
+        for fuente, fecha in ((rmf, "2016-03-14"), (rufe, "2017-09-02"))
+    ]
+    respuesta = {
+        "resultado": "coincidencias",
+        "coincidencias": ["CO-RF-0006"],
+        "hechos": hechos,
+        "metadatos": {"fuentes": [rmf, rufe], "fecha": "2026-09-30"},
+    }
+    registro = resultado_frente(Frente.REGISTRO, [consulta(Frente.REGISTRO, {}, respuesta)])
+    delegador, estado, _, _ = _crear(resultados={Frente.REGISTRO: registro})
+
+    devuelta = _delegar(delegador, frente="registro", identificador="CO-RF-0006")
+
+    def pares(hechos_):
+        return {(h["contenido"]["fecha_constitucion"], h["metadatos"]["fuente"]) for h in hechos_}
+
+    esperados = {("2016-03-14", rmf), ("2017-09-02", rufe)}
+    assert pares(estado.consultas[0].resultado["hechos"]) == esperados
+    assert pares(estado.resultados[Frente.REGISTRO].consultas[0].resultado["hechos"]) == esperados
+    assert pares(devuelta["resultados"][0]["hechos"]) == esperados
+    assert estado.comercio["identificador"] == "CO-RF-0006"  # una sola fecha no se elige
+
+
+# ------------------------------------------------------------------ varias consultas del registro
+
+
+def _registro_con_dos_consultas(primera, segunda):
+    def de(comercios):
+        contenidos = comercios
+        ids = list(dict.fromkeys(c["identificador"] for c in comercios))
+        return consulta(
+            Frente.REGISTRO,
+            {},
+            respuesta_del_contrato("coincidencias", contenidos, ids),
+        )
+
+    return resultado_frente(Frente.REGISTRO, [de(primera), de(segunda)])
+
+
+def test_si_una_consulta_del_registro_da_varias_coincidencias_no_se_elige_la_otra():
+    unico = [comercio_del_registro()]
+    varias = [
+        comercio_del_registro("CO-AM-0004", "Almacén Mirador SAS", None),
+        comercio_del_registro("CO-AM-0005", "Almacén Mirador del Norte SAS", None),
+    ]
+    registro = _registro_con_dos_consultas(unico, varias)
+    listas, estado, ejecutor = _registro_y_listas(registro=registro)
+    assert estado.comercio is None and "varias coincidencias" in estado.motivo_comercio
+    assert listas["tipo"] == "frente_rechazado" and listas["reintentable"] is False
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+
+
+def test_si_las_consultas_del_registro_dan_comercios_distintos_no_hay_comercio():
+    otro = comercio_del_registro("CO-PL-0003", "Pago Latino SAS", None)
+    registro = _registro_con_dos_consultas([comercio_del_registro()], [otro])
+    listas, estado, ejecutor = _registro_y_listas(registro=registro)
+    assert estado.comercio is None and "comercios distintos" in estado.motivo_comercio
+    assert listas["tipo"] == "frente_rechazado"
+    assert ejecutor.llamadas_de(Frente.LISTAS) == []
+
+
+def test_dos_consultas_del_registro_que_dan_el_mismo_comercio_lo_fijan():
+    registro = _registro_con_dos_consultas([comercio_del_registro()], [comercio_del_registro()])
     listas, estado, _ = _registro_y_listas(registro=registro)
     assert estado.comercio == COMERCIO_ESPERADO
     assert listas["situacion"] == "terminado"

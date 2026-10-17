@@ -64,10 +64,6 @@ FRENTES: dict[Frente, DefinicionFrente] = {
 }
 
 
-def definicion(frente: Frente) -> DefinicionFrente:
-    return FRENTES[frente]
-
-
 def herramientas_ajenas(frente: Frente) -> tuple[str, ...]:
     """Las herramientas de la pasarela que NO son de este frente (el complemento de R3)."""
     propia = FRENTES[frente].herramienta

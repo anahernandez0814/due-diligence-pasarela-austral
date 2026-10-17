@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from due_diligence.estado import EstadoCaso
-from due_diligence.frentes import FRENTES, Frente
+from due_diligence.frentes import Frente
 
 
 class FrenteRechazado(Exception):
@@ -109,8 +109,3 @@ def construir_contexto(frente: Frente, entrada: Mapping[str, Any], estado: Estad
     else:
         lineas.append("El registro no devolvió representante legal: consulta solo al comercio.")
     return "\n".join(lineas)
-
-
-# Los campos de entrada que cada frente usa, para que `delegacion` no reenvíe los demás (R11).
-def campos_de(frente: Frente) -> tuple[str, ...]:
-    return FRENTES[frente].campos

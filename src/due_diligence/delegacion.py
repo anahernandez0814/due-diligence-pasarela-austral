@@ -153,13 +153,15 @@ class Delegador:
                 "entrada_invalida", f"El frente debe ser uno de: {valores}.", reintentable=False
             )
 
-        if self.estado.situacion(frente) is Situacion.EN_CURSO:
-            await self._hecho[frente].wait()
+        await self._esperar_si_en_curso(frente)
 
         if frente is Frente.LISTAS:
             previa = await self._esperar_al_registro()
             if previa is not None:
                 return previa
+            # Esperar al registro cede el control: otra llamada a `listas` pudo lanzar el frente
+            # mientras tanto. Desde esta última comprobación hasta `_ejecutar` no hay ningún await.
+            await self._esperar_si_en_curso(frente)
 
         try:
             contexto = construir_contexto(frente, entrada, self.estado)
@@ -184,6 +186,16 @@ class Delegador:
         self.estado.cambiar_situacion(frente, Situacion.RECHAZADO, motivo)
         self.eventos.registrar(TIPO_FRENTE_RECHAZADO, frente, motivo)
         return _error("frente_rechazado", motivo, reintentable, {"frente": frente.value})
+
+    async def _esperar_si_en_curso(self, frente: Frente) -> None:
+        """Espera mientras el frente siga en curso: un frente en curso no se lanza dos veces.
+
+        Se vuelve a comprobar tras cada espera (otra llamada pudo relanzarlo). Es recursiva y no un
+        `while` porque `test_sin_control_propio` prohíbe `while` en los módulos del ciclo (FR-010).
+        """
+        if self.estado.situacion(frente) is Situacion.EN_CURSO:
+            await self._hecho[frente].wait()
+            await self._esperar_si_en_curso(frente)
 
     async def _esperar_al_registro(self) -> dict[str, Any] | None:
         """El orden de `listas` (R4): espera al registro en curso; sin iniciar, se rechaza.
@@ -341,16 +353,29 @@ class Delegador:
         if situacion is not Situacion.TERMINADO:
             self.estado.fijar_comercio(None, f"El registro mercantil no terminó. {motivo}".strip())
             return
-        motivos = []
-        for consulta in resultado.consultas:
-            comercio, razon = derivar_comercio(consulta.resultado)
-            if comercio is not None:
-                self.estado.fijar_comercio(comercio)
+        # Todas las consultas que identificaron algo deben coincidir: no se elige la primera.
+        derivados = [
+            derivar_comercio(c.resultado)
+            for c in resultado.consultas
+            if c.resultado and c.resultado.get("coincidencias")
+        ]
+        if not derivados:
+            derivados = [derivar_comercio(c.resultado) for c in resultado.consultas[:1]]
+        if not derivados:
+            self.estado.fijar_comercio(None, "El registro no devolvió datos.")
+            return
+        for comercio, razon in derivados:
+            if comercio is None:
+                self.estado.fijar_comercio(None, razon)
                 return
-            motivos.append(razon)
-        self.estado.fijar_comercio(
-            None, motivos[0] if motivos else "El registro no devolvió datos."
-        )
+        if any(comercio != derivados[0][0] for comercio, _ in derivados):
+            self.estado.fijar_comercio(
+                None,
+                "Las consultas del registro identifican comercios distintos: no se elige uno; "
+                "hace falta el identificador.",
+            )
+            return
+        self.estado.fijar_comercio(derivados[0][0])
 
     def _respuesta(
         self, frente: Frente, situacion: Situacion, motivo: str, resultado: ResultadoFrente

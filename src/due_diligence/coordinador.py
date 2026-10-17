@@ -32,6 +32,7 @@ from due_diligence.eventos import (
 from due_diligence.frentes import Frente
 from due_diligence.terminacion import (
     Clasificacion,
+    Terminacion,
     clasificar_error,
     clasificar_resultado,
     sin_resultado,
@@ -132,13 +133,23 @@ class Caso:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:
                 clasificacion = clasificar_error(error)
+        except Exception as error:
+            # Otro fallo del SDK (conexión, proceso): queda constancia del corte y se relanza.
+            clasificacion = Clasificacion(
+                Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
+            )
+            self._terminar(clasificacion)
+            raise
         if clasificacion is None:
             clasificacion = sin_resultado()
+        self._terminar(clasificacion)
+        return self.respuesta
+
+    def _terminar(self, clasificacion: Clasificacion) -> None:
         self.estado.terminacion = clasificacion
         self._eventos.registrar(
             TIPO_TERMINACION, None, f"{clasificacion.terminacion.value}: {clasificacion.detalle}"
         )
-        return self.respuesta
 
 
 async def ejecutar_caso(

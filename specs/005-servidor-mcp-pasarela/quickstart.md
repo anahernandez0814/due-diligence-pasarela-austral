@@ -63,7 +63,7 @@ completo es del #12. Debe verse que (e) y (f) **no añaden datos** y que (c) usa
    `reintentable: true` con la variable en `1`, y funciona al ponerla en `0` **en la misma
    instancia** (R5).
 2. Relanzando el servidor con la variable (`PASARELA_FALLA_NOTICIAS=1`) y llamando por stdio con un
-   script desechable: mismo error; las otras cuatro herramientas responden.
+   script desechable: mismo error; las otras cinco herramientas responden.
 
 ## Q8. Guardas de #3 sobre este ticket
 

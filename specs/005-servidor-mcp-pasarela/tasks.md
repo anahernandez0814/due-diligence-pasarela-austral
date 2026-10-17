@@ -366,14 +366,14 @@ src/servidor_mcp/test_decisiones.py`.
 - [X] T039 Ejecutar Q5 y Q7 con un script desechable **fuera del repositorio** (carpeta de
   scratchpad): `registrar_informe` con la ruta por defecto, `git check-ignore`, borrar
   `resultados/` y comprobar que no queda nada en `.claude/`; y el servidor lanzado por stdio con
-  `PASARELA_FALLA_NOTICIAS=1`, con el mismo error de noticias y las otras cuatro herramientas
+  `PASARELA_FALLA_NOTICIAS=1`, con el mismo error de noticias y las otras cinco herramientas
   respondiendo. Anotar el resultado.
   **Resultados de T039** (script fuera del repositorio, en el scratchpad de la sesión):
   - **Q5.1**: `test_decisiones.py`: 43 passed; `git status --short` sin nada nuevo y sin `resultados/`.
   - **Q5.2**: con `PASARELA_RESULTADOS_DIR` sin definir, `registrar_informe` creó `resultados/informes/INF-xxxxxxxx.json`; `git check-ignore` lo reconoce; `git status` no cambió; no hay nada de resultados dentro de `.claude/`; `resultados/` se borró y el estado de git quedó como al inicio.
   - **Q7.1**: 10 tests lo comprueban en proceso, entre ellos `test_la_variable_se_lee_en_cada_llamada_en_la_misma_instancia` (noticias) y `test_la_variable_se_lee_en_cada_llamada_con_el_servidor_ya_arrancado` (por el protocolo).
   - **Q7.2**: el servidor lanzado por stdio con `PASARELA_FALLA_NOTICIAS=1` y `PASARELA_RESULTADOS_DIR` en una carpeta temporal: `buscar_noticias` devuelve `servicio_no_disponible` con `reintentable: true` y las **otras cinco** herramientas responden (`is_error=False`). El quickstart y T039 decían «cuatro»: son cinco.
-- [ ] T040 [MANUAL] **Q6 en una sesión nueva** abierta en la raíz del repositorio: `/mcp` muestra
+- [X] T040 [MANUAL] **Q6 en una sesión nueva** abierta en la raíz del repositorio: `/mcp` muestra
   `github` y `pasarela` conectados **sin pedir aprobación** y las seis herramientas
   `mcp__pasarela__*`; llamar a `consultar_registro_mercantil` con «almacén mirador» y comprobar
   que devuelve dos coincidencias sin elegir. **Si `pasarela` no conecta**, anotar el error de
@@ -383,7 +383,12 @@ src/servidor_mcp/test_decisiones.py`.
   `.claude/hooks/test_configuracion.py`**, que hoy exige que el bloque `pasarela` no contenga
   `${`: debe admitir únicamente `${CLAUDE_PROJECT_DIR}` en `args` y seguir rechazando `env` y
   cualquier otra variable o credencial. Claude espera la confirmación de la analista.
-- [ ] T041 Anotar en esta lista los resultados de T038 a T040 y commitear
+  **Resultado de T040** (2026-10-17, sesión nueva de la analista abierta en la raíz): `/mcp`
+  mostró `github` y `pasarela` conectados **sin pedir aprobación**, con las seis herramientas
+  `mcp__pasarela__*`; `consultar_registro_mercantil` con «Almacén Mirador SAS» devolvió `CO-AM-0004`
+  y `CO-AM-0005` sin elegir. Conecta a la primera: **se mantiene la primera opción de R7** y no
+  hay que tocar T032 ni `DECISIONES.md`.
+- [X] T041 Anotar en esta lista los resultados de T038 a T040 y commitear
   `docs(specs): resultados de la validación del ticket #5`. Después, `/abrir-pr`. **Ningún commit
   va después de la revisión.**
 

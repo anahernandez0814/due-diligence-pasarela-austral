@@ -69,7 +69,7 @@ verificación del cierre de #5 la hace el paso 0 del siguiente `/siguiente-ticke
 - [X] T001 Confirmar que la rama es `005-servidor-mcp-pasarela` y commitear este
   `specs/005-servidor-mcp-pasarela/tasks.md` (`docs(specs): tareas del ticket #5`), para que
   `guarda_spec_previa` deje editar el código protegido.
-- [ ] T002 Añadir la dependencia con `uv add "mcp>=2.3,<3"` (actualiza `pyproject.toml` y `uv.lock`,
+- [X] T002 Añadir la dependencia con `uv add "mcp>=2.3,<3"` (actualiza `pyproject.toml` y `uv.lock`,
   R1). Comprobar con `uv run python -c "from mcp.server.mcpserver import MCPServer"` y con
   `uv run pytest src/servidor_mcp/test_humo.py`. Commit: `build: dependencia mcp 2.x`.
 - [ ] T003 [P] Añadir `resultados/` a `.gitignore`, con el comentario

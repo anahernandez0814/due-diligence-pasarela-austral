@@ -328,7 +328,7 @@ comprobación de forma del ciclo`.
 
 ## Fase 10: Documentación
 
-- [ ] T028 [P] Añadir una sección breve «Coordinador y subagentes» a `README.md`: cómo ejecutar un
+- [X] T028 [P] Añadir una sección breve «Coordinador y subagentes» a `README.md`: cómo ejecutar un
   caso (`uv run python -m due_diligence "<solicitud>"`), de dónde sale la clave (variable de entorno o
   archivo local no versionado, sin nombrar valores), cómo cambiar los modelos con
   `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES`, y el aviso del coste en frío del
@@ -343,10 +343,12 @@ comprobación de forma del ciclo`.
 
 ## Fase 11: Validación con el quickstart
 
-- [ ] T030 Ejecutar Q1, Q3, Q6 y Q7 del quickstart: `uv run ruff format .`, `uv run ruff check .` y
+- [X] T030 Ejecutar Q1, Q3, Q6 y Q7 del quickstart: `uv run ruff format .`, `uv run ruff check .` y
   `uv run pytest` completos; los tests de este ticket y la suite existente en verde, y
   `test_revision_repositorio.py` sin hallazgos en los archivos nuevos. Anotar el resultado al pie de
   esta tarea.
+  *Resultado (2026-10-17): `ruff format` y `ruff check` limpios; `src/due_diligence` 222 pasan; suite
+  completa 2047 pasan en 4 min 19 s, incluido `test_revision_repositorio.py` sin hallazgos.*
 - [ ] T031 [MANUAL] Q2: la analista ejecuta `uv run python -m due_diligence.sondeo_aislamiento
   --herramientas` en una sesión nueva en la raíz. Esperado: la tabla de Q2 (con `[]`, sin skills ni
   agentes del repositorio, 0 eventos de hooks, sin contenido del `CLAUDE.md`) y la lista inicial de

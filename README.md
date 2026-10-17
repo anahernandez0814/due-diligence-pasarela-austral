@@ -144,6 +144,35 @@ credenciales. Las decisiones están en la entrada 6 de [DECISIONES.md](DECISIONE
 - **Los datos son ficticios**: nombres inventados, dominios `.example` y ningún documento, NIT o
   tarjeta con forma real. Cada archivo de `src/servidor_mcp/datos/` lo declara.
 
+## Coordinador y subagentes
+
+El paquete [src/due_diligence/](src/due_diligence/) es el núcleo multi-agente del ticket #6. Un
+coordinador recibe la solicitud del analista y delega cada frente (registro mercantil, listas
+restrictivas, noticias y riesgo de categoría) en un subagente con su propio `query()` del Claude
+Agent SDK. El coordinador solo tiene la herramienta `delegar_frente` y las dos de decisión; cada
+subagente, solo la herramienta de su frente y el contexto que se le pasa de forma explícita. Registro,
+noticias y categoría corren en paralelo; listas espera al registro y consulta al comercio y a su
+representante legal tal como los devolvió el registro. Las decisiones están en
+[specs/006-coordinador-subagentes-agent/](specs/006-coordinador-subagentes-agent/).
+
+- **Ejecutar un caso con el modelo real** (gasta tokens):
+  `uv run python -m due_diligence "<solicitud del analista>"`. Imprime los eventos con su hora, la
+  situación de cada frente, la duración de cada uno, si hubo solape, el coste y la respuesta del
+  coordinador. **Coste**: cada agente envía unos 30 000 tokens de prefijo al llamar a una herramienta;
+  con Sonnet 5.5 una ejecución en frío cuesta del orden de 0,13 USD por agente y las siguientes, con la
+  caché caliente, centavos. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
+- **Modelos**: `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` (por defecto
+  `claude-sonnet-5-5`). El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
+  por la razón de parada del modelo.
+- **Credenciales**: el modelo se autentica con las variables de entorno que carga `__main__` desde el
+  archivo de entorno local con python-dotenv. Los tests no lo cargan ni llaman al modelo.
+- **Sondeo de aislamiento** (manual, gasta tokens): `uv run python -m due_diligence.sondeo_aislamiento`
+  comprueba que ni `CLAUDE.md` ni los hooks del repositorio llegan a los agentes;
+  `--herramientas` lista las herramientas iniciales de cada agente y `--limite` provoca el límite de turnos.
+- **Tests**: `uv run pytest src/due_diligence` usa un ejecutor simulado ([simulacion.py](src/due_diligence/simulacion.py)).
+- **Alcance**: aún no hay hooks de reglas de negocio (#7); mientras tanto el coordinador conserva
+  `registrar_informe` y `escalar_a_cumplimiento` y su instrucción le prohíbe usarlas.
+
 ## Guardas del entorno
 
 Claude Code trabaja con cuatro guardas y un hook de formato, registrados en

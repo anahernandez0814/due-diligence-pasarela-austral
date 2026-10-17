@@ -6,6 +6,8 @@ Todas fijan `PASARELA_RESULTADOS_DIR` en `tmp_path`: ninguna escribe en `resulta
 import json
 import os
 import re
+import shutil
+import subprocess
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -348,3 +350,24 @@ def test_la_fecha_de_registro_es_la_de_la_hora_local_y_no_la_utc(monkeypatch):
     carpeta = decisiones.carpeta_resultados()
     guardado = json.loads((carpeta / "informes" / f"{identificador}.json").read_text("utf-8"))
     assert guardado["registrado_en"] == "2026-10-17T23:30:00-05:00"
+
+
+# --- resultados/ está ignorado por git -----------------------------------------------------------
+
+
+def _git_ignora(raiz, ruta):
+    return subprocess.run(
+        ["git", "-C", str(raiz), "check-ignore", "--quiet", ruta], capture_output=True
+    ).returncode
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git no está disponible")
+def test_resultados_esta_ignorado_por_git():
+    raiz = Path(decisiones.__file__).resolve().parents[2]
+    if not (raiz / ".git").exists():
+        pytest.skip("no es un clon de git")
+    # Los informes y los casos escalados de la carpeta por defecto nunca entran en git.
+    assert _git_ignora(raiz, "resultados/informes/INF-00000000.json") == 0
+    assert _git_ignora(raiz, "resultados/escalamientos/ESC-00000000.json") == 0
+    # Control: una ruta cualquiera del código no está ignorada.
+    assert _git_ignora(raiz, "src/servidor_mcp/registro.py") == 1

@@ -391,6 +391,19 @@ src/servidor_mcp/test_decisiones.py`.
 - [X] T041 Anotar en esta lista los resultados de T038 a T040 y commitear
   `docs(specs): resultados de la validación del ticket #5`. Después, `/abrir-pr`. **Ningún commit
   va después de la revisión.**
+- [X] T042 Sugerencia del revisor del primer `/abrir-pr` (sobre `d891cef`): un test de que `resultados/`
+  está ignorado por git. `test_resultados_esta_ignorado_por_git` en `src/servidor_mcp/test_decisiones.py`
+  comprueba con `git check-ignore` que `resultados/informes/…` y `resultados/escalamientos/…` están
+  ignorados y, como control, que una ruta del código (`src/servidor_mcp/registro.py`) no lo está; se
+  omite si git no está disponible o no es un clon. **Resultado**: el test pasó desde el principio,
+  porque el `.gitignore` ya tenía la regla desde T003; protege contra que alguien la quite.
+- [X] T043 Sugerencia del mismo revisor: el mensaje de nombre demasiado corto explica que el mínimo de 3
+  caracteres se cuenta sin la forma jurídica final. Test primero:
+  `test_el_mensaje_de_nombre_demasiado_corto_explica_como_se_cuenta_el_minimo` en
+  `src/servidor_mcp/test_registro.py` (cinco entradas; el mensaje nombra la forma jurídica, las
+  formas y es fijo, sin repetir lo escrito); falló 5 veces con el mensaje anterior. Después,
+  `registro.py` cambia el texto: «El nombre debe tener al menos 3 caracteres, sin contar los signos
+  de puntuación ni la forma jurídica final (SAS, SA, Ltda, EU, SCA, S. en C.): «SAS» solo no basta.»
 
 ---
 

@@ -204,3 +204,17 @@ def test_solo_la_forma_juridica_da_entrada_invalida(solo):
 def test_el_identificador_no_distingue_mayusculas(identificador):
     cuerpo = _cuerpo(consultar_registro_mercantil(identificador=identificador))
     assert cuerpo["coincidencias"] == ["CO-TV-0001"]
+
+
+@pytest.mark.parametrize("corto", ["SAS", "S.A.S.", "ab", "ab SAS", "Ltda."])
+def test_el_mensaje_de_nombre_demasiado_corto_explica_como_se_cuenta_el_minimo(corto):
+    cuerpo = consultar_registro_mercantil(nombre=corto).structured_content
+    assert cuerpo["tipo"] == "entrada_invalida"
+    mensaje = cuerpo["mensaje"]
+    assert "3 caracteres" in mensaje
+    # El mínimo se cuenta sin la forma jurídica final: el mensaje lo dice y nombra las formas.
+    assert "forma jurídica" in mensaje
+    assert "SAS" in mensaje and "Ltda" in mensaje
+    # El texto es fijo: no repite lo que escribió quien consulta.
+    otro = consultar_registro_mercantil(nombre="xy").structured_content["mensaje"]
+    assert mensaje == otro

@@ -35,7 +35,11 @@ def consultar_registro_mercantil(nombre: Any = None, identificador: Any = None) 
     if clave == "nombre" and not cumple_minimo(texto):
         return error(
             "entrada_invalida",
-            "El nombre debe tener al menos 3 caracteres, sin contar signos de puntuación.",
+            (
+                "El nombre debe tener al menos 3 caracteres, sin contar los signos de "
+                "puntuación ni la forma jurídica final (SAS, SA, Ltda, EU, SCA, S. en C.): "
+                "«SAS» solo no basta."
+            ),
             False,
         )
 

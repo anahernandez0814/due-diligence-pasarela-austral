@@ -370,13 +370,19 @@ Q11, Q14, Q16).
   `cat`); el comando `uv run … veredicto.py registrar …` no se bloquea. Mensaje: `El
   directorio de veredictos solo lo escribe el registro de la revisión. Ejecuta /abrir-pr.`
   - **Ampliado tras la parada D** (hallazgo 3), en cualquier rama, también para
-    `settings.local.json` (FR-025 de #3): se bloquea copiar o mover hacia `.claude` (o hacia
-    la raíz con copia recursiva) cuando no se pueden saber los nombres que llegan:
-    `cp -r /tmp/falso/. .claude`, `cp -a /tmp/falso/. .claude/`,
-    `cp -r /tmp/falso/* .claude/`, `Copy-Item -Recurse C:\tmp\falso\* .claude`; y borrar o
-    mover `.claude` entera: `rm -rf .claude`, `Remove-Item -Recurse -Force .claude`,
-    `mv .claude x`. Se siguen permitiendo `cp archivo .claude/otro-directorio/`, `ls .claude`
-    y `cp -r src/otro dir-temporal/`, y se sigue bloqueando cuando el nombre aparece
+    `settings.local.json` (FR-025 de #3), con una regla **sobre el destino** y no sobre el
+    origen (segunda ronda): hacia la carpeta `.claude` misma, toda copia recursiva y todo
+    movimiento se bloquea sin mirar el origen (`cp -r /tmp/falso/. .claude`,
+    `cp -a /tmp/falso/. .claude/`, `cp -r /tmp/falso/* .claude/`, `cp -rT /tmp/falso .claude`,
+    `cp -r --no-target-directory /tmp/falso .claude`, `cp -R /tmp/falso/ .claude` (en macOS y
+    BSD, la barra final copia el contenido), `mv -T /tmp/falso .claude`,
+    `Copy-Item -Recurse C:\tmp\falso\* .claude`); hacia subcarpetas (`.claude/agents/…`), la
+    regla normal; hacia la raíz, la copia recursiva con origen opaco (`/.`, comodines), con
+    `-T`/`--no-target-directory` o con barra final; y borrar o mover `.claude` entera:
+    `rm -rf .claude`, `Remove-Item -Recurse -Force .claude`, `mv .claude x`. Se siguen
+    permitiendo `cp archivo .claude/otro-directorio/`, `cp archivo .claude/` (sin recursión),
+    `ls .claude`, `cp -r src/otro dir-temporal/` y `cp -r /tmp/falso .` (sin barra, que copia la
+    carpeta entera con su nombre), y se sigue bloqueando cuando el nombre aparece
     (`cp -r …/veredictos .claude/`, `Move-Item`).
 - [X] T023 [US4] Ampliar `.claude/hooks/guarda_spec_previa.py` (FR-020, R8; hace pasar T022):
   añadir `.claude/veredictos/**` al mismo tratamiento que `.claude/settings.local.json`

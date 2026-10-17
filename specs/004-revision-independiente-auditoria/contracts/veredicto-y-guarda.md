@@ -80,15 +80,20 @@ en código en línea `.claude/veredictos/**`, con las vías que ya vigila para
 así que no se bloquea. Mensaje: `[guarda_spec_previa] El directorio de veredictos solo lo
 escribe el registro de la revisión. Ejecuta /abrir-pr.`
 
-**Copias y borrados que no dejan ver los nombres** (hallazgo 3 de la parada D). En cualquier
-rama, `guarda_spec_previa` bloquea también:
+**Copias y borrados que no dejan ver los nombres** (hallazgo 3 de la parada D, corregido en
+la segunda ronda). En cualquier rama, `guarda_spec_previa` bloquea también, con una regla
+**sobre el destino**, no sobre el origen: la primera versión adivinaba el origen (`/.`,
+comodines) y no veía `cp -rT /tmp/falso .claude`, `cp -r --no-target-directory /tmp/falso
+.claude`, `cp -R /tmp/falso/ .claude` (en macOS y BSD, la barra final copia el contenido) ni
+`mv -T /tmp/falso .claude`. Con un JSON preparado fuera del repositorio con el sha de `HEAD`,
+cualquiera de ellos dejaba un veredicto aprobado sin que la guarda viera su nombre.
 
-- **copiar o mover hacia la carpeta `.claude`** (o hacia la raíz con copia recursiva) cuando no
-  se pueden saber los nombres que llegan: un origen terminado en `/.` o con comodines
-  (`cp -r /tmp/falso/. .claude/`, `cp -a /tmp/falso/. .claude/`, `cp -r /tmp/falso/* .claude/`,
-  `Copy-Item -Recurse C:\tmp\falso\* .claude`). Con ese origen, un JSON preparado fuera del
-  repositorio con el sha de `HEAD` quedaría como veredicto aprobado sin que la guarda viera su
-  nombre;
+- **hacia la carpeta `.claude` misma**: toda copia recursiva (`cp -r`, `-R`, `-a`, `-rT`,
+  `--recursive`, `--archive`, `Copy-Item -Recurse`) y todo movimiento (`mv`, `mv -T`,
+  `Move-Item`) se bloquea, **sin mirar el origen**;
+- **hacia subcarpetas** (`.claude/agents/…`): la regla normal;
+- **hacia la raíz**: la copia recursiva con origen opaco (terminado en `/.` o con comodines),
+  con `-T` o `--no-target-directory`, o con el origen terminado en barra (`/`);
 - **borrar o mover `.claude` entera** (`rm -rf .claude`, `Remove-Item -Recurse -Force .claude`,
   `mv .claude x`).
 

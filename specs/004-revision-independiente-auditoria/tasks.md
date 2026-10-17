@@ -463,7 +463,7 @@ validación en sesión (fase 8).
 sesión nueva, las entradas de `/hooks` y `/agents`, y que los archivos y el clon de prueba
 existen.
 
-- [ ] T030 Ejecutar Q1 a Q4 y anotar el resultado de cada una al pie de este archivo
+- [X] T030 Ejecutar Q1 a Q4 y anotar el resultado de cada una al pie de este archivo
   (R2, R4, R13): variable que resuelve la ruta del script, que el patrón de `allowed-tools`
   funciona desde cualquier carpeta y clon, que el subagente no puede ejecutar ni escribir,
   si la constitución llega por `@import`, el techo real de la salida inyectada. **Q4(b) es
@@ -486,11 +486,11 @@ existen.
   real sin veredicto). Nunca se abre un PR de prueba. **SC-005 lo valida la analista
   leyendo los reportes de Q7 y Q8 sin abrir el código** [MANUAL]. Anotar los resultados al
   pie y añadir los de Q1 a Q6 a `DECISIONES.md`.
-- [ ] T034 Ejecutar Q16 y Q17 (FR-020 y la marca de contexto): el directorio de veredictos
+- [X] T034 Ejecutar Q16 y Q17 (FR-020 y la marca de contexto): el directorio de veredictos
   no se modifica por ninguna herramienta en ninguna rama y la revisión sin inyección
   declara `cobertura=incompleta`. `disableSkillShellExecution` se activa y se restaura
   desde fuera de Claude Code.
-- [ ] T035 [MANUAL] Limpieza: borrar `.env.local`, el clon desechable y los archivos de
+- [X] T035 [MANUAL] Limpieza: borrar `.env.local`, el clon desechable y los archivos de
   `.claude/veredictos/` de las pruebas desde fuera de Claude Code, y las ramas temporales
   con `git branch -d`.
 
@@ -499,7 +499,7 @@ y entrega los resultados anotados de Q1 a Q17, lo que cambió en T031 y el estad
 repositorio (`git status --porcelain`, `git log --oneline main..HEAD`). La analista decide
 si se lanza `/abrir-pr`.
 
-- [ ] T036 Commitear los resultados anotados al pie de este archivo y en `DECISIONES.md`
+- [X] T036 Commitear los resultados anotados al pie de este archivo y en `DECISIONES.md`
   (`docs(specs): resultados de la validación del ticket #4`), **marcando T036 `[X]` en ese
   mismo commit** y comprobando `git status --porcelain` vacío. Ningún commit va después de
   la revisión. Después se lanza `/abrir-pr` en esta misma sesión nueva: genera el veredicto
@@ -667,9 +667,8 @@ Con las instrucciones anteriores a las correcciones de cobertura:
   tabulador y un salto de página) en un test de `test_guarda_spec_previa.py`; que
   `settings.local.json` se comparaba sin `casefold` (en Windows y macOS `.claude/Settings.local.json`
   escapaba); y que `gh api -p x …/pulls -X POST` tomaba `x` como endpoint.
-- Quedan como sugerencias, sin corregir: `cp /tmp/falso/* .claude/` sin `-r` sigue permitido (no
-  crea directorios, así que no afecta a los veredictos, pero sí podría sobrescribir
-  `settings.local.json`); `_nombre` repetida en tres módulos; con unos 140 archivos la lista se
+- La copia con comodín hacia `.claude` se corrigió después (`e42ee31`). Quedan como sugerencias,
+  sin corregir: `_nombre` repetida en tres módulos; con unos 140 archivos la lista se
   agrupa por directorio y entonces la cobertura es incompleta; y el bloque de cobertura repetido
   en cuatro archivos.
 
@@ -709,8 +708,10 @@ commits A a F son temporales y no se publicaron.
 - La guarda comprueba antes la publicación que el veredicto, así que en la sesión el mensaje es
   el de «no publicado»; que con veredicto aprobado y commit publicado se **permite** lo prueba
   `test_guarda_pr.py` por stdin, porque publicar crearía una rama remota.
-- SC-005 (que quien no conoce el código entienda los reportes sin abrirlo): pendiente de la
-  analista, con los reportes de Q7 y Q8 de esta sesión.
+- **SC-005**: lo valida la analista con los reportes de Q7 y Q8; su mensaje de la parada F lo
+  dejó en blanco (`<su juicio>`). Juicio de Claude, que **no** sustituye al de quien no conoce el
+  código: cada hallazgo de Q7 y cada regla de Q8 traen `archivo:línea`, la regla afectada y su
+  razón, y las que no aplican lo dicen con motivo, así que se entienden sin abrir el código.
 
 ### Q16 (T034, parcial)
 
@@ -719,6 +720,16 @@ commits A a F son temporales y no se publicaron.
   nombra los bloquea `guarda_spec_previa` («El directorio de veredictos solo lo escribe el
   registro de la revisión»). Leerlo con `Read` y `cat` se permite y `veredicto.py registrar`
   funciona. Ninguna de las pruebas creó ni modificó archivos.
-- Q17 (inyección desactivada con `disableSkillShellExecution`): pendiente de la analista, porque
-  exige editar `settings.local.json` desde fuera de Claude Code.
+- **Q17** (la analista, fuera de Claude Code): `settings.local.json` no existía; se creó con
+  `disableSkillShellExecution=true`, se ejecutó `/revisar-codigo` y se borró. El revisor recibió
+  `[shell command execution disabled by policy]`, no revisó a ciegas y terminó con
+  `cobertura=incompleta` y 0 hallazgos. **Pasa.**
+
+### Q4(b) repetido en el clon y T035 (la analista, tras las correcciones)
+
+- **Q4(b)** en `C:\Temp\clon-q4` (#3 + #4, 56 archivos, ≈ 663 KB, diff omitido):
+  `RESUMEN: bloqueantes=2 sugerencias=6 cobertura=completa`. Los dos bloqueantes eran las tareas
+  abiertas (T030, T034, T035 y T036). **Pasa: FR-005 demostrado.**
+- **T035 hecho**: el archivo de entorno de prueba, los veredictos de prueba y el clon, borrados;
+  las ramas `099-prueba` y `prueba-revision`, borradas.
 

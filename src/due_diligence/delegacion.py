@@ -15,13 +15,12 @@ from claude_agent_sdk import ClaudeAgentOptions, SdkMcpTool, create_sdk_mcp_serv
 from mcp_types import ToolAnnotations
 
 from due_diligence.contexto import FrenteRechazado, construir_contexto
-from due_diligence.ejecutor import EjecutorSubagente
+from due_diligence.ejecutor import EjecutorSubagente, es_bloqueo_de_hook
 from due_diligence.estado import (
     Consulta,
     EstadoCaso,
     ResultadoFrente,
     Situacion,
-    derivar_comercio,
 )
 from due_diligence.eventos import (
     TIPO_DELEGACION,
@@ -33,8 +32,8 @@ from due_diligence.eventos import (
     RegistroEventos,
 )
 from due_diligence.frentes import HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION, Frente
+from due_diligence.reglas import consulta_coincide
 from due_diligence.terminacion import Clasificacion, Terminacion
-from servidor_mcp.normalizar import igual, igual_identificador
 
 DESCRIPCION = (
     "Delega un frente de la investigación en un subagente especializado y devuelve su resultado. "
@@ -220,6 +219,12 @@ class Delegador:
             else f"Se delega el frente {frente.value}."
         )
         self.eventos.registrar(TIPO_DELEGACION, frente, detalle)
+        # El comercio que ya estaba identificado se conserva para decidir, al concluir, si el nuevo
+        # es otro y `listas` deja de valer. Se reinicia la identificación antes de lanzar el frente:
+        # la registra el hook del registro durante esta ejecución (R4).
+        anterior = self.estado.comercio if frente is Frente.REGISTRO else None
+        if frente is Frente.REGISTRO:
+            self.estado.reiniciar_identificacion()
         self.estado.cambiar_situacion(frente, Situacion.EN_CURSO)
         self._contextos[frente] = contexto
         self._hecho[frente].clear()
@@ -237,7 +242,7 @@ class Delegador:
                     ),
                     f"excepción {type(error).__name__}: {error}",
                 )
-            return self._concluir(frente, resultado)
+            return self._concluir(frente, resultado, anterior)
         finally:
             if self.estado.situacion(frente) is Situacion.EN_CURSO:  # cancelado: no se pierde
                 self.estado.cambiar_situacion(
@@ -253,16 +258,19 @@ class Delegador:
         if clasificacion is None or clasificacion.terminacion is not Terminacion.NORMAL:
             donde = resultado.detalle_terminacion
             return Situacion.NO_TERMINADO, f"El subagente no terminó con normalidad ({donde})."
-        errores = [c.error for c in resultado.consultas if c.error]
+        # Un intento que un hook bloqueó (regla I.1) no cuenta contra el frente: queda como evento
+        # de la regla y como traza en el estado, pero decide lo que sí se consultó (#7).
+        efectivas = [c for c in resultado.consultas if not es_bloqueo_de_hook(c.error)]
+        errores = [c.error for c in efectivas if c.error]
         if errores:
             tipos = ", ".join(str(e.get("tipo")) for e in errores)
             return (
                 Situacion.NO_TERMINADO,
                 f"La herramienta devolvió un error estructurado ({tipos}).",
             )
-        if not resultado.consultas:
+        if not efectivas:
             return Situacion.NO_TERMINADO, "El subagente no hizo ninguna consulta."
-        if any(not c.valido for c in resultado.consultas):
+        if any(not c.valido for c in efectivas):
             return (
                 Situacion.NO_TERMINADO,
                 "Un resultado no tiene la forma del contrato de la pasarela.",
@@ -276,35 +284,21 @@ class Delegador:
     def _falta_en_listas(self, resultado: ResultadoFrente) -> str:
         """Comprueba que `listas` consultó al comercio y, si lo hay, a su representante (FR-005).
 
-        Cuenta una consulta del tipo correcto (`comercio` o `persona`) cuyo identificador coincide
-        con `igual_identificador` o cuyo nombre completo coincide con `igual()` de
-        `servidor_mcp.normalizar`. `igual()` es estricto: ignora mayúsculas y tildes, pero no la
-        forma jurídica ni acepta un nombre parcial, porque la pasarela busca por el nombre completo
-        y otra forma sería un falso negativo. Devuelve el motivo si falta una, o "" si están ambas.
+        Usa `reglas.consulta_coincide`, la misma comparación que el hook de la consulta de listas
+        (R7): el tipo correcto (`comercio` o `persona`) y cada clave que trae la consulta debe
+        existir en la entidad del registro y coincidir, con la normalización de
+        `servidor_mcp.normalizar`.
+        Devuelve el motivo si falta una, o "" si están ambas.
         """
         comercio = self.estado.comercio
         if comercio is None:
             return ""
 
         def consultada(tipo: str, entidad: Mapping[str, Any]) -> bool:
-            for consulta in resultado.consultas:
-                argumentos = consulta.argumentos
-                if argumentos.get("tipo") != tipo:
-                    continue
-                identificador, nombre = argumentos.get("identificador"), argumentos.get("nombre")
-                if (
-                    entidad.get("identificador")
-                    and isinstance(identificador, str)
-                    and igual_identificador(identificador, entidad["identificador"])
-                ):
-                    return True
-                if (
-                    entidad.get("nombre")
-                    and isinstance(nombre, str)
-                    and igual(nombre, entidad["nombre"])
-                ):
-                    return True
-            return False
+            return any(
+                consulta.valido and consulta_coincide(consulta.argumentos, entidad, tipo)
+                for consulta in resultado.consultas
+            )
 
         if not consultada("comercio", comercio):
             return "Falta la consulta del comercio en listas restrictivas (tipo comercio)."
@@ -315,16 +309,17 @@ class Delegador:
             )
         return ""
 
-    def _concluir(self, frente: Frente, resultado: ResultadoFrente) -> dict[str, Any]:
+    def _concluir(
+        self, frente: Frente, resultado: ResultadoFrente, anterior: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         self.estado.guardar_resultado(resultado)
         self.estado.agregar_consultas(resultado.consultas)
         situacion, motivo = self._evaluar(frente, resultado)
         self.estado.cambiar_situacion(frente, situacion, motivo)
-        if frente is Frente.REGISTRO:
-            anterior = self.estado.comercio
-            self._fijar_comercio(situacion, motivo, resultado)
-            if self.estado.comercio != anterior:
-                self._invalidar_listas()
+        # El comercio ya no se deriva aquí: lo identifica el hook del registro (R4) y
+        # `estado.comercio` lo consolida. Solo se compara con el que había antes de esta ejecución.
+        if frente is Frente.REGISTRO and self.estado.comercio != anterior:
+            self._invalidar_listas()
         detalle = f"{situacion.value}: {resultado.detalle_terminacion}"
         self.eventos.registrar(TIPO_FRENTE_FIN, frente, f"{detalle}. {motivo}".strip())
         respuesta = self._respuesta(frente, situacion, motivo, resultado)
@@ -346,37 +341,6 @@ class Delegador:
         self._contextos.pop(Frente.LISTAS, None)
         self.eventos.registrar(TIPO_FRENTE_INVALIDADO, Frente.LISTAS, MOTIVO_COMERCIO_CAMBIO)
 
-    def _fijar_comercio(
-        self, situacion: Situacion, motivo: str, resultado: ResultadoFrente
-    ) -> None:
-        """Deriva el comercio del registro, tal como lo devolvió (FR-005, FR-013)."""
-        if situacion is not Situacion.TERMINADO:
-            self.estado.fijar_comercio(None, f"El registro mercantil no terminó. {motivo}".strip())
-            return
-        # Todas las consultas que identificaron algo deben coincidir: no se elige la primera.
-        derivados = [
-            derivar_comercio(c.resultado)
-            for c in resultado.consultas
-            if c.resultado and c.resultado.get("coincidencias")
-        ]
-        if not derivados:
-            derivados = [derivar_comercio(c.resultado) for c in resultado.consultas[:1]]
-        if not derivados:
-            self.estado.fijar_comercio(None, "El registro no devolvió datos.")
-            return
-        for comercio, razon in derivados:
-            if comercio is None:
-                self.estado.fijar_comercio(None, razon)
-                return
-        if any(comercio != derivados[0][0] for comercio, _ in derivados):
-            self.estado.fijar_comercio(
-                None,
-                "Las consultas del registro identifican comercios distintos: no se elige uno; "
-                "hace falta el identificador.",
-            )
-            return
-        self.estado.fijar_comercio(derivados[0][0])
-
     def _respuesta(
         self, frente: Frente, situacion: Situacion, motivo: str, resultado: ResultadoFrente
     ) -> dict[str, Any]:
@@ -384,11 +348,12 @@ class Delegador:
             return {
                 "frente": frente.value,
                 "situacion": situacion.value,
-                "resultados": [self._resultado_de(c) for c in resultado.consultas],
+                "resultados": [self._resultado_de(c) for c in resultado.consultas if c.valido],
                 "resumen": resultado.resumen,
             }
         errores = [c.error for c in resultado.consultas if c.error]
-        reintentable = bool(errores) and all(e.get("reintentable") is True for e in errores)
+        reales = [e for e in errores if not es_bloqueo_de_hook(e)]
+        reintentable = bool(reales) and all(e.get("reintentable") is True for e in reales)
         return _error(
             "frente_no_terminado",
             motivo,

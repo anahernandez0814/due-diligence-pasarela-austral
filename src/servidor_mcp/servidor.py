@@ -211,13 +211,17 @@ _COBERTURA = _p(
     description=(
         "Registra el informe de due diligence con su recomendación, sus hallazgos por frente con "
         "la fuente de cada uno y la cobertura alcanzada. Es uno de los dos canales de decisión. "
-        "No valida reglas de negocio ni decide: guarda lo que recibe. Si falta un campo "
-        "obligatorio devuelve un error no reintentable que lo nombra."
+        "La recomendación es habilitar, no_habilitar o decide_cumplimiento (es una guía: el "
+        "servidor no la valida). No valida reglas de negocio ni decide: guarda lo que recibe. Si "
+        "falta un campo obligatorio devuelve un error no reintentable que lo nombra."
     ),
 )
 def registrar_informe(
     comercio: Annotated[Any, _COMERCIO] = None,
-    recomendacion: Annotated[Any, _p("Texto. La recomendación del informe.")] = None,
+    recomendacion: Annotated[
+        Any,
+        _p("Texto. La recomendación del informe: habilitar, no_habilitar o decide_cumplimiento."),
+    ] = None,
     hallazgos: Annotated[Any, _HALLAZGOS] = None,
     cobertura: Annotated[Any, _COBERTURA] = None,
 ) -> CallToolResult:

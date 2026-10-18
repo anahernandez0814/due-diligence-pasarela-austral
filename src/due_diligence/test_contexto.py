@@ -6,8 +6,9 @@ El prompt lo construye el código, solo con los campos que el frente necesita.
 import pytest
 
 from due_diligence.contexto import FrenteRechazado, construir_contexto, instrucciones
-from due_diligence.estado import EstadoCaso
+from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.frentes import FRENTES, Frente
+from due_diligence.simulacion import comercios_parecidos, respuesta_registro
 
 MARCADOR = "FRASE-MARCADORA-DE-LA-CONVERSACION"
 SOLICITUD = (
@@ -22,9 +23,16 @@ COMERCIO = {
 }
 
 
-def _estado(comercio=None, motivo=""):
+def _estado(comercio=None, ambiguo=False):
+    """Un estado con el registro terminado. Desde el #7 la identificación la registra el hook del
+    registro a partir de la respuesta (`registrar_identificacion`, R4): ya no se fija a mano."""
     estado = EstadoCaso(SOLICITUD)
-    estado.fijar_comercio(comercio, motivo)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    if comercio is not None:
+        estado.registrar_identificacion(respuesta_registro(comercio))
+    elif ambiguo:
+        estado.registrar_identificacion(respuesta_registro(*comercios_parecidos()))
     return estado
 
 
@@ -130,7 +138,7 @@ def test_categoria_sin_categoria_se_rechaza_y_no_se_inventa_una(entrada):
 
 
 def test_listas_sin_comercio_unico_se_rechaza_con_el_motivo_del_estado():
-    estado = _estado(None, "el registro devolvió varias coincidencias")
+    estado = _estado(ambiguo=True)
     with pytest.raises(FrenteRechazado) as error:
         construir_contexto(Frente.LISTAS, {}, estado)
     assert "varias coincidencias" in str(error.value)

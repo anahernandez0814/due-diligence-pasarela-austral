@@ -8,9 +8,11 @@ import json
 
 import pytest
 
+from due_diligence import configuracion
 from due_diligence.delegacion import Delegador
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_DELEGACION,
     TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
@@ -20,6 +22,7 @@ from due_diligence.eventos import (
     RegistroEventos,
 )
 from due_diligence.frentes import Frente
+from due_diligence.hooks import HooksDelCaso
 from due_diligence.simulacion import (
     EjecutorSimulado,
     comercio_del_registro,
@@ -41,13 +44,29 @@ ERROR_NOTICIAS = {
 }
 
 
-def _crear(**kwargs):
+def _crear(listas_vigilada=True, **kwargs):
     estado, registro, ejecutor = (
         EstadoCaso("solicitud"),
         RegistroEventos(),
         EjecutorSimulado(**kwargs),
     )
-    delegador = Delegador(estado, registro, ejecutor, lambda frente: ("opciones", frente))
+    # Desde el #7 la identificación la registra el hook del registro (R4): las opciones de cada
+    # subagente llevan los hooks del caso y el ejecutor simulado los ejecuta como el SDK.
+    hooks = HooksDelCaso(estado, registro)
+    delegador = Delegador(
+        estado,
+        registro,
+        ejecutor,
+        lambda frente: configuracion.opciones_subagente(
+            frente,
+            "instrucciones",
+            # `listas_vigilada=False` prueba la defensa propia del Delegador (`_falta_en_listas`)
+            # sin que el hook de la consulta de listas (I.1) la bloquee antes.
+            hooks=None
+            if frente is Frente.LISTAS and not listas_vigilada
+            else hooks.subagente(frente),
+        ),
+    )
     return delegador, estado, registro, ejecutor
 
 
@@ -75,7 +94,9 @@ def test_registro_con_identificador_delega_y_devuelve_el_json_tal_cual():
     assert resultado["hechos"][0]["metadatos"]["fuente"]
     assert len(ejecutor.llamadas) == 1
     assert "CO-TV-0001" in ejecutor.llamadas[0].contexto
-    assert ejecutor.llamadas[0].opciones == ("opciones", Frente.REGISTRO)
+    opciones = ejecutor.llamadas[0].opciones
+    assert opciones.model == configuracion.modelo_subagentes()
+    assert set(opciones.hooks) == {"PostToolUse", "PostToolUseFailure"}  # los hooks del registro
     assert estado.situacion(Frente.REGISTRO) is Situacion.TERMINADO
 
 
@@ -473,12 +494,14 @@ COMERCIO_ESPERADO = {
 }
 
 
-def _registro_y_listas(consultas_de_listas=None, registro=None, retardo=0.0):
+def _registro_y_listas(consultas_de_listas=None, registro=None, retardo=0.0, vigilada=True):
     """El registro y `listas` en el mismo turno; devuelve la respuesta de `listas`."""
     resultados = {Frente.REGISTRO: registro or resultado_registro()}
     if consultas_de_listas is not None:
         resultados[Frente.LISTAS] = resultado_listas(consultas_de_listas)
-    delegador, estado, _, ejecutor = _crear(resultados=resultados, retardo=retardo)
+    delegador, estado, _, ejecutor = _crear(
+        listas_vigilada=vigilada, resultados=resultados, retardo=retardo
+    )
     _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
     return listas, estado, ejecutor
 
@@ -543,7 +566,7 @@ def test_el_nombre_del_comercio_sin_su_forma_juridica_no_cuenta():
         consulta_listas("comercio", nombre="Tienda Verde"),
         consulta_listas("persona", identificador="PE-0001"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
 
 
@@ -552,7 +575,7 @@ def test_un_nombre_parcial_del_representante_no_cuenta():
         consulta_listas("comercio", identificador="CO-TV-0001"),
         consulta_listas("persona", nombre="Lucía Ferrer"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado"
     assert "consulta del representante" in listas["mensaje"]
 
@@ -562,7 +585,7 @@ def test_una_consulta_con_el_tipo_cambiado_no_cuenta():
         consulta_listas("comercio", identificador="CO-TV-0001"),
         consulta_listas("comercio", nombre="Lucía Ferrer Montalvo"),  # tipo equivocado
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado"
     assert "consulta del representante" in listas["mensaje"]
 
@@ -572,7 +595,7 @@ def test_el_nombre_del_comercio_con_el_tipo_persona_no_cuenta_como_consulta_del_
         consulta_listas("persona", nombre="Tienda Verde SAS"),  # tipo equivocado
         consulta_listas("persona", identificador="PE-0001"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
 
 
@@ -582,7 +605,7 @@ def test_las_consultas_de_mas_no_estorban():
         consulta_listas("persona", identificador="PE-0001"),
         consulta_listas("persona", nombre="Otra Persona Ficticia"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["situacion"] == "terminado"
 
 
@@ -796,3 +819,109 @@ def test_volver_al_comercio_anterior_tampoco_reutiliza_el_resultado_viejo_de_lis
     _delegar(delegador, frente="registro", identificador="CO-TV-0001")
     _delegar(delegador, frente="listas")
     assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 3
+
+
+def test_al_volver_a_delegar_el_registro_se_reinicia_la_identificacion_antes_de_lanzar_el_frente():
+    visto = {}
+
+    def segundo_registro(contexto):
+        # Cuando el ejecutor arranca por segunda vez, lo identificado antes ya se olvidó (R4).
+        visto["identificaciones"] = list(estado.identificaciones)
+        visto["comercio"] = estado.comercio
+        return resultado_registro()
+
+    resultados = iter([resultado_registro(), None])
+
+    def registro(contexto):
+        siguiente = next(resultados)
+        return siguiente if siguiente is not None else segundo_registro(contexto)
+
+    delegador, estado, registro_eventos, _ = _crear(resultados={Frente.REGISTRO: registro})
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    assert estado.comercio == COMERCIO_ESPERADO
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001 ")
+    assert visto == {"identificaciones": [], "comercio": None}
+    assert estado.comercio == COMERCIO_ESPERADO  # y al terminar vuelve a identificarse
+
+
+def test_el_comercio_anterior_se_conserva_para_decidir_la_invalidacion_de_listas():
+    # El comercio que ya estaba (capturado antes de reiniciar) es contra el que se compara al
+    # concluir: con el mismo comercio listas sigue terminado; con otro, deja de estarlo.
+    delegador, estado, registro, _ = _registro_cambia_de_comercio()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    _delegar(delegador, frente="registro", identificador="CO-PL-0003")
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    invalidaciones = [e for e in registro.eventos() if e.tipo == TIPO_FRENTE_INVALIDADO]
+    assert len(invalidaciones) == 1
+
+
+def _consultas_de_listas_con_una_de_mas():
+    return [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", identificador="PE-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),  # de más: el hook la bloquea
+    ]
+
+
+def test_una_consulta_de_mas_bloqueada_no_hace_fallar_el_frente_si_las_necesarias_se_hicieron():
+    # Decisión de la analista: lo bloqueado no cuenta contra el frente si el comercio y el
+    # representante se consultaron de forma válida. El intento queda como evento de la regla.
+    listas, estado, registro, _ = _registro_y_listas_con_eventos(
+        _consultas_de_listas_con_una_de_mas()
+    )
+    assert listas["situacion"] == "terminado" and "error" not in listas
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+    bloqueos = [e for e in registro.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
+    assert [(e.regla, e.frente) for e in bloqueos] == [("I.1", Frente.LISTAS)]
+    # La respuesta al coordinador solo trae las consultas válidas, sin el intento bloqueado.
+    assert len(listas["resultados"]) == 2
+    assert "Otra Persona" not in json.dumps(listas)
+    # El estado conserva el intento como traza, con su tipo de error.
+    bloqueadas = [
+        c for c in estado.consultas if c.error and c.error["tipo"] == "bloqueado_por_hook"
+    ]
+    assert len(bloqueadas) == 1 and bloqueadas[0].valido is False
+
+
+def test_si_lo_bloqueado_era_una_consulta_necesaria_el_frente_no_termina():
+    consultas = [
+        consulta_listas("comercio", nombre="Otro Comercio SAS"),  # no es el comercio: se bloquea
+        consulta_listas("persona", identificador="PE-0001"),
+    ]
+    listas, estado, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert "consulta del comercio" in listas["mensaje"]
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+
+
+def test_un_error_real_de_la_herramienta_sigue_haciendo_fallar_el_frente():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", identificador="PE-0001"),
+        consulta(
+            Frente.LISTAS, {"tipo": "persona", "identificador": "PE-0001"}, error=ERROR_NOTICIAS
+        ),
+    ]
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert listas["reintentable"] is True  # solo cuentan los errores reales para reintentar
+
+
+def test_el_bloqueo_de_un_hook_no_vuelve_reintentable_a_un_frente_que_fallo_por_otra_causa():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),  # bloqueada
+    ]
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["tipo"] == "frente_no_terminado" and listas["reintentable"] is False
+
+
+def _registro_y_listas_con_eventos(consultas_de_listas):
+    resultados = {
+        Frente.REGISTRO: resultado_registro(),
+        Frente.LISTAS: resultado_listas(consultas_de_listas),
+    }
+    delegador, estado, registro, ejecutor = _crear(resultados=resultados)
+    _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
+    return listas, estado, registro, ejecutor

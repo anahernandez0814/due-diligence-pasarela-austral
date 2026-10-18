@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from due_diligence.frentes import Frente
+from due_diligence.libro import LibroReglas
 
 if TYPE_CHECKING:
     from due_diligence.terminacion import Clasificacion
@@ -66,12 +67,30 @@ class ResultadoFrente:
     coste_usd: float | None = None  # `total_cost_usd` del subagente, si el SDK lo informó
 
 
+@dataclass(frozen=True)
+class Identificacion:
+    """Lo que `derivar_comercio` devolvió para una consulta válida del registro (R4).
+
+    `con_coincidencias` dice si esa respuesta traía coincidencias; la consolidación de varias
+    consultas ignora las que no las tienen, como hacía el #6.
+    """
+
+    comercio: dict[str, Any] | None
+    motivo: str
+    con_coincidencias: bool
+
+
 @dataclass
 class EstadoCaso:
     solicitud: str = ""
-    comercio: dict[str, Any] | None = None
-    motivo_comercio: str = ""
     terminacion: "Clasificacion | None" = None
+    # Identificaciones registradas por el hook del registro (único escritor, R4). `comercio` y
+    # `motivo_comercio` se derivan de ellas y de la situación del frente de registro.
+    identificaciones: list[Identificacion] = field(default_factory=list)
+    # Lo que los hooks de las reglas registran para decidir I.1, I.2 e I.3 (data-model).
+    libro: LibroReglas = field(default_factory=LibroReglas)
+    # El `Stop` agotó `MAX_CIERRES_IMPEDIDOS` sin que el caso estuviera escalado (R3).
+    cierre_sin_escalar: bool = False
     resultados: dict[Frente, ResultadoFrente] = field(default_factory=dict)
     consultas: list[Consulta] = field(default_factory=list)
     _situaciones: dict[Frente, Situacion] = field(
@@ -104,9 +123,50 @@ class EstadoCaso:
     def agregar_consultas(self, consultas: list[Consulta]) -> None:
         self.consultas.extend(consultas)
 
-    def fijar_comercio(self, comercio: dict[str, Any] | None, motivo: str = "") -> None:
-        self.comercio = comercio
-        self.motivo_comercio = "" if comercio is not None else motivo
+    def registrar_identificacion(self, respuesta: Any) -> None:
+        """Guarda lo que `derivar_comercio` devuelve para una respuesta del registro (R4).
+
+        `derivar_comercio` es el único intérprete: aquí no se decide nada sobre la respuesta.
+        """
+        comercio, motivo = derivar_comercio(respuesta)
+        con_coincidencias = isinstance(respuesta, dict) and bool(respuesta.get("coincidencias"))
+        self.identificaciones.append(Identificacion(comercio, motivo, con_coincidencias))
+
+    def reiniciar_identificacion(self) -> None:
+        """Olvida las identificaciones: el registro se vuelve a delegar con otra entrada."""
+        self.identificaciones.clear()
+
+    def _consolidar_comercio(self) -> tuple[dict[str, Any] | None, str]:
+        """(comercio, motivo) del caso. Es la lógica de `_fijar_comercio` del #6, movida aquí.
+
+        Solo hay comercio si el registro terminó con normalidad y todas las consultas con
+        coincidencias identifican al mismo (principios I.1 e I.4: no se elige una).
+        """
+        if self.situacion(Frente.REGISTRO) is not Situacion.TERMINADO:
+            motivo = self.motivo(Frente.REGISTRO)
+            return None, f"El registro mercantil no terminó. {motivo}".strip()
+        if not self.identificaciones:
+            return None, "El registro no devolvió datos."
+        derivadas = [i for i in self.identificaciones if i.con_coincidencias]
+        if not derivadas:
+            derivadas = self.identificaciones[:1]
+        for identificacion in derivadas:
+            if identificacion.comercio is None:
+                return None, identificacion.motivo
+        if any(i.comercio != derivadas[0].comercio for i in derivadas):
+            return None, (
+                "Las consultas del registro identifican comercios distintos: no se elige uno; "
+                "hace falta el identificador."
+            )
+        return derivadas[0].comercio, ""
+
+    @property
+    def comercio(self) -> dict[str, Any] | None:
+        return self._consolidar_comercio()[0]
+
+    @property
+    def motivo_comercio(self) -> str:
+        return self._consolidar_comercio()[1]
 
     def instantanea(self) -> "EstadoCaso":
         """Copia independiente: modificarla no cambia el estado del caso."""

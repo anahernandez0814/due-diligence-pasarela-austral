@@ -158,10 +158,11 @@ representante legal tal como los devolvió el registro. Las decisiones están en
 - **Ejecutar un caso con el modelo real** (gasta tokens):
   `uv run python -m due_diligence "<solicitud del analista>"`. Imprime los eventos con su hora, la
   situación de cada frente, la duración de cada uno, si hubo solape, el coste y la respuesta del
-  coordinador. **Coste**: en la validación real, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
-  diferencia apreciable entre frío y caliente. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
-- **Modelos**: `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` (por defecto
-  `claude-sonnet-5-5`). El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
+  coordinador. **Coste**: en la validación real del #6, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
+  diferencia apreciable entre frío y caliente; con Opus 5.5, que cuesta el doble por token, se estima en unos 0,12 USD. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
+- **Modelos**: por defecto `claude-opus-5-5` en el coordinador y en los cuatro subagentes (desde el
+  #7); `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` permiten cambiarlo, por ejemplo a
+  `claude-sonnet-5-5`. El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
   por la razón de parada del modelo.
 - **Credenciales**: el modelo se autentica con las variables de entorno que carga `__main__` desde el
   archivo de entorno local con python-dotenv. Los tests no lo cargan ni llaman al modelo.
@@ -169,8 +170,23 @@ representante legal tal como los devolvió el registro. Las decisiones están en
   comprueba que ni `CLAUDE.md` ni los hooks del repositorio llegan a los agentes;
   `--herramientas` lista las herramientas iniciales de cada agente y `--limite` provoca el límite de turnos.
 - **Tests**: `uv run pytest src/due_diligence` usa un ejecutor simulado ([simulacion.py](src/due_diligence/simulacion.py)).
-- **Alcance**: aún no hay hooks de reglas de negocio (#7); mientras tanto el coordinador conserva
-  `registrar_informe` y `escalar_a_cumplimiento` y su instrucción le prohíbe usarlas.
+- **Reglas de negocio con hooks** (ticket #7, [specs/007-hooks-sdk-reglas/](specs/007-hooks-sdk-reglas/)):
+  las reglas 1, 2 y 3 las hacen cumplir hooks del Agent SDK, no el prompt. Listas solo se consulta
+  con el comercio identificado de forma unívoca en el registro; una coincidencia en listas, o una
+  categoría de alto riesgo, impide recomendar habilitar y obliga a escalar con
+  `escalar_a_cumplimiento`; el coordinador no puede terminar un caso que requiere escalamiento sin
+  escalar. El informe solo admite las recomendaciones `habilitar`, `no_habilitar` y
+  `decide_cumplimiento`. Cada bloqueo deja un evento con la regla y el motivo, que `python -m
+  due_diligence` imprime junto a si el caso quedó completo.
+- **Modo de demostración**: con `PASARELA_MODO_DEMO_HOOKS=1` se quitan del prompt del coordinador la
+  regla de las varias coincidencias y la guía de escalar, para que el modelo pueda intentar las
+  acciones prohibidas y se vea que el hook las bloquea. **No desactiva ningún hook** y no es una
+  configuración normal: sirve para demostrar y probar que las reglas no dependen del prompt.
+  Ejemplo: `PASARELA_MODO_DEMO_HOOKS=1 uv run python -m due_diligence "<solicitud>"`.
+- **Sondeo de los hooks** (manual, gasta tokens, unos 0,01 USD): `uv run python -m
+  due_diligence.sondeo_hooks` repite lo medido con el SDK (forma de `tool_response`, vía de los
+  errores estructurados, qué pasa si un hook falla, el `Stop` con `block`) y prueba los hooks del
+  caso con una sesión real. Sale con 0 si todo coincide, 1 si algo difiere y 2 si solo hay mediciones inconclusas.
 
 ## Guardas del entorno
 

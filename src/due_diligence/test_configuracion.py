@@ -174,28 +174,37 @@ def test_el_servidor_reenvia_solo_las_variables_pasarela_presentes():
 # ---------------------------------------------------------------- modelos (R9)
 
 
-def test_el_modelo_por_defecto_es_sonnet_para_el_coordinador_y_los_cuatro_subagentes():
-    assert configuracion.MODELO_POR_DEFECTO == "claude-sonnet-5-5"
-    assert configuracion.modelo_coordinador({}) == "claude-sonnet-5-5"
-    assert configuracion.modelo_subagentes({}) == "claude-sonnet-5-5"
+def test_el_modelo_por_defecto_es_opus_para_el_coordinador_y_los_cuatro_subagentes():
+    # Decisión de la analista en el #7: Opus 5.5 en el código, sin depender del archivo de entorno.
+    assert configuracion.MODELO_POR_DEFECTO == "claude-opus-5-5"
+    assert configuracion.modelo_coordinador({}) == "claude-opus-5-5"
+    assert configuracion.modelo_subagentes({}) == "claude-opus-5-5"
+
+
+def test_las_variables_permiten_volver_a_sonnet():
+    entorno = {
+        "PASARELA_MODELO_COORDINADOR": "claude-sonnet-5-5",
+        "PASARELA_MODELO_SUBAGENTES": "claude-sonnet-5-5",
+    }
+    assert configuracion.modelo_coordinador(entorno) == "claude-sonnet-5-5"
+    assert configuracion.modelo_subagentes(entorno) == "claude-sonnet-5-5"
 
 
 def test_cada_modelo_se_sustituye_por_separado_con_su_variable(monkeypatch):
     monkeypatch.setenv("PASARELA_MODELO_COORDINADOR", "modelo-del-coordinador")
     monkeypatch.delenv("PASARELA_MODELO_SUBAGENTES", raising=False)
     assert _opciones_coordinador().model == "modelo-del-coordinador"
-    assert all(_opciones_subagente(f).model == "claude-sonnet-5-5" for f in Frente)
+    assert all(_opciones_subagente(f).model == "claude-opus-5-5" for f in Frente)
 
     monkeypatch.delenv("PASARELA_MODELO_COORDINADOR")
     monkeypatch.setenv("PASARELA_MODELO_SUBAGENTES", "modelo-de-subagentes")
-    assert _opciones_coordinador().model == "claude-sonnet-5-5"
+    assert _opciones_coordinador().model == "claude-opus-5-5"
     assert all(_opciones_subagente(f).model == "modelo-de-subagentes" for f in Frente)
 
 
 def test_un_valor_vacio_usa_el_modelo_por_defecto():
     assert (
-        configuracion.modelo_coordinador({"PASARELA_MODELO_COORDINADOR": "  "})
-        == "claude-sonnet-5-5"
+        configuracion.modelo_coordinador({"PASARELA_MODELO_COORDINADOR": "  "}) == "claude-opus-5-5"
     )
 
 
@@ -245,3 +254,39 @@ def test_todas_las_opciones_usan_el_filtro_de_stderr():
         modelo="m", system_prompt="s", permitidas=[], prohibidas=[], mcp_servers={}
     )
     assert opciones.stderr is configuracion.filtrar_stderr
+
+
+# ------------------------------------------------ límite de devoluciones y demo (#7, R3, R11)
+
+
+def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos():
+    assert configuracion.MAX_CIERRES_IMPEDIDOS == 3
+    assert configuracion.MAX_CIERRES_IMPEDIDOS < configuracion.MAX_TURNOS_SEGURIDAD
+
+
+@pytest.mark.parametrize("valor", ["0", "true", "", " ", "11", "si", "yes"])
+def test_el_modo_demostracion_solo_se_activa_con_el_valor_exacto_uno(valor):
+    entorno = {configuracion.VARIABLE_MODO_DEMO: valor}
+    assert configuracion.modo_demostracion(entorno) is False
+
+
+def test_el_modo_demostracion_con_uno_se_activa_y_sin_variable_no():
+    assert configuracion.modo_demostracion({configuracion.VARIABLE_MODO_DEMO: "1"}) is True
+    assert configuracion.modo_demostracion({}) is False
+
+
+def test_el_modo_demostracion_lee_el_entorno_dado_y_con_none_lee_os_environ(monkeypatch):
+    # Con un entorno dado no mira `os.environ`; con `None` sí (el patrón de `_modelo`, R11).
+    monkeypatch.setenv(configuracion.VARIABLE_MODO_DEMO, "1")
+    assert configuracion.modo_demostracion({}) is False
+    assert configuracion.modo_demostracion(None) is True
+    assert configuracion.modo_demostracion() is True
+    monkeypatch.delenv(configuracion.VARIABLE_MODO_DEMO)
+    assert configuracion.modo_demostracion(None) is False
+
+
+def test_la_variable_de_demostracion_no_se_reenvia_al_servidor():
+    assert configuracion.VARIABLE_MODO_DEMO == "PASARELA_MODO_DEMO_HOOKS"
+    assert configuracion.VARIABLE_MODO_DEMO not in configuracion.VARIABLES_PASARELA
+    entorno = {configuracion.VARIABLE_MODO_DEMO: "1"}
+    assert "env" not in configuracion.servidor_pasarela(entorno)

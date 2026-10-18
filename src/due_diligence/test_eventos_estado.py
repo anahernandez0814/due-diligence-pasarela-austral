@@ -14,10 +14,17 @@ from due_diligence.estado import (
     derivar_comercio,
 )
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_CASO_INICIADO,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_CONSULTA_FALLIDA,
     TIPO_DELEGACION,
+    TIPO_ESCALAMIENTO_REGISTRADO,
+    TIPO_FALLO_DE_HOOK,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_MODO_DEMOSTRACION,
     TIPO_TERMINACION,
     TIPOS,
     RegistroEventos,
@@ -39,8 +46,42 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "frente_rechazado",
         "frente_invalidado",
         "terminacion",
+        "bloqueo_regla",
+        "cierre_impedido",
+        "cierre_sin_escalar",
+        "fallo_de_hook",
+        "escalamiento_registrado",
+        "modo_demostracion",
+        "consulta_fallida",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS
+
+
+def test_los_tipos_nuevos_de_los_hooks_son_validos():
+    registro = RegistroEventos()
+    for tipo in (
+        TIPO_BLOQUEO_REGLA,
+        TIPO_CIERRE_IMPEDIDO,
+        TIPO_CIERRE_SIN_ESCALAR,
+        TIPO_FALLO_DE_HOOK,
+        TIPO_ESCALAMIENTO_REGISTRADO,
+        TIPO_MODO_DEMOSTRACION,
+        TIPO_CONSULTA_FALLIDA,
+    ):
+        assert registro.registrar(tipo).tipo == tipo
+    with pytest.raises(TipoDeEventoInvalido):
+        registro.registrar("bloqueo_inventado")
+
+
+def test_el_evento_lleva_la_regla_y_por_defecto_ninguna():
+    registro = RegistroEventos()
+    sin_regla = registro.registrar(TIPO_DELEGACION, Frente.REGISTRO, "delegado")
+    con_regla = registro.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "motivo", regla="I.1")
+    assert sin_regla.regla is None
+    assert con_regla.regla == "I.1"
+    assert [e.regla for e in registro.eventos()] == [None, "I.1"]
+    # Las llamadas posicionales del #6 siguen valiendo: (secuencia, marca, tipo, frente, detalle).
+    assert sin_regla.detalle == "delegado"
 
 
 def test_la_secuencia_crece_desde_uno():
@@ -190,7 +231,9 @@ def test_instantanea_devuelve_una_copia_independiente():
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
     copia = estado.instantanea()
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
-    estado.fijar_comercio({"identificador": "CO-TV-0001"}, "")
+    estado.registrar_identificacion(
+        respuesta_del_contrato("coincidencias", [comercio_del_registro()], ["CO-TV-0001"])
+    )
     assert copia.situacion(Frente.REGISTRO) is Situacion.EN_CURSO
     assert copia.comercio is None
     copia.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO)
@@ -203,12 +246,6 @@ def test_dos_estados_no_comparten_nada():
     uno.agregar_consultas([_consulta()])
     assert otro.situacion(Frente.LISTAS) is Situacion.SIN_INICIAR
     assert otro.consultas == []
-
-
-def test_fijar_comercio_guarda_el_motivo_cuando_no_hay_comercio():
-    estado = EstadoCaso("")
-    estado.fijar_comercio(None, "varias coincidencias")
-    assert estado.comercio is None and estado.motivo_comercio == "varias coincidencias"
 
 
 # ---------------------------------------------------------------- ayudas

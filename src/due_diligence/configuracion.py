@@ -31,9 +31,11 @@ from due_diligence.frentes import (
 # Raíz del repositorio: src/due_diligence/configuracion.py → tres niveles arriba.
 RAIZ = Path(__file__).resolve().parents[2]
 
-# Un mismo modelo para el coordinador y los cuatro subagentes (R9). Cada uno se sustituye por
-# separado con su variable de entorno, sin tocar el código.
-MODELO_POR_DEFECTO = "claude-sonnet-5-5"
+# Un mismo modelo para el coordinador y los cuatro subagentes (R9 del #6). Desde el #7 es Opus 5.5
+# por decisión de la analista, fijado aquí y no solo por variable de entorno, para que quien ejecute
+# el producto sin archivo de entorno obtenga el mismo modelo. Cada uno se sustituye por separado con
+# su variable de entorno (por ejemplo, para volver a `claude-sonnet-5-5`), sin tocar el código.
+MODELO_POR_DEFECTO = "claude-opus-5-5"
 VARIABLE_MODELO_COORDINADOR = "PASARELA_MODELO_COORDINADOR"
 VARIABLE_MODELO_SUBAGENTES = "PASARELA_MODELO_SUBAGENTES"
 
@@ -42,6 +44,20 @@ VARIABLE_MODELO_SUBAGENTES = "PASARELA_MODELO_SUBAGENTES"
 # se alcanza, el SDK lo informa como `error_max_turns` y se registra aparte (R5).
 MAX_TURNOS_SEGURIDAD = 30
 
+# PROTECCIÓN DE SEGURIDAD, no el mecanismo de la regla (#7, R3): cuántas veces el hook de `Stop`
+# contradice el fin de turno del coordinador cuando el caso requiere escalamiento y no se escaló.
+# Lo garantizado en código es que ese caso nunca se recomienda habilitar, nunca figura como
+# completo y queda marcado `cierre_sin_escalar`; que el escalamiento ocurra depende del modelo,
+# con este número de oportunidades. El ciclo sigue terminando por la razón de parada; este contador
+# solo limita las devoluciones, igual que `max_turns`. Es menor que `MAX_TURNOS_SEGURIDAD`: las
+# devoluciones gastan turnos (medido en R3) y no deben llevar por sí solas a `error_max_turns`.
+MAX_CIERRES_IMPEDIDOS = 3
+
+# Modo de demostración (#7, R11): quita del prompt del coordinador las instrucciones de las
+# reglas de negocio para que el modelo pueda intentar las acciones prohibidas. NO desactiva ningún
+# hook y no se reenvía al servidor de la pasarela.
+VARIABLE_MODO_DEMO = "PASARELA_MODO_DEMO_HOOKS"
+
 # Variables del servidor `pasarela` que se reenvían a su proceso si están definidas (#5).
 VARIABLES_PASARELA = ("PASARELA_FALLA_NOTICIAS", "PASARELA_RESULTADOS_DIR")
 
@@ -49,6 +65,12 @@ VARIABLES_PASARELA = ("PASARELA_FALLA_NOTICIAS", "PASARELA_RESULTADOS_DIR")
 def _modelo(variable: str, entorno: Mapping[str, str] | None) -> str:
     valor = (os.environ if entorno is None else entorno).get(variable, "").strip()
     return valor or MODELO_POR_DEFECTO
+
+
+def modo_demostracion(entorno: Mapping[str, str] | None = None) -> bool:
+    """`True` solo con el valor exacto `1`. Con `entorno=None` lee `os.environ` (como `_modelo`)."""
+    fuente = os.environ if entorno is None else entorno
+    return fuente.get(VARIABLE_MODO_DEMO, "") == "1"
 
 
 def modelo_coordinador(entorno: Mapping[str, str] | None = None) -> str:

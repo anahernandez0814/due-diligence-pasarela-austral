@@ -170,3 +170,35 @@ def test_una_re_delegacion_no_cambia_el_solape_ni_la_duracion_del_primer_ciclo()
 def test_sin_dos_frentes_independientes_el_solape_se_imprime_como_no_aplica():
     assert principal._si_no(None) == "no aplica"
     assert principal._si_no(True) == "sí" and principal._si_no(False) == "no"
+
+
+def test_el_chat_muestra_el_bloqueo_con_su_regla_y_su_motivo_y_que_el_caso_no_esta_completo():
+    from due_diligence.simulacion import (
+        CoordinadorSimulado,
+        comercios_parecidos,
+        consulta,
+        respuesta_registro,
+    )
+
+    guion = [
+        ("delegar", {"frente": "registro", "nombre": "Almacén Mirador"}),
+        ("delegar", {"frente": "listas"}),  # sin identificación unívoca: el hook lo bloquea
+        ("terminar",),
+    ]
+    coordinador = CoordinadorSimulado(guion)
+    registro = resultado_frente(
+        Frente.REGISTRO,
+        [consulta(Frente.REGISTRO, {"nombre": "x"}, respuesta_registro(*comercios_parecidos()))],
+    )
+    caso = Caso(
+        ejecutor=EjecutorSimulado(resultados={Frente.REGISTRO: registro}), consulta=coordinador
+    )
+    coordinador.caso = caso
+    asyncio.run(caso.ejecutar("solicitud"))
+
+    salida = []
+    principal.imprimir_caso(caso, salida.append)
+    texto = " | ".join(salida)
+    assert "bloqueo_regla" in texto and "[I.1]" in texto
+    assert "pida el identificador al analista" in texto
+    assert "Caso completo: no" in texto

@@ -404,3 +404,21 @@ def test_un_tipo_incorrecto_sigue_dando_entrada_invalida_en_espanol(herramienta,
     texto = _texto(resultado).lower()
     for ingles in ("pydantic", "[type=", "input_value", "valid string", "valid dictionary"):
         assert ingles not in texto
+
+
+def test_la_descripcion_de_registrar_informe_nombra_los_tres_valores_de_recomendacion():
+    herramienta = _herramientas()["registrar_informe"]
+    for valor in ("habilitar", "no_habilitar", "decide_cumplimiento"):
+        assert valor in herramienta.description
+        assert valor in herramienta.input_schema["properties"]["recomendacion"]["description"]
+    # Es una guía: la descripción dice que el servidor no la valida ni decide.
+    assert "no la valida" in herramienta.description
+    assert "No valida reglas de negocio ni decide" in herramienta.description
+
+
+def test_el_servidor_sigue_aceptando_cualquier_recomendacion_textual():
+    for texto in ("aprobar", "No habilitar de forma automática.", "decide_cumplimiento"):
+        entrada = {**_informe(), "recomendacion": texto}
+        resultado = _llamar("registrar_informe", entrada)
+        assert resultado.is_error is False, texto
+        assert resultado.structured_content["resultado"] == "informe_registrado"

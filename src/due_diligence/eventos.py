@@ -19,6 +19,15 @@ TIPO_FRENTE_FIN = "frente_fin"
 TIPO_FRENTE_RECHAZADO = "frente_rechazado"
 TIPO_FRENTE_INVALIDADO = "frente_invalidado"
 TIPO_TERMINACION = "terminacion"
+# Eventos de los hooks de las reglas de negocio (#7, R12).
+TIPO_BLOQUEO_REGLA = "bloqueo_regla"
+TIPO_CIERRE_IMPEDIDO = "cierre_impedido"
+TIPO_CIERRE_SIN_ESCALAR = "cierre_sin_escalar"
+TIPO_FALLO_DE_HOOK = "fallo_de_hook"
+TIPO_ESCALAMIENTO_REGISTRADO = "escalamiento_registrado"
+TIPO_MODO_DEMOSTRACION = "modo_demostracion"
+# Una herramienta de una regla devolvió un error estructurado (llega por `PostToolUseFailure`, R1).
+TIPO_CONSULTA_FALLIDA = "consulta_fallida"
 
 TIPOS = frozenset(
     {
@@ -30,6 +39,13 @@ TIPOS = frozenset(
         TIPO_FRENTE_RECHAZADO,
         TIPO_FRENTE_INVALIDADO,
         TIPO_TERMINACION,
+        TIPO_BLOQUEO_REGLA,
+        TIPO_CIERRE_IMPEDIDO,
+        TIPO_CIERRE_SIN_ESCALAR,
+        TIPO_FALLO_DE_HOOK,
+        TIPO_ESCALAMIENTO_REGISTRADO,
+        TIPO_MODO_DEMOSTRACION,
+        TIPO_CONSULTA_FALLIDA,
     }
 )
 
@@ -45,6 +61,9 @@ class Evento:
     tipo: str
     frente: Frente | None
     detalle: str
+    # La regla de negocio que causó el evento ("I.1", "I.2", "I.3" o varias separadas por coma);
+    # `None` en los eventos que no son de una regla. Al final para no romper llamadas posicionales.
+    regla: str | None = None
 
 
 def _ahora() -> datetime:
@@ -57,11 +76,17 @@ class RegistroEventos:
         self._eventos: list[Evento] = []
         self._candado = threading.Lock()
 
-    def registrar(self, tipo: str, frente: Frente | None = None, detalle: str = "") -> Evento:
+    def registrar(
+        self,
+        tipo: str,
+        frente: Frente | None = None,
+        detalle: str = "",
+        regla: str | None = None,
+    ) -> Evento:
         if tipo not in TIPOS:
             raise TipoDeEventoInvalido(f"Tipo de evento desconocido: {tipo!r}.")
         with self._candado:
-            evento = Evento(len(self._eventos) + 1, self._reloj(), tipo, frente, detalle)
+            evento = Evento(len(self._eventos) + 1, self._reloj(), tipo, frente, detalle, regla)
             self._eventos.append(evento)
         return evento
 

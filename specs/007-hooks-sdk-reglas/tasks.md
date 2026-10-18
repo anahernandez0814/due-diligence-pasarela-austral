@@ -543,9 +543,9 @@ modelo simulado que intenta las tres acciones.
 
 ## Fase 10: Validación con el quickstart
 
-- [ ] T053 Ejecutar Q1 a Q3 y Q6 del [quickstart](quickstart.md) y anotar el resultado en esta tarea: formato y
+- [X] T053 Ejecutar Q1 a Q3 y Q6 del [quickstart](quickstart.md) y anotar el resultado en esta tarea: formato y
   lint; `test_casos_reglas.py` con los casos (a), (b), (c) y (e); las pruebas de reglas, hooks, sesiones y fuente
-  única; y las instrucciones sin el modo de demostración. Resultado: ______.
+  única; y las instrucciones sin el modo de demostración. Resultado (2026-10-18): **Q1** `uv run ruff format .` y `uv run ruff check .` limpios y `uv run pytest` con **2460 tests en verde** (línea base 2071). **Q2** `test_casos_reglas.py`: 9 pasan, con los casos (a), (b), (c) y (e) de extremo a extremo; sin los hooks los 9 fallan (comprobación de mutación). **Q3** reglas, hooks, sesiones y fuente única: 287 pasan; `derivar_comercio` se define y se llama una sola vez y no existen `fijar_comercio` ni `_fijar_comercio`. **Q6** sin el modo de demostración las instrucciones incluyen la regla de las varias coincidencias, la instrucción de escalar y los tres valores, y no incluyen la prohibición del #6 ni «No decidas la habilitación».
 - [ ] T054 [MANUAL] Q4 del quickstart: `uv run python -m due_diligence.sondeo_hooks`, en una sesión de Claude Code
   nueva abierta en la raíz y con el modelo real (Haiku, ≈ 0,01 USD). Anotar si (a) a (d) coinciden con
   `research.md`. Si el SDK cambió, anotar qué dejó de cumplirse. Resultado: ______.

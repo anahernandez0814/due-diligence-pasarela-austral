@@ -191,18 +191,18 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 - El recorrido de SC-004 da espera exactamente en tres situaciones.
 - En el caso (d), elegir `CO-AM-0005` deja noticias no cubierto; elegir `CO-AM-0004` lo conserva.
 
-- [ ] T023 [P] [US4] Test del recorrido de SC-004 en `src/due_diligence/test_reglas.py`:
+- [X] T023 [P] [US4] Test del recorrido de SC-004 en `src/due_diligence/test_reglas.py`:
   - parametrizado con los 6 estados del registro (sin delegar, en curso, varias, ninguna, identificado y caído), por los 3 de la categoría (con resultado, sin delegar, bloqueada sin resultado), con y sin causas de escalamiento (36 casos);
   - `espera_del_analista` no es `None` exactamente cuando el registro está en `varias` o `ninguna`, o la categoría está bloqueada sin resultado.
   - Entre los 36, **el registro caído con la categoría bloqueada sin resultado** da la espera `categoria`, y el registro caído con la categoría con resultado o sin delegar da `None` (hallazgo A1).
 
   Un test aparte, con la clase `contradictoria`, da `None`; con `contradictoria` y la categoría bloqueada, da `categoria`.
-- [ ] T024 [US4] **Cambiar a sabiendas** el test del #9 `test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta` en `src/due_diligence/test_hooks.py` (FR-015). No se borra:
+- [X] T024 [US4] **Cambiar a sabiendas** el test del #9 `test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta` en `src/due_diligence/test_hooks.py` (FR-015). No se borra:
   - **se conserva con otro nombre y otro comentario** (US4-1): con el comercio identificado y sin una categoría bloqueada, una pregunta sigue bloqueándose con `MOTIVO_SIN_INFORME`. Ya no es una limitación sino lo especificado, y la aserción no cambia;
   - **se añade** el test de la espera de categoría: con la categoría bloqueada sin resultado, el `Stop` admite la espera (US4-4).
 
   Anotarlo en la tabla de T046.
-- [ ] T025 [P] [US4] Tests en `src/due_diligence/test_reglas.py`, `test_cobertura.py` y `test_informe.py` (R7, FR-027):
+- [X] T025 [P] [US4] Tests en `src/due_diligence/test_reglas.py`, `test_cobertura.py` y `test_informe.py` (R7, FR-027):
   - **`consulta_del_comercio`**: coincide por `identificador` (`igual_identificador`) o por `nombre` (`igual`); no coincide con otro nombre ni con una entrada malformada.
   - **Cobertura de noticias**, con noticias `terminado` y consultado con «Almacén Mirador SAS»:
     - con el comercio identificado como `CO-AM-0005` (nombre «Almacén Mirador Norte SAS"), noticias **no** está cubierto, con la causa `otro_comercio` y el motivo fijo de data-model;
@@ -215,17 +215,21 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
     - en listas, una consulta del representante sí cuenta;
     - una del comercio anterior, no;
     - categoría y registro no cambian.
-- [ ] T026 [US4] Implementar T025:
+- [X] T026 [US4] Implementar T025:
   - `consulta_del_comercio` en `src/due_diligence/reglas.py`;
   - noticias de otro comercio en `src/due_diligence/cobertura.py` (`_MOTIVOS[Causa.OTRO_COMERCIO]`);
   - las fuentes por comercio en `src/due_diligence/informe.py`.
 
   La cobertura sigue siendo pura.
-- [ ] T027 [P] [US4] Instrucciones (R11, FR-028) en `src/due_diligence/test_coordinador.py` y `test_modo_demo.py`:
+- [X] T027 [P] [US4] Instrucciones (R11, FR-028) en `src/due_diligence/test_coordinador.py` y `test_modo_demo.py`:
   - **`_REGLA_TRAS_IDENTIFICAR`** está en las instrucciones normales **y** en las del modo de demostración. Dice que el rechazo de listas por falta de identificación deja de valer cuando el comercio queda identificado, aunque dijera `reintentable false`, y que noticias se vuelve a delegar si se consultó con otro nombre.
   - **`_REGLA_VARIAS_COINCIDENCIAS` ampliada** («termina tu turno sin escalar ni registrar el informe; cuando responda, sigue en el mismo caso»): solo en el modo normal.
-- [ ] T028 [US4] Implementar T027 en `src/due_diligence/coordinador.py`.
-- [ ] T029 [US4] Fase 5: ruff, la suite y los tests de T046. Commit «FR-027 en la cobertura y esperas que no lo son (#10, US4)». **PARADA DE REVISIÓN A**:
+- [X] T028 [US4] Implementar T027 en `src/due_diligence/coordinador.py`.
+  **Notas de la fase 5**:
+  - T023 pasó al escribirlo (prueba una función de T011). Con la mutación que olvida «sin resultado» sobrevivía; se añadió `test_sc004_la_categoria_bloqueada_con_un_resultado_ya_no_es_espera` (6 casos) y la mutación pasó a fallar 4.
+  - T026: las mutaciones de la cobertura de noticias y de las fuentes por comercio hacen fallar 2 tests cada una.
+  - T026 cambió `EjecutorSimulado`: sin resultado asignado, noticias consulta con el dato de su contexto, como el subagente real.
+- [X] T029 [US4] Fase 5: ruff, la suite y los tests de T046. Commit «FR-027 en la cobertura y esperas que no lo son (#10, US4)». **PARADA DE REVISIÓN A**:
   - Claude se detiene y resume a la analista lo hecho en el bloque A (esperas, `Caso.continuar`, cierre por turno, FR-027 y la categoría), con los tests de R4 y del recorrido de SC-004;
   - no sigue con el bloque B hasta su visto bueno.
 
@@ -358,6 +362,8 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_hooks.py::test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradicen`, variante de varias coincidencias | FR-016: el informe se rechaza durante la espera del identificador (es la fila del cambio respecto al #9). | Se separa en `test_con_varias_coincidencias_la_cobertura_y_los_conflictos_no_se_contradicen`: las mismas igualdades exactas de la cobertura (`registro: cubierto.`) y de los conflictos, con los cálculos puros que pondría el hook, y el rechazo con el motivo exacto. Las variantes «en curso» y «caído» no cambian. |
   | `test_coordinador.py::test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos` | Cada turno empieza con `mensaje_analista` (R2). | La secuencia exacta añade `("mensaje_analista", None)` tras `caso_iniciado`. |
   | `test_casos_reglas.py`: casos b, c (dos) y el límite de devoluciones; `test_casos_cobertura.py`: los tres del caso f; `test_casos_informe.py`: caso g, caso escalado y SC-003 con escalamiento; `test_modo_demo.py`: los tres en demo | FR-020: la categoría delegada tiene que aparecer en un mensaje del analista, y sus solicitudes no la nombraban (por ejemplo, «talleres» o «panaderías» con la solicitud de Tienda Verde). | Cambia solo la **entrada**: cada caso pide el due diligence con la categoría que delega su guion (`SOLICITUD_B`, `SOLICITUD_C`, `SOLICITUD_G`, `SOLICITUD_A` o «Solicitud de <categoría>.» en demo). Ninguna aserción cambia. |
+  | `test_hooks.py::test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta` (T024) | FR-015: ya no es una limitación sino lo especificado (US4-1). | Se conserva con otro nombre (`test_con_el_comercio_identificado_una_pregunta_no_es_una_espera_y_exige_el_informe`) y otro comentario; la aserción no cambia. Se añade `test_con_la_categoria_bloqueada_sin_resultado_la_pregunta_es_una_espera`. |
+  | `test_hooks.py::test_con_el_informe_no_vigente_el_motivo_nombra_lo_que_cambio` y `test_main.py::_ejecutar_caso_simulado` | FR-027: una consulta de noticias sin argumentos no es del comercio identificado. | Cambia solo la **entrada**: la consulta de noticias lleva `{"identificador": "CO-TV-0001"}`, el dato delegado. Ninguna aserción cambia. |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

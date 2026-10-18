@@ -21,6 +21,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.simulacion import EjecutorSimulado, resultado_frente
+from due_diligence.simulacion import consulta as consulta_de_frente
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +59,10 @@ def _ejecutar_caso_simulado(fin, llamadas):
             )
             yield fin
 
-        noticias = resultado_frente(Frente.NOTICIAS)
+        # La consulta de noticias lleva el dato delegado, como la del subagente (#10, FR-027).
+        noticias = resultado_frente(
+            Frente.NOTICIAS, [consulta_de_frente(Frente.NOTICIAS, {"identificador": "CO-TV-0001"})]
+        )
         noticias.coste_usd = 0.01
         caso = Caso(
             ejecutor=EjecutorSimulado(retardo=0.01, resultados={Frente.NOTICIAS: noticias}),

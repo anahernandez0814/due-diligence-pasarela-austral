@@ -23,7 +23,7 @@ from due_diligence.cobertura import CoberturaCaso, calcular_cobertura, registro_
 from due_diligence.conflictos import ConflictosCaso, calcular_conflictos, clave_de_valor
 from due_diligence.estado import EstadoCaso
 from due_diligence.frentes import Frente
-from due_diligence.reglas import causas_vigentes
+from due_diligence.reglas import causas_vigentes, consulta_coincide, consulta_del_comercio
 from servidor_mcp.informe import Problema
 from servidor_mcp.normalizar import igual
 
@@ -66,11 +66,15 @@ def fuentes_consultadas(estado: EstadoCaso, frente: Frente) -> list[str]:
     """Las fuentes de las consultas válidas del frente, sin repetir y en orden de aparición (R4).
 
     Cuentan la fuente de cada hecho y las de `metadatos.fuentes`: una respuesta sin coincidencias
-    no tiene hechos, pero sí su fuente.
+    no tiene hechos, pero sí su fuente. Con el comercio identificado (#10, FR-027, R7), en noticias
+    y en listas solo cuentan las consultas de ese comercio (o, en listas, de su representante): la
+    consulta del nombre ambiguo, o la de un comercio anterior, no sustenta una afirmación.
     """
     fuentes: list[str] = []
     for c in estado.consultas:
         if c.frente is not frente or not c.valido or not isinstance(c.resultado, Mapping):
+            continue
+        if not _del_comercio_del_caso(estado, c.frente, c.argumentos):
             continue
         de_hechos = [
             (h.get("metadatos") or {}).get("fuente")
@@ -82,6 +86,19 @@ def fuentes_consultadas(estado: EstadoCaso, frente: Frente) -> list[str]:
             if isinstance(fuente, str) and fuente.strip() and fuente not in fuentes:
                 fuentes.append(fuente)
     return fuentes
+
+
+def _del_comercio_del_caso(estado: EstadoCaso, frente: Frente, argumentos: Any) -> bool:
+    """Si la consulta es del comercio del caso, en los frentes que dependen de él (R7)."""
+    comercio = estado.comercio
+    if comercio is None or frente not in (Frente.NOTICIAS, Frente.LISTAS):
+        return True
+    if frente is Frente.NOTICIAS:
+        return consulta_del_comercio(argumentos, comercio)
+    representante = comercio.get("representante_legal")
+    return consulta_coincide(argumentos, comercio, "comercio") or bool(
+        representante and consulta_coincide(argumentos, representante, "persona")
+    )
 
 
 def problemas_de_fuente(estado: EstadoCaso, hallazgos: Any) -> list[Problema]:

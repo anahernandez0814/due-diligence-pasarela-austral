@@ -990,3 +990,113 @@ def test_el_motivo_de_la_categoria_no_repite_la_categoria_ni_el_comercio():
     assert MOTIVO_CATEGORIA_NO_DEL_ANALISTA == (
         "La categoría no aparece en los mensajes del analista: use la que dio o pregúntesela."
     )
+
+
+# ------------------------------------------- #10: recorrido de las esperas de SC-004 (T023)
+
+ESTADOS_DEL_REGISTRO = ("sin_delegar", "en_curso", "varias", "ninguna", "identificado", "caido")
+ESTADOS_DE_LA_CATEGORIA = ("con_resultado", "sin_delegar", "bloqueada")
+
+
+def _estado_del_registro(nombre):
+    if nombre == "sin_delegar":
+        return _estado_con_registro(Situacion.SIN_INICIAR, identificar=False)
+    if nombre == "en_curso":
+        return _estado_con_registro(Situacion.EN_CURSO, identificar=False)
+    if nombre == "varias":
+        return _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    if nombre == "ninguna":
+        return _estado_con_registro(Situacion.TERMINADO)
+    if nombre == "identificado":
+        return _con_comercio()
+    return _registro_caido()
+
+
+@pytest.mark.parametrize("con_causas", [False, True])
+@pytest.mark.parametrize("categoria", ESTADOS_DE_LA_CATEGORIA)
+@pytest.mark.parametrize("registro", ESTADOS_DEL_REGISTRO)
+def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria, con_causas):
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _estado_del_registro(registro)
+    if categoria == "con_resultado":
+        estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    elif categoria == "bloqueada":
+        estado.categoria_bloqueada = True
+    if con_causas:
+        estado.libro.coincidencias.append(Coincidencia("persona", "Lista A", "F", "2026-09-30"))
+    espera = espera_del_analista(estado)
+    if registro == "varias":
+        assert espera.clase == "identificador"
+    elif registro == "ninguna":
+        assert espera.clase == "nombre"
+    elif categoria == "bloqueada":
+        # Hallazgo A1: también con el registro caído, que por sí solo no es una espera.
+        assert espera.clase == "categoria"
+    else:
+        assert espera is None
+
+
+def _contradictoria():
+    estado = _estado_con_registro(Situacion.TERMINADO, identificar=False)
+    otra = {**comercio_alto_riesgo(), "nombre": "Tienda Verde Ltda"}
+    estado.registrar_identificacion(
+        {
+            "resultado": "coincidencias",
+            "hechos": [
+                {"contenido": comercio_alto_riesgo(), "metadatos": {}},
+                {"contenido": otra, "metadatos": {}},
+            ],
+            "coincidencias": ["CO-TV-0001"],
+        }
+    )
+    return estado
+
+
+def test_sc004_d3_del_9_no_es_espera_salvo_por_la_categoria_bloqueada():
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _contradictoria()
+    assert espera_del_analista(estado) is None
+    estado.categoria_bloqueada = True
+    assert espera_del_analista(estado).clase == "categoria"
+
+
+@pytest.mark.parametrize("registro", ESTADOS_DEL_REGISTRO)
+def test_sc004_la_categoria_bloqueada_con_un_resultado_ya_no_es_espera(registro):
+    # La condición es «bloqueada **y sin resultado**»: un resultado de categoría (por ejemplo, de
+    # una delegación anterior al bloqueo) la quita. Sin este caso, la mutación que olvida el
+    # resultado sobrevivía al recorrido.
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _estado_del_registro(registro)
+    estado.categoria_bloqueada = True
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    espera = espera_del_analista(estado)
+    esperada = {"varias": "identificador", "ninguna": "nombre"}.get(registro)
+    assert (espera.clase if espera else None) == esperada
+
+
+# ------------------------------------------- #10: consulta del comercio identificado (T025)
+
+NORTE = {"identificador": "CO-AM-0005", "nombre": "Almacén Mirador Norte SAS"}
+
+
+@pytest.mark.parametrize(
+    ("argumentos", "es_suya"),
+    [
+        ({"identificador": "CO-AM-0005"}, True),
+        ({"identificador": "co-am-0005"}, True),  # el identificador no distingue mayúsculas
+        ({"nombre": "ALMACEN MIRADOR NORTE S.A.S."}, True),  # la normalización de siempre
+        ({"nombre": "Almacén Mirador SAS"}, False),  # el nombre ambiguo del primer turno
+        ({"identificador": "CO-AM-0004"}, False),
+        ({"identificador": "CO-AM-0005", "nombre": "Almacén Mirador SAS"}, False),
+        ({}, False),
+        (None, False),
+        ({"nombre": ""}, False),
+    ],
+)
+def test_la_consulta_es_del_comercio_solo_si_su_dato_es_el_del_comercio(argumentos, es_suya):
+    from due_diligence.reglas import consulta_del_comercio
+
+    assert consulta_del_comercio(argumentos, NORTE) is es_suya

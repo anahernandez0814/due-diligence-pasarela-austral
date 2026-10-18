@@ -190,7 +190,17 @@ class EjecutorSimulado:
             return resultado_registro()
         if frente is Frente.LISTAS:
             return resultado_listas()
+        if frente is Frente.NOTICIAS:
+            # Como el subagente real, consulta con el dato que recibe en su contexto (#10, FR-027:
+            # la cobertura de noticias distingue el comercio consultado).
+            return resultado_frente(frente, [consulta(frente, _argumentos_del_contexto(contexto))])
         return resultado_frente(frente)
+
+
+def _argumentos_del_contexto(contexto: str) -> dict[str, str]:
+    """El dato del comercio que `construir_contexto` pone en el prompt de registro o noticias."""
+    encontrado = re.search(r"Consulta con el (identificador|nombre) «([^»]*)»", contexto)
+    return {encontrado.group(1): encontrado.group(2)} if encontrado else {}
 
 
 def en_secuencia(*resultados: ResultadoFrente) -> Callable[[str], ResultadoFrente]:

@@ -986,3 +986,31 @@ def test_r4_b_el_turno_2_que_no_hace_nada_vuelve_a_poner_la_marca():
     assert caso.estado.cierre_sin_informe is True
     assert caso.estado.libro.cierres_impedidos == configuracion.MAX_CIERRES_IMPEDIDOS
     assert caso.completo is False
+
+
+# ------------------------------------------------ #10: guía tras identificar (T027, FR-028)
+
+
+def test_la_guia_tras_identificar_dice_que_el_rechazo_de_listas_deja_de_valer():
+    from due_diligence.coordinador import _REGLA_TRAS_IDENTIFICAR, instrucciones_coordinador
+
+    for fragmento in (
+        "ese rechazo deja de valer cuando el registro lo identifica",
+        "vuelve a delegar listas",
+        "aunque el rechazo dijera reintentable false",
+        "vuelve a delegar noticias con el comercio identificado",
+    ):
+        assert fragmento in _REGLA_TRAS_IDENTIFICAR, fragmento
+    for demo in (False, True):  # también en el modo de demostración (FR-028)
+        assert _REGLA_TRAS_IDENTIFICAR in instrucciones_coordinador(demo=demo)
+
+
+def test_la_regla_de_varias_coincidencias_pide_terminar_el_turno_y_seguir_en_el_mismo_caso():
+    from due_diligence.coordinador import _REGLA_VARIAS_COINCIDENCIAS, instrucciones_coordinador
+
+    assert (
+        "termina tu turno sin escalar ni registrar el informe; cuando responda, sigue en el mismo "
+        "caso" in _REGLA_VARIAS_COINCIDENCIAS
+    )
+    assert _REGLA_VARIAS_COINCIDENCIAS in INSTRUCCIONES_COORDINADOR
+    assert _REGLA_VARIAS_COINCIDENCIAS not in instrucciones_coordinador(demo=True)

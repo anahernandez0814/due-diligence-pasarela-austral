@@ -199,3 +199,66 @@ def test_los_tipos_son_inmutables():
     assert all(isinstance(c, CoberturaFrente) for c in cobertura.frentes.values())
     with pytest.raises(AttributeError):
         cobertura.completa = False  # type: ignore[misc]
+
+
+# ------------------------------------- #10: noticias consultado con otro nombre (T025, FR-027)
+
+from due_diligence.estado import ResultadoFrente  # noqa: E402
+from due_diligence.simulacion import (  # noqa: E402
+    comercios_parecidos,
+    consulta,
+    terminacion_normal,
+)
+
+MOTIVO_OTRO_COMERCIO = (
+    "se consultó con un nombre o identificador que no es el del comercio identificado"
+)
+
+
+def _caso_d(elegido, noticias_con):
+    """El caso (d) tras el turno 2: el registro identifica a `elegido`; noticias se consultó con
+    `noticias_con` (por ejemplo, el nombre ambiguo del primer turno)."""
+    parecidos = {c["identificador"]: c for c in comercios_parecidos()}
+    estado = EstadoCaso("Due diligence de Almacén Mirador SAS.")
+    if elegido is not None:
+        estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+        estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+        estado.registrar_identificacion(respuesta_registro(parecidos[elegido]))
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.TERMINADO)
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS, [consulta(Frente.NOTICIAS, noticias_con)], "", terminacion_normal(), ""
+        )
+    )
+    return estado
+
+
+def test_noticias_del_nombre_ambiguo_no_cubre_al_comercio_identificado_como_otro():
+    cobertura = calcular_cobertura(_caso_d("CO-AM-0005", {"nombre": "Almacén Mirador SAS"}))
+    noticias = cobertura.frentes[Frente.NOTICIAS]
+    assert noticias.cubierto is False
+    assert noticias.causa is Causa.OTRO_COMERCIO
+    assert noticias.motivo == MOTIVO_OTRO_COMERCIO
+    assert "noticias: no cubierto; " + MOTIVO_OTRO_COMERCIO + "." in cobertura.lineas()
+
+
+def test_noticias_del_mismo_nombre_cubre_al_comercio_identificado():
+    cobertura = calcular_cobertura(_caso_d("CO-AM-0004", {"nombre": "Almacén Mirador SAS"}))
+    assert cobertura.frentes[Frente.NOTICIAS].cubierto is True
+
+
+def test_noticias_con_el_identificador_del_comercio_lo_cubre():
+    cobertura = calcular_cobertura(_caso_d("CO-AM-0005", {"identificador": "CO-AM-0005"}))
+    assert cobertura.frentes[Frente.NOTICIAS].cubierto is True
+
+
+def test_sin_comercio_identificado_noticias_terminado_sigue_cubierto():
+    cobertura = calcular_cobertura(_caso_d(None, {"nombre": "Almacén Mirador SAS"}))
+    assert cobertura.frentes[Frente.NOTICIAS].cubierto is True
+
+
+def test_el_motivo_de_otro_comercio_no_repite_datos_del_comercio():
+    cobertura = calcular_cobertura(_caso_d("CO-AM-0005", {"nombre": "Almacén Mirador SAS"}))
+    for linea in cobertura.lineas():
+        assert "Mirador" not in linea and "CO-AM" not in linea

@@ -2034,8 +2034,9 @@ def test_con_el_informe_no_vigente_el_motivo_nombra_lo_que_cambio():
         "El informe registrado ya no está vigente: cambió la cobertura después de registrarlo. "
         "Registra uno nuevo."
     )
-    # Las noticias ya están cubiertas: el informe nuevo las cita (US1-6).
-    estado.agregar_consultas([consulta(Frente.NOTICIAS)])
+    # Las noticias ya están cubiertas: el informe nuevo las cita (US1-6). La consulta es del
+    # comercio identificado, como la del subagente (#10, FR-027).
+    estado.agregar_consultas([consulta(Frente.NOTICIAS, {"identificador": "CO-TV-0001"})])
     _aceptar_informe(
         hooks, tool_use_id="t2", identificador="INF-0002", hallazgos=afirmaciones_del_caso(estado)
     )
@@ -2119,13 +2120,27 @@ def test_agotadas_las_devoluciones_sin_escalar_ni_informe_se_marcan_los_dos():
     assert [e.tipo for e in eventos.eventos()] == [TIPO_CIERRE_SIN_ESCALAR, TIPO_CIERRE_SIN_INFORME]
 
 
-def test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta():
-    # Limitación conocida (#9, R8; la resuelve el #10): el `Stop` no distingue una pregunta al
-    # analista de un cierre definitivo. Con el comercio identificado y sin informe, se bloquea.
+def test_con_el_comercio_identificado_una_pregunta_no_es_una_espera_y_exige_el_informe():
+    # US4-1 del #10 (FR-015). Era la «limitación conocida» del #9 (R8), que el #10 cambia a
+    # sabiendas: solo es espera lo que el código comprueba en el estado (R3). Con el comercio
+    # identificado y sin una categoría bloqueada, el texto del fin de turno no cuenta.
     _, _, hooks = _caso_con_comercio()
     pregunta = _fin_de_turno(mensaje="Necesito que me confirme la categoría del comercio.")
     salida = _ejecutar(_stop(hooks), pregunta)
     assert _es_bloqueo(salida) and salida["reason"] == MOTIVO_SIN_INFORME
+
+
+def test_con_la_categoria_bloqueada_sin_resultado_la_pregunta_es_una_espera():
+    # US4-4 del #10: la misma pregunta, con la última delegación de categoría bloqueada por I.3 y
+    # sin ningún resultado de categoría, sí es una espera que el código comprueba.
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.categoria_bloqueada = True
+    pregunta = _fin_de_turno(mensaje="Necesito que me confirme la categoría del comercio.")
+    assert _ejecutar(_stop(hooks), pregunta) == permitir()
+    assert [e.tipo for e in eventos.eventos()] == [TIPO_ESPERA_ANALISTA]
+    assert estado.libro.cierres_impedidos == 0
 
 
 # ------------------------------------------- #9: informe mínimo tras un fallo de hook (US4, R9)

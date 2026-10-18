@@ -287,3 +287,13 @@ def test_la_guia_de_las_afirmaciones_esta_en_los_dos_modos_y_no_trae_reglas_de_n
         assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
     assert REGLA_3 not in _REGLA_AFIRMACIONES and ESCALAR not in _REGLA_AFIRMACIONES
     assert CUANDO_ESCALADO not in _REGLA_AFIRMACIONES
+
+
+def test_la_guia_tras_identificar_esta_en_los_dos_modos_y_no_trae_reglas_de_negocio():
+    # #10, FR-028: no es una regla I.1 a I.3 que el modo de demostración quite.
+    from due_diligence.coordinador import _REGLA_TRAS_IDENTIFICAR
+
+    for demo in (False, True):
+        assert _REGLA_TRAS_IDENTIFICAR in instrucciones_coordinador(demo=demo)
+    assert "escalar" not in _REGLA_TRAS_IDENTIFICAR.casefold()
+    assert "varias coincidencias" not in _REGLA_TRAS_IDENTIFICAR

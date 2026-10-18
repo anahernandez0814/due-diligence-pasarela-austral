@@ -19,6 +19,7 @@ from typing import Any
 from due_diligence.ejecutor import es_bloqueo_de_hook
 from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.frentes import Frente
+from due_diligence.reglas import consulta_del_comercio
 
 MOTIVO_SIN_INICIAR = "no se delegó"
 MOTIVO_EN_CURSO = "seguía en curso"
@@ -98,8 +99,26 @@ def _motivo(causa: Causa | None, error: Mapping[str, Any] | None) -> str:
     return _MOTIVOS[causa]
 
 
+def _de_otro_comercio(estado: EstadoCaso, frente: Frente) -> bool:
+    """Noticias terminó, pero para otro comercio que el identificado (#10, FR-027, R7).
+
+    Con el comercio identificado, su último resultado tiene consultas válidas y ninguna es del
+    comercio: por ejemplo, la del nombre ambiguo del primer turno del caso (d). Sin comercio
+    identificado, o sin resultado guardado, no se puede afirmar que sea de otro.
+    """
+    comercio = estado.comercio
+    resultado = estado.resultados.get(frente)
+    if frente is not Frente.NOTICIAS or comercio is None or resultado is None:
+        return False
+    validas = [c for c in resultado.consultas if c.valido]
+    return bool(validas) and not any(consulta_del_comercio(c.argumentos, comercio) for c in validas)
+
+
 def _del_frente(estado: EstadoCaso, frente: Frente) -> CoberturaFrente:
     situacion = estado.situacion(frente)
+    if situacion is Situacion.TERMINADO and _de_otro_comercio(estado, frente):
+        motivo = _MOTIVOS[Causa.OTRO_COMERCIO]
+        return CoberturaFrente(frente, False, motivo, Causa.OTRO_COMERCIO, 0)
     if situacion is Situacion.TERMINADO:
         return CoberturaFrente(frente, True, "", None, 0)
     if situacion is Situacion.SIN_INICIAR:

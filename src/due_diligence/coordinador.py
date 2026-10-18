@@ -73,7 +73,8 @@ _REGLA_DATOS = (
 # el hook de `delegar_frente` y el de la consulta de listas. El modo de demostración la quita.
 _REGLA_VARIAS_COINCIDENCIAS = (
     "Si el registro devuelve varias coincidencias, no elijas una ni sigas con listas: informa las "
-    "coincidencias y pide al analista el identificador."
+    "coincidencias y pide al analista el identificador, y termina tu turno sin escalar ni "
+    "registrar el informe; cuando responda, sigue en el mismo caso."
 )
 
 # Guía de las reglas I.2 e I.3 (escalar). Es guía: la garantía son los hooks de `registrar_informe`
@@ -103,6 +104,17 @@ _REGLA_FALLOS = (
     "la misma entrada; si devuelve reintentable false, no lo repitas: sigue con los demás "
     "frentes y registra el informe igualmente. La cobertura del informe la calcula el sistema a "
     "partir de lo que devolvieron los frentes."
+)
+
+# Guía tras identificar al comercio (#10, FR-028, R11; riesgo residual 7 del #8). No es una regla
+# I.1 a I.3: está también en el modo de demostración. Lo que no puede fallar lo hace el código: el
+# `Delegador` ejecuta listas cuando el comercio queda identificado, y la cobertura no da por
+# cubierto un noticias consultado con otro nombre (FR-027).
+_REGLA_TRAS_IDENTIFICAR = (
+    "Si listas se rechazó porque el comercio aún no estaba identificado, ese rechazo deja de valer "
+    "cuando el registro lo identifica: vuelve a delegar listas, aunque el rechazo dijera "
+    "reintentable false. Si consultaste noticias con otro nombre o identificador, vuelve a delegar "
+    "noticias con el comercio identificado."
 )
 
 # Guía del informe con procedencia (#9, R12). No es una regla de negocio I.1 a I.3: está también en
@@ -143,6 +155,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_DELEGAR,
             _REGLA_DATOS,
             _REGLA_FALLOS,
+            _REGLA_TRAS_IDENTIFICAR,
             _REGLA_INFORME,
             _REGLA_AFIRMACIONES,
             _REGLA_RESUMEN,
@@ -153,6 +166,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_DATOS,
             _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
+            _REGLA_TRAS_IDENTIFICAR,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
             _REGLA_RESUMEN,

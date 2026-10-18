@@ -86,6 +86,32 @@ def consulta_coincide(consulta: Any, entidad: Any, tipo: str) -> bool:
     return True
 
 
+def consulta_del_comercio(argumentos: Any, comercio: Any) -> bool:
+    """Si una consulta de noticias es del comercio identificado (#10, FR-027, R7).
+
+    Trae al menos su `identificador` o su `nombre`, y **cada uno que trae** coincide con el del
+    comercio: `igual_identificador` para el identificador e `igual` para el nombre completo, la
+    normalización del servidor. Una entrada malformada no es del comercio y no lanza.
+    """
+    if not isinstance(argumentos, Mapping) or not isinstance(comercio, Mapping):
+        return False
+    claves = {
+        clave: valor
+        for clave in ("identificador", "nombre")
+        if (valor := argumentos.get(clave)) not in (None, "")
+    }
+    if not claves:
+        return False
+    for clave, valor in claves.items():
+        buscado, existente = _texto(valor), _texto(comercio.get(clave))
+        if buscado is None or existente is None:
+            return False
+        coincide = igual_identificador if clave == "identificador" else igual
+        if not coincide(buscado, existente):
+            return False
+    return True
+
+
 # --------------------------------------------------------------------------- regla I.1 (listas)
 
 MOTIVO_SIN_COMERCIO = (

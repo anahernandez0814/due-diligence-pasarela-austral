@@ -33,14 +33,27 @@ tiene `{ruta, texto}`. Una lista vacía significa que la forma es válida.
 ValorFuente   = {valor: Any, fuente: str, fecha: str}
 Conflicto     = {dato: str, valores: [ValorFuente, …]}   # ≥ 2 valores distintos
 ConflictosCaso
-  estado: "sin_conflictos" | "con_conflictos" | "no_comparables" | "no_calculados"
+  estado: "sin_conflictos" | "con_conflictos"
+        | "registro_caido" | "sin_comercio" | "sin_consulta"   # SIN_COMPARAR
+        | "no_calculados"
   lista: tuple[Conflicto, …]
   resumen: str          # texto fijo por estado (R6)
   como_entrada() -> {resumen, lista}
 ```
 
-- `no_comparables`: el registro está caído, o hay comercio identificado sin una consulta válida
-  del registro que coincida en `estado.consultas` (R6, hallazgo U1). No hay datos que comparar.
+- Sin comparación (`SIN_COMPARAR`), el estado dice por qué. Así el resumen es verdadero y la huella
+  distingue los casos si después se vuelve a delegar el registro (bloqueante de la revisión de
+  `/abrir-pr`, T051). Ninguno es `sin_conflictos` (R6, hallazgo U1):
+  - `registro_caido`: sin comercio y `registro_caido(estado)`. «No se pudieron comparar las fuentes
+    registrales: el registro no respondió.»
+  - `sin_comercio`: sin comercio por cualquier otro motivo: varias coincidencias, ninguna, entrada
+    inválida, registro sin iniciar o en curso. «No se compararon las fuentes registrales: no hay
+    comercio identificado.»
+  - `sin_consulta`: hay comercio identificado, pero ninguna consulta válida del registro en
+    `estado.consultas` lo trae. «No se compararon las fuentes registrales: ninguna consulta válida
+    del registro trae el comercio identificado.»
+- `registro_caido(estado)` vive en `cobertura.py`, para que lo usen `conflictos.py` e `informe.py`
+  sin importarse entre ellos; `informe.registro_caido` sigue siendo el mismo.
 - `no_calculados`: solo se construye en el modo de informe mínimo (R9); `calcular_conflictos`
   nunca lo devuelve.
 - El orden de `valores` es el de la respuesta de la pasarela. No indica precedencia.

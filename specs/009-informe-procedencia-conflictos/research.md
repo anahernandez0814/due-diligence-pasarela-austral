@@ -133,6 +133,9 @@ pusieron y si lo declarado por el coordinador era distinto. No lleva datos del c
   cumpla eso (comercio identificado, pero sin una consulta del registro que coincida en
   `estado.consultas`), el resultado es `no_comparables`, con el mismo resumen que el registro
   caído. Nunca es `sin_conflictos`, que afirmaría algo que no se comparó (hallazgo U1).
+  **Cambio tras la revisión de `/abrir-pr` (T051)**: `no_comparables` se divide en
+  `registro_caido`, `sin_comercio` y `sin_consulta`, cada uno con su resumen. El resumen único
+  decía que el registro no respondió también cuando sí respondió (data-model).
 - `estado.consultas` solo lo escribe el `Delegador` (`delegacion.py:483`). Los helpers de los tests
   a nivel de hook (`Caso` de `test_hooks_sesiones.py` y `_caso_con_comercio` de `test_hooks.py`)
   **la llenan** con las mismas consultas que simulan, para que FR-004 y los conflictos se prueben

@@ -656,6 +656,52 @@ hora con UTC, los conflictos y los informes.
   - **#10 / #11**: el comercio pedido pierde el nombre cuando el coordinador consulta el registro
     solo con el identificador, y el coordinador afirma lo contrario en su respuesta (T048).
 
+  **Tras la revisión del commit `f9b4132`** (veredicto `con bloqueantes`: 1 bloqueante en la
+  revisión de código; la auditoría, sin bloqueantes), las correcciones van en la fase 11, con
+  commits nuevos y sin amend. La descripción del PR declara además:
+  - riesgo residual: un `Stop` que falla con una excepción y agota las devoluciones siempre marca
+    `cierre_sin_escalar`, aunque lo que falte sea el informe (`hooks.py`, en el envoltorio del
+    `Stop`); no se corrige en este ticket;
+  - el escenario US1-6 (la conclusión «sin hallazgos» de un frente cubierto es una afirmación con
+    su fuente) no lo exige el código: se acepta un informe con frentes cubiertos y sin ninguna
+    afirmación;
+  - el informe mínimo va sin conflictos ni cobertura calculados aunque se pudieran calcular: lo
+    manda FR-014;
+  - si la pasarela acepta el informe y no hay huella pendiente (sin `PreToolUse` que lo
+    aceptara), el `PostToolUse` no deja evento ni constancia (FR-016).
+
+---
+
+## Fase 11: correcciones de la revisión de `/abrir-pr`
+
+- [X] T051 Bloqueante (`conflictos.py`): un estado propio por cada motivo de no comparar
+  (`registro_caido`, `sin_comercio`, `sin_consulta`; data-model). Solo el registro caído dice que
+  el registro no respondió. `registro_caido` pasa a `cobertura.py` para evitar el import circular.
+  Tests: `test_conflictos.py` (los tres estados; sin comercio sin iniciar, en curso, con varias
+  coincidencias, con ninguna y con entrada inválida); `test_hooks.py` (el pedido sin verificar
+  con el registro sin iniciar, y cobertura y conflictos que no se contradicen con varias
+  coincidencias, en curso y caído); `test_informe.py` (del registro en curso al caído solo
+  cambian los conflictos de la huella).
+- [X] T052 `PASARELA_FALLA_REGISTRO` en `VARIABLES_PASARELA`, con su test en
+  `test_configuracion.py`.
+- [X] T053 La recomendación se guarda en su forma canónica (`normalizar_recomendacion`) en la
+  entrada sustituida, la huella pendiente, `InformeRegistrado` y el evento `informe_registrado`.
+- [X] T054 Los tests que consultan el registro real limpian `PASARELA_FALLA_REGISTRO`
+  (`test_servidor.py`, `test_registro.py`, `test_hooks.py`, `test_informe.py`,
+  `test_casos_informe.py`, `test_main.py` y `test_coordinador.py`). La suite pasa con
+  `PASARELA_FALLA_REGISTRO=1` y `PASARELA_FALLA_NOTICIAS=1` en el entorno.
+- [X] T055 Tests señalados por el revisor. El de `cierre_sin_escalar` en `test_coordinador.py` no
+  probaba nada sin un informe vigente: ahora pone el informe y cubre también `cierre_sin_informe`
+  (ningún otro test comprobaba que esa marca impidiera `Caso.completo`). En `test_decisiones.py`,
+  los dos tests de las afirmaciones se renombran: ya comprueban `entrada_invalida` con su ruta, no
+  un campo faltante. En `test_informe.py`, `requiere_informe` prueba también el caso de varias
+  coincidencias que su nombre anunciaba.
+- [X] T056 Guion del registro caído (`test_casos_informe.py`): la delegación de listas se rechaza
+  por I.1 con `MOTIVO_SIN_COMERCIO`, deja un `bloqueo_regla [I.1]` con la acción
+  `delegar_frente (listas)`, y listas sigue `sin_iniciar`.
+- [X] T057 Ruff y la suite completa en verde. Tres mutaciones (sin comercio siempre como registro
+  caído, recomendación sin normalizar, variable sin reenviar) hacen fallar los tests nuevos.
+
 ---
 
 ## Dependencias y orden de ejecución
@@ -676,6 +722,7 @@ hora con UTC, los conflictos y los informes.
 - **Fase 8**: T038 y T039 → T040. **Parada B.**
 - **Fase 9**: T041, T042 y T043 en paralelo; T044 al final.
 - **Fase 10**: T045 → T046 a T049 (manuales, pueden ir juntas) → T050.
+- **Fase 11**: tras el veredicto `con bloqueantes` de T050; T051 a T056 → T057 → `/abrir-pr`.
 
 ## Oportunidades de paralelismo
 

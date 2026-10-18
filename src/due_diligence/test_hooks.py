@@ -35,6 +35,7 @@ from due_diligence.hooks import (
 from due_diligence.libro import Coincidencia, ConsultaRiesgo
 from due_diligence.reglas import (
     MOTIVO_CONSULTA_AJENA,
+    MOTIVO_FALTA_LISTAS,
     MOTIVO_REGISTRO_PRIMERO,
     MOTIVO_SIN_COMERCIO,
 )
@@ -677,6 +678,141 @@ def test_una_respuesta_ilegible_de_listas_no_entra_al_libro_y_deja_constancia():
     )
     assert estado.libro.consultas_listas == []
     assert eventos.eventos()[-1].tipo == TIPO_CONSULTA_FALLIDA
+
+
+def _coincidencias_sin_detalle(hechos):
+    """Una respuesta `coincidencias` de listas con los hechos dados."""
+    respuesta = respuesta_listas({"tipo": "persona", "nombre": "(ficticio)"})
+    respuesta["hechos"] = hechos
+    return respuesta
+
+
+HECHOS_AUSENTES_O_ILEGIBLES = [
+    [],
+    ["ilegible"],
+    [None],
+    [{"contenido": "ilegible", "metadatos": {"fuente": "F", "fecha": "2026-09-30"}}],
+    [{"contenido": {"lista": "L"}, "metadatos": "ilegible"}],
+]
+
+
+@pytest.mark.parametrize("hechos", HECHOS_AUSENTES_O_ILEGIBLES)
+def test_coincidencias_sin_hechos_legibles_cuentan_como_coincidencia_del_tipo_consultado(hechos):
+    estado, eventos, hooks = _caso_con_comercio()
+    respuesta = _coincidencias_sin_detalle(hechos)
+    entrada = {"tipo": "persona", "identificador": "PE-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"), _post_de(LISTAS, respuesta, entrada)
+    )
+    (consulta,) = estado.libro.consultas_listas
+    assert consulta.resultado == "coincidencias"
+    (coincidencia,) = estado.libro.coincidencias
+    assert coincidencia.tipo == "persona" and coincidencia.causa == "coincidencia_representante"
+    assert coincidencia.fuente == respuesta["metadatos"]["fuentes"][0]
+    assert coincidencia.fecha == respuesta["metadatos"]["fecha"]
+    assert eventos.eventos() == [] and estado.libro.fallo_de_hook is None
+
+
+@pytest.mark.parametrize("hechos", [None, "ilegible", {"contenido": {}}])
+def test_coincidencias_con_hechos_que_no_son_lista_es_una_respuesta_ilegible_que_no_cuenta(hechos):
+    """Fuera del contrato (`hechos` no es una lista) la respuesta no se lee: no cuenta como consulta
+    y deja `consulta_fallida`; habilitar sigue rechazado porque falta la consulta de listas."""
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = {"tipo": "persona", "identificador": "PE-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(LISTAS, _coincidencias_sin_detalle(hechos), entrada),
+    )
+    assert estado.libro.consultas_listas == [] and estado.libro.coincidencias == []
+    assert eventos.eventos()[-1].tipo == TIPO_CONSULTA_FALLIDA
+
+
+def test_coincidencias_sin_hechos_ni_fuentes_tambien_cuentan_como_coincidencia():
+    estado, _, hooks = _caso_con_comercio()
+    entrada = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    respuesta = {"resultado": "coincidencias", "hechos": [], "metadatos": {}}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"), _post_de(LISTAS, respuesta, entrada)
+    )
+    (coincidencia,) = estado.libro.coincidencias
+    assert coincidencia.causa == "coincidencia_comercio"
+    assert (coincidencia.fuente, coincidencia.fecha) == ("", "")
+
+
+def test_un_hecho_ilegible_junto_a_uno_legible_deja_las_dos_coincidencias():
+    estado, _, hooks = _caso_con_comercio()
+    respuesta = _coincidencia_de_persona("PE-0001")
+    respuesta["hechos"].append("ilegible")
+    entrada = {"tipo": "persona", "identificador": "PE-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"), _post_de(LISTAS, respuesta, entrada)
+    )
+    legible, sin_detalle = estado.libro.coincidencias
+    assert legible.lista == "Lista Restrictiva Ficticia A" and sin_detalle.lista == ""
+
+
+@pytest.mark.parametrize("resultado", ["parcial", "", None, 3, ...])
+def test_un_resultado_de_listas_que_no_es_del_contrato_no_cuenta_y_deja_consulta_fallida(
+    resultado,
+):
+    estado, eventos, hooks = _caso_con_comercio()
+    respuesta = respuesta_listas()
+    if resultado is ...:
+        del respuesta["resultado"]
+    else:
+        respuesta["resultado"] = resultado
+    entrada = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"), _post_de(LISTAS, respuesta, entrada)
+    )
+    assert estado.libro.consultas_listas == [] and estado.libro.coincidencias == []
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CONSULTA_FALLIDA and evento.frente is Frente.LISTAS
+    assert "CO-TV-0001" not in evento.detalle
+
+
+def test_con_coincidencias_sin_hechos_se_rechaza_habilitar_y_se_exige_escalar():
+    estado, _, hooks = _caso_con_comercio()
+    listas = _hook(hooks.subagente(Frente.LISTAS), "PostToolUse")
+    _ejecutar(
+        listas,
+        _post_de(LISTAS, respuesta_listas(), {"tipo": "comercio", "identificador": "CO-TV-0001"}),
+    )
+    _ejecutar(
+        listas,
+        _post_de(
+            LISTAS, _coincidencias_sin_detalle([]), {"tipo": "persona", "identificador": "PE-0001"}
+        ),
+    )
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert _es_denegacion(salida)
+    assert "no se puede recomendar habilitar" in _motivo(salida)
+    assert "aún no se ha escalado" in _motivo(salida)
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno()))
+
+    escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, {}))
+    informe = _pre(INFORME, _informe_de("decide_cumplimiento"))
+    assert _ejecutar(_hook_del_informe(hooks), informe) == permitir()
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+
+
+def test_un_resultado_de_listas_fuera_del_contrato_no_cuenta_para_habilitar():
+    estado, _, hooks = _caso_con_comercio()
+    listas = _hook(hooks.subagente(Frente.LISTAS), "PostToolUse")
+    _ejecutar(
+        listas,
+        _post_de(LISTAS, respuesta_listas(), {"tipo": "comercio", "identificador": "CO-TV-0001"}),
+    )
+    parcial = respuesta_listas()
+    parcial["resultado"] = "parcial"
+    _ejecutar(listas, _post_de(LISTAS, parcial, {"tipo": "persona", "identificador": "PE-0001"}))
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert _es_denegacion(salida) and MOTIVO_FALTA_LISTAS in _motivo(salida)
 
 
 def test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_evento():

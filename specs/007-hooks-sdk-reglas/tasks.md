@@ -83,7 +83,7 @@ cierre de #7 la hace el paso 0 del siguiente `/siguiente-ticket`.
   plan ya están en `0990797` y `b36b305`). Sin eso, la guarda de #3 bloquea escribir en
   `src/due_diligence/`. Mensaje convencional en español.
 - [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
-  aquí el número de tests que pasan (referencia para T052 y T053): ______.
+  aquí el número de tests que pasan (referencia para T052 y T053): **2071**.
 
 ---
 
@@ -570,7 +570,11 @@ modelo simulado que intenta las tres acciones.
   - Observaciones que no se corrigen en este ticket (comentadas en los issues #9 y #11): registrar el informe
     no deja evento; las horas de los eventos están en UTC y los archivos en hora local; el evento de bloqueo
     dice el motivo pero no qué se intentó.
-  Resultado: ______.
+  Resultado: **cumple SC-005 y SC-007**. En modo de demostración, sin las reglas en el prompt, los hooks
+  bloquearon las dos acciones prohibidas que el modelo intentó: un informe antes de escalar (I.3, 1b) y la
+  delegación de listas con varias coincidencias (I.1, 2b). Ningún caso quedó mal cerrado, el de bajo riesgo
+  recibió `habilitar` y los eventos de bloqueo se entienden sin abrir el código. En (a) y (e) el modelo no
+  intentó la acción prohibida, lo que no es un fallo del hook.
 - [X] T056 Q7 y Q8 del quickstart: el límite de devoluciones del cierre con los valores reales
   (`uv run pytest src/due_diligence/test_hooks.py -k cierre`) y que `git status` no muestra `resultados/` ni
   `.env`. Resultado: Q7, `-k cierre` **6 passed** (devoluciones agotadas → el `Stop` deja terminar y marca

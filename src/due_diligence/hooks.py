@@ -102,6 +102,44 @@ def leer_respuesta(contenido: Any, es_error: bool = False) -> tuple[Any, Any]:
     return interpretar_resultado(contenido, es_error)
 
 
+def _coincidencias_de(resultado: Mapping[str, Any], tipo: str) -> list[Coincidencia]:
+    """Las coincidencias de una respuesta `coincidencias` de listas; nunca ninguna.
+
+    Un hecho legible da su lista, su fuente y su fecha. Si no hay hechos, o un hecho no se puede
+    leer, queda una coincidencia del `tipo` consultado con la fuente y la fecha de los metadatos
+    de la respuesta, si existen.
+    """
+    metadatos = resultado.get("metadatos")
+    metadatos = metadatos if isinstance(metadatos, Mapping) else {}
+    fuentes = metadatos.get("fuentes")
+    fuentes = fuentes if isinstance(fuentes, list) else []
+    sin_detalle = Coincidencia(
+        tipo,
+        "",
+        ", ".join(f for f in fuentes if isinstance(f, str)),
+        str(metadatos.get("fecha") or ""),
+    )
+    hechos = resultado.get("hechos")
+    if not isinstance(hechos, list) or not hechos:
+        return [sin_detalle]
+    coincidencias = []
+    for hecho in hechos:
+        contenido = hecho.get("contenido") if isinstance(hecho, Mapping) else None
+        datos = hecho.get("metadatos") if isinstance(hecho, Mapping) else None
+        if not isinstance(contenido, Mapping) or not isinstance(datos, Mapping):
+            coincidencias.append(sin_detalle)
+            continue
+        coincidencias.append(
+            Coincidencia(
+                tipo,
+                str(contenido.get("lista", "")),
+                str(datos.get("fuente", "")),
+                str(datos.get("fecha", "")),
+            )
+        )
+    return coincidencias
+
+
 # --------------------------------------------------------------------------- fallo cerrado
 
 
@@ -339,36 +377,45 @@ class HooksDelCaso:
     async def _listas_posterior(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
-        """`PostToolUse` de listas: guarda la consulta válida y cada coincidencia (FR-004)."""
+        """`PostToolUse` de listas: guarda la consulta válida y cada coincidencia (FR-004).
+
+        Falla cerrado ante la duda (FR-012):
+
+        - Solo `sin_coincidencias` explícito cuenta como consulta limpia.
+        - `coincidencias` deja una coincidencia por hecho. Si no trae hechos, o un hecho no se
+          puede leer, la fuente dice igual que hay coincidencia: se guarda una del tipo consultado,
+          con la fuente y la fecha de los metadatos de la respuesta, y obliga a escalar.
+        - Cualquier otro resultado no cuenta como consulta y deja `consulta_fallida`.
+        """
         resultado, error = leer_respuesta(entrada.get("tool_response"))
         if resultado is None:
             self._constancia_de_consulta_fallida(Frente.LISTAS, error)
+            return permitir()
+        tipo_de_resultado = resultado.get("resultado")
+        if tipo_de_resultado not in ("coincidencias", "sin_coincidencias"):
+            self.eventos.registrar(
+                TIPO_CONSULTA_FALLIDA,
+                Frente.LISTAS,
+                "La consulta de listas devolvió un resultado que no es «coincidencias» ni "
+                "«sin_coincidencias»; no cuenta.",
+            )
             return permitir()
         argumentos = entrada.get("tool_input")
         argumentos = argumentos if isinstance(argumentos, Mapping) else {}
         tipo = str(argumentos.get("tipo", "")).strip().casefold()
         nombre, identificador = argumentos.get("nombre"), argumentos.get("identificador")
-        hechos = (
-            resultado.get("hechos", []) if resultado.get("resultado") == "coincidencias" else []
-        )
         self.estado.libro.consultas_listas.append(
             ConsultaListas(
                 tipo,
                 nombre if isinstance(nombre, str) else None,
                 identificador if isinstance(identificador, str) else None,
-                "coincidencias" if hechos else "sin_coincidencias",
+                tipo_de_resultado,
             )
         )
-        for hecho in hechos:
-            contenido, metadatos = hecho.get("contenido", {}), hecho.get("metadatos", {})
+        if tipo_de_resultado == "coincidencias":
             tipo_de_la_coincidencia = tipo if tipo in ("comercio", "persona") else "comercio"
-            self.estado.libro.coincidencias.append(
-                Coincidencia(
-                    tipo_de_la_coincidencia,
-                    str(contenido.get("lista", "")),
-                    str(metadatos.get("fuente", "")),
-                    str(metadatos.get("fecha", "")),
-                )
+            self.estado.libro.coincidencias.extend(
+                _coincidencias_de(resultado, tipo_de_la_coincidencia)
             )
         return permitir()
 

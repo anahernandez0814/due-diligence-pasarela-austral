@@ -53,6 +53,7 @@ from due_diligence.reglas import (
     MOTIVO_REGISTRO_REINTENTABLE,
     MOTIVO_SIN_COMERCIO,
     MOTIVO_SIN_INFORME,
+    causas_vigentes,
     motivo_de_escalar,
 )
 from due_diligence.simulacion import (
@@ -1221,20 +1222,80 @@ def test_el_limite_de_devoluciones_es_la_constante_real_y_menor_que_el_de_turnos
     assert MAX_CIERRES_IMPEDIDOS < MAX_TURNOS_SEGURIDAD
 
 
-def test_un_stop_que_lanza_una_excepcion_bloquea_y_cuenta_hasta_el_limite(monkeypatch):
-    estado, eventos, hooks = _caso_con_comercio()
-
+def _stop_roto(monkeypatch):
     def roto(_estado):
         raise RuntimeError("detalle interno")
 
     monkeypatch.setattr(modulo_hooks, "evaluar_cierre", roto)
+
+
+def _tipos_de_cierre(eventos):
+    return [e.tipo for e in eventos.eventos() if e.tipo.startswith("cierre_sin_")]
+
+
+def test_un_stop_que_lanza_una_excepcion_bloquea_y_cuenta_hasta_el_limite(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    _stop_roto(monkeypatch)
     for _ in range(MAX_CIERRES_IMPEDIDOS):
         salida = _ejecutar(_stop(hooks), _fin_de_turno())
         assert _es_bloqueo(salida) and "detalle interno" not in salida["reason"]
     assert estado.libro.cierres_impedidos == MAX_CIERRES_IMPEDIDOS
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()  # el límite también vale aquí
-    assert estado.cierre_sin_escalar is True
+    # Faltan el escalamiento (coincidencia) y el informe: se marcan los dos, con su evento.
+    assert estado.cierre_sin_escalar is True and estado.cierre_sin_informe is True
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_ESCALAR, TIPO_CIERRE_SIN_INFORME]
+    assert eventos.eventos()[-2].regla == "I.2"
     assert estado.libro.fallo_de_hook
+
+
+def _sello_ya_escalado(estado):
+    """Un fallo de hook anterior ya escalado: el sello es causa de escalamiento (#9, R9) y un
+    escalamiento que la cubre deja de exigirlo aunque el `Stop` vuelva a sellar el libro."""
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    estado.libro.escalamientos.append(causas_vigentes(estado.libro))
+
+
+def test_un_stop_que_falla_sin_informe_vigente_marca_solo_cierre_sin_informe(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+    _sello_ya_escalado(estado)  # nada pendiente de escalar; falta el informe
+    estado.libro.cierres_impedidos = MAX_CIERRES_IMPEDIDOS
+    _stop_roto(monkeypatch)
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_informe is True and estado.cierre_sin_escalar is False
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_INFORME]
+    assert "detalle interno" not in eventos.eventos()[-1].detalle
+
+
+def test_un_stop_que_falla_con_informe_vigente_y_escalamiento_pendiente_marca_solo_escalar(
+    monkeypatch,
+):
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"  # la huella ya incluye el sello
+    _con_informe_vigente(estado)
+    estado.libro.cierres_impedidos = MAX_CIERRES_IMPEDIDOS
+    _stop_roto(monkeypatch)
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_escalar is True and estado.cierre_sin_informe is False
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_ESCALAR]
+
+
+def test_si_tampoco_se_sabe_lo_que_falta_el_stop_marca_los_dos_por_prudencia(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+    _con_informe_vigente(estado)  # nada falta de verdad, pero no se puede comprobar
+    estado.libro.cierres_impedidos = MAX_CIERRES_IMPEDIDOS
+    _stop_roto(monkeypatch)
+
+    def tambien_roto(_estado):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr(modulo_hooks, "falta_para_cerrar", tambien_roto)
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_escalar is True and estado.cierre_sin_informe is True
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_ESCALAR, TIPO_CIERRE_SIN_INFORME]
+    assert eventos.eventos()[-2].regla is None
+    assert all("detalle interno" not in e.detalle for e in eventos.eventos())
 
 
 def test_con_el_libro_sellado_y_escalamiento_requerido_el_cierre_se_bloquea_igual():

@@ -285,6 +285,44 @@ def _registrar_fallo(
     )
 
 
+def _marcar_cierre_agotado(
+    estado: EstadoCaso,
+    eventos: RegistroEventos,
+    falta_escalar: bool,
+    falta_informe: bool,
+    regla: str | None,
+) -> None:
+    """Agotadas las devoluciones del `Stop`, marca y deja el evento de lo que falta (#7; #9, R8)."""
+    if falta_escalar:
+        estado.cierre_sin_escalar = True
+        eventos.registrar(
+            TIPO_CIERRE_SIN_ESCALAR,
+            None,
+            "El caso termina sin el escalamiento obligatorio: se agotaron las "
+            f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
+            regla=regla,
+        )
+    if falta_informe:
+        estado.cierre_sin_informe = True
+        eventos.registrar(
+            TIPO_CIERRE_SIN_INFORME,
+            None,
+            "El caso termina sin el informe vigente: se agotaron las "
+            f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
+        )
+
+
+def _lo_que_falta(estado: EstadoCaso) -> tuple[bool, bool, str | None]:
+    """(falta escalar, falta el informe, regla) para un `Stop` que falló; si tampoco se puede
+    saber, faltan los dos por prudencia."""
+    try:
+        falta_escalar, falta_informe = falta_para_cerrar(estado)
+        regla = reglas_de(causas_vigentes(estado.libro)) if falta_escalar else None
+    except Exception:
+        return True, True, None
+    return falta_escalar, falta_informe, regla
+
+
 def fallar_cerrado(
     hook: Hook,
     tipo: str,
@@ -295,7 +333,8 @@ def fallar_cerrado(
     """Envuelve un hook para que un fallo no deje pasar la acción (FR-012, R2).
 
     - `PreToolUse`: deniega con un motivo genérico.
-    - `Stop`: bloquea el cierre y cuenta como una devolución.
+    - `Stop`: bloquea el cierre y cuenta como una devolución; agotadas, marca lo que falte
+      (escalamiento, informe o, si tampoco se puede saber, los dos).
     - `PostToolUse` y `PostToolUseFailure`: no pueden impedir nada; sellan el libro y los
       `PreToolUse` de las reglas deniegan mientras el sello exista.
 
@@ -312,7 +351,7 @@ def fallar_cerrado(
             if tipo == "Stop":
                 # Sin poder evaluar el cierre se bloquea, pero con el mismo límite de devoluciones.
                 if estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
-                    estado.cierre_sin_escalar = True
+                    _marcar_cierre_agotado(estado, eventos, *_lo_que_falta(estado))
                     return permitir()
                 estado.libro.cierres_impedidos += 1
                 return bloquear_cierre(MOTIVO_FALLO_DE_HOOK)
@@ -514,23 +553,7 @@ class HooksDelCaso:
         falta_escalar, falta_informe = falta_para_cerrar(self.estado)
         regla = reglas_de(causas_vigentes(self.estado.libro)) if falta_escalar else None
         if self.estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
-            if falta_escalar:
-                self.estado.cierre_sin_escalar = True
-                self.eventos.registrar(
-                    TIPO_CIERRE_SIN_ESCALAR,
-                    None,
-                    "El caso termina sin el escalamiento obligatorio: se agotaron las "
-                    f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
-                    regla=regla,
-                )
-            if falta_informe:
-                self.estado.cierre_sin_informe = True
-                self.eventos.registrar(
-                    TIPO_CIERRE_SIN_INFORME,
-                    None,
-                    "El caso termina sin el informe vigente: se agotaron las "
-                    f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
-                )
+            _marcar_cierre_agotado(self.estado, self.eventos, falta_escalar, falta_informe, regla)
             return permitir()
         self.estado.libro.cierres_impedidos += 1
         self.eventos.registrar(TIPO_CIERRE_IMPEDIDO, None, motivo, regla=regla)

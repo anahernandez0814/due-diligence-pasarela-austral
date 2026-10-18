@@ -80,7 +80,7 @@ cierre del #9 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 ## Fase 1: Setup
 
-- [ ] T001 Confirmar que la rama es `009-informe-procedencia-conflictos` y commitear este
+- [X] T001 Confirmar que la rama es `009-informe-procedencia-conflictos` y commitear este
   `tasks.md`. Mensaje convencional en español.
 - [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
   aquí el número de tests que pasan (referencia para T040): **3928** (ruff limpio).

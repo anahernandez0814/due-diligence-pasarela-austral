@@ -34,6 +34,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.hooks import HooksDelCaso
+from due_diligence.informe import informe_vigente
 from due_diligence.terminacion import (
     Clasificacion,
     Terminacion,
@@ -186,8 +187,8 @@ class Caso:
 
         Solo si la cobertura calculada es completa (los cuatro frentes cubiertos, R5), el ciclo
         terminó con normalidad, el `Stop` no tuvo que dejar terminar un caso sin su escalamiento
-        obligatorio y ningún hook falló: un `PostToolUse` que falló pudo dejar sin registrar una
-        coincidencia o una identificación.
+        obligatorio ni sin su informe (#9), ningún hook falló (un `PostToolUse` que falló pudo dejar
+        sin registrar una coincidencia o una identificación) y hay un informe vigente (#9, FR-023).
         """
         estado = self.estado
         return (
@@ -195,7 +196,9 @@ class Caso:
             and estado.terminacion is not None
             and estado.terminacion.terminacion is Terminacion.NORMAL
             and not estado.cierre_sin_escalar
+            and not estado.cierre_sin_informe
             and estado.libro.fallo_de_hook is None
+            and informe_vigente(estado)
         )
 
     def _opciones_subagente(self, frente: Frente) -> ClaudeAgentOptions:

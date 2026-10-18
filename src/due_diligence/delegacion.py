@@ -250,6 +250,16 @@ class Delegador:
                 return _rechazo(frente, motivo)
             return self._rechazar(frente, str(rechazo))
 
+        if frente is Frente.REGISTRO:
+            # El comercio que pidió el analista (#9, R8): el del informe sin comercio identificado.
+            self.estado.comercio_pedido = {
+                campo: valor.strip() if isinstance(valor, str) and valor.strip() else None
+                for campo, valor in (
+                    ("identificador", entrada.get("identificador")),
+                    ("nombre", entrada.get("nombre")),
+                )
+            }
+
         clave = (frente, contexto)
         ultimo = self._ultimo.get(clave)
         actual = frente in self._respuestas and self._contextos.get(frente) == contexto

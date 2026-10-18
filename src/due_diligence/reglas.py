@@ -300,14 +300,61 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     return rechazos
 
 
-def evaluar_cierre(estado: EstadoCaso) -> str | None:
-    """El motivo por el que el caso no puede terminar, o `None` si puede (FR-007, R3).
+# Motivos del cierre por el informe (#9, contrato `cierre.md`): textos fijos, sin datos del caso.
+MOTIVO_SIN_INFORME = (
+    "Falta registrar el informe del caso con registrar_informe (habilitar, no_habilitar o "
+    "decide_cumplimiento)."
+)
+MOTIVO_REGISTRO_REINTENTABLE = (
+    "El registro mercantil no respondió: reintenta el registro o registra el informe."
+)
+MOTIVO_INFORME_NO_VIGENTE = (
+    "El informe registrado ya no está vigente: cambió {cambios} después de registrarlo. Registra "
+    "uno nuevo."
+)
+SUFIJO_LUEGO_INFORME = " Luego registra el informe."
 
-    No puede terminar un caso que requiere escalamiento (coincidencia en listas o alto riesgo) sin
-    que `escalar_a_cumplimiento` haya cubierto sus causas vigentes. El motivo usa solo las etiquetas
-    fijas de las causas.
+
+def falta_para_cerrar(estado: EstadoCaso) -> tuple[bool, bool]:
+    """(falta escalar, falta el informe vigente) para que el caso pueda terminar (#9, R8).
+
+    El informe solo se exige si `requiere_informe` (comercio identificado o registro caído).
     """
-    libro = estado.libro
-    if escalamiento_cubre(libro):
-        return None
-    return motivo_de_escalar(causas_vigentes(libro))
+    # Importación diferida: `informe.py` importa este módulo (`causas_vigentes`).
+    from due_diligence import informe
+
+    falta_escalar = not escalamiento_cubre(estado.libro)
+    falta_informe = informe.requiere_informe(estado) and not informe.informe_vigente(estado)
+    return falta_escalar, falta_informe
+
+
+def _motivo_del_informe(estado: EstadoCaso) -> str:
+    from due_diligence import informe
+
+    if estado.informes:
+        cambios = informe.cambios(estado.informes[-1].huella, informe.huella_actual(estado))
+        if cambios:
+            enumerados = (
+                cambios[0] if len(cambios) == 1 else f"{', '.join(cambios[:-1])} y {cambios[-1]}"
+            )
+            return MOTIVO_INFORME_NO_VIGENTE.format(cambios=enumerados)
+    if informe.registro_caido(estado) and informe.registro_reintentable(estado):
+        return MOTIVO_REGISTRO_REINTENTABLE
+    return MOTIVO_SIN_INFORME
+
+
+def evaluar_cierre(estado: EstadoCaso) -> str | None:
+    """El motivo por el que el caso no puede terminar, o `None` si puede (#7 FR-007; #9 R8).
+
+    No puede terminar un caso que requiere escalamiento sin que `escalar_a_cumplimiento` haya
+    cubierto sus causas vigentes (#7), ni un caso que requiere informe sin un informe vigente (#9).
+    Si faltan los dos, primero el escalamiento: el informe se rechazaría hasta escalar (FR-012).
+    Los motivos usan solo textos y etiquetas fijas.
+    """
+    falta_escalar, falta_informe = falta_para_cerrar(estado)
+    if falta_escalar:
+        motivo = motivo_de_escalar(causas_vigentes(estado.libro))
+        return motivo + SUFIJO_LUEGO_INFORME if falta_informe else motivo
+    if falta_informe:
+        return _motivo_del_informe(estado)
+    return None

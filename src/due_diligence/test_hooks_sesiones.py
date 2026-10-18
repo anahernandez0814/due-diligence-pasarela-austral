@@ -15,6 +15,10 @@ from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_CIERRE_SIN_INFORME,
+    TIPO_COBERTURA_SUSTITUIDA,
+    TIPO_DATOS_SUSTITUIDOS,
+    TIPO_INFORME_REGISTRADO,
     RegistroEventos,
 )
 from due_diligence.frentes import FRENTES, Frente
@@ -299,10 +303,12 @@ def test_un_caso_con_coincidencia_no_termina_hasta_que_se_escala():
     assert "coincidencia del representante legal en listas restrictivas" in sin_escalar.motivo
     assert caso.terminar().termino is False  # insiste y se le sigue devolviendo
     assert caso.escalar().ejecutada
+    assert caso.informe("decide_cumplimiento").ejecutada  # #9: después de escalar, el informe
     assert caso.terminar("ya escalé").termino is True
     assert caso.estado.cierre_sin_escalar is False
     tipos = [e.tipo for e in caso.eventos.eventos()]
     assert tipos.count(TIPO_CIERRE_IMPEDIDO) == 2 and TIPO_CIERRE_SIN_ESCALAR not in tipos
+    assert TIPO_CIERRE_SIN_INFORME not in tipos
 
 
 def test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar():
@@ -312,15 +318,25 @@ def test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar():
     cierre = caso.terminar()
     assert cierre.termino is False and "categoría de alto riesgo" in cierre.motivo
     caso.escalar()
+    assert caso.informe("decide_cumplimiento").ejecutada  # #9: después de escalar, el informe
     assert caso.terminar().termino is True
+    assert TIPO_CIERRE_SIN_INFORME not in [e.tipo for e in caso.eventos.eventos()]
 
 
 def test_un_caso_de_bajo_riesgo_sin_hallazgos_termina_sin_trabas():
     caso = Caso(registro=[comercio_bajo_riesgo()])
     caso.registrar(identificador="CO-TA-0002")
     caso.riesgo("talleres")
+    # #9: el cierre exige el informe; sin listas consultadas, `habilitar` se rechazaría.
+    assert caso.informe("no_habilitar").ejecutada
     assert caso.terminar().termino is True
-    assert caso.eventos.eventos() == []
+    # Antes, `eventos == []`. Ahora la lista exacta de lo que emite registrar el informe, en orden;
+    # `terminar()` no añade ninguno (T037).
+    assert [e.tipo for e in caso.eventos.eventos()] == [
+        TIPO_COBERTURA_SUSTITUIDA,
+        TIPO_DATOS_SUSTITUIDOS,
+        TIPO_INFORME_REGISTRADO,
+    ]
 
 
 def test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no_completo():

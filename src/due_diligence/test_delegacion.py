@@ -1186,3 +1186,23 @@ def test_una_entrada_invalida_no_es_un_error_de_frente():
     respuesta = _delegar(delegador, frente="inventado")
     assert respuesta["tipo"] == "entrada_invalida"
     assert "frente" not in respuesta and "causa" not in respuesta
+
+
+# ------------------------------------------------------------------ #9: comercio pedido (R8)
+
+
+def test_delegar_el_registro_guarda_el_comercio_pedido_sin_inventar_datos():
+    delegador, estado, _, _ = _crear()
+    assert estado.comercio_pedido is None
+    _delegar(delegador, frente="registro", nombre="Taller Aurora SAS")
+    assert estado.comercio_pedido == {"identificador": None, "nombre": "Taller Aurora SAS"}
+    # Una nueva delegación del registro con otra entrada lo reemplaza.
+    _delegar(delegador, frente="registro", identificador="CO-TA-0002")
+    assert estado.comercio_pedido == {"identificador": "CO-TA-0002", "nombre": None}
+
+
+def test_otros_frentes_y_un_registro_rechazado_no_cambian_el_comercio_pedido():
+    delegador, estado, _, _ = _crear()
+    _delegar(delegador, frente="noticias", nombre="Taller Aurora SAS")
+    _delegar(delegador, frente="registro")  # sin dato: se rechaza
+    assert estado.comercio_pedido is None

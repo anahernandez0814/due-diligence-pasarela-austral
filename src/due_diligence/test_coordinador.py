@@ -571,8 +571,9 @@ def test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop():
     coordinador = _matchers(caso.opciones_coordinador().hooks)
     assert coordinador == {
         "PreToolUse": [DELEGAR, INFORME, ESCALAR],
-        "PostToolUse": [ESCALAR],
-        "PostToolUseFailure": [ESCALAR],
+        # #9: el `PostToolUse` y el `PostToolUseFailure` del informe (huella pendiente, R7).
+        "PostToolUse": [ESCALAR, INFORME],
+        "PostToolUseFailure": [ESCALAR, INFORME],
         "Stop": [None],
     }
 
@@ -677,9 +678,24 @@ def test_el_caso_y_ejecutar_caso_no_aceptan_un_parametro_hooks():
 # ------------------------------------------------------------------ Caso.completo (#7, FR-007)
 
 
+def _con_informe_vigente(caso):
+    """Un informe registrado con la huella de ahora: desde el #9 (FR-023) el caso completo lo exige.
+
+    El coordinador simulado de estos tests no registra informes; los del #9 que sí lo hacen están en
+    `test_casos_informe.py`.
+    """
+    from due_diligence.informe import InformeRegistrado, huella_actual
+
+    caso.estado.informes.append(
+        InformeRegistrado("INF-0001", "decide_cumplimiento", False, huella_actual(caso.estado))
+    )
+
+
 def test_un_caso_con_los_cuatro_frentes_terminados_y_fin_normal_esta_completo():
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.completo is False  # #9: sin informe vigente no está completo
+    _con_informe_vigente(caso)
     assert caso.completo is True
 
 
@@ -709,6 +725,7 @@ def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
     # Un PostToolUse que falló pudo dejar sin registrar una coincidencia: no es un caso completo.
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    _con_informe_vigente(caso)
     assert caso.completo is True
     caso.estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     assert caso.completo is False
@@ -720,6 +737,7 @@ def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
 def test_la_cobertura_del_caso_es_la_calculada_por_el_codigo():
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    _con_informe_vigente(caso)
     assert caso.cobertura == calcular_cobertura(caso.estado)
     assert caso.cobertura.completa is True and caso.completo is True
 

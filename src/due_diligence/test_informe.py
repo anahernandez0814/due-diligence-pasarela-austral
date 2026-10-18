@@ -4,9 +4,25 @@ Fuentes consultadas por frente (FR-004), el comercio que el código pone en el i
 desde la fase 5, la huella y la vigencia. Todos los datos son ficticios.
 """
 
-from due_diligence.estado import EstadoCaso, Situacion
+import pytest
+
+from due_diligence import informe as modulo_informe
+from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.frentes import Frente
-from due_diligence.informe import comercio_del_informe, fuentes_consultadas, problemas_de_fuente
+from due_diligence.informe import (
+    NO_CALCULADOS,
+    InformeRegistrado,
+    cambios,
+    comercio_del_informe,
+    fuentes_consultadas,
+    huella_actual,
+    informe_vigente,
+    problemas_de_fuente,
+    registro_caido,
+    registro_reintentable,
+    requiere_informe,
+)
+from due_diligence.libro import Coincidencia
 from due_diligence.simulacion import (
     consulta,
     consulta_listas,
@@ -133,3 +149,148 @@ def test_el_identificado_prevalece_sobre_el_pedido():
     estado.comercio_pedido = {"identificador": "CO-TA-0002", "nombre": None}
     _con_registro_identificado(estado)
     assert comercio_del_informe(estado)["verificado"] is True
+
+
+# ------------------------------------------------------------------ huella y vigencia (R7, R8)
+
+
+def _error_registro(causa, tipos=(), reintentable=False):
+    return {
+        "error": True,
+        "tipo": "frente_no_terminado",
+        "causa": causa.value,
+        "reintentable": reintentable,
+        "obtenido": {"errores": [{"tipo": t, "reintentable": False} for t in tipos]},
+    }
+
+
+def _registro_no_terminado(estado, error):
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO, "falló")
+    estado.errores[Frente.REGISTRO] = error
+
+
+def _con_informe(estado, huella=None):
+    estado.informes.append(
+        InformeRegistrado("INF-0001", "no_habilitar", False, huella or huella_actual(estado))
+    )
+
+
+def test_un_frente_que_pasa_de_un_error_a_otro_no_cambia_la_huella():
+    estado = EstadoCaso()
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "caída")
+    estado.errores[Frente.NOTICIAS] = {"causa": "error_de_fuente", "intento": 1}
+    antes = huella_actual(estado)
+    # Un reintento que vuelve a fallar, con otra causa y otro número de intentos.
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "otra")
+    estado.errores[Frente.NOTICIAS] = {"causa": "terminacion_anomala", "intento": 2}
+    assert huella_actual(estado) == antes
+
+
+def test_un_frente_que_pasa_a_cubierto_cambia_la_cobertura_de_la_huella():
+    estado = EstadoCaso()
+    antes = huella_actual(estado)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.TERMINADO)
+    assert cambios(antes, huella_actual(estado)) == ["la cobertura"]
+
+
+def test_una_causa_nueva_y_un_comercio_distinto_cambian_la_huella():
+    estado = EstadoCaso()
+    antes = huella_actual(estado)
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    assert cambios(antes, huella_actual(estado)) == ["las causas de escalamiento"]
+    antes = huella_actual(estado)
+    estado.comercio_pedido = {"identificador": "CO-TA-0002", "nombre": None}
+    assert cambios(antes, huella_actual(estado)) == ["el comercio"]
+
+
+def test_un_conflicto_nuevo_cambia_la_huella():
+    from servidor_mcp import datos
+    from servidor_mcp.registro import consultar_registro_mercantil
+
+    datos.limpiar_cache()
+    estado = EstadoCaso()
+    _con_registro_identificado(estado, "CO-RF-0006", "Ferretería Río Fino SAS")
+    antes = huella_actual(estado)
+    respuesta = consultar_registro_mercantil(identificador="CO-RF-0006").structured_content
+    estado.agregar_consultas([consulta(Frente.REGISTRO, {}, respuesta)])
+    assert cambios(antes, huella_actual(estado)) == ["los conflictos"]
+
+
+def test_con_el_caso_sellado_la_huella_no_calcula_cobertura_ni_conflictos(monkeypatch):
+    estado = EstadoCaso()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+
+    def roto(_estado):
+        raise RuntimeError("no se debe llamar")
+
+    monkeypatch.setattr(modulo_informe, "calcular_cobertura", roto)
+    monkeypatch.setattr(modulo_informe, "calcular_conflictos", roto)
+    primera = huella_actual(estado)
+    assert primera.cobertura == NO_CALCULADOS and primera.conflictos == NO_CALCULADOS
+    assert huella_actual(estado) == primera
+
+
+def test_informe_vigente_solo_si_la_huella_del_ultimo_coincide():
+    estado = EstadoCaso()
+    assert informe_vigente(estado) is False
+    _con_informe(estado)
+    assert informe_vigente(estado) is True
+    estado.cambiar_situacion(Frente.CATEGORIA, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.CATEGORIA, Situacion.TERMINADO)
+    assert informe_vigente(estado) is False
+    _con_informe(estado)  # un informe nuevo lo deja vigente
+    assert informe_vigente(estado) is True
+
+
+@pytest.mark.parametrize(
+    ("causa", "tipos"),
+    [
+        (Causa.TERMINACION_ANOMALA, ()),
+        (Causa.SIN_CONSULTAS, ()),
+        (Causa.RESULTADO_INVALIDO, ()),
+        (Causa.CANCELADO, ()),
+        (Causa.ERROR_DE_FUENTE, ("servicio_no_disponible",)),
+        (Causa.ERROR_DE_FUENTE, ("datos_no_disponibles",)),
+        (Causa.ERROR_DE_FUENTE, ("error_interno",)),
+    ],
+)
+@pytest.mark.parametrize("reintentable", [True, False])
+def test_el_registro_esta_caido_si_la_fuente_no_respondio_con_o_sin_reintento(
+    causa, tipos, reintentable
+):
+    estado = EstadoCaso()
+    _registro_no_terminado(estado, _error_registro(causa, tipos, reintentable))
+    assert registro_caido(estado) is True
+    assert requiere_informe(estado) is True
+    assert registro_reintentable(estado) is reintentable
+
+
+def test_una_entrada_invalida_no_es_registro_caido():
+    estado = EstadoCaso()
+    _registro_no_terminado(estado, _error_registro(Causa.ERROR_DE_FUENTE, ("entrada_invalida",)))
+    assert registro_caido(estado) is False
+    assert requiere_informe(estado) is False
+
+
+@pytest.mark.parametrize(
+    "situacion",
+    [Situacion.SIN_INICIAR, Situacion.EN_CURSO, Situacion.TERMINADO, Situacion.RECHAZADO],
+)
+def test_un_registro_que_no_quedo_no_terminado_no_esta_caido(situacion):
+    estado = EstadoCaso()
+    estado._situaciones[Frente.REGISTRO] = situacion
+    assert registro_caido(estado) is False
+
+
+def test_requiere_informe_con_comercio_identificado_y_no_con_varias_o_ninguna():
+    estado = EstadoCaso()
+    _con_registro_identificado(estado)
+    assert requiere_informe(estado) is True
+    ninguna = EstadoCaso()
+    ninguna.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    ninguna.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    ninguna.registrar_identificacion(respuesta_registro())
+    assert requiere_informe(ninguna) is False

@@ -297,7 +297,7 @@ y se confirma en el `PostToolUse`.
 devolución; con el informe vigente termina. Un reintento con éxito, incluido el que termina en el
 mismo mensaje que el informe, exige un informe nuevo (SC-003).
 
-- [ ] T025 [P] [US3] Tests en `src/due_diligence/test_informe.py` (R7, R8, data-model):
+- [X] T025 [P] [US3] Tests en `src/due_diligence/test_informe.py` (R7, R8, data-model):
   - **`huella_actual`**:
     - la cobertura entra solo como `(frente, cubierto)`, así que un frente que pasa de un error a
       otro con más intentos **no** cambia la huella;
@@ -323,14 +323,14 @@ mismo mensaje que el informe, exige un informe nuevo (SC-003).
     ninguna;
   - `comercio_del_informe` con el registro caído da `estado.comercio_pedido` con `verificado:
     false`, sin inventar el dato que falte.
-- [ ] T026 [US3] Implementar en `src/due_diligence/informe.py`: `Huella`, `InformeRegistrado`,
+- [X] T026 [US3] Implementar en `src/due_diligence/informe.py`: `Huella`, `InformeRegistrado`,
   `huella_actual`, `cambios`, `informe_vigente`, `registro_caido`, `registro_reintentable` y
   `requiere_informe`, y completar `comercio_del_informe`. En `src/due_diligence/delegacion.py`, al
   delegar el registro con un contexto válido, guardar `estado.comercio_pedido` con el
   `identificador` y el `nombre` de la entrada (`None` si falta). Con un test en
   `src/due_diligence/test_delegacion.py`: una nueva delegación de registro con otra entrada lo
   reemplaza. Hace pasar T025.
-- [ ] T027 [US3] Tests en `src/due_diligence/test_hooks.py` y `src/due_diligence/test_reglas.py`
+- [X] T027 [US3] Tests en `src/due_diligence/test_hooks.py` y `src/due_diligence/test_reglas.py`
   (R7, R8; contrato `cierre.md`):
   - **pendiente y confirmación**:
     - el `PreToolUse` que acepta guarda la huella en `estado.informes_pendientes[tool_use_id]`;
@@ -354,7 +354,7 @@ mismo mensaje que el informe, exige un informe nuevo (SC-003).
     algo al analista» y sin informe se bloquea. El test lo dice en su nombre y en un comentario;
   - el coordinador registra **ocho** hooks, con `PostToolUse` y `PostToolUseFailure` de
     `registrar_informe`.
-- [ ] T028 [US3] Implementar lo de T027:
+- [X] T028 [US3] Implementar lo de T027:
   - en `src/due_diligence/reglas.py`, `evaluar_cierre(estado)` con el informe, más una función que
     diga qué falta;
   - en `src/due_diligence/hooks.py`:
@@ -367,7 +367,7 @@ mismo mensaje que el informe, exige un informe nuevo (SC-003).
     `informe_vigente(estado)`.
 
   Hace pasar T027.
-- [ ] T029 [US3] Test de **orden** en `src/due_diligence/test_casos_informe.py` (nuevo; R7, la
+- [X] T029 [US3] Test de **orden** en `src/due_diligence/test_casos_informe.py` (nuevo; R7, la
   corrección de la analista):
   1. noticias falla con un error reintentable y se registra un informe vigente;
   2. con `("mismo_mensaje", [("delegar", {"frente": "noticias", …}), ("informe", "no_habilitar")])`,
@@ -379,7 +379,7 @@ mismo mensaje que el informe, exige un informe nuevo (SC-003).
 
   En el mismo archivo, el contraste: si el reintento termina **antes** del `PreToolUse`, el informe
   queda vigente.
-- [ ] T030 [US3] Fase 5: ruff, la suite completa y los tests de T037 adaptados. Commit «informe
+- [X] T030 [US3] Fase 5: ruff, la suite completa y los tests de T037 adaptados. Commit «informe
   obligatorio y vigente (#9, US3)». **PARADA DE REVISIÓN A.**
 
 ---
@@ -496,6 +496,11 @@ hora con UTC, los conflictos y los informes.
   | `src/servidor_mcp/test_servidor.py`: `TIPOS_JSON` y `TIPOS_INCORRECTOS` | Parámetro `conflictos` | El diccionario exacto de tipos gana `"conflictos": "object"`; se añade el caso de tipo incorrecto `{"conflictos": "texto"}`. |
   | `src/due_diligence/test_hooks.py`: `test_con_coincidencias_sin_hechos_se_rechaza_habilitar_y_…` (fase 3) | El informe aceptado emite también `datos_sustituidos` | La lista exacta de tipos pasa de `[cobertura_sustituida]` a `[cobertura_sustituida, datos_sustituidos]`. |
   | `test_hooks.py`: `_caso_con_comercio` y el test de las 625 combinaciones (fase 3) | FR-004 y el comercio leen `estado.consultas` y el comercio pedido | El helper llena `estado.consultas` con la consulta del registro (U1); en las 625 combinaciones se fija un comercio pedido y una consulta del registro. Las aserciones sobre la cobertura no cambian. |
+  | `test_hooks.py`: `test_un_caso_que_no_requiere_escalamiento_puede_terminar`, `test_un_caso_con_el_escalamiento_cubierto_puede_terminar`, `test_un_caso_que_requiere_escalamiento_sin_escalar_no_puede_terminar`, `test_agotadas_las_devoluciones_el_stop_deja_terminar_y_marca_cierre_sin_escalar` (fase 5) | Con el comercio identificado, el `Stop` exige además el informe | Un helper `_con_informe_vigente` registra un informe con la huella del momento justo antes del `Stop`, así siguen probando solo el escalamiento. Se conservan exactas `eventos == []`, `evento.detalle == salida["reason"]` y `ultimo.tipo == TIPO_CIERRE_SIN_ESCALAR`. Los casos sin informe van en tests nuevos. |
+  | `test_hooks.py`: `test_con_coincidencias_sin_hechos_…` (fase 5) | Hace falta confirmar la huella para que el informe esté vigente | Se ejecuta el `PostToolUse` del informe con la respuesta de la pasarela antes del `Stop`, que sigue debiendo dar `permitir()`. |
+  | `test_hooks.py`: `test_el_coordinador_registra_seis_hooks` → `test_el_coordinador_registra_ocho_hooks`; `test_el_coordinador_tiene_los_hooks_de_delegar_informe_y_escalar`; `test_coordinador.py`: `test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop` (fase 5) | `PostToolUse` y `PostToolUseFailure` del informe | Igualdad exacta: 8 hooks, y matchers `[ESCALAR, INFORME]` en los dos. Se renombra porque el nombre decía seis. |
+  | `src/due_diligence/test_reglas.py`: los siete tests de `evaluar_cierre` del #7 (fase 5) | Con el comercio identificado se exige el informe | Usan `_estado_de_cierre`, que añade un informe vigente; sus igualdades exactas (por ejemplo, el motivo completo de la coincidencia) no cambian. El motivo con «Luego registra el informe.» va en un test nuevo. |
+  | `test_coordinador.py`: `test_un_caso_con_los_cuatro_frentes_terminados_y_fin_normal_esta_completo`, `test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo`, `test_la_cobertura_del_caso_es_la_calculada_por_el_codigo` (fase 5) | `Caso.completo` exige un informe vigente | Se registra un informe vigente antes de `completo is True`. El primero comprueba además que sin informe es `False` (se refuerza). |
   | `src/due_diligence/test_sesion_simulada.py`: `test_la_pasarela_simulada_guarda_informes_y_escalamientos` | La `PasarelaSimulada` valida como la real (R12) | El informe de la prueba es válido y la igualdad `pasarela.informes == [informe]` sigue siendo exacta; el rechazo va en un test nuevo. |
 
   Ninguno se borra. Si un test no está en la tabla y falla, se añade con su justificación antes de

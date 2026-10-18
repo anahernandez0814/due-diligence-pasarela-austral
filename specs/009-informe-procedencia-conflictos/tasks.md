@@ -581,19 +581,35 @@ hora con UTC, los conflictos y los informes.
 
 ## Fase 10: validación
 
-- [ ] T045 Q1 y Q2 del quickstart: ruff, la suite completa y los casos del #9 en verde. Anotar aquí
-  el número de tests.
-- [ ] T046 [MANUAL] Q3, caso (g) con el modelo real (Opus 5.5, ≈ 0,15 a 0,30 USD). Anotar:
+- [X] T045 Q1 y Q2 del quickstart: ruff, la suite completa y los casos del #9 en verde. Anotar aquí
+  el número de tests. Resultado: **4121** tests en verde (3928 en T002), ruff y formato limpios. Incluye el
+  caso opcional del sello de extremo a extremo en `test_casos_informe.py` (sugerencia de la
+  analista en la parada B; commit propio, cinco mutaciones lo hacen fallar).
+- [X] T046 [MANUAL] Q3, caso (g) con el modelo real (Opus 5.5, ≈ 0,15 a 0,30 USD). Anotar:
   - el bloque de conflictos;
   - los eventos `cobertura_sustituida`, `datos_sustituidos` e `informe_registrado`;
   - los `bloqueo_regla [I.4]`, con su `accion`, y si el coordinador corrigió el informe tras el
     JSON `informe_rechazado` (riesgo residual 7);
   - el documento guardado, con `registrado_en` en UTC cruzado con la hora del evento;
   - los turnos, coste y duración.
-- [ ] T047 [MANUAL] Q4, caso escalado con `CO-TV-0001` en suplementos dietarios. Anotar el orden
+
+  **Resultado (aprobado por la analista)**:
+  - Conflictos: `fecha_constitucion` con `2016-03-14` (Registro Mercantil Ficticio del Sur,
+    2026-09-30) y `2017-09-02` (Registro Único Ficticio de Empresas, 2026-09-28).
+  - Eventos `cobertura_sustituida`, `datos_sustituidos` e `informe_registrado` (`INF-9d0acc5b`).
+  - 0 bloqueos por I.4: el riesgo residual 7 (cómo ve el modelo el JSON `informe_rechazado`)
+    sigue sin observarse con el modelo real.
+  - Las 8 afirmaciones con fuente y fecha; los conflictos del JSON, iguales a los de la salida;
+    `registrado_en` 18:09:23.324 UTC frente al evento de las 18:09:23.332 UTC.
+  - Recomendación `habilitar`; caso completo: sí. 6 de 30 turnos, 0,1488 USD, 41,1 s.
+- [X] T047 [MANUAL] Q4, caso escalado con `CO-TV-0001` en suplementos dietarios. Anotar el orden
   `escalamiento_registrado` → `informe_registrado`, la recomendación y si hubo un informe
   rechazado antes de escalar.
-- [ ] T048 [MANUAL] Q5, registro caído con `PASARELA_FALLA_REGISTRO=1` y `CO-TA-0002` (demo).
+
+  **Resultado (aprobado por la analista)**: `escalamiento_registrado` (evento 15) antes que
+  `informe_registrado` (evento 18); `decide_cumplimiento`; sin bloqueos: el coordinador escaló
+  primero, sin que el hook tuviera que rechazar el informe. 7 de 30 turnos, 0,1315 USD, 44,4 s.
+- [X] T048 [MANUAL] Q5, registro caído con `PASARELA_FALLA_REGISTRO=1` y `CO-TA-0002` (demo).
   Anotar:
   - si el coordinador reintentó;
   - listas rechazada, y noticias y categoría terminadas;
@@ -601,8 +617,22 @@ hora con UTC, los conflictos y los informes.
   - el informe con `verificado: false`, los conflictos `no_comparables` y una recomendación
     distinta de `habilitar`;
   - si hubo `cierre_impedido`.
-- [ ] T049 [MANUAL] Q6, sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`,
+
+  **Resultado (aprobado por la analista)**:
+  - Reintento del registro 1 de 1, que vuelve a fallar; sin `reintento_denegado`.
+  - Listas `sin_iniciar`, no rechazada: el coordinador no intentó delegarla, así que el hook de I.1
+    no tuvo que actuar. Noticias y categoría terminadas. Cobertura 2 de 4; «Caso completo: no».
+  - Informe `INF-d8077da7`, `no_habilitar`, comercio con `verificado: false` y `nombre: null`;
+    conflictos «No se pudieron comparar las fuentes registrales: el registro no respondió.».
+  - Sin `cierre_impedido`: registró el informe antes de terminar. 6 de 30 turnos, 0,0788 USD, 37 s.
+  - **Observación**: el coordinador dijo que el informe lleva «el nombre y el identificador», pero
+    va con `nombre: null`, porque consultó el registro solo con el identificador y el comercio
+    pedido no inventa el dato que falta (R5). Queda para el #10 o el #11 (ver T050).
+- [X] T049 [MANUAL] Q6, sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`,
   con G4 en el formato nuevo.
+
+  **Resultado (aprobado por la analista)**: 20 coinciden, 0 difieren, 0 inconclusas; código de
+  salida 0.
 - [ ] T050 Commitear las anotaciones de T045 a T049 en este archivo. **Ningún commit después de la
   revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye:
   - la tabla de T037;
@@ -613,6 +643,18 @@ hora con UTC, los conflictos y los informes.
   - en «Lo pendiente», para el #10: los riesgos residuales 2 (`decide_cumplimiento` sin escalar
     con el registro caído) y 5 (`Stop` en cualquier fin de turno), y el 1 (informe vigente con
     afirmaciones viejas) como decisión aceptada.
+
+  **Anotaciones commiteadas** (commit «anotaciones de la validación del #9»). Sin push: la analista
+  lanza `/abrir-pr` en una sesión nueva; queda pendiente marcar esta tarea al abrir el PR.
+
+  **Observaciones de la validación para el comentario de cierre del #9** (pedido de la analista;
+  no se arreglan en este ticket):
+  - **#11**: la respuesta al analista empieza con la recomendación, antes de los conflictos o la
+    cobertura; los eventos de sustitución dicen «era distinto» aunque el coordinador solo haya
+    omitido los campos; en `datos_sustituidos` hay mayúscula tras el punto y coma
+    («; Sin conflictos…»).
+  - **#10 / #11**: el comercio pedido pierde el nombre cuando el coordinador consulta el registro
+    solo con el identificador, y el coordinador afirma lo contrario en su respuesta (T048).
 
 ---
 

@@ -1,7 +1,9 @@
-"""Sondeo de los hooks del Agent SDK con el modelo real (#7, Q4, R1 a R3, G2).
+"""Sondeo de los hooks del Agent SDK con el modelo real (#7, Q4, R1 a R3, G2; #8, Q5, R9).
 
-Repite lo que `research.md` midió con el SDK 0.2.168 y comprueba que los hooks del caso
-(`HooksDelCaso`) funcionan en una sesión real:
+Repite lo que `research.md` del #7 y del #8 midió con el SDK 0.2.168 y comprueba que los hooks
+del caso (`HooksDelCaso`) funcionan en una sesión real. Desde el #8 mide también `updatedInput`
+(e), los turnos de un reintento (f) y la cobertura que los hooks del caso ponen en
+`registrar_informe` y `escalar_a_cumplimiento` (g4 y g5):
 
     uv run python -m due_diligence.sondeo_hooks
 
@@ -26,6 +28,7 @@ Es una herramienta manual: no la importa el paquete ni la ejecuta la suite de pr
 import asyncio
 import dataclasses
 import json
+import pathlib
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -45,10 +48,17 @@ from claude_agent_sdk import (
 from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
+from due_diligence.cobertura import calcular_cobertura
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import TIPO_BLOQUEO_REGLA, RegistroEventos
-from due_diligence.frentes import FRENTES, Frente
-from due_diligence.hooks import HooksDelCaso, bloquear_cierre, denegar, permitir
+from due_diligence.frentes import FRENTES, Frente, nombre_completo
+from due_diligence.hooks import (
+    HooksDelCaso,
+    bloquear_cierre,
+    denegar,
+    permitir,
+    reemplazar_entrada,
+)
 
 MODELO = "claude-haiku-5-5"
 NO_CONCLUYENTE = "no concluyente"
@@ -122,6 +132,7 @@ class Traza:
     resultados: list[tuple[bool | None, str]] = field(default_factory=list)
     subtype: str | None = None
     excepcion: str | None = None
+    num_turns: int | None = None
 
 
 def _texto(contenido: Any) -> str:
@@ -160,6 +171,7 @@ async def _correr(prompt: str, opciones: Any) -> Traza:
                         traza.resultados.append((bloque.is_error, _texto(bloque.content)))
             elif isinstance(mensaje, ResultMessage):
                 traza.subtype = mensaje.subtype
+                traza.num_turns = mensaje.num_turns
     except ResultError as error:
         traza.excepcion = type(error).__name__
     return traza
@@ -381,20 +393,202 @@ async def _hooks_del_caso() -> list[Medicion]:
     return mediciones
 
 
+# ------------------------------------------------------- cobertura y reintento (#8, R1, R2, R9)
+
+INFORME = nombre_completo("registrar_informe")
+ESCALAR = nombre_completo("escalar_a_cumplimiento")
+COBERTURA_DEL_SONDEO = ["Cobertura incompleta: 3 de 4 frentes cubiertos.", "noticias: no cubierto."]
+TIPO_ERROR_ENTRADA_PARCIAL = "campos_obligatorios_ausentes"  # el de `servidor_mcp.decisiones`
+TURNOS_REINTENTO_Y_DOS_DEVOLUCIONES = 5
+ENTRADA_INFORME = {
+    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+    "recomendacion": "no_habilitar",
+    "hallazgos": {"registro": {"contenido": "Existe", "fuente": "Registro ficticio"}},
+    "cobertura": "completa",
+}
+ENTRADA_ESCALAMIENTO = {
+    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+    "hallazgos": {"registro": {"contenido": "Existe", "fuente": "Registro ficticio"}},
+    "cobertura": "completa",
+    "causa_escalamiento": "sondeo",
+    "accion_recomendada": "ninguna, es un sondeo",
+}
+
+
+def pedir_con(herramienta: str, entrada: dict[str, Any]) -> str:
+    """El pedido al modelo: una llamada con esos argumentos exactos, con cobertura «completa»."""
+    return (
+        f"Llama una vez a {herramienta} con exactamente estos argumentos y responde ok: "
+        f"{json.dumps(entrada, ensure_ascii=False)}"
+    )
+
+
+def guardados(carpeta: pathlib.Path) -> list[dict[str, Any]]:
+    """Lo que guardó la pasarela en su carpeta de resultados: los JSON que son objetos."""
+    leidos = []
+    for ruta in sorted(carpeta.rglob("*.json")):
+        try:
+            contenido = json.loads(ruta.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if isinstance(contenido, dict):
+            leidos.append(contenido)
+    return leidos
+
+
+def _carpeta() -> pathlib.Path:
+    return pathlib.Path(tempfile.mkdtemp(prefix="sondeo8-"))
+
+
+async def _updated_input() -> list[Medicion]:
+    """(e) `updatedInput` en `PreToolUse` con la pasarela por stdio (R1 del #8)."""
+    completa = _carpeta()
+
+    async def sustituye(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        return reemplazar_entrada({**ENTRADA_INFORME, "cobertura": COBERTURA_DEL_SONDEO})
+
+    hooks = {"PreToolUse": [HookMatcher(matcher=INFORME, hooks=[sustituye])]}
+    servidores = _pasarela({"PASARELA_RESULTADOS_DIR": str(completa)})
+    traza = await _correr(
+        pedir_con("registrar_informe", ENTRADA_INFORME), _opciones([INFORME], servidores, hooks)
+    )
+    cobertura = [g.get("cobertura") for g in guardados(completa)]
+
+    parcial = _carpeta()
+    errores: list[Any] = []
+
+    async def solo_cobertura(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        return reemplazar_entrada({"cobertura": COBERTURA_DEL_SONDEO})
+
+    async def fallo(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        errores.append(entrada.get("error"))
+        return permitir()
+
+    hooks = {
+        "PreToolUse": [HookMatcher(matcher=INFORME, hooks=[solo_cobertura])],
+        "PostToolUseFailure": [HookMatcher(matcher=INFORME, hooks=[fallo])],
+    }
+    servidores = _pasarela({"PASARELA_RESULTADOS_DIR": str(parcial)})
+    otra = await _correr(
+        pedir_con("registrar_informe", ENTRADA_INFORME), _opciones([INFORME], servidores, hooks)
+    )
+    tipo = NO_CONCLUYENTE
+    if errores:
+        try:
+            tipo = json.loads(errores[0]).get("tipo")
+        except (TypeError, ValueError):
+            tipo = "ilegible"
+    return [
+        Medicion(
+            "e1_entrada_completa",
+            "con la entrada completa, la pasarela guarda la cobertura del hook",
+            [COBERTURA_DEL_SONDEO],
+            _si_llamo(traza, cobertura),
+        ),
+        Medicion(
+            "e2_entrada_parcial",
+            "con solo la cobertura no se fusiona: no se guarda ningún informe",
+            0,
+            _si_llamo(otra, len(guardados(parcial))),
+        ),
+        Medicion(
+            "e3_tipo_del_error",
+            "tipo del error de la entrada parcial (PostToolUseFailure)",
+            TIPO_ERROR_ENTRADA_PARCIAL,
+            _si_llamo(otra, tipo),
+        ),
+    ]
+
+
+async def _turnos_de_reintento() -> list[Medicion]:
+    """(f) Un reintento y dos devoluciones del `Stop` gastan un turno cada uno (R2 del #8)."""
+    intentos: list[Any] = []
+
+    @tool(
+        "delegar_frente",
+        "Delega un frente. Si responde con un error reintentable, puedes volver a pedirlo una vez.",
+        {"frente": str},
+    )
+    async def delegar_frente(args: dict[str, Any]) -> dict[str, Any]:
+        intentos.append(args)
+        if len(intentos) == 1:
+            cuerpo = {"error": True, "tipo": "frente_no_terminado", "reintentable": True}
+            return {"content": [{"type": "text", "text": json.dumps(cuerpo)}], "is_error": True}
+        return {"content": [{"type": "text", "text": json.dumps({"situacion": "terminado"})}]}
+
+    servidores = {"delegacion": create_sdk_mcp_server("delegacion", tools=[delegar_frente])}
+    paradas: list[int] = []
+
+    async def dos_veces(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        paradas.append(1)
+        if len(paradas) <= 2:
+            return bloquear_cierre("Aún no: responde de nuevo con la palabra listo.")
+        return permitir()
+
+    pedido = (
+        "Llama a delegar_frente con frente noticias. Si la respuesta es un error con reintentable "
+        "true, llámala otra vez con lo mismo, solo una vez. Después responde listo."
+    )
+    opciones = _opciones([DELEGAR], servidores, {"Stop": [HookMatcher(hooks=[dos_veces])]}, 30)
+    traza = await _correr(pedido, opciones)
+    medido = (traza.num_turns, traza.subtype) if len(intentos) == 2 else NO_CONCLUYENTE
+    return [
+        Medicion(
+            "f1_turnos",
+            "un reintento y dos devoluciones del Stop: num_turns y fin normal",
+            (TURNOS_REINTENTO_Y_DOS_DEVOLUCIONES, "success"),
+            medido,
+        )
+    ]
+
+
+async def _cobertura_del_caso() -> list[Medicion]:
+    """(g4, g5) Los hooks reales del caso ponen la cobertura del código en los dos canales."""
+    estado, eventos = EstadoCaso("sondeo"), RegistroEventos()
+    hooks = HooksDelCaso(estado, eventos)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "noticias caídas")
+    esperada = calcular_cobertura(estado).lineas()
+    mediciones = []
+    for clave, corto, completo, entrada in (
+        ("g4_informe", "registrar_informe", INFORME, ENTRADA_INFORME),
+        ("g5_escalamiento", "escalar_a_cumplimiento", ESCALAR, ENTRADA_ESCALAMIENTO),
+    ):
+        carpeta = _carpeta()
+        servidores = _pasarela({"PASARELA_RESULTADOS_DIR": str(carpeta)})
+        traza = await _correr(
+            pedir_con(corto, entrada), _opciones([completo], servidores, hooks.coordinador())
+        )
+        mediciones.append(
+            Medicion(
+                clave,
+                f"HooksDelCaso: la pasarela guarda la cobertura del código en {corto}",
+                [esperada],
+                _si_llamo(traza, [g.get("cobertura") for g in guardados(carpeta)]),
+            )
+        )
+    return mediciones
+
+
 # ------------------------------------------------------------------ punto de entrada
+
+EXPERIMENTOS = (
+    _forma_de_tool_response,
+    _via_del_error_estructurado,
+    _excepcion_y_deny,
+    _stop_con_block,
+    _hooks_del_caso,
+    _updated_input,
+    _turnos_de_reintento,
+    _cobertura_del_caso,
+)
 
 
 async def sondear() -> list[Medicion]:
     """Todos los experimentos, uno tras otro, y sus mediciones."""
     STDERR_DE_LA_CLI.clear()
     mediciones: list[Medicion] = []
-    for experimento in (
-        _forma_de_tool_response,
-        _via_del_error_estructurado,
-        _excepcion_y_deny,
-        _stop_con_block,
-        _hooks_del_caso,
-    ):
+    for experimento in EXPERIMENTOS:
         mediciones += await experimento()
     return mediciones
 

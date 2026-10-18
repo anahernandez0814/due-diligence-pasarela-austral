@@ -459,7 +459,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
 
 ## Fase 7: Sondeo y documentación
 
-- [ ] T026 [P] Experimentos repetibles en `src/due_diligence/sondeo_hooks.py` (R9, Q5), con el mismo
+- [X] T026 [P] Experimentos repetibles en `src/due_diligence/sondeo_hooks.py` (R9, Q5), con el mismo
   patrón `Medicion` y `veredicto` del #7 y `PASARELA_RESULTADOS_DIR` en una carpeta temporal:
   - **(e) `updatedInput`**:
     - `e1`: entrada completa con `allow` → la pasarela guarda la cobertura del hook;
@@ -471,7 +471,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
   
   Tests de las partes puras en `src/due_diligence/test_sondeo_hooks.py`: las claves nuevas y sus
   valores esperados.
-- [ ] T027 [P] `DECISIONES.md`: **entrada 9, «Errores estructurados y cobertura»**, sin recortar las
+- [X] T027 [P] `DECISIONES.md`: **entrada 9, «Errores estructurados y cobertura»**, sin recortar las
   anteriores. Recoge:
   - la cobertura calculada en código y sustituida con `updatedInput` (medido: la entrada entera);
   - el escalamiento que nunca se deniega y su texto fijo;
@@ -479,11 +479,16 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
   - que el «tipo de error» de FR-002 es el campo `causa`, y que `tipo` se conserva por
     compatibilidad con el #6 (T1 del análisis);
   - el presupuesto de turnos calculado;
+  - el texto fijo por causa en la cobertura: el motivo crudo del estado puede traer identificadores
+    del registro y la cobertura no repite datos del comercio (decisión de la parada B);
+  - **also fixes**: el defecto del #6 por el que listas `no_terminado`, invalidado al cambiar el
+    comercio del registro, lanzaba `TransicionInvalida`; ahora puede seguir `no_terminado` con el
+    motivo nuevo, como `rechazado` (decisión de la parada B);
   - los riesgos residuales de R10.
-- [ ] T028 [P] `README.md`: una sección breve, «Fallas de una fuente y cobertura». Explica que el
+- [X] T028 [P] `README.md`: una sección breve, «Fallas de una fuente y cobertura». Explica que el
   coordinador puede reintentar una vez un frente con error reintentable, que el informe declara la
   cobertura calculada por el sistema y cómo verlo con `PASARELA_FALLA_NOTICIAS=1`.
-- [ ] T029 Fase 7 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
+- [X] T029 Fase 7 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
   verde. Commit «sondeo y documentación del ticket #8».
 
 ---
@@ -516,8 +521,10 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
   la analista sin abrir el código). En Q7, cobertura completa y `habilitar`. Resultado: **____**.
 - [ ] T034 Commitear la anotación de T031 a T033 en este archivo. **Ningún commit después de la
   revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de los
-  cinco tests del #6 y del #7 que cambian (T021), con su justificación, y en «Lo pendiente» el riesgo
-  residual 6, que hereda el #9 (C1 del análisis).
+  cinco tests del #6 y del #7 que cambian (T021), con su justificación; una sección **«Also
+  fixes»** con el defecto del #6 (`no_terminado → no_terminado` al invalidar listas); el texto fijo
+  por causa en la cobertura; y en «Lo pendiente» el riesgo residual 6, que hereda el #9 (C1 del
+  análisis).
 
 ---
 

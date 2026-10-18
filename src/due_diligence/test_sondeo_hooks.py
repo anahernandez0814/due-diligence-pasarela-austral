@@ -5,6 +5,7 @@ simuladas, la comparación, el informe y los códigos de salida. Ningún test ll
 """
 
 import ast
+import json
 import pathlib
 
 import pytest
@@ -142,3 +143,51 @@ def test_el_aviso_de_conectores_no_se_recoge():
     sondeo_hooks.STDERR_DE_LA_CLI.clear()
     sondeo_hooks.recoger_stderr("claude.ai connectors are disabled")
     assert sondeo_hooks.STDERR_DE_LA_CLI == []
+
+
+# ------------------------------------------------------------------ experimentos del #8 (R9)
+
+
+def test_los_experimentos_del_8_se_ejecutan_despues_de_los_del_7():
+    nombres = [e.__name__ for e in sondeo_hooks.EXPERIMENTOS]
+    assert nombres == [
+        "_forma_de_tool_response",
+        "_via_del_error_estructurado",
+        "_excepcion_y_deny",
+        "_stop_con_block",
+        "_hooks_del_caso",
+        "_updated_input",
+        "_turnos_de_reintento",
+        "_cobertura_del_caso",
+    ]
+
+
+def test_el_pedido_lleva_los_argumentos_exactos_con_cobertura_completa():
+    pedido = sondeo_hooks.pedir_con("registrar_informe", sondeo_hooks.ENTRADA_INFORME)
+    assert "registrar_informe" in pedido
+    argumentos = json.loads(pedido.split("responde ok: ", 1)[1])
+    assert argumentos == sondeo_hooks.ENTRADA_INFORME
+    assert argumentos["cobertura"] == "completa"  # lo que el hook debe sustituir
+
+
+def test_guardados_lee_solo_los_json_que_son_objetos(tmp_path):
+    (tmp_path / "informes").mkdir()
+    (tmp_path / "informes" / "a.json").write_text('{"cobertura": ["x"]}', encoding="utf-8")
+    (tmp_path / "b.json").write_text("[1, 2]", encoding="utf-8")
+    (tmp_path / "c.json").write_text("no es json", encoding="utf-8")
+    (tmp_path / "d.txt").write_text('{"cobertura": "y"}', encoding="utf-8")
+    assert sondeo_hooks.guardados(tmp_path) == [{"cobertura": ["x"]}]
+
+
+def test_el_tipo_esperado_de_la_entrada_parcial_es_el_que_da_la_pasarela():
+    # Sin los demás campos obligatorios, la pasarela no escribe nada y devuelve este tipo.
+    from servidor_mcp import decisiones
+
+    error = decisiones.registrar_informe(cobertura=sondeo_hooks.COBERTURA_DEL_SONDEO)
+    assert error.is_error is True
+    assert error.structured_content["tipo"] == sondeo_hooks.TIPO_ERROR_ENTRADA_PARCIAL
+
+
+def test_los_turnos_esperados_son_un_reintento_y_dos_devoluciones():
+    # Primer intento, reintento, tres respuestas finales (dos devueltas por el Stop): R2 del #8.
+    assert sondeo_hooks.TURNOS_REINTENTO_Y_DOS_DEVOLUCIONES == 5

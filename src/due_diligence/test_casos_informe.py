@@ -405,3 +405,64 @@ def test_un_reintento_que_vuelve_a_fallar_no_invalida_el_informe():
     assert caso.estado.errores[Frente.NOTICIAS]["intento"] == 2
     (cierre,) = coordinador.resultados_de("terminar")
     assert cierre.termino is True
+
+
+def test_sello_escalar_informe_minimo_cierre_permitido_y_caso_no_completo(monkeypatch):
+    # FR-014 y R9 de extremo a extremo (sugerencia de la analista en la parada B): un caso de bajo
+    # riesgo, sin otras causas, queda sellado porque falla el `PostToolUse` del primer informe.
+    from due_diligence import hooks as modulo_hooks
+    from due_diligence.conflictos import no_calculados
+    from due_diligence.hooks import COBERTURA_NO_CALCULADA
+    from due_diligence.libro import CAUSA_FALLO_DE_HOOK
+    from due_diligence.reglas import MOTIVO_SOLO_OFICIAL, SUFIJO_LUEGO_INFORME, motivo_de_escalar
+
+    original = modulo_hooks._identificador_del_informe
+    llamadas = []
+
+    def falla_la_primera_vez(resultado):
+        llamadas.append(resultado)
+        if len(llamadas) == 1:
+            raise RuntimeError("fallo simulado del PostToolUse del informe")
+        return original(resultado)
+
+    monkeypatch.setattr(modulo_hooks, "_identificador_del_informe", falla_la_primera_vez)
+    guion = [
+        _delegaciones("CO-TA-0002", "talleres"),
+        ("delegar", {"frente": "listas"}),
+        ("informe", "no_habilitar"),  # la pasarela lo guarda, pero su PostToolUse falla: sello
+        ("terminar",),  # sellado: primero escalar, luego el informe
+        ("informe", "decide_cumplimiento"),  # antes de escalar: rechazado (FR-012)
+        ("escalar",),
+        ("informe", "no_habilitar"),  # tras el sello solo decide el oficial
+        ("informe", "decide_cumplimiento"),  # el informe mínimo
+        ("terminar",),
+    ]
+    caso, coordinador = _caso_con(guion, _resultados_bajo_riesgo())
+
+    assert caso.estado.libro.fallo_de_hook is not None
+    primero, segundo = coordinador.resultados_de("terminar")
+    assert (primero.termino, primero.motivo) == (
+        False,
+        motivo_de_escalar([CAUSA_FALLO_DE_HOOK]) + SUFIJO_LUEGO_INFORME,
+    )
+    assert segundo.termino is True
+
+    _, antes_de_escalar, otra_recomendacion, minimo = coordinador.resultados_de("informe")
+    assert antes_de_escalar.denegada and "aún no se ha escalado" in antes_de_escalar.motivo
+    assert otra_recomendacion.denegada and MOTIVO_SOLO_OFICIAL in otra_recomendacion.motivo
+    assert minimo.ejecutada and not minimo.denegada
+
+    guardado = coordinador.pasarela.informes[-1]
+    assert guardado["recomendacion"] == "decide_cumplimiento"
+    assert guardado["cobertura"] == [COBERTURA_NO_CALCULADA]
+    assert guardado["conflictos"] == no_calculados().como_entrada()
+    assert [(i.recomendacion, i.minimo) for i in caso.estado.informes] == [
+        ("decide_cumplimiento", True)
+    ]
+    assert CAUSA_FALLO_DE_HOOK in caso.estado.informes[0].huella.causas
+
+    tipos = [e.tipo for e in caso.eventos()]
+    assert tipos.index("escalamiento_registrado") < tipos.index(TIPO_INFORME_REGISTRADO)
+    (registrado,) = [e for e in caso.eventos() if e.tipo == TIPO_INFORME_REGISTRADO]
+    assert registrado.detalle.endswith(" Informe mínimo tras un fallo de hook.")
+    assert caso.completo is False

@@ -19,7 +19,9 @@ from due_diligence.libro import (
 )
 from due_diligence.reglas import (
     ALTO_RIESGO,
+    MOTIVO_ENTRADA_INFORME,
     RECOMENDACIONES,
+    Rechazo,
     categoria_determinada,
     causas_vigentes,
     consulta_coincide,
@@ -27,6 +29,7 @@ from due_diligence.reglas import (
     escalamiento_cubre,
     evaluar_cierre,
     evaluar_informe,
+    motivo_de_escalar,
     normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
@@ -759,4 +762,63 @@ def test_varios_cambios_se_nombran_juntos_en_el_motivo():
     assert evaluar_cierre(estado) == (
         "El informe registrado ya no está vigente: cambió la cobertura y los conflictos después "
         "de registrarlo. Registra uno nuevo."
+    )
+
+
+# ------------------------------------------------------------------ #9: fallo de hook (US4, R9)
+
+
+def _sellado(libro=None):
+    estado = _estado_de_informe(libro or _libro_del_caso_b())
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    return estado
+
+
+def test_el_sello_es_una_causa_de_escalamiento_con_su_etiqueta_y_sin_regla():
+    from due_diligence.libro import CAUSA_FALLO_DE_HOOK
+    from due_diligence.reglas import ETIQUETAS_CAUSA
+
+    assert CAUSA_FALLO_DE_HOOK == "fallo_de_hook"
+    estado = _sellado()
+    assert causas_vigentes(estado.libro) == frozenset({CAUSA_FALLO_DE_HOOK})
+    assert ETIQUETAS_CAUSA[CAUSA_FALLO_DE_HOOK] == "fallo de un hook de verificación"
+    assert reglas_de({CAUSA_FALLO_DE_HOOK}) is None
+    assert causas_vigentes(_estado_de_informe(_libro_del_caso_b()).libro) == frozenset()
+
+
+def test_el_informe_minimo_solo_admite_decide_cumplimiento_y_tras_escalar():
+    from due_diligence.libro import CAUSA_FALLO_DE_HOOK
+    from due_diligence.reglas import MOTIVO_SOLO_OFICIAL, evaluar_informe_minimo
+
+    assert MOTIVO_SOLO_OFICIAL == (
+        "Tras un fallo de hook solo decide el oficial: la recomendación debe ser "
+        "decide_cumplimiento."
+    )
+    sin_escalar = _sellado()
+    escalar = Rechazo(motivo_de_escalar({CAUSA_FALLO_DE_HOOK}), None)
+    assert evaluar_informe_minimo(sin_escalar, _informe("decide_cumplimiento")) == [escalar]
+    for recomendacion in ("habilitar", "no_habilitar", "aprobar"):
+        assert evaluar_informe_minimo(sin_escalar, _informe(recomendacion)) == [
+            Rechazo(MOTIVO_SOLO_OFICIAL, None),
+            escalar,
+        ]
+    escalado = _sellado(_libro_del_caso_b(escalamientos=[frozenset({CAUSA_FALLO_DE_HOOK})]))
+    assert evaluar_informe_minimo(escalado, _informe("decide_cumplimiento")) == []
+    assert evaluar_informe_minimo(escalado, _informe("no_habilitar")) == [
+        Rechazo(MOTIVO_SOLO_OFICIAL, None)
+    ]
+    assert evaluar_informe_minimo(escalado, "no es un objeto") == [
+        Rechazo(MOTIVO_ENTRADA_INFORME, None)
+    ]
+
+
+def test_con_el_sello_y_sin_otras_causas_el_cierre_exige_escalar():
+    # Cambio respecto al #7 (R9): un caso sellado sin otras causas ya no puede cerrarse sin escalar.
+    from due_diligence.reglas import falta_para_cerrar
+
+    estado = _sellado()
+    assert falta_para_cerrar(estado)[0] is True
+    assert evaluar_cierre(estado).startswith(
+        "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
+        "fallo de un hook de verificación."
     )

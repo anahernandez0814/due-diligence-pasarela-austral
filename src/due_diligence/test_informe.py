@@ -230,6 +230,8 @@ def test_con_el_caso_sellado_la_huella_no_calcula_cobertura_ni_conflictos(monkey
     monkeypatch.setattr(modulo_informe, "calcular_conflictos", roto)
     primera = huella_actual(estado)
     assert primera.cobertura == NO_CALCULADOS and primera.conflictos == NO_CALCULADOS
+    # T031 (repuesta tras la parada A): con el sello, la causa `fallo_de_hook` entra en la huella.
+    assert "fallo_de_hook" in primera.causas
     assert huella_actual(estado) == primera
 
 

@@ -15,6 +15,7 @@ from due_diligence.libro import (
     CAUSA_ALTO_RIESGO,
     CAUSA_COINCIDENCIA_COMERCIO,
     CAUSA_COINCIDENCIA_REPRESENTANTE,
+    CAUSA_FALLO_DE_HOOK,
     LibroReglas,
 )
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
@@ -170,6 +171,7 @@ ETIQUETAS_CAUSA = {
     CAUSA_COINCIDENCIA_COMERCIO: "coincidencia del comercio en listas restrictivas",
     CAUSA_COINCIDENCIA_REPRESENTANTE: "coincidencia del representante legal en listas restrictivas",
     CAUSA_ALTO_RIESGO: "categoría de alto riesgo",
+    CAUSA_FALLO_DE_HOOK: "fallo de un hook de verificación",
 }
 
 MOTIVO_RECOMENDACION = (
@@ -211,10 +213,16 @@ def categoria_determinada(libro: LibroReglas) -> bool:
 
 
 def causas_vigentes(libro: LibroReglas) -> frozenset[str]:
-    """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9)."""
+    """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9).
+
+    Desde el #9 (R9) incluye el sello `fallo_de_hook`: un caso sellado tiene que llegar al oficial,
+    también sin coincidencias ni alto riesgo (cambio respecto al #7). No es una regla I.2 ni I.3.
+    """
     causas = {coincidencia.causa for coincidencia in libro.coincidencias}
     if es_alto_riesgo(libro):
         causas.add(CAUSA_ALTO_RIESGO)
+    if libro.fallo_de_hook:
+        causas.add(CAUSA_FALLO_DE_HOOK)
     return frozenset(causas)
 
 
@@ -269,6 +277,29 @@ def _listas_consultadas(estado: EstadoCaso) -> bool:
 
     representante = comercio.get("representante_legal")
     return hay("comercio", comercio) and (not representante or hay("persona", representante))
+
+
+MOTIVO_SOLO_OFICIAL = (
+    "Tras un fallo de hook solo decide el oficial: la recomendación debe ser decide_cumplimiento."
+)
+
+
+def evaluar_informe_minimo(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
+    """Los motivos por los que se rechaza el informe con el caso sellado (#9, FR-014, R9).
+
+    Solo `decide_cumplimiento` y solo después de un escalamiento que cubra las causas vigentes,
+    entre ellas el sello. Las reglas de `habilitar` no hacen falta: con el sello no se admite.
+    """
+    if not isinstance(entrada, Mapping):
+        return [Rechazo(MOTIVO_ENTRADA_INFORME, None)]
+    rechazos: list[Rechazo] = []
+    if normalizar_recomendacion(entrada.get("recomendacion")) != "decide_cumplimiento":
+        rechazos.append(Rechazo(MOTIVO_SOLO_OFICIAL, None))
+    libro = estado.libro
+    if not escalamiento_cubre(libro):
+        causas = causas_vigentes(libro)
+        rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
+    return rechazos
 
 
 def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:

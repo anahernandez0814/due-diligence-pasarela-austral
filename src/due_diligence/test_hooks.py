@@ -638,6 +638,21 @@ def _rechazo(salida):
     return json.loads(_motivo(salida))
 
 
+# Con el sello y sin escalar, el informe mínimo da estos dos motivos, en este orden (R9).
+MOTIVOS_SELLADO_SIN_ESCALAR = [
+    {
+        "regla": None,
+        "texto": "Tras un fallo de hook solo decide el oficial: la recomendación debe ser "
+        "decide_cumplimiento.",
+    },
+    {
+        "regla": None,
+        "texto": "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
+        "fallo de un hook de verificación.",
+    },
+]
+
+
 def test_el_subagente_de_listas_tiene_pre_post_y_failure_con_su_herramienta():
     _, _, hooks = _caso()
     listas = hooks.subagente(Frente.LISTAS)
@@ -978,10 +993,14 @@ def test_el_hook_del_informe_con_una_entrada_malformada_deniega(entrada):
 
 
 def test_con_el_libro_sellado_el_hook_del_informe_deniega():
+    # #9, R9: sigue denegando `no_habilitar` con el sello y sin escalar, ahora con los dos motivos
+    # del informe mínimo, en ese orden (T037: igualdad exacta sobre el JSON).
     estado, _, hooks = _caso_con_comercio()
     estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
-    assert _es_denegacion(salida) and _motivo(salida) == SELLADO
+    assert _es_denegacion(salida)
+    assert _rechazo(salida)["motivos"] == MOTIVOS_SELLADO_SIN_ESCALAR
+    assert _rechazo(salida)["problemas"] == []
 
 
 def test_el_hook_del_informe_si_evaluar_informe_lanza_una_excepcion_deniega(monkeypatch):
@@ -1369,9 +1388,11 @@ def test_una_excepcion_en_el_escalamiento_lo_deja_pasar_con_el_texto_fijo_y_sell
     assert estado.libro.fallo_de_hook is not None
     (evento,) = eventos.eventos()
     assert evento.tipo == TIPO_FALLO_DE_HOOK and TEXTO_INTERNO not in evento.detalle
-    # Con el sello, el informe ya no se acepta (riesgo residual 6, lo resuelve el #9).
+    # Con el sello y sin escalamiento confirmado, `no_habilitar` se rechaza (#9, R9; el riesgo
+    # residual 6 del #8 lo resuelve el informe mínimo, que se prueba aparte).
     informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
-    assert _es_denegacion(informe) and _motivo(informe) == SELLADO
+    assert _es_denegacion(informe)
+    assert _rechazo(informe)["motivos"] == MOTIVOS_SELLADO_SIN_ESCALAR
 
 
 def test_ningun_caso_probado_del_escalamiento_deniega(monkeypatch):
@@ -1770,3 +1791,155 @@ def test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pr
     pregunta = _fin_de_turno(mensaje="Necesito que me confirme la categoría del comercio.")
     salida = _ejecutar(_stop(hooks), pregunta)
     assert _es_bloqueo(salida) and salida["reason"] == MOTIVO_SIN_INFORME
+
+
+# ------------------------------------------- #9: informe mínimo tras un fallo de hook (US4, R9)
+
+NO_CALCULADOS_ENTRADA = {
+    "resumen": "No se pudieron calcular los conflictos; deben tratarse como no verificados.",
+    "lista": [],
+}
+
+
+def _sellar(estado):
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+
+
+def _escalar_confirmado(hooks):
+    """El escalamiento pasa (nunca se deniega) y su `PostToolUse` guarda la instantánea."""
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
+    _ejecutar(
+        _hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, _sustituida(salida))
+    )
+
+
+def test_sin_escalamiento_el_informe_minimo_se_rechaza():
+    estado, _, hooks = _caso_con_comercio()
+    _sellar(estado)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("decide_cumplimiento")))
+    assert _rechazo(salida)["motivos"] == [MOTIVOS_SELLADO_SIN_ESCALAR[1]]
+
+
+@pytest.mark.parametrize("recomendacion", ["habilitar", "no_habilitar"])
+def test_tras_escalar_solo_decide_cumplimiento(recomendacion):
+    estado, _, hooks = _caso_con_comercio()
+    _sellar(estado)
+    _escalar_confirmado(hooks)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de(recomendacion)))
+    assert _rechazo(salida)["motivos"] == [MOTIVOS_SELLADO_SIN_ESCALAR[0]]
+
+
+def test_tras_escalar_el_informe_minimo_se_acepta_con_los_textos_fijos(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+    _sellar(estado)
+    _escalar_confirmado(hooks)
+
+    def roto(_estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    # Con el sello, ni el `PreToolUse` ni la huella calculan cobertura ni conflictos (I1).
+    from due_diligence import informe as modulo_informe
+
+    for modulo in (modulo_hooks, modulo_informe):
+        monkeypatch.setattr(modulo, "calcular_cobertura", roto)
+        monkeypatch.setattr(modulo, "calcular_conflictos", roto)
+    entrada = _informe_de("decide_cumplimiento")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert _sustituida(salida) == {
+        "comercio": COMERCIO_VERIFICADO,
+        "recomendacion": "decide_cumplimiento",
+        "hallazgos": entrada["hallazgos"],
+        "conflictos": NO_CALCULADOS_ENTRADA,
+        "cobertura": [COBERTURA_NO_CALCULADA],
+    }
+    registrado = respuesta_de_decision("informe_registrado", "INF-0009")
+    _ejecutar(_post_del_informe(hooks), _post_de(INFORME, registrado, _sustituida(salida)))
+    (informe,) = estado.informes
+    assert informe.minimo is True and informe.id == "INF-0009"
+    assert eventos.eventos()[-1].detalle == (
+        "Informe INF-0009 registrado; recomendación: decide_cumplimiento; cobertura y conflictos "
+        "no calculados. Informe mínimo tras un fallo de hook."
+    )
+    assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())
+
+
+def test_el_informe_minimo_sigue_validando_la_forma_y_la_fuente():
+    estado, _, hooks = _caso_con_comercio()
+    _sellar(estado)
+    _escalar_confirmado(hooks)
+    entrada = _informe_de("decide_cumplimiento")
+    entrada["hallazgos"]["registro"][0]["fecha"] = "2026-02-30"
+    entrada["hallazgos"]["noticias"] = [
+        {"texto": "Sin menciones.", "fuente": "Diario Ficticio", "fecha": "2026-09-30"}
+    ]
+    rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
+    assert rechazo["motivos"] == []
+    assert [p["ruta"] for p in rechazo["problemas"]] == [
+        "hallazgos.registro[0].fecha",
+        "hallazgos.noticias[0].fuente",
+    ]
+
+
+def test_informe_minimo_tras_escalar_el_stop_permite_cerrar_y_el_caso_no_esta_completo(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+    _sellar(estado)
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno()))  # sin escalar ni informe
+    _escalar_confirmado(hooks)
+    _aceptar_informe(hooks, recomendacion="decide_cumplimiento", tool_use_id="t9")
+
+    def roto(_estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    from due_diligence import informe as modulo_informe
+
+    monkeypatch.setattr(modulo_informe, "calcular_cobertura", roto)
+    monkeypatch.setattr(modulo_informe, "calcular_conflictos", roto)
+    antes = len(eventos.eventos())
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert eventos.eventos()[antes:] == []
+    assert estado.cierre_sin_informe is False and estado.cierre_sin_escalar is False
+    # El caso nunca figura como completo con el sello (`Caso.completo` exige `fallo_de_hook` vacío).
+    from due_diligence.informe import informe_vigente
+
+    assert informe_vigente(estado) is True and estado.libro.fallo_de_hook
+
+
+def test_si_falla_el_post_del_informe_se_sella_y_pide_escalar_y_el_minimo(monkeypatch):
+    # Hallazgo U2: el informe quedó guardado en la pasarela, pero su huella no se confirma.
+    original = HooksDelCaso._informe_posterior
+    llamadas = []
+
+    async def falla_la_primera(self, entrada, tool_use_id, contexto):
+        llamadas.append(tool_use_id)
+        if len(llamadas) == 1:
+            raise RuntimeError(TEXTO_INTERNO)
+        return await original(self, entrada, tool_use_id, contexto)
+
+    monkeypatch.setattr(HooksDelCaso, "_informe_posterior", falla_la_primera)
+    estado, eventos, hooks = _caso_con_comercio()
+    _aceptar_informe(hooks, tool_use_id="t1")
+    assert estado.libro.fallo_de_hook is not None
+    assert estado.informes == []
+    assert TIPO_FALLO_DE_HOOK in [e.tipo for e in eventos.eventos()]
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno()))  # ahora hay que escalar
+    _escalar_confirmado(hooks)
+    _aceptar_informe(hooks, recomendacion="decide_cumplimiento", tool_use_id="t2")
+    (informe,) = estado.informes
+    assert informe.minimo is True
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+
+
+def test_con_doble_fallo_el_informe_minimo_se_deniega_con_el_motivo_generico(monkeypatch):
+    # Riesgo residual 6: si con el sello también falla el control de la fuente, se deniega.
+    estado, _, hooks = _caso_con_comercio()
+    _sellar(estado)
+    _escalar_confirmado(hooks)
+
+    def roto(_estado, _hallazgos):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(modulo_hooks, "problemas_de_fuente", roto)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("decide_cumplimiento")))
+    assert _es_denegacion(salida) and _motivo(salida) == modulo_hooks.MOTIVO_FALLO_DE_HOOK

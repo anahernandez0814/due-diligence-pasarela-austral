@@ -393,7 +393,7 @@ la cobertura y los conflictos en textos fijos; el caso nunca figura como complet
 `habilitar` y `no_habilitar` se rechazan y `decide_cumplimiento` se registra con los textos fijos
 (SC-004).
 
-- [ ] T031 [P] [US4] Tests en `src/due_diligence/test_reglas.py`:
+- [X] T031 [P] [US4] Tests en `src/due_diligence/test_reglas.py`:
   - `causas_vigentes` incluye `CAUSA_FALLO_DE_HOOK` con `libro.fallo_de_hook`;
   - su etiqueta es «fallo de un hook de verificación»;
   - `reglas_de` no le asigna I.2 ni I.3;
@@ -401,7 +401,7 @@ la cobertura y los conflictos en textos fijos; el caso nunca figura como complet
     «Tras un fallo de hook solo decide el oficial: la recomendación debe ser
     decide_cumplimiento.», y también el informe sin escalamiento que cubra la causa;
   - con el sello y sin otras causas, `evaluar_cierre` exige escalar (cambio respecto al #7, R9).
-- [ ] T032 [US4] Tests en `src/due_diligence/test_hooks.py`:
+- [X] T032 [US4] Tests en `src/due_diligence/test_hooks.py`:
   - con el sello, `_informe_previo`:
     - rechaza con el JSON (R3) hasta que hay un escalamiento cuya instantánea incluye la causa;
     - después admite `decide_cumplimiento` con `cobertura == [COBERTURA_NO_CALCULADA]` y los
@@ -423,14 +423,14 @@ la cobertura y los conflictos en textos fijos; el caso nunca figura como complet
   - con un doble fallo (`problemas_de_fuente` lanza con el caso sellado), se deniega con el motivo
     genérico (riesgo residual 6);
   - el caso sellado no figura como completo aunque tenga escalamiento e informe.
-- [ ] T033 [US4] Implementar lo de T031 y T032:
+- [X] T033 [US4] Implementar lo de T031 y T032:
   - en `src/due_diligence/reglas.py`, `CAUSA_FALLO_DE_HOOK` (constante en
     `src/due_diligence/libro.py`), su etiqueta y `evaluar_informe_minimo`;
   - en `src/due_diligence/hooks.py`, el camino del sello en `_informe_previo`, que sustituye a la
     denegación directa por `_sellado`.
 
   Hace pasar T031 y T032.
-- [ ] T034 [US4] Fase 6: ruff, la suite completa y los tests de T037 adaptados. Commit «informe
+- [X] T034 [US4] Fase 6: ruff, la suite completa y los tests de T037 adaptados. Commit «informe
   mínimo tras un fallo de hook (#9, US4)».
 
 ---
@@ -570,6 +570,9 @@ hora con UTC, los conflictos y los informes.
   - el presupuesto de 19 de 30 turnos (R8);
   - el rechazo del informe en JSON (R3);
   - la hora en UTC (R10; el #11 mostrará la hora de Colombia).
+  - **la ampliación del comercio pedido** (fase 3, R5; pedido de la analista en la parada A):
+    siempre que no hay comercio identificado, el informe lleva el comercio pedido con
+    `verificado: false`, no solo con el registro caído; sin comercio pedido, el hook deniega.
 - [ ] T043 [P] `README.md`: la variable `PASARELA_FALLA_REGISTRO`, junto a
   `PASARELA_FALLA_NOTICIAS`, y el bloque de conflictos de la salida.
 - [ ] T044 Fase 9: ruff, la suite completa y commit «sondeo y documentación del #9».
@@ -603,6 +606,8 @@ hora con UTC, los conflictos y los informes.
 - [ ] T050 Commitear las anotaciones de T045 a T049 en este archivo. **Ningún commit después de la
   revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye:
   - la tabla de T037;
+  - **con honestidad, el desliz de orden de T013** (pedido de la analista en la parada A): la
+    simulación se escribió antes que sus tests, que pasan pero no se vieron fallar primero;
   - el cambio respecto al #7 de R9;
   - el presupuesto de 19 turnos;
   - en «Lo pendiente», para el #10: los riesgos residuales 2 (`decide_cumplimiento` sin escalar

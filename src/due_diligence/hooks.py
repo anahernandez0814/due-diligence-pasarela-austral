@@ -25,7 +25,7 @@ from claude_agent_sdk import HookMatcher
 
 from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
 from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
-from due_diligence.conflictos import calcular_conflictos
+from due_diligence.conflictos import calcular_conflictos, no_calculados
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
@@ -63,6 +63,7 @@ from due_diligence.reglas import (
     causas_vigentes,
     evaluar_cierre,
     evaluar_informe,
+    evaluar_informe_minimo,
     falta_para_cerrar,
     permite_delegar_listas,
     permite_listas,
@@ -601,36 +602,45 @@ class HooksDelCaso:
         afirmación (FR-004). Si acepta, la entrada completa lleva el comercio, los conflictos y la
         cobertura del código, y `hallazgos` y `recomendacion` tal como los envió el coordinador.
         """
-        sellado = self._sellado(None, None)
-        if sellado is not None:
-            return sellado
+        # Con el sello (#9, R9, FR-014): solo el informe mínimo, `decide_cumplimiento` tras
+        # escalar, con la cobertura y los conflictos en textos fijos y sin calcularlos.
+        sellado = bool(self.estado.libro.fallo_de_hook)
         argumentos = entrada.get("tool_input")
-        rechazos = list(evaluar_informe(self.estado, argumentos))
+        evaluar = evaluar_informe_minimo if sellado else evaluar_informe
+        rechazos = list(evaluar(self.estado, argumentos))
         if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
             return self._denegar_informe(rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [])
         comercio = comercio_del_informe(self.estado)
         if comercio is None:
             rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_INFORME, None))
-        cobertura = calcular_cobertura(self.estado)
-        conflictos = calcular_conflictos(self.estado)
+        cobertura = None if sellado else calcular_cobertura(self.estado)
+        conflictos = None if sellado else calcular_conflictos(self.estado)
         completa = {
             "comercio": comercio,
             "recomendacion": argumentos.get("recomendacion"),
             "hallazgos": argumentos.get("hallazgos"),
-            "conflictos": conflictos.como_entrada(),
-            "cobertura": cobertura.lineas(),
+            "conflictos": (conflictos or no_calculados()).como_entrada(),
+            "cobertura": cobertura.lineas() if cobertura else [COBERTURA_NO_CALCULADA],
         }
         problemas = self._problemas_del_informe(completa)
         if rechazos or problemas:
             return self._denegar_informe(rechazos, problemas)
-        self._evento_cobertura("registrar_informe", argumentos, cobertura)
+        if cobertura is None:
+            self.eventos.registrar(
+                TIPO_COBERTURA_SUSTITUIDA,
+                None,
+                "Cobertura puesta en registrar_informe: no calculada tras un fallo de hook "
+                "(informe mínimo).",
+            )
+        else:
+            self._evento_cobertura("registrar_informe", argumentos, cobertura)
         self._evento_datos(argumentos, completa)
         # R7: la huella se calcula aquí, con los mismos datos que se sustituyen, y queda pendiente
         # hasta que el `PostToolUse` confirme que la pasarela aceptó.
         self.estado.informes_pendientes[tool_use_id or ""] = (
             huella_con(self.estado, cobertura, conflictos),
             completa["recomendacion"],
-            False,
+            sellado,
         )
         return reemplazar_entrada(completa)
 

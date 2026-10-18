@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 CAUSA_COINCIDENCIA_COMERCIO = "coincidencia_comercio"
 CAUSA_COINCIDENCIA_REPRESENTANTE = "coincidencia_representante"
 CAUSA_ALTO_RIESGO = "alto_riesgo"
+# El sello `fallo_de_hook` también es causa de escalamiento (#9, R9): tras un fallo de hook solo
+# decide un oficial, y un oficial solo decide lo que recibe.
+CAUSA_FALLO_DE_HOOK = "fallo_de_hook"
 
 
 @dataclass(frozen=True)

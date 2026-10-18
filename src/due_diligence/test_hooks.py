@@ -2604,3 +2604,62 @@ def test_la_espera_de_categoria_de_extremo_a_extremo_en_el_stop():
     assert _es_bloqueo(salida) and salida["reason"] == (
         motivo_de_escalar({"alto_riesgo"}) + " Luego registra el informe."
     )
+
+
+# ------------------------- #10, parada A: la espera de la categoría no exime de escalar (FR-014)
+
+
+def _espera_de_categoria_con_coincidencia():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.categoria_bloqueada = True
+    return estado, eventos, hooks
+
+
+def test_a_con_una_coincidencia_la_espera_de_categoria_exige_escalar_y_gasta_una_devolucion():
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _espera_de_categoria_con_coincidencia()
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida)
+    assert salida["reason"] == motivo_de_escalar({"coincidencia_representante"})
+    assert estado.libro.cierres_impedidos == 1
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CIERRE_IMPEDIDO and evento.regla == "I.2"
+    assert TIPO_ESPERA_ANALISTA not in [e.tipo for e in eventos.eventos()]
+
+
+def test_b_ya_escalado_la_espera_de_categoria_se_admite_sin_el_informe():
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _espera_de_categoria_con_coincidencia()
+    estado.libro.escalamientos.append(
+        Escalamiento(causas_vigentes(estado.libro), clave_comercio(estado))
+    )
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert [e.tipo for e in eventos.eventos()] == [TIPO_ESPERA_ANALISTA]
+    assert estado.libro.cierres_impedidos == 0 and estado.informes == []
+
+
+def test_c_agotadas_las_devoluciones_la_espera_de_categoria_marca_cierre_sin_escalar():
+    from due_diligence.coordinador import Caso as _CasoReal  # solo para `completo`
+
+    estado, eventos, hooks = _espera_de_categoria_con_coincidencia()
+    estado.libro.cierres_impedidos = MAX_CIERRES_IMPEDIDOS
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_escalar is True
+    assert estado.cierre_sin_informe is False  # la espera de la categoría exime del informe
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_ESCALAR]
+    caso = _CasoReal()
+    caso.estado = estado
+    assert caso.completo is False
+
+
+def test_d_con_el_sello_la_espera_de_categoria_exige_escalar():
+    estado, _, hooks = _caso_con_comercio()
+    estado.categoria_bloqueada = True
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida)
+    assert salida["reason"] == motivo_de_escalar({"fallo_de_hook"})
+    assert estado.libro.cierres_impedidos == 1

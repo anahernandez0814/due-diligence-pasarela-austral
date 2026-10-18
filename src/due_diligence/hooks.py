@@ -71,6 +71,7 @@ from due_diligence.reglas import (
     evaluar_informe,
     evaluar_informe_minimo,
     falta_para_cerrar,
+    motivo_de_escalar,
     motivo_del_informe_en_espera,
     normalizar_recomendacion,
     permite_delegar_listas,
@@ -580,16 +581,23 @@ class HooksDelCaso:
         dos, y nunca figura como completo ni habilitado.
 
         Antes mira si el turno termina esperando un dato del analista que el código comprueba en
-        el estado (#10, R3): entonces deja terminar sin exigir nada y sin gastar devoluciones.
+        el estado (#10, R3): entonces deja terminar sin exigir nada y sin gastar devoluciones. La
+        espera de la categoría exime solo del informe (FR-014): si falta escalar (una coincidencia
+        o el sello), se exige el escalamiento como en cualquier cierre. Las del registro no lo
+        necesitan: sin identificación no hay listas ni coincidencias.
         """
         espera = espera_del_analista(self.estado)
-        if espera is not None:
+        falta_escalar, falta_informe = falta_para_cerrar(self.estado)
+        if espera is not None and not (espera.clase == "categoria" and falta_escalar):
             self.eventos.registrar(TIPO_ESPERA_ANALISTA, None, espera.motivo)
             return permitir()
-        motivo = evaluar_cierre(self.estado)
+        if espera is not None:
+            falta_informe = False
+            motivo = motivo_de_escalar(causas_vigentes(self.estado.libro))
+        else:
+            motivo = evaluar_cierre(self.estado)
         if motivo is None:
             return permitir()
-        falta_escalar, falta_informe = falta_para_cerrar(self.estado)
         regla = reglas_de(causas_vigentes(self.estado.libro)) if falta_escalar else None
         if self.estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
             _marcar_cierre_agotado(self.estado, self.eventos, falta_escalar, falta_informe, regla)

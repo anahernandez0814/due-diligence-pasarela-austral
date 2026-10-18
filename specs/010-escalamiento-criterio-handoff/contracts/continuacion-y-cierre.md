@@ -23,7 +23,7 @@ caso.turnos_del_caso  # list[Clasificacion], una por turno
 
 En este orden:
 
-1. **`espera_del_analista(estado)`**: si hay espera, se permite, se registra `espera_analista` con su motivo y **no** se cuenta como cierre impedido.
+1. **`espera_del_analista(estado)`**: si hay espera, se permite, se registra `espera_analista` con su motivo y **no** se cuenta como cierre impedido. **Excepción**: con la espera `categoria` y el escalamiento pendiente (coincidencia o sello), se sigue al paso 3 solo por el escalamiento: devolución con el motivo de escalar o, agotadas, `cierre_sin_escalar`. La espera de la categoría exime solo del informe.
 2. **`evaluar_cierre(estado)`**: como en el #9. Primero va el escalamiento, que ahora solo cuenta si es del comercio actual (R8), y después el informe vigente.
 3. **Devoluciones** con `MAX_CIERRES_IMPEDIDOS` por turno. Agotadas, se marca `cierre_sin_escalar` o `cierre_sin_informe`.
 

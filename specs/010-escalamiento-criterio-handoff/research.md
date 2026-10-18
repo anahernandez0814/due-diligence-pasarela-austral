@@ -55,6 +55,7 @@ Lo marcado *(medido)* se comprobó con `claude-agent-sdk` 0.2.168, Haiku 5.5 y u
   **Cambio respecto al #9**: el #9 aceptaba el informe con el comercio pedido (`verificado: false`) ante varias coincidencias; FR-016 lo rechaza.
 - **Durante la espera `categoria`** el informe sigue las reglas de siempre (sin categoría determinada no se puede `habilitar`).
 - En el `Stop`, la espera se comprueba **antes** que `evaluar_cierre`. Si la hay, el `Stop` permite terminar sin tocar `cierres_impedidos` y deja el evento `espera_analista` con el motivo.
+- **La espera de la categoría exime solo del informe** (corrección de la parada A): si con ella falta escalar (una coincidencia en listas o el sello), el `Stop` evalúa el escalamiento como un cierre normal, con su devolución o la marca `cierre_sin_escalar` al agotarlas. Las esperas del registro no lo necesitan: sin identificación no hay listas ni coincidencias.
 - Con el sello, la espera no cambia: el `Stop` la admite igual, y escalar se admite (R5).
 
 **Rationale**: las tres condiciones salen del estado que escriben los hooks y el `Delegador`, no del texto del modelo. Una pregunta del coordinador con el comercio identificado y la categoría con resultado sigue siendo un cierre (FR-015).

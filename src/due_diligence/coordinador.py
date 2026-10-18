@@ -27,6 +27,7 @@ from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
+    TIPO_MENSAJE_ANALISTA,
     TIPO_MODO_DEMOSTRACION,
     TIPO_TERMINACION,
     Evento,
@@ -35,6 +36,7 @@ from due_diligence.eventos import (
 from due_diligence.frentes import Frente
 from due_diligence.hooks import HooksDelCaso
 from due_diligence.informe import informe_vigente
+from due_diligence.reglas import Espera, espera_del_analista
 from due_diligence.terminacion import (
     Clasificacion,
     Terminacion,
@@ -162,8 +164,17 @@ def instrucciones_coordinador(demo: bool = False) -> str:
 INSTRUCCIONES_COORDINADOR = instrucciones_coordinador(demo=False)
 
 
+class CasoSinSesion(RuntimeError):
+    """`Caso.continuar` sin un turno anterior que dejara su `session_id` (#10, R1)."""
+
+
 class Caso:
-    """Una ejecución del due diligence: su estado, sus eventos y su delegación (FR-014)."""
+    """Una ejecución del due diligence: su estado, sus eventos y su delegación (FR-014).
+
+    Desde el #10 (R1) el caso puede tener varios turnos: `ejecutar` lanza el primero y `continuar`
+    los siguientes, con `resume` sobre la sesión del coordinador y el mismo estado, hooks y
+    `Delegador`.
+    """
 
     def __init__(
         self,
@@ -189,6 +200,10 @@ class Caso:
         # `num_turns` del coordinador (#8, R2): para comprobar que los reintentos y las
         # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. `None` sin `ResultMessage`.
         self.turnos: int | None = None
+        # #10 (R1): la sesión del coordinador que deja cada `ResultMessage` (la que `continuar`
+        # reanuda) y la clasificación de cada turno, en orden; `terminacion` es la del último.
+        self.session_id: str | None = None
+        self.turnos_del_caso: list[Clasificacion] = []
 
     def eventos(self) -> list[Evento]:
         return self._eventos.eventos()
@@ -208,17 +223,24 @@ class Caso:
         return calcular_conflictos(self.estado)
 
     @property
+    def espera(self) -> Espera | None:
+        """La espera del analista con la que terminó el último turno, si la hay (#10, R3)."""
+        return espera_del_analista(self.estado)
+
+    @property
     def completo(self) -> bool:
         """Si el caso puede presentarse como completo (#7, FR-007; #8, FR-012).
 
         Solo si la cobertura calculada es completa (los cuatro frentes cubiertos, R5), el ciclo
         terminó con normalidad, el `Stop` no tuvo que dejar terminar un caso sin su escalamiento
         obligatorio ni sin su informe (#9), ningún hook falló (un `PostToolUse` que falló pudo dejar
-        sin registrar una coincidencia o una identificación) y hay un informe vigente (#9, FR-023).
+        sin registrar una coincidencia o una identificación), hay un informe vigente (#9, FR-023) y
+        el caso no espera al analista (#10, FR-018).
         """
         estado = self.estado
         return (
-            self.cobertura.completa
+            self.espera is None
+            and self.cobertura.completa
             and estado.terminacion is not None
             and estado.terminacion.terminacion is Terminacion.NORMAL
             and not estado.cierre_sin_escalar
@@ -235,17 +257,17 @@ class Caso:
             entorno=self.entorno,
         )
 
-    def opciones_coordinador(self) -> ClaudeAgentOptions:
+    def opciones_coordinador(self, resume: str | None = None) -> ClaudeAgentOptions:
         return configuracion.opciones_coordinador(
             self.delegador.servidor(),
             instrucciones_coordinador(self.demo),
             hooks=self.hooks.coordinador(),
             entorno=self.entorno,
+            resume=resume,
         )
 
     async def ejecutar(self, solicitud: str) -> str:
-        """Ejecuta el ciclo del coordinador y devuelve su respuesta final al analista."""
-        self.estado.solicitud = solicitud
+        """Ejecuta el primer turno del coordinador y devuelve su respuesta final al analista."""
         self._eventos.registrar(TIPO_CASO_INICIADO, None, "Se inicia el caso.")
         if self.demo:
             self._eventos.registrar(
@@ -254,19 +276,49 @@ class Caso:
                 "Modo de demostración: las reglas 1, 2 y 3 no están en el prompt del coordinador "
                 "y los hooks siguen activos.",
             )
+        return await self._turno(solicitud, None)
+
+    async def continuar(self, mensaje: str) -> str:
+        """Un turno más del mismo caso con otro mensaje del analista (#10, R1, FR-013).
+
+        Reanuda la sesión del coordinador con su `session_id`; el estado, los hooks, el `Delegador`
+        y los eventos son los del caso. Sin un turno anterior que dejara la sesión, falla sin
+        llamar al modelo.
+        """
+        if self.session_id is None:
+            raise CasoSinSesion(
+                "No hay una sesión del coordinador que continuar: el caso no tiene un turno "
+                "anterior terminado."
+            )
+        return await self._turno(mensaje, self.session_id)
+
+    async def _turno(self, mensaje: str, resume: str | None) -> str:
+        """Un turno del coordinador: el mensaje, el cierre reiniciado y la `query()` (R1, R4)."""
+        estado = self.estado
+        estado.mensajes.append(mensaje)
+        self._eventos.registrar(
+            TIPO_MENSAJE_ANALISTA, None, f"Mensaje {len(estado.mensajes)} del analista."
+        )
+        # El cierre es del turno (R4): el `Stop` vuelve a evaluar al final de este turno y, si
+        # tampoco se escala o se informa, vuelve a poner la marca.
+        estado.libro.cierres_impedidos = 0
+        estado.cierre_sin_escalar = False
+        estado.cierre_sin_informe = False
+        self.respuesta = ""
         clasificacion: Clasificacion | None = None
         try:
-            async for mensaje in self._consulta(
-                prompt=solicitud, options=self.opciones_coordinador()
+            async for mensaje_sdk in self._consulta(
+                prompt=mensaje, options=self.opciones_coordinador(resume)
             ):
-                if isinstance(mensaje, AssistantMessage):
-                    for bloque in mensaje.content:
+                if isinstance(mensaje_sdk, AssistantMessage):
+                    for bloque in mensaje_sdk.content:
                         if isinstance(bloque, TextBlock):
                             self.respuesta = bloque.text
-                elif isinstance(mensaje, ResultMessage):
-                    clasificacion = clasificar_resultado(mensaje)
-                    self.coste_usd = mensaje.total_cost_usd
-                    self.turnos = mensaje.num_turns
+                elif isinstance(mensaje_sdk, ResultMessage):
+                    clasificacion = clasificar_resultado(mensaje_sdk)
+                    self.coste_usd = mensaje_sdk.total_cost_usd
+                    self.turnos = mensaje_sdk.num_turns
+                    self.session_id = mensaje_sdk.session_id or self.session_id
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:
@@ -285,6 +337,7 @@ class Caso:
 
     def _terminar(self, clasificacion: Clasificacion) -> None:
         self.estado.terminacion = clasificacion
+        self.turnos_del_caso.append(clasificacion)
         self._eventos.registrar(
             TIPO_TERMINACION, None, f"{clasificacion.terminacion.value}: {clasificacion.detalle}"
         )

@@ -547,3 +547,57 @@ def test_pre_y_post_reciben_el_mismo_tool_use_id_y_cada_llamada_el_suyo():
     assert ids[("pre", 1)] == ids[("post", 1)]
     assert ids[("pre", 2)] == ids[("post", 2)]
     assert ids[("pre", 1)] != ids[("pre", 2)]
+
+
+# ------------------------------------------------- #10: el coordinador simulado por turnos (T018)
+
+
+def _consumir_con(coordinador, opciones):
+    async def consumir():
+        return [m async for m in coordinador(prompt="p", options=opciones)]
+
+    return asyncio.run(consumir())
+
+
+def test_el_coordinador_simulado_consume_un_guion_por_turno():
+    from claude_agent_sdk import ResultMessage
+
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    uno, dos = _informe_valido(), _informe_valido(recomendacion="decide_cumplimiento")
+    coordinador = CoordinadorSimulado(guiones=[[("informe_con", uno)], [("informe_con", dos)]])
+    primero = _consumir_con(coordinador, ClaudeAgentOptions())
+    assert coordinador.pasarela.informes == [uno]
+    segundo = _consumir_con(coordinador, ClaudeAgentOptions(resume="sesion-de-prueba"))
+    assert coordinador.pasarela.informes == [uno, dos]
+    # Cada turno termina con su `ResultMessage`, con el mismo `session_id` estable.
+    for mensajes in (primero, segundo):
+        (resultado,) = [m for m in mensajes if isinstance(m, ResultMessage)]
+        assert resultado.session_id == "sesion-de-prueba"
+    assert coordinador.reanudaciones == [None, "sesion-de-prueba"]
+
+
+def test_un_guion_solo_sigue_valiendo_como_un_turno():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    entrada = _informe_valido()
+    coordinador = CoordinadorSimulado([("informe_con", entrada)])
+    _consumir_con(coordinador, ClaudeAgentOptions())
+    assert coordinador.pasarela.informes == [entrada]
+    assert coordinador.reanudaciones == [None]
+
+
+def test_un_turno_de_mas_que_el_guion_no_ejecuta_ningun_paso():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=[[("informe_con", _informe_valido())]])
+    _consumir_con(coordinador, ClaudeAgentOptions())
+    _consumir_con(coordinador, ClaudeAgentOptions(resume="sesion-de-prueba"))
+    assert len(coordinador.pasarela.informes) == 1
+
+
+def test_el_mensaje_de_resultado_acepta_otro_session_id():
+    from due_diligence.simulacion import mensaje_de_resultado
+
+    assert mensaje_de_resultado().session_id == "sesion-de-prueba"
+    assert mensaje_de_resultado(session_id="otra").session_id == "otra"

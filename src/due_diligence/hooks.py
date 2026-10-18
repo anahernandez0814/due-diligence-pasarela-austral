@@ -37,6 +37,7 @@ from due_diligence.eventos import (
     TIPO_CONSULTA_FALLIDA,
     TIPO_DATOS_SUSTITUIDOS,
     TIPO_ESCALAMIENTO_REGISTRADO,
+    TIPO_ESPERA_ANALISTA,
     TIPO_FALLO_DE_HOOK,
     TIPO_INFORME_REGISTRADO,
     RegistroEventos,
@@ -63,10 +64,12 @@ from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     Rechazo,
     causas_vigentes,
+    espera_del_analista,
     evaluar_cierre,
     evaluar_informe,
     evaluar_informe_minimo,
     falta_para_cerrar,
+    motivo_del_informe_en_espera,
     normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
@@ -547,7 +550,14 @@ class HooksDelCaso:
         no `stop_hook_active` (R3). Es una protección: pasadas `MAX_CIERRES_IMPEDIDOS` devoluciones
         deja terminar, pero el caso queda marcado `cierre_sin_escalar`, `cierre_sin_informe` o los
         dos, y nunca figura como completo ni habilitado.
+
+        Antes mira si el turno termina esperando un dato del analista que el código comprueba en
+        el estado (#10, R3): entonces deja terminar sin exigir nada y sin gastar devoluciones.
         """
+        espera = espera_del_analista(self.estado)
+        if espera is not None:
+            self.eventos.registrar(TIPO_ESPERA_ANALISTA, None, espera.motivo)
+            return permitir()
         motivo = evaluar_cierre(self.estado)
         if motivo is None:
             return permitir()
@@ -663,6 +673,11 @@ class HooksDelCaso:
         argumentos = entrada.get("tool_input")
         evaluar = evaluar_informe_minimo if sellado else evaluar_informe
         rechazos = list(evaluar(self.estado, argumentos))
+        # #10, FR-016 (R3): mientras se espera el identificador o el nombre, no hay informe. Con el
+        # sello no aplica: el informe mínimo solo exige escalar antes, como en el #9.
+        en_espera = None if sellado else motivo_del_informe_en_espera(self.estado)
+        if en_espera is not None:
+            rechazos.append(en_espera)
         if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
             return self._denegar_informe(
                 rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [], argumentos

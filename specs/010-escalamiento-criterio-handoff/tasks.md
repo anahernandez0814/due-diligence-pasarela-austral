@@ -102,7 +102,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 - **Turno 1**: con los dos comercios de nombre casi idéntico, el `Stop` deja terminar con `espera_analista`, sin consultas de listas, escalamiento ni informe.
 - **Turno 2**: `Caso.continuar` con el identificador consulta el registro, identifica, delega listas y termina con el cierre de siempre.
 
-- [ ] T010 [P] [US3] Tests en `src/due_diligence/test_reglas.py` (R3, data-model `Espera`):
+- [X] T010 [P] [US3] Tests en `src/due_diligence/test_reglas.py` (R3, data-model `Espera`):
   - **`espera_del_analista`**:
     - registro `terminado` y clase `varias` → `Espera("identificador", <motivo fijo>)`;
     - clase `ninguna` → `Espera("nombre", …)`;
@@ -112,8 +112,8 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - **Prioridad**: con `varias` y la categoría bloqueada a la vez, la espera es `identificador`.
   - **Textos fijos**: los motivos no contienen ningún identificador de las coincidencias (`CO-AM-0004`, `CO-AM-0005`).
   - **`_motivo_sin_comercio`** lee la clase, no subcadenas del motivo: con un motivo cuyo texto se cambió y la clase `varias`, sigue devolviendo `MOTIVO_VARIAS_COINCIDENCIAS`.
-- [ ] T011 [US3] Implementar T010 en `src/due_diligence/reglas.py`: `Espera`, los tres motivos fijos de data-model, `espera_del_analista` y `_motivo_sin_comercio` por clase.
-- [ ] T012 [P] [US3] Tests en `src/due_diligence/test_hooks.py`, para el `Stop` con esperas (R3, contrato `continuacion-y-cierre.md`):
+- [X] T011 [US3] Implementar T010 en `src/due_diligence/reglas.py`: `Espera`, los tres motivos fijos de data-model, `espera_del_analista` y `_motivo_sin_comercio` por clase.
+- [X] T012 [P] [US3] Tests en `src/due_diligence/test_hooks.py`, para el `Stop` con esperas (R3, contrato `continuacion-y-cierre.md`):
   - **Espera del identificador**: con el registro en `varias`, una categoría de alto riesgo y sin escalar, `_cierre` devuelve `permitir()`, deja un evento `espera_analista` con el motivo, **no** incrementa `cierres_impedidos` y no marca `cierre_sin_escalar` ni `cierre_sin_informe`.
   - **Espera del nombre**: lo mismo con `ninguna`.
   - **D3 del #9 no es espera**: con la clase `contradictoria` y alto riesgo, el `Stop` exige el escalamiento como en el #9.
@@ -126,12 +126,12 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
     - con el sello y la espera `identificador`, el informe mínimo sigue exigiendo escalar antes, como en el #9.
 
     Es un cambio de comportamiento respecto al #9, que va a la tabla de T046.
-- [ ] T013 [US3] Implementar T012 en `src/due_diligence/hooks.py` (`_cierre` mira `espera_del_analista` antes que `evaluar_cierre`; `_informe_previo` añade el rechazo de la espera) y en `src/due_diligence/reglas.py` (`MOTIVO_INFORME_ESPERA_IDENTIFICADOR` y `MOTIVO_INFORME_ESPERA_NOMBRE`, con los textos de research R3).
-- [ ] T018 [P] [US3] Simulación por turnos en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py` (R12):
+- [X] T013 [US3] Implementar T012 en `src/due_diligence/hooks.py` (`_cierre` mira `espera_del_analista` antes que `evaluar_cierre`; `_informe_previo` añade el rechazo de la espera) y en `src/due_diligence/reglas.py` (`MOTIVO_INFORME_ESPERA_IDENTIFICADOR` y `MOTIVO_INFORME_ESPERA_NOMBRE`, con los textos de research R3).
+- [X] T018 [P] [US3] Simulación por turnos en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py` (R12):
   - `CoordinadorSimulado(guiones=[[…], […]])` consume un guion por llamada; `guion=[…]` sigue valiendo como un solo turno;
   - lee `options.resume` y lo deja en `self.reanudaciones`;
   - su `ResultMessage` lleva un `session_id` estable (`mensaje_de_resultado(session_id=…)`).
-- [ ] T014 [P] [US3] Tests en `src/due_diligence/test_coordinador.py` (R1, R2, R4, contrato):
+- [X] T014 [P] [US3] Tests en `src/due_diligence/test_coordinador.py` (R1, R2, R4, contrato):
   - **`ejecutar` y `continuar`**: `ejecutar(solicitud)` añade el mensaje y deja `mensaje_analista` («Mensaje 1 del analista.», sin repetir el texto). `continuar(mensaje)` lanza la consulta con `options.resume` igual al `session_id` del último `ResultMessage`, con el **mismo** `HooksDelCaso`, el mismo `Delegador` y el mismo `EstadoCaso`.
   - **Sin sesión**: sin `session_id` previo, `continuar` lanza `CasoSinSesion` con un mensaje en español, sin llamar a la consulta.
   - **Clasificación por turno**: `turnos_del_caso` tiene una `Clasificacion` por turno y `terminacion` es la del último.
@@ -141,16 +141,18 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - **Test R4 (b)**: el turno 1 agota las devoluciones. El turno 2 termina sin hacer nada. Resultado: la marca vuelve a quedar puesta y `completo` es falso.
 
   Los dos tests de R4 usan el `CoordinadorSimulado` de T018.
-- [ ] T015 [US3] Implementar T014 en `src/due_diligence/coordinador.py`:
+- [X] T015 [US3] Implementar T014 en `src/due_diligence/coordinador.py`:
   - `Caso.continuar`, `CasoSinSesion`, `session_id` del último `ResultMessage`;
   - `turnos_del_caso`, `espera`, el reinicio por turno y `completo` con la espera.
 
   `ejecutar` y `continuar` comparten un método privado que lanza el turno; no se duplica el bucle de mensajes.
-- [ ] T016 [P] [US3] Tests en `src/due_diligence/test_delegacion.py` y `test_hooks_sesiones.py` (FR-017):
+- [X] T016 [P] [US3] Tests en `src/due_diligence/test_delegacion.py` y `test_hooks_sesiones.py` (FR-017):
   - el registro delegado primero con «Almacén Mirador SAS» (dos coincidencias) y después con `CO-AM-0005` deja `estado.comercio` igual a `CO-AM-0005`;
   - `clase_identificacion` es `unica` y la delegación de listas se permite;
   - la identificación ambigua anterior no impide la nueva: la reinicia `_ejecutar` del registro, como desde el #7. El test lo fija con una `SesionSimulada` que ejecuta el hook del registro.
-- [ ] T017 [US3] Si T016 falla, corregir en `src/due_diligence/delegacion.py` o `estado.py` la consolidación, sin tocar I.1. Si pasa sin cambios, anotarlo aquí.
+- [X] T017 [US3] Si T016 falla, corregir en `src/due_diligence/delegacion.py` o `estado.py` la consolidación, sin tocar I.1. Si pasa sin cambios, anotarlo aquí.
+
+  **Resultado**: T016 pasó sin cambios de código; el reinicio de la identificación en `Delegador._ejecutar` del #7 ya lo garantizaba. Los dos tests están en `test_hooks_sesiones.py`, con un `Caso` real, porque la identificación solo la escribe el hook del registro. Con la mutación que quita `reiniciar_identificacion` fallan los dos (2 de 2); se restauró desde una copia propia, sin `git checkout`.
 - [ ] T019 [US3] Fase 3: ruff, la suite completa y los tests de T046 adaptados. Commit «esperas del analista y continuación del caso (#10, US3)».
 
 ---
@@ -351,6 +353,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_reglas.py`: `_libro_con`, `test_una_causa_nueva_posterior_al_escalamiento_no_queda_cubierta`, `test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar` y el informe mínimo tras escalar | `libro.escalamientos` pasa de `frozenset` a `Escalamiento(causas, comercio)` (R8). | Las mismas causas, envueltas en `Escalamiento(…, None)`: el libro solo, sin comercio. Las aserciones no cambian. |
   | `test_hooks.py`: el escalamiento exitoso, el informe tras escalar, el cierre con el escalamiento cubierto y el `Stop` que falla con el sello ya escalado | Lo mismo. | Igualdad exacta con `Escalamiento(frozenset(...), ("CO-TV-0001", "Tienda Verde SAS", True))`, o con `clave_comercio(estado)` donde el test construye el escalamiento. |
   | `test_hooks_sesiones.py` (casos a y c) y `test_casos_reglas.py` (caso a) | Lo mismo. | Igualdad exacta con el `Escalamiento` y la clave del comercio del caso (`CO-PL-0003` o `CO-TV-0001`). |
+  | `test_hooks.py::test_con_varias_coincidencias_o_ninguna_no_se_exige_informe` | Ahora es una espera del analista y deja `espera_analista` (R3). | Sigue exigiendo `permitir()`; los eventos pasan de `[]` a exactamente `[espera_analista]`. |
+  | `test_hooks.py::test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradicen`, variante de varias coincidencias | FR-016: el informe se rechaza durante la espera del identificador (es la fila del cambio respecto al #9). | Se separa en `test_con_varias_coincidencias_la_cobertura_y_los_conflictos_no_se_contradicen`: las mismas igualdades exactas de la cobertura (`registro: cubierto.`) y de los conflictos, con los cálculos puros que pondría el hook, y el rechazo con el motivo exacto. Las variantes «en curso» y «caído» no cambian. |
+  | `test_coordinador.py::test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos` | Cada turno empieza con `mensaje_analista` (R2). | La secuencia exacta añade `("mensaje_analista", None)` tras `caso_iniciado`. |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

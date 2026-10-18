@@ -825,3 +825,131 @@ def test_con_el_sello_y_sin_otras_causas_el_cierre_exige_escalar():
         "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
         "fallo de un hook de verificación."
     )
+
+
+# ------------------------------------------------------------ #10: esperas del analista (T010)
+
+COINCIDENCIAS_PARECIDAS = ("CO-AM-0004", "CO-AM-0005")
+
+
+def _registro_caido():
+    estado = _estado_con_registro(Situacion.NO_TERMINADO, identificar=False)
+    estado.errores[Frente.REGISTRO] = {"causa": "terminacion_anomala", "reintentable": False}
+    return estado
+
+
+def _con_categoria_bloqueada(estado):
+    estado.categoria_bloqueada = True
+    return estado
+
+
+def test_varias_coincidencias_es_la_espera_del_identificador():
+    from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR, Espera, espera_del_analista
+
+    estado = _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    assert espera_del_analista(estado) == Espera("identificador", MOTIVO_ESPERA_IDENTIFICADOR)
+
+
+def test_ninguna_coincidencia_es_la_espera_del_nombre():
+    from due_diligence.reglas import MOTIVO_ESPERA_NOMBRE, Espera, espera_del_analista
+
+    estado = _estado_con_registro(Situacion.TERMINADO)  # respuesta sin comercios
+    assert espera_del_analista(estado) == Espera("nombre", MOTIVO_ESPERA_NOMBRE)
+
+
+def test_d3_del_9_unica_e_invalida_no_son_espera():
+    from due_diligence.reglas import espera_del_analista
+
+    assert espera_del_analista(_con_comercio()) is None
+    otra = {**comercio_alto_riesgo(), "nombre": "Tienda Verde Ltda"}
+    contradictoria = _estado_con_registro(Situacion.TERMINADO, identificar=False)
+    contradictoria.registrar_identificacion(
+        {
+            "resultado": "coincidencias",
+            "hechos": [
+                {"contenido": comercio_alto_riesgo(), "metadatos": {}},
+                {"contenido": otra, "metadatos": {}},
+            ],
+            "coincidencias": ["CO-TV-0001"],
+        }
+    )
+    assert contradictoria.clase_identificacion == "contradictoria"
+    assert espera_del_analista(contradictoria) is None
+    invalida = _estado_con_registro(Situacion.TERMINADO, identificar=False)
+    invalida.registrar_identificacion({"hola": 1})
+    assert invalida.clase_identificacion == "invalida" and espera_del_analista(invalida) is None
+
+
+@pytest.mark.parametrize(
+    "situacion", [Situacion.SIN_INICIAR, Situacion.EN_CURSO, Situacion.RECHAZADO]
+)
+def test_un_registro_que_no_termino_no_es_espera(situacion):
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _estado_con_registro(situacion, identificar=False)
+    assert espera_del_analista(estado) is None
+
+
+def test_el_registro_caido_por_si_solo_no_es_espera():
+    from due_diligence.reglas import espera_del_analista
+
+    assert espera_del_analista(_registro_caido()) is None
+
+
+@pytest.mark.parametrize("estado_base", ["identificado", "caido", "sin_delegar"])
+def test_la_categoria_bloqueada_sin_resultado_es_espera_con_cualquier_registro(estado_base):
+    from due_diligence.reglas import MOTIVO_ESPERA_CATEGORIA, Espera, espera_del_analista
+
+    estado = {
+        "identificado": _con_comercio,
+        "caido": _registro_caido,
+        "sin_delegar": lambda: _estado_con_registro(Situacion.SIN_INICIAR, identificar=False),
+    }[estado_base]()
+    _con_categoria_bloqueada(estado)
+    assert espera_del_analista(estado) == Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
+
+
+@pytest.mark.parametrize("nivel", ["bajo", None])
+def test_con_un_resultado_de_categoria_no_hay_espera_de_categoria(nivel):
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _con_categoria_bloqueada(_con_comercio())
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("ropa y accesorios", nivel))
+    assert espera_del_analista(estado) is None
+
+
+def test_con_varias_coincidencias_y_la_categoria_bloqueada_prevalece_el_identificador():
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _con_categoria_bloqueada(
+        _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    )
+    assert espera_del_analista(estado).clase == "identificador"
+
+
+def test_los_motivos_de_espera_no_repiten_las_coincidencias():
+    from due_diligence.reglas import (
+        MOTIVO_ESPERA_CATEGORIA,
+        MOTIVO_ESPERA_IDENTIFICADOR,
+        MOTIVO_ESPERA_NOMBRE,
+        espera_del_analista,
+    )
+
+    estado = _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    for texto in (
+        espera_del_analista(estado).motivo,
+        MOTIVO_ESPERA_IDENTIFICADOR,
+        MOTIVO_ESPERA_NOMBRE,
+        MOTIVO_ESPERA_CATEGORIA,
+    ):
+        assert not any(c in texto for c in COINCIDENCIAS_PARECIDAS)
+        assert "Almacén Mirador" not in texto
+
+
+def test_el_motivo_sin_comercio_lee_la_clase_y_no_el_texto(monkeypatch):
+    from due_diligence.reglas import MOTIVO_VARIAS_COINCIDENCIAS, _motivo_sin_comercio
+
+    estado = _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    # Un motivo del registro con otro texto: la clase sigue diciendo `varias`.
+    monkeypatch.setattr(type(estado), "motivo_comercio", property(lambda self: "otro texto"))
+    assert _motivo_sin_comercio(estado) == MOTIVO_VARIAS_COINCIDENCIAS

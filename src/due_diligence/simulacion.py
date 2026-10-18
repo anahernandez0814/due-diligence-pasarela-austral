@@ -612,6 +612,7 @@ def mensaje_de_resultado(
     stop_reason: str = "end_turn",
     terminal: str = "completed",
     num_turns: int = 1,
+    session_id: str = "sesion-de-prueba",
 ) -> ResultMessage:
     """Un `ResultMessage` del SDK: por defecto, un fin normal en un turno."""
     return ResultMessage(
@@ -620,7 +621,7 @@ def mensaje_de_resultado(
         duration_api_ms=1,
         is_error=subtype != "success",
         num_turns=num_turns,
-        session_id="sesion-de-prueba",
+        session_id=session_id,
         stop_reason=stop_reason,
         terminal_reason=terminal,
     )
@@ -644,15 +645,28 @@ class CoordinadorSimulado:
       las llamadas de un mismo mensaje; su resultado es la lista de resultados, en orden.
 
     El resultado de cada paso queda en `pasos`, como `(tipo, resultado)`.
+
+    Por turnos (#10, R12): `guiones=[[…], […]]` da un guion por llamada, como cada `query()` del
+    `Caso` (`ejecutar` y después `continuar`). `guion=[…]` es un solo turno, como hasta el #9; una
+    llamada de más que los guiones no ejecuta ningún paso. `reanudaciones` guarda el `resume` de
+    las opciones de cada llamada, y el `ResultMessage` lleva siempre el mismo `session_id`.
     """
+
+    SESION = "sesion-de-prueba"
 
     def __init__(
         self,
-        guion: list[tuple[Any, ...]],
+        guion: list[tuple[Any, ...]] | None = None,
         pasarela: "PasarelaSimulada | None" = None,
         texto: str = "Resumen para el analista.",
+        *,
+        guiones: list[list[tuple[Any, ...]]] | None = None,
     ) -> None:
-        self.guion = list(guion)
+        if guion is not None and guiones is not None:
+            raise ValueError("Pasa guion o guiones, no los dos.")
+        self.guiones = [list(g) for g in guiones] if guiones is not None else [list(guion or [])]
+        self.guion = self.guiones[0]
+        self.reanudaciones: list[str | None] = []
         self.pasarela = pasarela or PasarelaSimulada()
         self.texto = texto
         self.caso: Any = None
@@ -703,7 +717,10 @@ class CoordinadorSimulado:
         }
         sesion = SesionSimulada(options, herramientas)
         self.sesion = sesion
-        for paso in self.guion:
+        turno = len(self.reanudaciones)
+        self.reanudaciones.append(getattr(options, "resume", None))
+        guion = self.guiones[turno] if turno < len(self.guiones) else []
+        for paso in guion:
             self.pasos.append((paso[0], await self._paso(sesion, paso)))
         yield AssistantMessage(content=[TextBlock(self.texto)], model="simulado")
-        yield mensaje_de_resultado()
+        yield mensaje_de_resultado(session_id=self.SESION)

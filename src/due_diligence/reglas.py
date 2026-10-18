@@ -107,15 +107,89 @@ MOTIVO_CONSULTA_AJENA = (
 def _motivo_sin_comercio(estado: EstadoCaso) -> str:
     """El motivo de que no haya un comercio único, con textos fijos: no repite nada consultado.
 
-    Se apoya en `estado.motivo_comercio` solo para distinguir la causa (varias coincidencias,
-    ninguna) y devuelve siempre un texto propio, sin los identificadores que traiga el del registro.
+    Se apoya en `estado.clase_identificacion` (#10, R3) para distinguir la causa (varias
+    coincidencias, ninguna), no en subcadenas del motivo del registro, y devuelve siempre un texto
+    propio, sin los identificadores que traiga ese motivo.
     """
-    motivo = estado.motivo_comercio
-    if "varias coincidencias" in motivo:
+    clase = estado.clase_identificacion
+    if clase == "varias":
         return MOTIVO_VARIAS_COINCIDENCIAS
-    if "ninguna coincidencia" in motivo:
+    if clase == "ninguna":
         return MOTIVO_SIN_COINCIDENCIAS
     return MOTIVO_SIN_COMERCIO
+
+
+# ------------------------------------------------------------ esperas del analista (#10, R3)
+
+MOTIVO_ESPERA_IDENTIFICADOR = (
+    "El registro devolvió varias coincidencias: el caso espera el identificador del analista."
+)
+MOTIVO_ESPERA_NOMBRE = (
+    "El registro no encontró el comercio: el caso espera que el analista revise el nombre."
+)
+MOTIVO_ESPERA_CATEGORIA = (
+    "La categoría no aparece en los mensajes del analista: el caso espera la categoría."
+)
+
+
+class Espera(NamedTuple):
+    """Un fin de turno que espera un dato del analista (#10, R3, data-model).
+
+    `clase` es `identificador`, `nombre` o `categoria`; `motivo`, un texto fijo sin datos del caso.
+    """
+
+    clase: str
+    motivo: str
+
+
+MOTIVO_INFORME_ESPERA_IDENTIFICADOR = (
+    "El registro devolvió varias coincidencias: pida el identificador al analista antes de "
+    "registrar el informe."
+)
+MOTIVO_INFORME_ESPERA_NOMBRE = (
+    "El registro no encontró el comercio: pida al analista que revise el nombre antes de "
+    "registrar el informe."
+)
+# Regla de los rechazos por una espera del analista: el principio V (pedir el identificador en vez
+# de elegir), que no es ninguna de las reglas I.1 a I.5.
+REGLA_ESPERA = "V"
+
+
+def espera_del_analista(estado: EstadoCaso) -> Espera | None:
+    """La espera del analista que el código comprueba en el estado, o `None` (FR-014, R3).
+
+    - `identificador`: el registro terminó con varias coincidencias.
+    - `nombre`: el registro terminó sin ninguna coincidencia.
+    - `categoria`: la última delegación de categoría la bloqueó FR-020 y el caso no tiene ningún
+      resultado de categoría. Vale con cualquier estado del registro, también el caído.
+
+    Las del registro prevalecen. Ninguna otra situación es una espera: ni el registro caído, que
+    por sí solo exige reintentar o informar, ni las fuentes que difieren en el nombre o el
+    representante (D3 del #9, `contradictoria`). Es pura: no escribe nada.
+    """
+    clase = estado.clase_identificacion
+    if clase == "varias":
+        return Espera("identificador", MOTIVO_ESPERA_IDENTIFICADOR)
+    if clase == "ninguna":
+        return Espera("nombre", MOTIVO_ESPERA_NOMBRE)
+    if estado.categoria_bloqueada and not estado.libro.consultas_riesgo:
+        return Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
+    return None
+
+
+def motivo_del_informe_en_espera(estado: EstadoCaso) -> "Rechazo | None":
+    """El rechazo del informe durante la espera del identificador o del nombre (FR-016, R3).
+
+    `None` sin espera o con la espera de la categoría, en la que el informe sigue las reglas de
+    siempre. Cambio respecto al #9, que aceptaba el informe con el comercio pedido ante varias
+    coincidencias.
+    """
+    espera = espera_del_analista(estado)
+    if espera is None or espera.clase == "categoria":
+        return None
+    if espera.clase == "identificador":
+        return Rechazo(MOTIVO_INFORME_ESPERA_IDENTIFICADOR, REGLA_ESPERA)
+    return Rechazo(MOTIVO_INFORME_ESPERA_NOMBRE, REGLA_ESPERA)
 
 
 def permite_listas(estado: EstadoCaso, entrada: Any) -> tuple[bool, str]:

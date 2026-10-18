@@ -1761,14 +1761,31 @@ def _registro_caido_en_el_estado(estado):
     }
 
 
+def test_con_varias_coincidencias_la_cobertura_y_los_conflictos_no_se_contradicen():
+    # La variante de varias coincidencias del test siguiente (#9). Desde el #10 (FR-016) el informe
+    # se rechaza durante la espera del identificador, así que la cobertura y los conflictos se
+    # comprueban con los cálculos puros que el hook pondría, con las mismas igualdades exactas.
+    from due_diligence.conflictos import calcular_conflictos
+    from due_diligence.reglas import MOTIVO_INFORME_ESPERA_IDENTIFICADOR
+
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    lineas = calcular_cobertura(estado).lineas()
+    assert lineas[1 + list(Frente).index(Frente.REGISTRO)] == "registro: cubierto."
+    assert calcular_conflictos(estado).resumen == (
+        "No se compararon las fuentes registrales: no hay comercio identificado."
+    )
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _rechazo(salida)["motivos"] == [
+        {"regla": "V", "texto": MOTIVO_INFORME_ESPERA_IDENTIFICADOR}
+    ]
+
+
 @pytest.mark.parametrize(
     ("preparar", "linea_registro", "resumen"),
     [
-        (
-            _registro_con_varias_coincidencias,
-            "registro: cubierto.",
-            "No se compararon las fuentes registrales: no hay comercio identificado.",
-        ),
         (
             _registro_en_curso,
             "registro: no cubierto; seguía en curso.",
@@ -2057,11 +2074,14 @@ def test_sin_escalar_ni_informe_primero_el_escalamiento_y_luego_el_informe():
     "respuesta", [respuesta_registro(*comercios_parecidos()), respuesta_registro()]
 )
 def test_con_varias_coincidencias_o_ninguna_no_se_exige_informe(respuesta):
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
     estado, eventos, hooks = _caso()
     _registro_terminado(estado)
     estado.registrar_identificacion(respuesta)
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
-    assert eventos.eventos() == []
+    # Desde el #10 (R3) es una espera del analista: deja `espera_analista` y nada más.
+    assert [e.tipo for e in eventos.eventos()] == [TIPO_ESPERA_ANALISTA]
 
 
 def test_la_entrada_invalida_en_el_registro_no_exige_informe():
@@ -2353,3 +2373,139 @@ def test_ninguna_accion_repite_nombres_ni_identificadores():
     acciones = " ".join(e.accion or "" for e in eventos.eventos())
     for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía"):
         assert dato not in acciones
+
+
+# ---------------------------------------------- #10: esperas del analista en el Stop (T012)
+
+
+def _con_alto_riesgo(estado):
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    return estado
+
+
+def _registro_sin_coincidencias(estado):
+    _registro_terminado(estado)
+    respuesta = respuesta_registro()
+    estado.registrar_identificacion(respuesta)
+    estado.agregar_consultas([consulta(Frente.REGISTRO, {"nombre": "Almacén Mirado"}, respuesta)])
+
+
+def _eventos_de(eventos, tipo):
+    return [e for e in eventos.eventos() if e.tipo == tipo]
+
+
+@pytest.mark.parametrize(
+    ("preparar", "motivo"),
+    [
+        (_registro_con_varias_coincidencias, "MOTIVO_ESPERA_IDENTIFICADOR"),
+        (_registro_sin_coincidencias, "MOTIVO_ESPERA_NOMBRE"),
+    ],
+)
+def test_el_stop_admite_la_espera_del_registro_sin_escalar_ni_gastar_devoluciones(preparar, motivo):
+    from due_diligence import reglas
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _caso()
+    preparar(estado)
+    _con_alto_riesgo(estado)  # el caso exige escalar, pero falta el dato del analista
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    (evento,) = _eventos_de(eventos, TIPO_ESPERA_ANALISTA)
+    assert evento.detalle == getattr(reglas, motivo)
+    assert estado.libro.cierres_impedidos == 0
+    assert estado.cierre_sin_escalar is False and estado.cierre_sin_informe is False
+    assert _eventos_de(eventos, TIPO_CIERRE_IMPEDIDO) == []
+
+
+def test_d3_del_9_no_es_espera_y_el_stop_exige_escalar():
+    estado, _, hooks = _caso()
+    _registro_terminado(estado)
+    otra = {**comercio_alto_riesgo(), "nombre": "Tienda Verde Ltda"}
+    estado.registrar_identificacion(
+        {
+            "resultado": "coincidencias",
+            "hechos": [
+                {"contenido": comercio_alto_riesgo(), "metadatos": {}},
+                {"contenido": otra, "metadatos": {}},
+            ],
+            "coincidencias": ["CO-TV-0001"],
+        }
+    )
+    _con_alto_riesgo(estado)
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida) and salida["reason"] == motivo_de_escalar({"alto_riesgo"})
+    assert estado.libro.cierres_impedidos == 1
+
+
+def test_con_el_sello_la_espera_del_identificador_se_sigue_admitiendo():
+    estado, _, hooks = _caso()
+    _registro_con_varias_coincidencias(estado)
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+
+
+def test_si_falla_el_calculo_de_la_espera_el_stop_bloquea(monkeypatch):
+    estado, _, hooks = _caso()
+    _registro_con_varias_coincidencias(estado)
+
+    def lanza(_estado):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr("due_diligence.hooks.espera_del_analista", lanza)
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida) and "detalle interno" not in salida["reason"]
+
+
+# -------------------------------------- #10: el informe durante la espera (T012, FR-016, I1)
+
+
+def _informe_del_caso(estado, recomendacion):
+    return {**_informe_de(recomendacion), "hallazgos": afirmaciones_del_caso(estado)}
+
+
+@pytest.mark.parametrize(
+    ("preparar", "motivo"),
+    [
+        (_registro_con_varias_coincidencias, "MOTIVO_INFORME_ESPERA_IDENTIFICADOR"),
+        (_registro_sin_coincidencias, "MOTIVO_INFORME_ESPERA_NOMBRE"),
+    ],
+)
+def test_el_informe_se_rechaza_mientras_se_espera_el_identificador_o_el_nombre(preparar, motivo):
+    from due_diligence import reglas
+
+    estado, eventos, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    preparar(estado)
+    entrada = _informe_del_caso(estado, "no_habilitar")  # válido en forma y en fuentes
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _es_denegacion(salida)
+    rechazo = _rechazo(salida)
+    assert rechazo["motivos"] == [{"regla": "V", "texto": getattr(reglas, motivo)}]
+    assert rechazo["problemas"] == []
+    (evento,) = _eventos_de(eventos, TIPO_BLOQUEO_REGLA)
+    assert evento.regla == "V"
+    assert estado.informes_pendientes == {}
+
+
+def test_en_la_espera_de_la_categoria_el_informe_sigue_las_reglas_de_siempre():
+    estado, _, hooks = _caso_con_comercio()
+    estado.categoria_bloqueada = True
+    entrada = _informe_del_caso(estado, "no_habilitar")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert not _es_denegacion(salida)
+    assert _sustituida(salida)["recomendacion"] == "no_habilitar"
+
+
+def test_con_el_sello_y_la_espera_el_informe_minimo_sigue_exigiendo_escalar_antes():
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = _informe_del_caso(estado, "decide_cumplimiento")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _es_denegacion(salida)
+    textos = [m["texto"] for m in _rechazo(salida)["motivos"]]
+    assert textos == [motivo_de_escalar({"fallo_de_hook"})]  # sin el motivo de la espera
+    estado.libro.escalamientos.append(
+        Escalamiento(causas_vigentes(estado.libro), clave_comercio(estado))
+    )
+    assert not _es_denegacion(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))

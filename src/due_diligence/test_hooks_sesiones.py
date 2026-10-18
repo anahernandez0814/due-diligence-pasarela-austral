@@ -466,3 +466,62 @@ def test_el_estado_sale_de_la_respuesta_de_la_herramienta_y_no_del_resumen_del_m
     asyncio.run(caso.ejecutar("solicitud"))
     assert len(caso.estado.libro.coincidencias) == 1
     assert "Sin coincidencias" in caso.estado.resultados[Frente.LISTAS].resumen
+
+
+# ------------------------------------- #10: la consulta con el identificador identifica (T016)
+
+
+def _registro_por_contexto(contexto):
+    """El registro según la entrada: el nombre ambiguo da dos coincidencias; el id, una."""
+    from due_diligence.simulacion import consulta, respuesta_registro, resultado_frente
+
+    parecidos = comercios_parecidos()
+    if "CO-AM-0005" in contexto:
+        argumentos, comercios = {"identificador": "CO-AM-0005"}, [parecidos[1]]
+    else:
+        argumentos, comercios = {"nombre": "Almacén Mirador SAS"}, parecidos
+    return resultado_frente(
+        Frente.REGISTRO,
+        [consulta(Frente.REGISTRO, argumentos, respuesta_registro(*comercios))],
+    )
+
+
+def test_tras_varias_coincidencias_la_consulta_con_el_identificador_identifica_al_comercio():
+    from due_diligence.reglas import permite_delegar_listas
+
+    caso = CasoReal(ejecutor=EjecutorSimulado(resultados={Frente.REGISTRO: _registro_por_contexto}))
+    delegador = caso.delegador
+    asyncio.run(delegador.delegar({"frente": "registro", "nombre": "Almacén Mirador SAS"}))
+    assert caso.estado.comercio is None and caso.estado.clase_identificacion == "varias"
+    assert permite_delegar_listas(caso.estado)[0] is False
+    asyncio.run(delegador.delegar({"frente": "registro", "identificador": "CO-AM-0005"}))
+    assert caso.estado.comercio["identificador"] == "CO-AM-0005"
+    assert caso.estado.clase_identificacion == "unica"
+    # La identificación ambigua anterior no queda: `_ejecutar` del registro la reinicia (#7).
+    assert [i.clase for i in caso.estado.identificaciones] == ["unica"]
+    assert permite_delegar_listas(caso.estado) == (True, "")
+
+
+def test_tras_identificar_listas_se_delega_y_consulta_al_comercio_y_al_representante():
+    from due_diligence.simulacion import consulta_listas, resultado_frente
+
+    listas = resultado_frente(
+        Frente.LISTAS,
+        [
+            consulta_listas("comercio", identificador="CO-AM-0005"),
+            consulta_listas("persona", identificador="PE-0005"),
+        ],
+    )
+    caso = CasoReal(
+        ejecutor=EjecutorSimulado(
+            resultados={Frente.REGISTRO: _registro_por_contexto, Frente.LISTAS: listas}
+        )
+    )
+    delegador = caso.delegador
+    asyncio.run(delegador.delegar({"frente": "registro", "nombre": "Almacén Mirador SAS"}))
+    rechazo = asyncio.run(delegador.delegar({"frente": "listas"}))
+    assert rechazo["error"] is True and rechazo["reintentable"] is False
+    asyncio.run(delegador.delegar({"frente": "registro", "identificador": "CO-AM-0005"}))
+    respuesta = asyncio.run(delegador.delegar({"frente": "listas"}))
+    assert respuesta["situacion"] == "terminado"
+    assert caso.estado.situacion(Frente.LISTAS) is Situacion.TERMINADO

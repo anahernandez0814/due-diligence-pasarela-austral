@@ -57,6 +57,17 @@ def test_con_demo_activa_se_quitan_la_regla_3_y_la_instruccion_de_escalar():
     assert "varias coincidencias" not in texto
 
 
+def test_con_demo_activa_las_afirmaciones_no_traen_guia_de_escalamiento():
+    # #9: la guía de las afirmaciones está en los dos modos, pero sin el orden escalar-informe.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    texto = instrucciones_coordinador(demo=True)
+    assert _REGLA_AFIRMACIONES in texto
+    assert "escalar" not in _REGLA_AFIRMACIONES
+    assert "escalar" not in texto.casefold()
+    assert "después de escalar" in INSTRUCCIONES_COORDINADOR
+
+
 def test_con_demo_activa_se_conservan_la_delegacion_el_resumen_y_el_registro_del_informe():
     texto = instrucciones_coordinador(demo=True)
     assert "delegar_frente" in texto and "en la misma respuesta" in texto

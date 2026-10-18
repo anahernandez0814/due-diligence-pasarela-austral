@@ -822,8 +822,10 @@ def test_las_instrucciones_guian_las_afirmaciones_del_informe():
         "fuentes que consultaste para ese frente",
         "Cada frente cubierto lleva al menos una afirmación, también si no hubo hallazgos",
         "El comercio, los conflictos entre fuentes y la cobertura los pone el sistema",
-        "después de escalar",
         "reintenta el registro o registra el informe",
     ):
         assert fragmento in _REGLA_AFIRMACIONES, fragmento
     assert _REGLA_AFIRMACIONES in INSTRUCCIONES_COORDINADOR
+    assert (
+        "Si hay que escalar, registra el informe después de escalar." in INSTRUCCIONES_COORDINADOR
+    )

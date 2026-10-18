@@ -113,10 +113,13 @@ _REGLA_AFIRMACIONES = (
     "afirmación, también si no hubo hallazgos (por ejemplo, sin coincidencias); un frente que no "
     "quedó cubierto puede ir sin afirmaciones. El comercio, los conflictos entre fuentes y la "
     "cobertura los pone el "
-    "sistema: no elijas entre valores que se contradicen. Si hay que escalar, registra el informe "
-    "después de escalar. Si el registro mercantil no responde, reintenta el registro o registra "
-    "el informe con el comercio que pidió el analista."
+    "sistema: no elijas entre valores que se contradicen. Si el registro mercantil no responde, "
+    "reintenta el registro o registra el informe con el comercio que pidió el analista."
 )
+
+# Orden entre escalar e informe: es guía de escalamiento (reglas I.2 e I.3), así que el modo de
+# demostración la quita con `_REGLA_ESCALAR`. La garantía es el hook de `registrar_informe`.
+_REGLA_INFORME_TRAS_ESCALAR = "Si hay que escalar, registra el informe después de escalar."
 
 _REGLA_RESUMEN = (
     "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
@@ -149,7 +152,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
-            _REGLA_AFIRMACIONES,
+            f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))

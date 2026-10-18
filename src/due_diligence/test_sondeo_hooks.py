@@ -181,7 +181,7 @@ def test_el_hook_del_informe_acepta_la_entrada_de_g4_y_pone_los_datos_del_codigo
     import asyncio
 
     from due_diligence.cobertura import calcular_cobertura
-    from due_diligence.conflictos import no_comparables
+    from due_diligence.conflictos import sin_comparar
 
     estado, hooks = sondeo_hooks.caso_del_sondeo_de_cobertura()
     (matcher,) = [m for m in hooks.coordinador()["PreToolUse"] if m.matcher == sondeo_hooks.INFORME]
@@ -200,7 +200,8 @@ def test_el_hook_del_informe_acepta_la_entrada_de_g4_y_pone_los_datos_del_codigo
         },
         "recomendacion": "no_habilitar",
         "hallazgos": sondeo_hooks.ENTRADA_INFORME["hallazgos"],
-        "conflictos": no_comparables().como_entrada(),
+        # El registro del sondeo no se delegó: no hay comercio identificado (no está caído).
+        "conflictos": sin_comparar("sin_comercio").como_entrada(),
         "cobertura": calcular_cobertura(estado).lineas(),
     }
 

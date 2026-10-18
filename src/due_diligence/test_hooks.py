@@ -72,6 +72,12 @@ MAX_CIERRES_IMPEDIDOS = configuracion.MAX_CIERRES_IMPEDIDOS
 MAX_TURNOS_SEGURIDAD = configuracion.MAX_TURNOS_SEGURIDAD
 
 
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
+
+
 def _caso():
     estado = EstadoCaso("solicitud")
     eventos = RegistroEventos()
@@ -1551,11 +1557,73 @@ def test_sin_comercio_identificado_va_el_pedido_sin_verificar():
         entrada,
         estado,
         comercio={"identificador": None, "nombre": "Taller Aurora SAS", "verificado": False},
+        # El registro no se delegó: no hay comercio identificado, pero no está caído.
         conflictos={
-            "resumen": "No se pudieron comparar las fuentes registrales: el registro no respondió.",
+            "resumen": "No se compararon las fuentes registrales: no hay comercio identificado.",
             "lista": [],
         },
     )
+
+
+def _registro_con_varias_coincidencias(estado):
+    _registro_terminado(estado)
+    respuesta = respuesta_registro(*comercios_parecidos())
+    estado.registrar_identificacion(respuesta)
+    estado.agregar_consultas([consulta(Frente.REGISTRO, {"nombre": "Almacén Mirador"}, respuesta)])
+
+
+def _registro_en_curso(estado):
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+
+
+def _registro_caido_en_el_estado(estado):
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO, "caído")
+    estado.errores[Frente.REGISTRO] = {
+        "causa": "error_de_fuente",
+        "reintentable": False,
+        "obtenido": {"errores": [{"tipo": "servicio_no_disponible"}]},
+    }
+
+
+@pytest.mark.parametrize(
+    ("preparar", "linea_registro", "resumen"),
+    [
+        (
+            _registro_con_varias_coincidencias,
+            "registro: cubierto.",
+            "No se compararon las fuentes registrales: no hay comercio identificado.",
+        ),
+        (
+            _registro_en_curso,
+            "registro: no cubierto; seguía en curso.",
+            "No se compararon las fuentes registrales: no hay comercio identificado.",
+        ),
+        (
+            _registro_caido_en_el_estado,
+            "registro: no cubierto; error de la fuente (servicio_no_disponible).",
+            "No se pudieron comparar las fuentes registrales: el registro no respondió.",
+        ),
+    ],
+)
+def test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradicen(
+    preparar, linea_registro, resumen
+):
+    # Bloqueante de la revisión del #9: con varias coincidencias el registro respondió (cobertura
+    # «cubierto») y en curso aún no terminó; solo el registro caído dice que no respondió.
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    preparar(estado)
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {}}
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    comercio = {"identificador": None, "nombre": "Almacén Mirador", "verificado": False}
+    conflictos = {"resumen": resumen, "lista": []}
+    _comprobar_informe_aceptado(salida, entrada, estado, comercio=comercio, conflictos=conflictos)
+    sustituida = _sustituida(salida)
+    registro = sustituida["cobertura"][1 + list(Frente).index(Frente.REGISTRO)]
+    assert registro == linea_registro
+    no_respondio = "no respondió" in sustituida["conflictos"]["resumen"]
+    assert no_respondio == registro.startswith("registro: no cubierto; error de la fuente")
 
 
 def test_sin_comercio_identificado_ni_pedido_el_informe_se_rechaza():
@@ -1647,6 +1715,22 @@ def test_el_pretooluse_deja_la_huella_pendiente_y_el_post_la_confirma():
         "Informe INF-0007 registrado; recomendación: no_habilitar; cobertura incompleta, "
         "1 de 4 frentes; sin conflictos."
     )
+
+
+def test_la_recomendacion_queda_en_su_forma_canonica_en_la_pasarela_el_informe_y_el_evento():
+    # FR-011: el modelo escribe «No-Habilitar»; lo que se registra es `no_habilitar`.
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = _informe_de("No-Habilitar")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    _comprobar_informe_aceptado(salida, {**entrada, "recomendacion": "no_habilitar"}, estado)
+    assert estado.informes_pendientes["t1"][1] == "no_habilitar"
+    respuesta = respuesta_de_decision("informe_registrado", "INF-0003")
+    _ejecutar(_post_del_informe(hooks), _post_de(INFORME, respuesta, _sustituida(salida)))
+    assert estado.informes[-1].recomendacion == "no_habilitar"
+    registrado = eventos.eventos()[-1]
+    assert registrado.tipo == TIPO_INFORME_REGISTRADO
+    assert "recomendación: no_habilitar;" in registrado.detalle
+    assert "No-Habilitar" not in registrado.detalle
 
 
 def test_un_post_con_error_descarta_la_pendiente_sin_evento_de_informe():

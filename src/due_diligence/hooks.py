@@ -25,7 +25,7 @@ from claude_agent_sdk import HookMatcher
 
 from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
 from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
-from due_diligence.conflictos import calcular_conflictos, no_calculados
+from due_diligence.conflictos import SIN_COMPARAR, calcular_conflictos, no_calculados
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
@@ -180,7 +180,7 @@ def _resumen_de_huella(huella: Huella) -> str:
     completa = "completa" if cubiertos == total else "incompleta"
     cobertura = f"cobertura {completa}, {cubiertos} de {total} frentes"
     estado, lista = huella.conflictos
-    if estado == "no_comparables":
+    if estado in SIN_COMPARAR:
         conflictos = "fuentes registrales no comparadas"
     elif not lista:
         conflictos = "sin conflictos"
@@ -627,7 +627,9 @@ class HooksDelCaso:
         Junta en un solo rechazo estructurado las reglas del #7 (`evaluar_informe`), la forma del
         informe (`validar_informe`, la misma de la pasarela) y la fuente consultada de cada
         afirmación (FR-004). Si acepta, la entrada completa lleva el comercio, los conflictos y la
-        cobertura del código, y `hallazgos` y `recomendacion` tal como los envió el coordinador.
+        cobertura del código, `hallazgos` tal como los envió el coordinador y `recomendacion` en su
+        forma canónica (FR-011: `No-Habilitar` llega como `no_habilitar` a la pasarela, al informe
+        registrado y al evento).
         """
         # Con el sello (#9, R9, FR-014): solo el informe mínimo, `decide_cumplimiento` tras
         # escalar, con la cobertura y los conflictos en textos fijos y sin calcularlos.
@@ -644,9 +646,11 @@ class HooksDelCaso:
             rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_INFORME, None))
         cobertura = None if sellado else calcular_cobertura(self.estado)
         conflictos = None if sellado else calcular_conflictos(self.estado)
+        # Una recomendación no válida ya la rechazan las reglas: va tal cual al rechazo.
+        recomendacion = argumentos.get("recomendacion")
         completa = {
             "comercio": comercio,
-            "recomendacion": argumentos.get("recomendacion"),
+            "recomendacion": normalizar_recomendacion(recomendacion) or recomendacion,
             "hallazgos": argumentos.get("hallazgos"),
             "conflictos": (conflictos or no_calculados()).como_entrada(),
             "cobertura": cobertura.lineas() if cobertura else [COBERTURA_NO_CALCULADA],

@@ -7,6 +7,7 @@ entorno real (`cargar_entorno` se parchea).
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from due_diligence import __main__ as principal
@@ -20,6 +21,12 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.simulacion import EjecutorSimulado, resultado_frente
+
+
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
 
 
 def _fin(stop_reason="end_turn", coste=0.5):

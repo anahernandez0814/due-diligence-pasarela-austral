@@ -99,8 +99,13 @@ def turnos_usados(turnos: int | None) -> str:
 # hook y no se reenvía al servidor de la pasarela.
 VARIABLE_MODO_DEMO = "PASARELA_MODO_DEMO_HOOKS"
 
-# Variables del servidor `pasarela` que se reenvían a su proceso si están definidas (#5).
-VARIABLES_PASARELA = ("PASARELA_FALLA_NOTICIAS", "PASARELA_RESULTADOS_DIR")
+# Variables del servidor `pasarela` que se reenvían a su proceso si están definidas (#5; el #9
+# añade la caída simulada del registro, pareja de la de noticias).
+VARIABLES_PASARELA = (
+    "PASARELA_FALLA_NOTICIAS",
+    "PASARELA_FALLA_REGISTRO",
+    "PASARELA_RESULTADOS_DIR",
+)
 
 
 def _modelo(variable: str, entorno: Mapping[str, str] | None) -> str:

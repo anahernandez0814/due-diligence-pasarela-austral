@@ -24,6 +24,7 @@ from due_diligence.informe import (
 )
 from due_diligence.libro import Coincidencia
 from due_diligence.simulacion import (
+    comercios_parecidos,
     consulta,
     consulta_listas,
     error_estructurado,
@@ -34,6 +35,12 @@ from servidor_mcp.informe import FRENTES_INFORME, Problema
 
 SUR = "Registro Mercantil Ficticio del Sur"
 LISTA = "Lista Restrictiva Ficticia"
+
+
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
 
 
 def _afirmacion(fuente, fecha="2026-09-30"):
@@ -219,6 +226,24 @@ def test_un_conflicto_nuevo_cambia_la_huella():
     assert cambios(antes, huella_actual(estado)) == ["los conflictos"]
 
 
+def test_del_registro_en_curso_al_registro_caido_solo_cambian_los_conflictos():
+    # Bloqueante de la revisión del #9: los dos van sin comercio identificado y con el registro no
+    # cubierto, pero solo el caído dice que no respondió. La huella los distingue por el estado de
+    # los conflictos, así que un informe registrado con uno no queda vigente con el otro.
+    estado = EstadoCaso()
+    estado.comercio_pedido = {"identificador": "CO-TA-0002", "nombre": None}
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    antes = huella_actual(estado)
+    assert antes.conflictos == ("sin_comercio", ())
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO, "caído")
+    estado.errores[Frente.REGISTRO] = _error_registro(
+        Causa.ERROR_DE_FUENTE, ("servicio_no_disponible",)
+    )
+    despues = huella_actual(estado)
+    assert despues.conflictos == ("registro_caido", ())
+    assert cambios(antes, despues) == ["los conflictos"]
+
+
 def test_con_el_caso_sellado_la_huella_no_calcula_cobertura_ni_conflictos(monkeypatch):
     estado = EstadoCaso()
     estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
@@ -291,8 +316,9 @@ def test_requiere_informe_con_comercio_identificado_y_no_con_varias_o_ninguna():
     estado = EstadoCaso()
     _con_registro_identificado(estado)
     assert requiere_informe(estado) is True
-    ninguna = EstadoCaso()
-    ninguna.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
-    ninguna.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
-    ninguna.registrar_identificacion(respuesta_registro())
-    assert requiere_informe(ninguna) is False
+    for respuesta in (respuesta_registro(*comercios_parecidos()), respuesta_registro()):
+        sin_comercio = EstadoCaso()
+        sin_comercio.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+        sin_comercio.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+        sin_comercio.registrar_identificacion(respuesta)
+        assert requiere_informe(sin_comercio) is False

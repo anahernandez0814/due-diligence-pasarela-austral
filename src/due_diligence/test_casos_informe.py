@@ -11,9 +11,18 @@ import pytest
 
 from due_diligence.coordinador import Caso
 from due_diligence.estado import Situacion
-from due_diligence.eventos import TIPO_CIERRE_IMPEDIDO, TIPO_INFORME_REGISTRADO
+from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_INFORME_REGISTRADO,
+)
 from due_diligence.frentes import Frente
-from due_diligence.reglas import MOTIVO_REGISTRO_REINTENTABLE, MOTIVO_SIN_INFORME
+from due_diligence.hooks import ACCION_DELEGAR_LISTAS
+from due_diligence.reglas import (
+    MOTIVO_REGISTRO_REINTENTABLE,
+    MOTIVO_SIN_COMERCIO,
+    MOTIVO_SIN_INFORME,
+)
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
@@ -49,6 +58,12 @@ class EjecutorConEspera(EjecutorSimulado):
         if frente is Frente.NOTICIAS and self.llamadas_de(Frente.NOTICIAS):
             await self.soltar.wait()
         return await super().__call__(frente, contexto, opciones)
+
+
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
 
 
 def _resultados_con_noticias_que_se_recuperan():
@@ -351,6 +366,13 @@ def test_registro_caido_el_cierre_exige_reintentar_o_registrar_el_informe_sin_ve
     assert (primero.termino, primero.motivo) == (False, MOTIVO_REGISTRO_REINTENTABLE)
     assert (segundo.termino, segundo.motivo) == (False, MOTIVO_SIN_INFORME)
     assert tercero.termino is True
+    # I.1: con el registro caído no hay comercio identificado y listas no se delega.
+    _, listas = coordinador.resultados_de("delegar")
+    assert listas.denegada and not listas.ejecutada
+    assert listas.motivo == MOTIVO_SIN_COMERCIO
+    (bloqueo,) = [e for e in caso.eventos() if e.tipo == TIPO_BLOQUEO_REGLA and e.regla == "I.1"]
+    assert bloqueo.accion == ACCION_DELEGAR_LISTAS
+    assert caso.estado.situacion(Frente.LISTAS) is Situacion.SIN_INICIAR
     habilitar, no_habilitar = coordinador.resultados_de("informe")
     assert habilitar.denegada and not no_habilitar.denegada
     (informe,) = coordinador.pasarela.informes

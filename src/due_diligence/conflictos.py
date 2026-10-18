@@ -7,6 +7,11 @@ fuente. Hay conflicto cuando dos o más fuentes traen valores distintos del mism
 
 Los valores van en el orden de la respuesta de la pasarela, que **no indica precedencia**: el
 código no elige ninguno (I.4). Los resúmenes son textos fijos y no repiten datos del comercio.
+
+Sin comparación, el estado dice por qué, para que el resumen sea verdadero y la huella distinga los
+casos si después se vuelve a delegar el registro: `registro_caido` (la fuente no respondió),
+`sin_comercio` (respondió o no terminó, pero no hay comercio identificado) y `sin_consulta` (hay
+comercio, pero ninguna consulta válida del registro lo trae).
 """
 
 import json
@@ -14,18 +19,31 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from due_diligence.cobertura import registro_caido
 from due_diligence.estado import EstadoCaso
 from due_diligence.frentes import Frente
 
 RESUMEN_SIN_CONFLICTOS = "Sin conflictos entre las fuentes registrales."
-RESUMEN_NO_COMPARABLES = (
+RESUMEN_REGISTRO_CAIDO = (
     "No se pudieron comparar las fuentes registrales: el registro no respondió."
+)
+RESUMEN_SIN_COMERCIO = "No se compararon las fuentes registrales: no hay comercio identificado."
+RESUMEN_SIN_CONSULTA = (
+    "No se compararon las fuentes registrales: ninguna consulta válida del registro trae el "
+    "comercio identificado."
 )
 RESUMEN_NO_CALCULADOS = (
     "No se pudieron calcular los conflictos; deben tratarse como no verificados."
 )
 # El identificador es la clave con la que se agrupan los hechos del comercio, no un dato.
 _NO_SE_COMPARA = frozenset({"identificador"})
+_RESUMENES_SIN_COMPARAR = {
+    "registro_caido": RESUMEN_REGISTRO_CAIDO,
+    "sin_comercio": RESUMEN_SIN_COMERCIO,
+    "sin_consulta": RESUMEN_SIN_CONSULTA,
+}
+# Los estados en los que no se compararon las fuentes (nunca `sin_conflictos`, hallazgo U1).
+SIN_COMPARAR = frozenset(_RESUMENES_SIN_COMPARAR)
 
 
 @dataclass(frozen=True)
@@ -43,7 +61,8 @@ class Conflicto:
 
 @dataclass(frozen=True)
 class ConflictosCaso:
-    estado: str  # "sin_conflictos", "con_conflictos", "no_comparables" o "no_calculados"
+    # "sin_conflictos", "con_conflictos", uno de `SIN_COMPARAR` o "no_calculados"
+    estado: str
     lista: tuple[Conflicto, ...]
     resumen: str
 
@@ -63,8 +82,9 @@ class ConflictosCaso:
         }
 
 
-def no_comparables() -> ConflictosCaso:
-    return ConflictosCaso("no_comparables", (), RESUMEN_NO_COMPARABLES)
+def sin_comparar(estado: str) -> ConflictosCaso:
+    """Sin comparación, con el resumen fijo de su estado (uno de `SIN_COMPARAR`)."""
+    return ConflictosCaso(estado, (), _RESUMENES_SIN_COMPARAR[estado])
 
 
 def no_calculados() -> ConflictosCaso:
@@ -108,14 +128,15 @@ def calcular_conflictos(estado: EstadoCaso) -> ConflictosCaso:
     """Los conflictos del comercio identificado entre las fuentes registrales (R6).
 
     Sin comercio identificado, o sin una consulta válida del registro que coincida con él, no hay
-    nada que comparar: `no_comparables`, nunca `sin_conflictos` (hallazgo U1).
+    nada que comparar: uno de `SIN_COMPARAR`, nunca `sin_conflictos` (hallazgo U1). Solo el
+    registro caído dice que la fuente no respondió.
     """
     comercio = estado.comercio
     if comercio is None:
-        return no_comparables()
+        return sin_comparar("registro_caido" if registro_caido(estado) else "sin_comercio")
     hechos = _hechos_del_comercio(estado, comercio["identificador"])
     if hechos is None:
-        return no_comparables()
+        return sin_comparar("sin_consulta")
     datos: list[str] = []
     for hecho in hechos:
         datos += [d for d in hecho["contenido"] if d not in _NO_SE_COMPARA and d not in datos]

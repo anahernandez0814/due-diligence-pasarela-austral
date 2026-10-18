@@ -7,7 +7,8 @@
 - `huella_actual`, `informe_vigente` y `cambios`: qué cuenta como cambio para FR-023 (R7, decisión
   de la analista): solo la cobertura (cubierto o no por frente), los conflictos, las causas de
   escalamiento y el comercio.
-- `registro_caido` y `requiere_informe`: cuándo el cierre exige el informe (FR-011, R8).
+- `registro_caido` (vive en `cobertura.py`, que también lo usa `conflictos.py`) y
+  `requiere_informe`: cuándo el cierre exige el informe (FR-011, R8).
 
 Ninguna escribe en el estado ni registra eventos.
 """
@@ -17,10 +18,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
+from due_diligence.cobertura import CoberturaCaso, calcular_cobertura, registro_caido
 from due_diligence.conflictos import ConflictosCaso, calcular_conflictos
-from due_diligence.ejecutor import es_bloqueo_de_hook
-from due_diligence.estado import Causa, EstadoCaso, Situacion
+from due_diligence.estado import EstadoCaso
 from due_diligence.frentes import Frente
 from due_diligence.reglas import causas_vigentes
 from servidor_mcp.informe import Problema
@@ -31,11 +31,6 @@ FUENTE_NO_CONSULTADA = "La fuente no es ninguna de las consultadas para {frente}
 # en la cobertura y los conflictos, así que la huella no los calcula, ni en el `PreToolUse` ni en
 # el `Stop`.
 NO_CALCULADOS = "no_calculados"
-# Causas de un registro que no respondió (R8). `error_de_fuente` solo si algún error real no es
-# `entrada_invalida`: con una entrada inválida la fuente respondió (caso límite de la spec).
-_CAUSAS_DE_CAIDA = frozenset(
-    {Causa.TERMINACION_ANOMALA, Causa.SIN_CONSULTAS, Causa.RESULTADO_INVALIDO, Causa.CANCELADO}
-)
 _NOMBRES_DE_COMPONENTE = {
     "cobertura": "la cobertura",
     "conflictos": "los conflictos",
@@ -169,24 +164,6 @@ def cambios(antes: Huella, despues: Huella) -> list[str]:
 def informe_vigente(estado: EstadoCaso) -> bool:
     """Si hay informe y la huella del último coincide con la actual (FR-023)."""
     return bool(estado.informes) and estado.informes[-1].huella == huella_actual(estado)
-
-
-def registro_caido(estado: EstadoCaso) -> bool:
-    """El registro no terminó y la fuente no respondió, quede o no un reintento (R8)."""
-    if estado.situacion(Frente.REGISTRO) is not Situacion.NO_TERMINADO:
-        return False
-    error = estado.errores.get(Frente.REGISTRO) or {}
-    try:
-        causa = Causa(error.get("causa"))
-    except ValueError:
-        return False
-    if causa in _CAUSAS_DE_CAIDA:
-        return True
-    if causa is not Causa.ERROR_DE_FUENTE:
-        return False
-    errores = (error.get("obtenido") or {}).get("errores") or []
-    tipos = [e.get("tipo") for e in errores if isinstance(e, Mapping) and not es_bloqueo_de_hook(e)]
-    return any(tipo != "entrada_invalida" for tipo in tipos)
 
 
 def registro_reintentable(estado: EstadoCaso) -> bool:

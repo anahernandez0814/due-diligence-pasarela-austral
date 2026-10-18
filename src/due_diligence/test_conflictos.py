@@ -10,13 +10,17 @@ import pytest
 
 from due_diligence.conflictos import (
     RESUMEN_NO_CALCULADOS,
-    RESUMEN_NO_COMPARABLES,
+    RESUMEN_REGISTRO_CAIDO,
+    RESUMEN_SIN_COMERCIO,
     RESUMEN_SIN_CONFLICTOS,
+    RESUMEN_SIN_CONSULTA,
+    SIN_COMPARAR,
     calcular_conflictos,
     no_calculados,
 )
 from due_diligence.estado import Consulta, EstadoCaso, Situacion
 from due_diligence.frentes import FRENTES, Frente
+from due_diligence.simulacion import comercios_parecidos, respuesta_registro
 from servidor_mcp import datos
 from servidor_mcp.registro import consultar_registro_mercantil
 
@@ -110,7 +114,7 @@ def test_se_usa_la_ultima_consulta_valida_que_coincide_con_el_comercio():
     # El comercio identificado es el de la consulta con coincidencias (consolidación del #6):
     # aquí difieren, así que no hay comercio único y no hay nada que comparar.
     assert estado.comercio is None
-    assert calcular_conflictos(estado).estado == "no_comparables"
+    assert calcular_conflictos(estado).estado == "sin_comercio"
     estado = _estado(_respuesta("CO-RF-0006"))
     estado.agregar_consultas(
         [Consulta(Frente.REGISTRO, REGISTRO, {}, _respuesta("CO-TA-0002"), True)]
@@ -118,26 +122,86 @@ def test_se_usa_la_ultima_consulta_valida_que_coincide_con_el_comercio():
     assert calcular_conflictos(estado).estado == "con_conflictos"
 
 
-def test_con_comercio_identificado_y_sin_una_consulta_que_coincida_no_son_comparables():
-    # Hallazgo U1: nunca `sin_conflictos`, que afirmaría algo que no se comparó.
+def test_con_comercio_identificado_y_sin_una_consulta_que_coincida_no_se_comparan():
+    # Hallazgo U1: nunca `sin_conflictos`, que afirmaría algo que no se comparó; y tampoco que el
+    # registro no respondió, porque respondió.
     estado = EstadoCaso()
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
     estado.registrar_identificacion(_respuesta("CO-RF-0006"))  # sin `estado.consultas`
     conflictos = calcular_conflictos(estado)
-    assert conflictos.estado == "no_comparables"
-    assert conflictos.como_entrada() == {"resumen": RESUMEN_NO_COMPARABLES, "lista": []}
+    assert conflictos.estado == "sin_consulta"
+    assert conflictos.como_entrada() == {"resumen": RESUMEN_SIN_CONSULTA, "lista": []}
+    assert RESUMEN_SIN_CONSULTA == (
+        "No se compararon las fuentes registrales: ninguna consulta válida del registro trae el "
+        "comercio identificado."
+    )
 
 
-def test_con_el_registro_caido_no_son_comparables():
-    estado = EstadoCaso()
+def _caido(estado, tipo="servicio_no_disponible"):
+    """El registro no terminó por un error de la fuente, como lo deja la delegación (#8)."""
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO, "caído")
-    conflictos = calcular_conflictos(estado)
-    assert conflictos.estado == "no_comparables"
-    assert RESUMEN_NO_COMPARABLES == (
+    estado.errores[Frente.REGISTRO] = {
+        "causa": "error_de_fuente",
+        "reintentable": tipo == "servicio_no_disponible",
+        "obtenido": {"errores": [{"tipo": tipo}]},
+    }
+    return estado
+
+
+def test_solo_con_el_registro_caido_dice_que_el_registro_no_respondio():
+    conflictos = calcular_conflictos(_caido(EstadoCaso()))
+    assert conflictos.estado == "registro_caido"
+    assert conflictos.como_entrada() == {"resumen": RESUMEN_REGISTRO_CAIDO, "lista": []}
+    assert RESUMEN_REGISTRO_CAIDO == (
         "No se pudieron comparar las fuentes registrales: el registro no respondió."
     )
+
+
+def _sin_iniciar():
+    return EstadoCaso()
+
+
+def _en_curso():
+    estado = EstadoCaso()
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    return estado
+
+
+def _varias_coincidencias():
+    respuesta = respuesta_registro(*comercios_parecidos())
+    return _estado(respuesta)
+
+
+def _ninguna_coincidencia():
+    return _estado(respuesta_registro())
+
+
+def _entrada_invalida():
+    return _caido(EstadoCaso(), "entrada_invalida")
+
+
+@pytest.mark.parametrize(
+    "construir",
+    [_sin_iniciar, _en_curso, _varias_coincidencias, _ninguna_coincidencia, _entrada_invalida],
+)
+def test_sin_comercio_identificado_por_otro_motivo_no_dice_que_el_registro_no_respondio(construir):
+    estado = construir()
+    assert estado.comercio is None
+    conflictos = calcular_conflictos(estado)
+    assert conflictos.estado == "sin_comercio"
+    assert conflictos.como_entrada() == {"resumen": RESUMEN_SIN_COMERCIO, "lista": []}
+    assert "no respondió" not in conflictos.resumen
+    assert RESUMEN_SIN_COMERCIO == (
+        "No se compararon las fuentes registrales: no hay comercio identificado."
+    )
+
+
+def test_los_tres_estados_sin_comparacion_son_distintos_y_ninguno_es_sin_conflictos():
+    assert SIN_COMPARAR == {"registro_caido", "sin_comercio", "sin_consulta"}
+    resumenes = {RESUMEN_REGISTRO_CAIDO, RESUMEN_SIN_COMERCIO, RESUMEN_SIN_CONSULTA}
+    assert len(resumenes) == 3 and RESUMEN_SIN_CONFLICTOS not in resumenes
 
 
 def test_las_consultas_no_validas_no_cuentan():
@@ -146,7 +210,7 @@ def test_las_consultas_no_validas_no_cuentan():
         Consulta(c.frente, c.herramienta, c.argumentos, c.resultado, False)
         for c in estado.consultas
     ]
-    assert calcular_conflictos(estado).estado == "no_comparables"
+    assert calcular_conflictos(estado).estado == "sin_consulta"
 
 
 def test_el_marcador_no_calculados_tiene_su_resumen_fijo():

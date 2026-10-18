@@ -167,6 +167,10 @@ def test_el_servidor_reenvia_solo_las_variables_pasarela_presentes():
         "PASARELA_FALLA_NOTICIAS": "1",
         "PASARELA_RESULTADOS_DIR": "carpeta",
     }
+    # #9: la caída simulada del registro se reenvía igual que la de noticias.
+    assert configuracion.servidor_pasarela({"PASARELA_FALLA_REGISTRO": "1"})["env"] == {
+        "PASARELA_FALLA_REGISTRO": "1"
+    }
     assert (
         "env" not in configuracion.servidor_pasarela({})
         or configuracion.servidor_pasarela({})["env"] == {}

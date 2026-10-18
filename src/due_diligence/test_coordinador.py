@@ -50,6 +50,12 @@ DELEGACIONES_DEL_EJEMPLO = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
+
+
 def _fin(subtype="success", stop_reason="end_turn", is_error=False, terminal="completed"):
     return ResultMessage(
         subtype=subtype,
@@ -714,10 +720,14 @@ def test_un_caso_con_terminacion_anomala_no_esta_completo():
     assert caso.completo is False
 
 
-def test_un_caso_con_cierre_sin_escalar_no_esta_completo():
+@pytest.mark.parametrize("marca", ["cierre_sin_escalar", "cierre_sin_informe"])
+def test_un_caso_con_un_cierre_forzado_no_esta_completo_aunque_lo_demas_se_cumpla(marca):
+    # Con el informe vigente, todo lo demás se cumple: solo la marca del `Stop` lo impide (#9).
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
-    caso.estado.cierre_sin_escalar = True
+    _con_informe_vigente(caso)
+    assert caso.completo is True
+    setattr(caso.estado, marca, True)
     assert caso.completo is False
 
 

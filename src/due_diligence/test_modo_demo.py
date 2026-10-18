@@ -265,3 +265,13 @@ def test_en_demo_terminar_sin_escalar_lo_impide_el_hook_de_fin_de_turno():
     )
     cierre = coordinador.resultados_de("terminar")[0]
     assert cierre.termino is False and "categoría de alto riesgo" in cierre.motivo
+
+
+def test_la_guia_de_las_afirmaciones_esta_en_los_dos_modos_y_no_trae_reglas_de_negocio():
+    # #9, T039: no es una de las reglas I.1 a I.3 que el modo de demostración quita.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    for demo in (False, True):
+        assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
+    assert REGLA_3 not in _REGLA_AFIRMACIONES and ESCALAR not in _REGLA_AFIRMACIONES
+    assert CUANDO_ESCALADO not in _REGLA_AFIRMACIONES

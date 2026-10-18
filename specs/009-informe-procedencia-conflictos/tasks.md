@@ -462,7 +462,7 @@ hora con UTC, los conflictos y los informes.
 
 ### Tests del #5 al #8 que cambian
 
-- [ ] T037 Revisar y adaptar **sin debilitar** los tests que fallen por el diseño del #9. La tabla
+- [X] T037 Revisar y adaptar **sin debilitar** los tests que fallen por el diseño del #9. La tabla
   se completa durante las fases 2 a 7 y va en el PR. Candidatos:
 
   | Test | Por qué cambia | Cómo se adapta |
@@ -480,11 +480,11 @@ hora con UTC, los conflictos y los informes.
   | `test_hooks_sesiones.py`: `test_un_caso_de_bajo_riesgo_sin_hallazgos_termina_sin_trabas` | El cierre exige informe (FR-011), y registrarlo emite eventos | Se registra un informe válido con `no_habilitar` (sin listas consultadas, `habilitar` se rechazaría) antes de `terminar()`. `eventos == []` se sustituye por la **lista exacta de tipos** que el diseño emite en ese camino, en orden: `[TIPO_COBERTURA_SUSTITUIDA, TIPO_DATOS_SUSTITUIDOS, TIPO_INFORME_REGISTRADO]`. Los dos primeros salen del `PreToolUse` que acepta y el último del `PostToolUse`; `terminar()` no añade ninguno. Un `consulta_fallida`, `fallo_de_hook`, `bloqueo_regla`, `cierre_impedido` o `cierre_sin_informe` hace fallar el test, como hoy. |
   | `test_hooks_sesiones.py`: `test_un_caso_con_coincidencia_no_termina_hasta_que_se_escala`, `test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar` | El cierre exige informe (FR-011) | Se registra el informe (`decide_cumplimiento`) después de escalar y antes del último `terminar()`. Se conservan las cuentas exactas de hoy (`tipos.count(TIPO_CIERRE_IMPEDIDO) == 2`, `TIPO_CIERRE_SIN_ESCALAR not in tipos`) y se añade `TIPO_CIERRE_SIN_INFORME not in tipos`. |
   | `test_hooks_sesiones.py`: `test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no_completo` | Ahora también falta el informe | Se conservan todas las aserciones exactas de hoy (`== MAX_CIERRES_IMPEDIDOS` devoluciones, `cierre_sin_escalar is True`, sin escalamientos) y se añaden `cierre_sin_informe is True` y `tipos.count(TIPO_CIERRE_SIN_INFORME) == 1`. |
-  | `src/due_diligence/test_casos_reglas.py`: `test_el_caso_sigue_siendo_el_mismo_con_el_limite_de_devoluciones_agotado` y los casos (a), (b) y (c) que terminan | El cierre exige informe | Las aserciones del #7 se mantienen con las mismas igualdades exactas, por ejemplo `[c.termino for c in cierres] == [False] * MAX_CIERRES_IMPEDIDOS + [True]`. Se añade `cierre_sin_informe is True` donde falte el informe y `is False` donde se registre. |
-  | `src/due_diligence/test_casos_cobertura.py` | El paso `informe` arma el formato nuevo (T014) | Sin cambios si T014 cubre el formato; si no, solo el guion. Las aserciones no se tocan. |
+  | `src/due_diligence/test_casos_reglas.py`: `test_el_caso_sigue_siendo_el_mismo_con_el_limite_de_devoluciones_agotado` y los casos (a), (b) y (c) que terminan | El cierre exige informe | **Al final no hizo falta cambiarlos**: sus guiones ya registran el informe antes de terminar y el `CoordinadorSimulado` lo arma válido (T014). Si hubieran fallado: las aserciones del #7 se mantienen con las mismas igualdades exactas, por ejemplo `[c.termino for c in cierres] == [False] * MAX_CIERRES_IMPEDIDOS + [True]`. Se añade `cierre_sin_informe is True` donde falte el informe y `is False` donde se registre. |
+  | `src/due_diligence/test_casos_cobertura.py` | El paso `informe` arma el formato nuevo (T014) | **Sin cambios**: T014 cubre el formato. |
   | `src/due_diligence/test_sondeo_hooks.py` | `ENTRADA_INFORME` nuevo (T041) | Igualdad exacta: `validar_informe(ENTRADA_INFORME) == []`. Las demás aserciones del #8 sobre la entrada y sus campos no se tocan. |
   | `src/due_diligence/test_main.py` y `src/due_diligence/test_eventos_estado.py` | Hora con UTC y campo `accion` | Las líneas esperadas de la salida se reescriben **completas**, como hoy, con la hora y su «UTC», en lugar de comprobar que contengan «UTC». Las comparaciones de `Evento` siguen siendo de igualdad, ahora con `accion` (`None` donde no aplica). |
-  | `src/due_diligence/test_coordinador.py`: `test_la_instruccion_minima_pide_escalar_y_registrar_el_informe_con_los_tres_valores` y `src/due_diligence/test_modo_demo.py` | Instrucciones nuevas (T039) | Siguen exigiendo los tres valores; se añade la guía de las afirmaciones. |
+  | `src/due_diligence/test_coordinador.py`: `test_la_instruccion_minima_pide_escalar_y_registrar_el_informe_con_los_tres_valores` y `src/due_diligence/test_modo_demo.py` | Instrucciones nuevas (T039) | **Sin cambios**: siguen pasando tal cual; la guía nueva tiene sus propios tests en los dos archivos. |
 
   **Añadidos durante la implementación** (fase 2), con la misma regla:
 
@@ -516,7 +516,7 @@ hora con UTC, los conflictos y los informes.
 
 ## Fase 8: casos de extremo a extremo e instrucciones
 
-- [ ] T038 [P] Casos en `src/due_diligence/test_casos_informe.py` con el `CoordinadorSimulado` y la
+- [X] T038 [P] Casos en `src/due_diligence/test_casos_informe.py` con el `CoordinadorSimulado` y la
   `PasarelaSimulada` (FR-019, Q2):
   - **caso (g)** con `CO-RF-0006`:
     - el informe registrado tiene el conflicto `fecha_constitucion` con los dos valores y sus
@@ -538,7 +538,7 @@ hora con UTC, los conflictos y los informes.
   - **informe vigente**:
     - un reintento que vuelve a fallar no invalida el informe;
     - uno que sale bien sí; el caso del mismo mensaje está en T029.
-- [ ] T039 Instrucciones del coordinador en `src/due_diligence/coordinador.py` (R12), con tests en
+- [X] T039 Instrucciones del coordinador en `src/due_diligence/coordinador.py` (R12), con tests en
   `src/due_diligence/test_coordinador.py` y `src/due_diligence/test_modo_demo.py`. La guía dice:
   - una afirmación por dato, con la fuente y la fecha de los metadatos del resultado;
   - los conflictos y la cobertura los pone el sistema;
@@ -547,9 +547,9 @@ hora con UTC, los conflictos y los informes.
 
   La guía del informe está también en el modo de demostración, porque no es una regla I.1 a I.3.
   Los tests de T037 de estas instrucciones se adaptan.
-- [ ] T040 Fases 7 y 8: ruff, la suite completa (anotar el número de tests, frente a T002), la
+- [X] T040 Fases 7 y 8: ruff, la suite completa (anotar el número de tests, frente a T002), la
   tabla de T037 completa y commit «casos de extremo a extremo e instrucciones (#9)». **PARADA DE
-  REVISIÓN B.**
+  REVISIÓN B.** Resultado: **4118** tests en verde (3928 en T002), ruff y formato limpios.
 
 ---
 

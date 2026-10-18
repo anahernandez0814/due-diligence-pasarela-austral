@@ -799,3 +799,20 @@ def test_caso_conflictos_es_el_calculo_del_codigo_con_y_sin_conflictos():
         caso.estado.agregar_consultas([Consulta(Frente.REGISTRO, herramienta, {}, respuesta, True)])
         assert caso.conflictos == calcular_conflictos(caso.estado)
         assert caso.conflictos.estado == esperado
+
+
+def test_las_instrucciones_guian_las_afirmaciones_del_informe():
+    # #9, T039, R12: guía, no garantía (la garantía es el hook de registrar_informe).
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    for fragmento in (
+        "una lista de afirmaciones",
+        "texto, fuente y fecha",
+        "metadatos del resultado",
+        "fuentes que consultaste para ese frente",
+        "El comercio, los conflictos entre fuentes y la cobertura los pone el sistema",
+        "después de escalar",
+        "reintenta el registro o registra el informe",
+    ):
+        assert fragmento in _REGLA_AFIRMACIONES, fragmento
+    assert _REGLA_AFIRMACIONES in INSTRUCCIONES_COORDINADOR

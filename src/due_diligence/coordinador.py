@@ -103,6 +103,19 @@ _REGLA_FALLOS = (
     "partir de lo que devolvieron los frentes."
 )
 
+# Guía del informe con procedencia (#9, R12). No es una regla de negocio I.1 a I.3: está también en
+# el modo de demostración. Lo que no puede fallar lo hace el código: el hook de `registrar_informe`
+# valida la forma y la fuente de cada afirmación y pone el comercio, los conflictos y la cobertura.
+_REGLA_AFIRMACIONES = (
+    "En el informe, escribe los hallazgos de cada frente como una lista de afirmaciones, cada una "
+    "con texto, fuente y fecha; la fuente y la fecha son las de los metadatos del resultado, y "
+    "solo cites fuentes que consultaste para ese frente. Si nada quedó cubierto, el informe va "
+    "sin afirmaciones. El comercio, los conflictos entre fuentes y la cobertura los pone el "
+    "sistema: no elijas entre valores que se contradicen. Si hay que escalar, registra el informe "
+    "después de escalar. Si el registro mercantil no responde, reintenta el registro o registra "
+    "el informe con el comercio que pidió el analista."
+)
+
 _REGLA_RESUMEN = (
     "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
     "fecha, y qué frentes no se pudieron cubrir y por qué."
@@ -119,7 +132,14 @@ def instrucciones_coordinador(demo: bool = False) -> str:
     hooks no cambian.
     """
     if demo:
-        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_FALLOS, _REGLA_INFORME, _REGLA_RESUMEN]
+        reglas = [
+            _REGLA_DELEGAR,
+            _REGLA_DATOS,
+            _REGLA_FALLOS,
+            _REGLA_INFORME,
+            _REGLA_AFIRMACIONES,
+            _REGLA_RESUMEN,
+        ]
     else:
         reglas = [
             _REGLA_DELEGAR,
@@ -127,6 +147,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
+            _REGLA_AFIRMACIONES,
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))

@@ -7,21 +7,26 @@ llama al modelo. Datos ficticios del #5.
 
 import asyncio
 
+import pytest
+
 from due_diligence.coordinador import Caso
 from due_diligence.estado import Situacion
 from due_diligence.eventos import TIPO_CIERRE_IMPEDIDO, TIPO_INFORME_REGISTRADO
 from due_diligence.frentes import Frente
+from due_diligence.reglas import MOTIVO_REGISTRO_REINTENTABLE, MOTIVO_SIN_INFORME
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
+    comercio_alto_riesgo,
     comercio_bajo_riesgo,
     consulta,
     consulta_listas,
     en_secuencia,
     error_estructurado,
+    respuesta_registro,
     resultado_frente,
 )
-from due_diligence.test_casos_reglas import _resultados
+from due_diligence.test_casos_reglas import _delegaciones, _resultados
 
 NOTICIAS = {"frente": "noticias", "identificador": "CO-TA-0002"}
 SOLICITUD = "Due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, talleres."
@@ -140,3 +145,263 @@ def test_si_el_reintento_termina_antes_del_pre_el_informe_queda_vigente():
     (cierre,) = coordinador.resultados_de("terminar")
     assert cierre.termino is True
     assert TIPO_CIERRE_IMPEDIDO not in [e.tipo for e in caso.eventos()]
+
+
+# ------------------------------------------------------------- T038: casos de extremo a extremo
+
+
+SUR = "Registro Mercantil Ficticio del Sur"
+RUFE = "Registro Único Ficticio de Empresas"
+CONFLICTO_G = {
+    "resumen": "1 conflicto entre las fuentes registrales.",
+    "lista": [
+        {
+            "dato": "fecha_constitucion",
+            "valores": [
+                {"valor": "2016-03-14", "fuente": SUR, "fecha": "2026-09-30"},
+                {"valor": "2017-09-02", "fuente": RUFE, "fecha": "2026-09-28"},
+            ],
+        }
+    ],
+}
+
+
+def _caso_con(guion, resultados):
+    caso, coordinador = _ejecutar(guion, EjecutorSimulado(resultados=resultados))
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    return caso, coordinador
+
+
+def _resultados_g():
+    """`CO-RF-0006` con la respuesta real de la pasarela: dos fuentes con fechas distintas."""
+    from servidor_mcp import datos
+    from servidor_mcp.registro import consultar_registro_mercantil
+
+    datos.limpiar_cache()
+    respuesta = consultar_registro_mercantil(identificador="CO-RF-0006").structured_content
+    resultados = _resultados(
+        [],
+        "comercio de calzado",
+        "medio",
+        [
+            consulta_listas("comercio", identificador="CO-RF-0006"),
+            consulta_listas("persona", identificador="PE-0006"),
+        ],
+    )
+    resultados[Frente.REGISTRO] = resultado_frente(
+        Frente.REGISTRO,
+        [consulta(Frente.REGISTRO, {"identificador": "CO-RF-0006"}, respuesta)],
+    )
+    return resultados
+
+
+def test_caso_g_el_informe_muestra_las_dos_fechas_sin_que_el_coordinador_las_declare():
+    guion = [
+        _delegaciones("CO-RF-0006", "comercio de calzado"),
+        ("delegar", {"frente": "listas"}),
+        ("informe", "no_habilitar"),  # el coordinador simulado declara «sin conflictos»
+        ("terminar",),
+    ]
+    caso, coordinador = _caso_con(guion, _resultados_g())
+    (informe,) = coordinador.pasarela.informes
+    assert informe["conflictos"] == CONFLICTO_G
+    assert informe["comercio"] == {
+        "identificador": "CO-RF-0006",
+        "nombre": "Ferretería Río Fino SAS",
+        "verificado": True,
+    }
+    assert coordinador.resultados_de("terminar")[0].termino is True
+    assert caso.conflictos.como_entrada() == CONFLICTO_G
+
+
+def test_caso_g_un_conflicto_inventado_por_el_coordinador_no_queda():
+    inventado = {
+        "comercio": {"identificador": "CO-RF-0006", "nombre": "x", "verificado": True},
+        "recomendacion": "no_habilitar",
+        "hallazgos": {
+            "registro": [{"texto": "Figura activo.", "fuente": SUR, "fecha": "2026-09-30"}]
+        },
+        "conflictos": {
+            "resumen": "1 conflicto.",
+            "lista": [
+                {
+                    "dato": "estado",
+                    "valores": [
+                        {"valor": "activo", "fuente": SUR, "fecha": "2026-09-30"},
+                        {"valor": "inactivo", "fuente": RUFE, "fecha": "2026-09-28"},
+                    ],
+                }
+            ],
+        },
+        "cobertura": "completa",
+    }
+    guion = [
+        _delegaciones("CO-RF-0006", "comercio de calzado"),
+        ("delegar", {"frente": "listas"}),
+        ("informe_con", inventado),
+        ("terminar",),
+    ]
+    _, coordinador = _caso_con(guion, _resultados_g())
+    (informe,) = coordinador.pasarela.informes
+    assert informe["conflictos"] == CONFLICTO_G
+
+
+def _resultados_alto_riesgo():
+    return _resultados(
+        [comercio_alto_riesgo()],
+        "suplementos dietarios",
+        "alto",
+        [
+            consulta_listas("comercio", identificador="CO-TV-0001"),
+            consulta_listas("persona", identificador="PE-0001"),
+        ],
+        identificador="CO-TV-0001",
+    )
+
+
+def test_caso_escalado_el_informe_se_rechaza_hasta_escalar_y_despues_se_registra():
+    guion = [
+        _delegaciones("CO-TV-0001", "suplementos dietarios"),
+        ("delegar", {"frente": "listas"}),
+        ("informe", "decide_cumplimiento"),  # antes de escalar: rechazado (FR-012)
+        ("escalar",),
+        ("informe", "decide_cumplimiento"),
+        ("terminar",),
+    ]
+    caso, coordinador = _caso_con(guion, _resultados_alto_riesgo())
+    antes, despues = coordinador.resultados_de("informe")
+    assert antes.denegada and "aún no se ha escalado" in antes.motivo
+    assert despues.ejecutada and not despues.denegada
+    assert [i["recomendacion"] for i in coordinador.pasarela.informes] == ["decide_cumplimiento"]
+    assert coordinador.resultados_de("terminar")[0].termino is True
+    tipos = [e.tipo for e in caso.eventos()]
+    assert tipos.index("escalamiento_registrado") < tipos.index(TIPO_INFORME_REGISTRADO)
+
+
+def _resultados_bajo_riesgo():
+    return _resultados(
+        [comercio_bajo_riesgo()],
+        "talleres",
+        "bajo",
+        [
+            consulta_listas("comercio", identificador="CO-TA-0002"),
+            consulta_listas("persona", identificador="PE-0002"),
+        ],
+        identificador="CO-TA-0002",
+    )
+
+
+@pytest.mark.parametrize("escalar", [False, True])
+@pytest.mark.parametrize("informe", ["ninguno", "vigente", "anterior_a_un_cambio"])
+def test_sc003_el_cierre_solo_se_permite_con_todo(escalar, informe):
+    # SC-003: escalamiento requerido (sí o no) × informe (ninguno, vigente o anterior a un cambio).
+    if escalar:
+        resultados, identificador, categoria = (
+            _resultados_alto_riesgo(),
+            "CO-TV-0001",
+            "suplementos dietarios",
+        )
+    else:
+        resultados, identificador, categoria = _resultados_bajo_riesgo(), "CO-TA-0002", "talleres"
+    guion = [
+        ("delegar", {"frente": "registro", "identificador": identificador}),
+        ("delegar", {"frente": "categoria", "categoria": categoria}),
+        ("delegar", {"frente": "listas"}),
+    ]
+    if escalar:
+        guion.append(("escalar",))
+    if informe != "ninguno":
+        guion.append(("informe", "decide_cumplimiento" if escalar else "no_habilitar"))
+    if informe == "anterior_a_un_cambio":
+        guion.append(("delegar", {"frente": "noticias", "identificador": identificador}))
+    guion.append(("terminar",))
+    _, coordinador = _caso_con(guion, resultados)
+    (cierre,) = coordinador.resultados_de("terminar")
+    assert cierre.termino is (informe == "vigente")
+    if informe == "ninguno":
+        assert cierre.motivo == MOTIVO_SIN_INFORME
+    if informe == "anterior_a_un_cambio":
+        assert cierre.motivo == COBERTURA_CAMBIO
+
+
+def _registro_caido(tipo="servicio_no_disponible", reintentable=True):
+    """La respuesta de la pasarela con `PASARELA_FALLA_REGISTRO=1`, en cada ejecución."""
+    error = error_estructurado(tipo, reintentable)
+    return resultado_frente(
+        Frente.REGISTRO,
+        [consulta(Frente.REGISTRO, {"identificador": "CO-TA-0002"}, error=error)],
+    )
+
+
+def test_registro_caido_el_cierre_exige_reintentar_o_registrar_el_informe_sin_verificar():
+    resultados = _resultados_bajo_riesgo()
+    resultados[Frente.REGISTRO] = _registro_caido()
+    guion = [
+        _delegaciones("CO-TA-0002", "talleres"),
+        ("terminar",),  # queda un reintento: el motivo ofrece las dos salidas
+        ("delegar", {"frente": "registro", "identificador": "CO-TA-0002"}),  # vuelve a fallar
+        ("terminar",),  # sin reintentos: falta el informe
+        ("delegar", {"frente": "listas"}),  # sin comercio: I.1 lo rechaza
+        ("informe", "habilitar"),  # sin listas: rechazado
+        ("informe", "no_habilitar"),
+        ("terminar",),
+    ]
+    caso, coordinador = _caso_con(guion, resultados)
+    primero, segundo, tercero = coordinador.resultados_de("terminar")
+    assert (primero.termino, primero.motivo) == (False, MOTIVO_REGISTRO_REINTENTABLE)
+    assert (segundo.termino, segundo.motivo) == (False, MOTIVO_SIN_INFORME)
+    assert tercero.termino is True
+    habilitar, no_habilitar = coordinador.resultados_de("informe")
+    assert habilitar.denegada and not no_habilitar.denegada
+    (informe,) = coordinador.pasarela.informes
+    assert informe["comercio"] == {
+        "identificador": "CO-TA-0002",
+        "nombre": None,
+        "verificado": False,
+    }
+    assert informe["conflictos"] == {
+        "resumen": "No se pudieron comparar las fuentes registrales: el registro no respondió.",
+        "lista": [],
+    }
+    assert (
+        "registro: no cubierto; error de la fuente (servicio_no_disponible); 2 intentos."
+        in (informe["cobertura"])
+    )
+    assert any(linea.startswith("listas: no cubierto") for linea in informe["cobertura"])
+    assert caso.completo is False
+
+
+@pytest.mark.parametrize(
+    "registro",
+    [
+        resultado_frente(
+            Frente.REGISTRO,
+            [consulta(Frente.REGISTRO, {"identificador": "CO-ZZ-9999"}, respuesta_registro())],
+        ),
+        _registro_caido("entrada_invalida", False),
+    ],
+    ids=["sin_coincidencias", "entrada_invalida"],
+)
+def test_sin_comercio_ni_registro_caido_no_se_exige_informe(registro):
+    # Decisión (a) y caso límite de la entrada inválida: se pide revisar el nombre, sin informe.
+    resultados = _resultados_bajo_riesgo()
+    resultados[Frente.REGISTRO] = registro
+    guion = [("delegar", {"frente": "registro", "identificador": "CO-TA-0002"}), ("terminar",)]
+    caso, coordinador = _caso_con(guion, resultados)
+    assert coordinador.resultados_de("terminar")[0].termino is True
+    assert coordinador.pasarela.informes == []
+    assert TIPO_CIERRE_IMPEDIDO not in [e.tipo for e in caso.eventos()]
+
+
+def test_un_reintento_que_vuelve_a_fallar_no_invalida_el_informe():
+    resultados = _resultados_bajo_riesgo()
+    caida = resultado_frente(
+        Frente.NOTICIAS,
+        [consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, error=error_estructurado())],
+    )
+    resultados[Frente.NOTICIAS] = caida  # falla siempre
+    guion = [*_inicio(), ("delegar", NOTICIAS), ("terminar",)]
+    caso, coordinador = _caso_con(guion, resultados)
+    assert caso.estado.errores[Frente.NOTICIAS]["intento"] == 2
+    (cierre,) = coordinador.resultados_de("terminar")
+    assert cierre.termino is True

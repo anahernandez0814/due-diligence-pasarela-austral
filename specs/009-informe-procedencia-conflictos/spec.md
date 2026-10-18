@@ -134,7 +134,7 @@ El analista, o quien revise el caso después, ve en los eventos cuándo se regis
 - **FR-003**: El rechazo DEBE ser un error estructurado (constitución IV) con un motivo en español que nombre cada afirmación incompleta por su frente y su posición, y DEBE permitir que el coordinador corrija y vuelva a registrar en el mismo caso.
 - **FR-004**: La fuente de cada afirmación DEBE ser una de las fuentes que el caso consultó para ese frente, según los resultados guardados de los frentes. Una afirmación con una fuente no consultada se rechaza con el motivo.
 - **FR-005**: La validación DEBE hacerla el código antes de que el informe quede guardado; un informe inválido NUNCA queda guardado, ni siquiera en parte.
-- **FR-006**: El comercio del informe registrado DEBE ser el identificado de forma unívoca por el código (#6). Si el coordinador declara otro, prevalece el del código o la llamada se rechaza; el plan elige el mecanismo. Con el registro caído (FR-011), el comercio es el que pidió el analista y el informe DEBE declararlo de forma explícita como no verificado en el registro mercantil.
+- **FR-006**: El comercio del informe registrado DEBE ser el identificado de forma unívoca por el código (#6). Si el coordinador declara otro, prevalece el del código o la llamada se rechaza; el plan elige el mecanismo. Sin un comercio identificado de forma unívoca (con el registro caído, FR-011, pero también con varias coincidencias, con el registro en curso o sin delegar), el comercio es el que pidió el analista y el informe DEBE declararlo de forma explícita como no verificado en el registro mercantil. Sin comercio identificado ni pedido, el informe se rechaza.
 
 **Conflictos entre fuentes (US2)**
 

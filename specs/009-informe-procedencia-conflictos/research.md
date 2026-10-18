@@ -15,6 +15,7 @@ prompt.
 |-----|-------|---------|
 | Esquema del informe (FR-001, FR-002): partes, afirmaciones con texto, fuente y fecha válida, claves de frente conocidas | **Pasarela** (`servidor_mcp/informe.py`, función pura) **y hook**, que reutiliza la misma función | La pasarela es el contrato del registro y no debe guardar un informe mal formado venga de donde venga (FR-005). El hook lo comprueba antes para que el coordinador reciba en un solo rechazo todo lo que falla. |
 | Fuente consultada (FR-004) | **Hook** `PreToolUse` de `registrar_informe` | La pasarela no conoce el estado del caso (indicación de la analista). Las fuentes salen de las consultas válidas del caso. |
+| Al menos una afirmación por frente cubierto (US1-6) | **Hook** `PreToolUse` de `registrar_informe`, salvo con el caso sellado | Igual que FR-004: qué frentes quedaron cubiertos depende del estado del caso (`calcular_cobertura`). Un frente no cubierto puede ir vacío (I.5). Con el sello la cobertura no se calcula (R9), así que no se exige. Se añadió tras la revisión del commit `2004581`. |
 | Comercio del informe (FR-006) | **Hook**, por sustitución (R5) | Lo decide la identificación del #6, o el comercio pedido con el registro caído. |
 | Conflictos (FR-007 a FR-009) | **Código puro** (`conflictos.py`) y sustitución en el **hook** | Se comparan datos estructurados del registro. |
 | Cobertura (#8) | Sin cambios: `cobertura.py` y sustitución en el hook | |

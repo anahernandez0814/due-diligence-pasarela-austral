@@ -662,9 +662,6 @@ hora con UTC, los conflictos y los informes.
   - riesgo residual: un `Stop` que falla con una excepción y agota las devoluciones siempre marca
     `cierre_sin_escalar`, aunque lo que falte sea el informe (`hooks.py`, en el envoltorio del
     `Stop`); no se corrige en este ticket;
-  - el escenario US1-6 (la conclusión «sin hallazgos» de un frente cubierto es una afirmación con
-    su fuente) no lo exige el código: se acepta un informe con frentes cubiertos y sin ninguna
-    afirmación;
   - el informe mínimo va sin conflictos ni cobertura calculados aunque se pudieran calcular: lo
     manda FR-014;
   - si la pasarela acepta el informe y no hay huella pendiente (sin `PreToolUse` que lo
@@ -704,6 +701,31 @@ hora con UTC, los conflictos y los informes.
 
 ---
 
+## Fase 12: correcciones de la segunda revisión de `/abrir-pr`
+
+Tras la revisión del commit `2004581` (veredicto `con bloqueantes`: el mismo bloqueante en la
+revisión de código y en la auditoría). Commits nuevos, sin amend.
+
+- [X] T058 Bloqueante, US1-6: el `PreToolUse` de `registrar_informe` rechaza un frente cubierto
+  según `calcular_cobertura` cuya lista de afirmaciones falta o está vacía, con un problema en
+  `hallazgos.<frente>` (`problemas_de_frentes_cubiertos` en `informe.py`). Los frentes no
+  cubiertos pueden ir vacíos y con el caso sellado no se exige. Solo en el hook (R1).
+- [X] T059 Tests de `test_hooks.py`: `hallazgos: {}` solo se acepta sin ningún frente cubierto;
+  un frente cubierto vacío o ausente se rechaza con I.4; se nombra cada frente cubierto vacío;
+  un frente no cubierto vacío o ausente se acepta; con el sello, `hallazgos: {}` se acepta. Los
+  tests que registraban informes con frentes cubiertos sin citar ahora los citan (las 625
+  combinaciones, el informe no vigente, sin comercio identificado y el caso (g) inventado).
+- [X] T060 La guía del coordinador (`_REGLA_AFIRMACIONES`) y la descripción de
+  `registrar_informe` dicen que cada frente cubierto lleva al menos una afirmación.
+- [X] T061 Sugerencias: FR-006 de la spec coincide con R5; `_hora` convierte con
+  `astimezone(UTC)` antes de formatear (con su test); la huella usa `clave_de_valor` de
+  `conflictos.py` en lugar de repetir la serialización; el encabezado «hora local» de
+  `test_decisiones.py` dice UTC.
+- [X] T062 Ruff y la suite completa en verde, con los casos de extremo a extremo y el
+  coordinador simulado.
+
+---
+
 ## Dependencias y orden de ejecución
 
 - **Fase 1** (T001, T002) → **Fase 2**:
@@ -723,6 +745,8 @@ hora con UTC, los conflictos y los informes.
 - **Fase 9**: T041, T042 y T043 en paralelo; T044 al final.
 - **Fase 10**: T045 → T046 a T049 (manuales, pueden ir juntas) → T050.
 - **Fase 11**: tras el veredicto `con bloqueantes` de T050; T051 a T056 → T057 → `/abrir-pr`.
+- **Fase 12**: tras el veredicto `con bloqueantes` del commit `2004581`; T058 → T059 y T060,
+  T061 → T062 → `/abrir-pr`.
 
 ## Oportunidades de paralelismo
 
@@ -750,9 +774,9 @@ hora con UTC, los conflictos y los informes.
 |-----------|--------|
 | FR-001, FR-002 | T003, T004, T005, T006 |
 | FR-003 | T017, T018 |
-| FR-004 | T016, T017, T018, T032 |
+| FR-004 | T016, T017, T018, T032, T058, T059 (US1-6) |
 | FR-005 | T005, T006 |
-| FR-006 | T016, T017, T018, T025, T026 |
+| FR-006 | T016, T017, T018, T025, T026, T061 |
 | FR-007, FR-008 | T020, T021 |
 | FR-009 | T022, T023 |
 | FR-010 | T020, T022, T023 (`Caso.conflictos`), T035, T036 |

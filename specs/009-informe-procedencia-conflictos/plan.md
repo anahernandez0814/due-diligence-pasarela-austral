@@ -89,7 +89,7 @@ Constitución v1.0.1. Resultado: **cumple, sin desviaciones.**
 |-----------|--------|------|
 | **I.1** Listas tras la identificación | Sin cambios | Los hooks del #7 se conservan. Con el registro caído no hay comercio y listas se sigue rechazando. |
 | **I.2 / I.3** Coincidencia y alto riesgo | Sin cambios en la regla; más estricto el cierre | `evaluar_informe` sigue igual y fija el orden escalamiento → informe (FR-012). El sello es una causa más (R9): un caso sellado tiene que llegar al oficial. |
-| **I.4** Fuente en cada afirmación y conflictos | **Cumple, garantizado en código** | Esquema en la pasarela y en el hook (R1, R2), fuente consultada en el hook (R4), conflictos calculados y sustituidos (R5, R6). Caso (g). |
+| **I.4** Fuente en cada afirmación y conflictos | **Cumple, garantizado en código** | Esquema en la pasarela y en el hook (R1, R2), fuente consultada y una afirmación por frente cubierto en el hook (R1, R4), conflictos calculados y sustituidos (R5, R6). Caso (g). |
 | **I.5** Cobertura declarada | Cumple, se amplía | Cobertura del #8 sin cambios. Además, el informe obligatorio en el cierre (R8) incluye el registro caído (regla 5 del enunciado). |
 | **II** Garantizado vs. sugerido | Cumple | Esquema, fuente, comercio, conflictos, informe obligatorio y vigente, e informe mínimo: todo en código (pasarela, hooks y `Stop`). El prompt solo orienta cómo escribir las afirmaciones (R12). |
 | **III** Arquitectura de agentes | Cumple | Sin cambios en la delegación; el `Delegador` solo guarda el comercio pedido. Los resultados conservan contenido y metadatos separados, que es de donde salen las fuentes admitidas. El ciclo sigue terminando por `stop_reason`. |
@@ -122,6 +122,11 @@ Detalle en [research.md](research.md).
 1. **Dónde se valida cada cosa (R1)**:
    - forma del informe: pasarela y hook, con la misma función;
    - fuente consultada (FR-004): solo el hook, porque la pasarela no conoce el caso;
+   - al menos una afirmación por frente cubierto (US1-6), aunque su resultado sea «sin
+     hallazgos»: solo el hook, igual que FR-004, porque qué frentes quedaron cubiertos
+     depende del estado del caso (`calcular_cobertura`). Un frente no cubierto puede ir
+     vacío (I.5) y con el caso sellado (informe mínimo, R9) no se exige, porque la cobertura
+     no se calcula;
    - comercio, conflictos y cobertura: los pone el hook;
    - informe obligatorio y vigente: el `Stop`.
 2. **Esquema (R2)**: comercio `{identificador, nombre, verificado}`, hallazgos por frente como lista

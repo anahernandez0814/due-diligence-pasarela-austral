@@ -36,7 +36,7 @@ Las fechas y la fuente de listas del ejemplo son ilustrativas. Todos los datos s
 
 | Capa | Comprueba | Si falla |
 |------|-----------|----------|
-| Hook `PreToolUse`, modo normal | Reglas del #7 (`evaluar_informe`: recomendación, escalamiento, I.2 e I.3 para `habilitar`), `validar_informe` y fuente consultada (FR-004) | `deny`; el motivo es el JSON `informe_rechazado` con **todos** los motivos y problemas (R3). Evento `bloqueo_regla` con `accion`. |
+| Hook `PreToolUse`, modo normal | Reglas del #7 (`evaluar_informe`: recomendación, escalamiento, I.2 e I.3 para `habilitar`), `validar_informe`, fuente consultada (FR-004) y al menos una afirmación por frente cubierto (US1-6) | `deny`; el motivo es el JSON `informe_rechazado` con **todos** los motivos y problemas (R3). Evento `bloqueo_regla` con `accion`. |
 | Hook `PreToolUse`, caso sellado (R9) | `evaluar_informe_minimo`, `validar_informe` y fuente consultada | Igual. |
 | Hook `PreToolUse`, aceptado | Pone `comercio`, `conflictos` y `cobertura` del código (R5) | `allow` con la entrada completa en `updatedInput`. Eventos `cobertura_sustituida` y `datos_sustituidos`. |
 | Pasarela | `validar_informe` (forma) | Error `entrada_invalida`, no reintentable, con `problemas: [{ruta, texto}]`, o `campos_obligatorios_ausentes` con `campos_faltantes`. No guarda nada (FR-005). |

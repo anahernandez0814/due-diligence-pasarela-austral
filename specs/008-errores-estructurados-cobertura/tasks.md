@@ -531,19 +531,41 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
       `g3_permite_propia`, y se añadió `g5_escalamiento`;
     - el informe con una entrada que no es un objeto lo deniega la regla del #7 con su motivo
       (`MOTIVO_ENTRADA_INFORME`), antes de llegar a la cobertura.
-- [ ] T032 [MANUAL] Q5 del quickstart: `uv run python -m due_diligence.sondeo_hooks` (Haiku,
+- [X] T032 [MANUAL] Q5 del quickstart: `uv run python -m due_diligence.sondeo_hooks` (Haiku,
   ≈ 0,02 USD), en una sesión de Claude Code nueva abierta en la raíz. Anotar:
   - si (a) a (d), G2, (e), (f) y G3 coinciden;
   - el tipo de error medido en `e2`.
   
-  Si algo `difiere`, aplicar el plan B de R1 (`deny` con motivo) y anotarlo. Resultado: **____**.
-- [ ] T033 [MANUAL] Q6 y Q7 del quickstart con el coordinador real (Opus 5.5, ≈ 0,15 a 0,30 USD por
+  Si algo `difiere`, aplicar el plan B de R1 (`deny` con motivo) y anotarlo.
+  
+  Resultado (2026-10-18, la analista): **20 coinciden, 0 difieren, 0 inconclusas**. El tipo del
+  error de la entrada parcial, medido en `e3_tipo_del_error` (en T026 el experimento de la entrada
+  parcial quedó partido en `e2` y `e3`), es `campos_obligatorios_ausentes`. No hace falta el plan B.
+- [X] T033 [MANUAL] Q6 y Q7 del quickstart con el coordinador real (Opus 5.5, ≈ 0,15 a 0,30 USD por
   solicitud): Taller Aurora con `PASARELA_FALLA_NOTICIAS=1` y sin ella. En Q6, anotar los seis
   puntos del quickstart: reintentos, bloque «Cobertura:», evento `cobertura_sustituida`, caso
   completo, turnos (se anota N; si pasa de 15, qué turnos sobraron; solo es fallo `error_max_turns`)
   y si la respuesta al analista dice qué frente faltó (SC-005, valorado por
-  la analista sin abrir el código). En Q7, cobertura completa y `habilitar`. Resultado: **____**.
-- [ ] T034 Commitear la anotación de T031 a T033 en este archivo. **Ningún commit después de la
+  la analista sin abrir el código). En Q7, cobertura completa y `habilitar`.
+  
+  Resultado (2026-10-18, la analista):
+  - **Q6, noticias caído**:
+    - el coordinador reintentó noticias una vez (`frente_reintento`) y el reintento también falló;
+    - no hubo `reintento_denegado`, porque la segunda respuesta ya traía `reintentable: false` y el
+      coordinador no insistió (R3);
+    - cobertura «incompleta, 3 de 4», con noticias «no cubierto; error de la fuente
+      (servicio_no_disponible); 2 intentos»;
+    - `cobertura_sustituida` dice que la cobertura declarada era distinta;
+    - «Caso completo: no»;
+    - 7 de 30 turnos, dentro del presupuesto de 15; 0,128 USD; 38 s;
+    - **SC-005 cumplido** según la analista: la respuesta nombra el frente y el motivo.
+    
+    Observación para el #11: la respuesta empieza con «Sí, se puede habilitar» y la falta de
+    noticias viene después.
+  - **Q7, sin la caída**: cobertura «completa, 4 de 4», «Caso completo: sí», ningún
+    `frente_reintento` y recomendación `habilitar`; 6 de 30 turnos, 0,078 USD, 37 s.
+- [X] T034 Commitear la anotación de T031 a T033 en este archivo. Hecho; `/abrir-pr` lo ejecuta la
+  analista en una sesión nueva. **Ningún commit después de la
   revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de los
   cinco tests del #6 y del #7 que cambian (T021), con su justificación; una sección **«Also
   fixes»** con el defecto del #6 (`no_terminado → no_terminado` al invalidar listas); el texto fijo

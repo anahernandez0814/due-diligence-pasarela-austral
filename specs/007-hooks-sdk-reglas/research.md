@@ -1,6 +1,6 @@
 # Investigación: Hooks del SDK: reglas de negocio 1, 2 y 3 garantizadas
 
-Todo lo marcado *(medido)* se comprobó el 2026-10-18 con `claude-agent-sdk` 0.2.168 (CLI 2.1.301)
+Todo lo marcado *(medido)* se comprobó el 2026-10-17 con `claude-agent-sdk` 0.2.168 (CLI 2.1.301)
 en un entorno temporal (`uv run --no-project --with claude-agent-sdk==0.2.168 --with "mcp>=2.3,<3"`),
 con `claude-haiku-5-5`, contra el servidor `pasarela` del #5 y una herramienta en proceso como
 `delegar_frente`. El sondeo vivió fuera del repositorio (`sondeo_hooks.py`, en el directorio

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `007-hooks-sdk-reglas`
 
-**Created**: 2026-10-18
+**Created**: 2026-10-17
 
 **Status**: Draft
 

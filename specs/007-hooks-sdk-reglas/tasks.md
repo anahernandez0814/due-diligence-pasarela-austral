@@ -410,7 +410,7 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
 **Meta**: el `Caso` reparte los hooks por agente con el mismo estado; los casos (a), (b), (c) y (e) pasan de
 extremo a extremo. **Prueba independiente**: ejecutor y sesión simulados, sin modelo.
 
-- [ ] T038 [US5] Ampliar `src/due_diligence/test_coordinador.py` (R5, FR-010): sustituir
+- [X] T038 [US5] Ampliar `src/due_diligence/test_coordinador.py` (R5, FR-010): sustituir
   `test_los_hooks_se_reparten_al_coordinador_y_a_cada_subagente` (línea ≈ 290) por pruebas del reparto
   de `contracts/hooks.md`: las opciones del coordinador llevan `PreToolUse` para
   `mcp__delegacion__delegar_frente` y `mcp__pasarela__registrar_informe`, `PostToolUse` y
@@ -424,15 +424,15 @@ extremo a extremo. **Prueba independiente**: ejecutor y sesión simulados, sin m
   no está `terminado`, si la terminación no es normal, si `estado.cierre_sin_escalar` o si
   `estado.libro.fallo_de_hook` existe (un `PostToolUse` que falló pudo dejar sin registrar una coincidencia);
   `True` solo si ninguna de esas cosas ocurre.
-- [ ] T039 [US5] Ampliar `src/due_diligence/test_configuracion.py`: `opciones_coordinador` y
+- [X] T039 [US5] Ampliar `src/due_diligence/test_configuracion.py`: `opciones_coordinador` y
   `opciones_subagente` siguen aceptando `hooks` (la construcción es neutral) y lo pasan sin cambios; el
   test `test_los_hooks_se_reparten_a_todas_las_opciones` (línea ≈ 88) se conserva para esa función.
-- [ ] T040 [US5] Editar `src/due_diligence/coordinador.py` (R5): `Caso` crea un `HooksDelCaso(self.estado,
+- [X] T040 [US5] Editar `src/due_diligence/coordinador.py` (R5): `Caso` crea un `HooksDelCaso(self.estado,
   self._eventos, self.entorno)` y usa `.coordinador()` en `opciones_coordinador` y `.subagente(frente)` en
   `_opciones_subagente` (líneas ≈ 105 y 112 del #6, que hoy pasan el mismo `self.hooks` a todos); eliminar
   el parámetro `hooks` de `Caso` y de `ejecutar_caso`; añadir la propiedad `Caso.completo` (data-model).
   Hace pasar T038 y T039.
-- [ ] T041 [US5] Escribir `src/due_diligence/test_casos_reglas.py` con los **casos de prueba obligatorios** del
+- [X] T041 [US5] Escribir `src/due_diligence/test_casos_reglas.py` con los **casos de prueba obligatorios** del
   caso completo (`Caso` con ejecutor simulado y sesiones simuladas, hooks reales; Q2). **El coordinador simulado pasa por
   `SesionSimulada(caso.opciones_coordinador())`** (G1): cada llamada del guion a `delegar_frente`, `registrar_informe` y
   `escalar_a_cumplimiento`, y su fin de turno, ejecuta los hooks del coordinador como el SDK (los datos y las
@@ -449,18 +449,18 @@ extremo a extremo. **Prueba independiente**: ejecutor y sesión simulados, sin m
   `I.2` (I3); además, para cada caso, los
   eventos son legibles en orden por `secuencia` y cada bloqueo trae su regla y un motivo en español
   (SC-007). Estos son los casos (a), (b), (c) y (e) de la constitución X.
-- [ ] T042 [US5] Ampliar `src/due_diligence/test_hooks_sesiones.py` (US5-1, US5-2, US5-4, SC-006): frentes que
+- [X] T042 [US5] Ampliar `src/due_diligence/test_hooks_sesiones.py` (US5-1, US5-2, US5-4, SC-006): frentes que
   corren en `asyncio` como sesiones separadas con `EjecutorSimulado`: el hook del subagente de listas ve
   la identificación que escribió el de registro; el hook del coordinador ve la coincidencia que
   escribió el de listas; **dos `Caso` a la vez** (con `asyncio.gather`) con comercios distintos no se
   mezclan (uno identifica y registra una coincidencia, el otro no ve nada); el estado se alimenta de la
   respuesta de la herramienta y **no de lo que el modelo transcriba** (un resumen del subagente que dice
   «sin coincidencias» no cambia una coincidencia registrada por el hook).
-- [ ] T043 [US5] Si `src/due_diligence/__main__.py` muestra los eventos del caso, mostrar también `regla` y el
+- [X] T043 [US5] Si `src/due_diligence/__main__.py` muestra los eventos del caso, mostrar también `regla` y el
   motivo de los eventos `bloqueo_regla`, `cierre_impedido`, `cierre_sin_escalar` y `fallo_de_hook`, para que
   se vea en el chat qué se bloqueó y por qué (VI); ampliar `src/due_diligence/test_main.py` con una
   ejecución simulada que muestre un bloqueo. No cambia lo que ya imprimía.
-- [ ] T044 [US5] Fase 7 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde.
+- [X] T044 [US5] Fase 7 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde.
   **PARADA DE REVISIÓN B.**
 
 ---

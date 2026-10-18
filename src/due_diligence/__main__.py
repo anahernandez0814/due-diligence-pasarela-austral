@@ -65,9 +65,11 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     escribir("Eventos del caso:")
     for evento in eventos:
         frente = evento.frente.value if evento.frente else "-"
+        # Los eventos de las reglas (#7) llevan la regla de negocio que los causó: se ve en el chat.
+        regla = f" [{evento.regla}]" if evento.regla else ""
         escribir(
-            f"{evento.secuencia:>3}  {_hora(evento.marca)}  {evento.tipo:<17} {frente:<10} "
-            f"{evento.detalle}"
+            f"{evento.secuencia:>3}  {_hora(evento.marca)}  {evento.tipo:<24} {frente:<10} "
+            f"{evento.detalle}{regla}"
         )
     escribir("")
     escribir("Frentes:")
@@ -96,6 +98,11 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     escribir("")
     if caso.terminacion:
         escribir(f"Terminación del caso: {caso.terminacion.terminacion.value}")
+    escribir(f"Caso completo: {'sí' if caso.completo else 'no'}")
+    if caso.estado.cierre_sin_escalar:
+        escribir("El caso terminó sin el escalamiento obligatorio (cierre_sin_escalar).")
+    if caso.estado.libro.fallo_de_hook:
+        escribir("Un hook de las reglas falló: el caso se bloqueó por precaución.")
     escribir("")
     escribir("Respuesta del coordinador:")
     escribir(caso.respuesta or "(sin respuesta)")

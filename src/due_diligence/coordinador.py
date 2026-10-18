@@ -22,7 +22,7 @@ from due_diligence import configuracion
 from due_diligence.contexto import instrucciones
 from due_diligence.delegacion import Delegador
 from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
-from due_diligence.estado import EstadoCaso
+from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
     TIPO_TERMINACION,
@@ -101,6 +101,24 @@ class Caso:
     @property
     def terminacion(self) -> Clasificacion | None:
         return self.estado.terminacion
+
+    @property
+    def completo(self) -> bool:
+        """Si el caso puede presentarse como completo (#7, FR-007).
+
+        Solo si los cuatro frentes terminaron, el ciclo terminó con normalidad, el `Stop` no tuvo
+        que dejar terminar un caso sin su escalamiento obligatorio y ningún hook falló: un
+        `PostToolUse` que falló pudo dejar sin registrar una coincidencia o una identificación.
+        La cobertura declarada es del #8.
+        """
+        estado = self.estado
+        return (
+            all(estado.situacion(frente) is Situacion.TERMINADO for frente in Frente)
+            and estado.terminacion is not None
+            and estado.terminacion.terminacion is Terminacion.NORMAL
+            and not estado.cierre_sin_escalar
+            and estado.libro.fallo_de_hook is None
+        )
 
     def _opciones_subagente(self, frente: Frente) -> ClaudeAgentOptions:
         return configuracion.opciones_subagente(

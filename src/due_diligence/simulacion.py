@@ -6,12 +6,15 @@ devuelve un resultado fijo. Los datos son los ficticios del #5.
 """
 
 import asyncio
+import inspect
 import json
 import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
+
+from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from due_diligence.estado import Consulta, ResultadoFrente
 from due_diligence.frentes import FRENTES, Frente
@@ -315,6 +318,8 @@ class SesionSimulada:
             if herramienta not in self.herramientas:
                 raise KeyError(f"La sesión simulada no tiene la herramienta {herramienta!r}.")
             respuesta = self.herramientas[herramienta](argumentos)
+            if inspect.isawaitable(respuesta):  # una herramienta en proceso asíncrona
+                respuesta = await respuesta
         es_error = isinstance(respuesta, Mapping) and respuesta.get("error") is True
         texto = json.dumps(respuesta, ensure_ascii=False)
         if es_error:
@@ -510,3 +515,101 @@ class PasarelaSimulada:
     def _escalar(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.escalamientos.append(dict(entrada))
         return respuesta_de_decision("caso_escalado", f"ESC-{len(self.escalamientos):04d}")
+
+
+# ------------------------------------------------------------------ coordinador simulado (G1, T041)
+
+
+def mensaje_de_resultado(
+    subtype: str = "success", stop_reason: str = "end_turn", terminal: str = "completed"
+) -> ResultMessage:
+    """Un `ResultMessage` del SDK: por defecto, un fin normal."""
+    return ResultMessage(
+        subtype=subtype,
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=subtype != "success",
+        num_turns=1,
+        session_id="sesion-de-prueba",
+        stop_reason=stop_reason,
+        terminal_reason=terminal,
+    )
+
+
+class CoordinadorSimulado:
+    """Un `query()` del coordinador que ejecuta un guion de llamadas **por sus hooks** (G1).
+
+    Cada paso del guion pasa por una `SesionSimulada` con las opciones del coordinador que el
+    `Caso` le entrega. Así los `PreToolUse` de `delegar_frente` y de `registrar_informe`, los
+    `PostToolUse` de `escalar_a_cumplimiento` y el `Stop` se ejecutan como en el SDK.
+    `delegar_frente` llama al `Delegador` del caso (asignar `coordinador.caso`); `registrar_informe`
+    y `escalar_a_cumplimiento`, a la `PasarelaSimulada`.
+
+    Pasos del guion: `("delegar", entrada)`, `("delegar_paralelo", [entradas])`,
+    `("informe", recomendacion)`, `("escalar",)` y `("terminar",)`. El resultado de cada uno queda
+    en `pasos`, como `(tipo, resultado)`.
+    """
+
+    def __init__(
+        self,
+        guion: list[tuple[Any, ...]],
+        pasarela: "PasarelaSimulada | None" = None,
+        texto: str = "Resumen para el analista.",
+    ) -> None:
+        self.guion = list(guion)
+        self.pasarela = pasarela or PasarelaSimulada()
+        self.texto = texto
+        self.caso: Any = None
+        self.pasos: list[tuple[str, Any]] = []
+        self.sesion: SesionSimulada | None = None
+
+    def resultados_de(self, tipo: str) -> list[Any]:
+        return [resultado for paso, resultado in self.pasos if paso == tipo]
+
+    def _informe(self, recomendacion: str) -> dict[str, Any]:
+        comercio = (self.caso.estado.comercio if self.caso is not None else None) or {}
+        return {
+            "comercio": {
+                "identificador": comercio.get("identificador", "sin identificar"),
+                "nombre": comercio.get("nombre", "sin identificar"),
+            },
+            "recomendacion": recomendacion,
+            "hallazgos": {},
+            "cobertura": "completa",
+        }
+
+    async def __call__(self, *, prompt: str, options: Any = None):
+        herramientas = {
+            **self.pasarela.herramientas,
+            "mcp__delegacion__delegar_frente": lambda entrada: self.caso.delegador.delegar(entrada),
+        }
+        sesion = SesionSimulada(options, herramientas)
+        self.sesion = sesion
+        for paso in self.guion:
+            tipo = paso[0]
+            if tipo == "delegar":
+                resultado = await sesion.llamar(
+                    "mcp__delegacion__delegar_frente", paso[1], en_proceso=True
+                )
+            elif tipo == "delegar_paralelo":
+                resultado = await asyncio.gather(
+                    *(
+                        sesion.llamar("mcp__delegacion__delegar_frente", entrada, en_proceso=True)
+                        for entrada in paso[1]
+                    )
+                )
+            elif tipo == "informe":
+                resultado = await sesion.llamar(
+                    "mcp__pasarela__registrar_informe", self._informe(paso[1])
+                )
+            elif tipo == "escalar":
+                resultado = await sesion.llamar(
+                    "mcp__pasarela__escalar_a_cumplimiento", {"causa_escalamiento": "simulada"}
+                )
+            elif tipo == "terminar":
+                resultado = await sesion.terminar(self.texto)
+            else:
+                raise ValueError(f"Paso de guion desconocido: {tipo!r}")
+            self.pasos.append((tipo, resultado))
+        yield AssistantMessage(content=[TextBlock(self.texto)], model="simulado")
+        yield mensaje_de_resultado()

@@ -9,6 +9,7 @@ import asyncio
 import json
 
 from due_diligence import configuracion
+from due_diligence.coordinador import Caso as CasoReal
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
@@ -19,6 +20,8 @@ from due_diligence.eventos import (
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.hooks import HooksDelCaso
 from due_diligence.simulacion import (
+    CoordinadorSimulado,
+    EjecutorSimulado,
     PasarelaSimulada,
     SesionSimulada,
     comercio_alto_riesgo,
@@ -327,3 +330,98 @@ def test_el_fin_de_turno_de_un_subagente_no_se_bloquea():
     for frente in Frente:
         sesion = caso.sesion(frente)
         assert asyncio.run(sesion.terminar("listo")).termino is True
+
+
+# ---------------------------------- US5: sesiones separadas, dos casos y estado de las herramientas
+
+
+def _frentes_de(comercio, representante_en_listas=False, resumen="resumen del subagente"):
+    from due_diligence.simulacion import (
+        consulta,
+        consulta_listas,
+        respuesta_listas,
+        respuesta_registro,
+        resultado_frente,
+    )
+
+    id_comercio = comercio["identificador"]
+    id_persona = comercio["representante_legal"]["identificador"]
+    persona = consulta_listas("persona", identificador=id_persona)
+    if representante_en_listas:
+        persona = consulta(
+            Frente.LISTAS,
+            {"tipo": "persona", "identificador": id_persona},
+            respuesta_listas(
+                {"tipo": "persona", "nombre": "(ficticio)", "identificador": id_persona}
+            ),
+        )
+    registro = consulta(
+        Frente.REGISTRO, {"identificador": id_comercio}, respuesta_registro(comercio)
+    )
+    return {
+        Frente.REGISTRO: resultado_frente(Frente.REGISTRO, [registro]),
+        Frente.LISTAS: resultado_frente(
+            Frente.LISTAS,
+            [consulta_listas("comercio", identificador=id_comercio), persona],
+            resumen=resumen,
+        ),
+    }
+
+
+def _caso_real(comercio, **kwargs):
+    guion = [
+        ("delegar_paralelo", [{"frente": "registro", "identificador": comercio["identificador"]}]),
+        ("delegar", {"frente": "listas"}),
+        ("terminar",),
+    ]
+    coordinador = CoordinadorSimulado(guion)
+    caso = CasoReal(
+        ejecutor=EjecutorSimulado(resultados=_frentes_de(comercio, **kwargs)), consulta=coordinador
+    )
+    coordinador.caso = caso
+    return caso
+
+
+def test_el_hook_de_listas_ve_la_identificacion_que_escribio_el_del_registro_en_otra_sesion():
+    caso = _caso_real(comercio_alto_riesgo())
+    asyncio.run(caso.ejecutar("solicitud"))
+    assert caso.estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+    consultas = [c for c in caso.estado.consultas if c.frente is Frente.LISTAS]
+    assert len(consultas) == 2 and all(c.valido and c.error is None for c in consultas)
+    assert [c.tipo for c in caso.estado.libro.consultas_listas] == ["comercio", "persona"]
+
+
+def test_el_hook_del_coordinador_ve_la_coincidencia_que_escribio_el_de_listas_en_otra_sesion():
+    caso = _caso_real(comercio_con_representante_en_listas(), representante_en_listas=True)
+    asyncio.run(caso.ejecutar("solicitud"))
+    assert [c.causa for c in caso.estado.libro.coincidencias] == ["coincidencia_representante"]
+    cierre = caso.hooks.coordinador()["Stop"][0].hooks[0]
+    salida = asyncio.run(cierre({"stop_hook_active": False}, None, None))
+    assert salida["decision"] == "block"  # el Stop del coordinador ve lo del subagente de listas
+
+
+def test_dos_casos_a_la_vez_no_se_mezclan():
+    uno = _caso_real(comercio_con_representante_en_listas(), representante_en_listas=True)
+    otro = _caso_real(comercio_alto_riesgo())
+
+    async def a_la_vez():
+        await asyncio.gather(uno.ejecutar("solicitud uno"), otro.ejecutar("solicitud otro"))
+
+    asyncio.run(a_la_vez())
+    assert uno.estado.comercio["identificador"] == "CO-PL-0003"
+    assert otro.estado.comercio["identificador"] == "CO-TV-0001"
+    assert len(uno.estado.libro.coincidencias) == 1 and otro.estado.libro.coincidencias == []
+    assert uno.estado.libro is not otro.estado.libro
+    assert [e.regla for e in otro.eventos()] == [None] * len(otro.eventos())  # sin bloqueos ajenos
+
+
+def test_el_estado_sale_de_la_respuesta_de_la_herramienta_y_no_del_resumen_del_modelo():
+    # El resumen del subagente dice «sin coincidencias», pero la herramienta devolvió una.
+    caso = _caso_real(
+        comercio_con_representante_en_listas(),
+        representante_en_listas=True,
+        resumen="Sin coincidencias en listas restrictivas para el comercio ni su representante.",
+    )
+    asyncio.run(caso.ejecutar("solicitud"))
+    assert len(caso.estado.libro.coincidencias) == 1
+    assert "Sin coincidencias" in caso.estado.resultados[Frente.LISTAS].resumen

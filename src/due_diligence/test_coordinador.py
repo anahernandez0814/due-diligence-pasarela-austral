@@ -502,3 +502,171 @@ def test_el_coste_del_coordinador_se_toma_del_resultado():
     assert caso.coste_usd is None
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.coste_usd == 0.25
+
+
+# ------------------------------------------------------------- reparto de hooks por agente (#7, R5)
+
+PASARELA = "mcp__pasarela__"
+DELEGAR = "mcp__delegacion__delegar_frente"
+INFORME = PASARELA + "registrar_informe"
+ESCALAR = PASARELA + "escalar_a_cumplimiento"
+HERRAMIENTAS_DE_LAS_REGLAS = {
+    DELEGAR,
+    INFORME,
+    ESCALAR,
+    PASARELA + "consultar_registro_mercantil",
+    PASARELA + "consultar_listas_restrictivas",
+    PASARELA + "consultar_riesgo_categoria",
+}
+
+
+def _matchers(hooks):
+    return {evento: [m.matcher for m in lista] for evento, lista in hooks.items()}
+
+
+def test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop():
+    caso, _, _ = _caso([])
+    coordinador = _matchers(caso.opciones_coordinador().hooks)
+    assert coordinador == {
+        "PreToolUse": [DELEGAR, INFORME],
+        "PostToolUse": [ESCALAR],
+        "PostToolUseFailure": [ESCALAR],
+        "Stop": [None],
+    }
+
+
+def test_cada_subagente_tiene_solo_los_hooks_que_vigilan_su_herramienta():
+    caso, _, _ = _caso([])
+    registro = PASARELA + "consultar_registro_mercantil"
+    listas = PASARELA + "consultar_listas_restrictivas"
+    riesgo = PASARELA + "consultar_riesgo_categoria"
+    esperado = {
+        Frente.REGISTRO: {"PostToolUse": [registro], "PostToolUseFailure": [registro]},
+        Frente.LISTAS: {
+            "PreToolUse": [listas],
+            "PostToolUse": [listas],
+            "PostToolUseFailure": [listas],
+        },
+        Frente.CATEGORIA: {"PostToolUse": [riesgo], "PostToolUseFailure": [riesgo]},
+        Frente.NOTICIAS: {},
+    }
+    for frente, hooks in esperado.items():
+        assert _matchers(caso._opciones_subagente(frente).hooks or {}) == hooks, frente
+
+
+def test_ningun_subagente_tiene_stop_y_el_pretooluse_de_listas_solo_esta_en_listas():
+    caso, _, _ = _caso([])
+    for frente in Frente:
+        hooks = caso._opciones_subagente(frente).hooks or {}
+        assert "Stop" not in hooks
+        tiene_el_de_listas = any(
+            m.matcher == PASARELA + "consultar_listas_restrictivas"
+            for m in hooks.get("PreToolUse", [])
+        )
+        assert tiene_el_de_listas is (frente is Frente.LISTAS)
+    assert not any(
+        m.matcher == PASARELA + "consultar_listas_restrictivas"
+        for m in caso.opciones_coordinador().hooks["PreToolUse"]
+    )
+
+
+def test_los_matchers_son_nombres_completos_exactos_de_herramientas_conocidas():
+    caso, _, _ = _caso([])
+    todos = [caso.opciones_coordinador().hooks]
+    todos += [caso._opciones_subagente(f).hooks or {} for f in Frente]
+    nombres = {m.matcher for hooks in todos for lista in hooks.values() for m in lista if m.matcher}
+    assert nombres <= HERRAMIENTAS_DE_LAS_REGLAS
+    for nombre in nombres:
+        assert nombre.startswith("mcp__") and "*" not in nombre and "|" not in nombre
+
+
+def test_los_hooks_de_todos_los_agentes_cierran_sobre_el_mismo_estado_del_caso():
+    from due_diligence.simulacion import (
+        SesionSimulada,
+        comercio_alto_riesgo,
+        respuesta_registro,
+    )
+
+    caso, _, _ = _caso([])
+    sesion_registro = SesionSimulada(caso._opciones_subagente(Frente.REGISTRO))
+    asyncio.run(
+        sesion_registro.llamar(
+            FRENTES[Frente.REGISTRO].herramienta_completa,
+            {"identificador": "CO-TV-0001"},
+            respuesta=respuesta_registro(comercio_alto_riesgo()),
+        )
+    )
+    caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    # El hook del subagente de listas, en otra sesión, ve lo que escribió el del registro.
+    sesion_listas = SesionSimulada(caso._opciones_subagente(Frente.LISTAS))
+    consulta = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    llamada = asyncio.run(
+        sesion_listas.llamar(
+            FRENTES[Frente.LISTAS].herramienta_completa, consulta, respuesta={"resultado": "x"}
+        )
+    )
+    assert llamada.ejecutada and not llamada.denegada
+    # Y el hook del coordinador ve el mismo estado: con el registro terminado permite listas.
+    sesion_coordinador = SesionSimulada(caso.opciones_coordinador())
+    delegar = asyncio.run(
+        sesion_coordinador.llamar(DELEGAR, {"frente": "listas"}, respuesta={"ok": True})
+    )
+    assert delegar.ejecutada and not delegar.denegada
+
+
+def test_dos_casos_no_comparten_hooks_estado_ni_libro():
+    caso_uno, _, _ = _caso([])
+    caso_otro, _, _ = _caso([])
+    assert caso_uno.estado is not caso_otro.estado
+    assert caso_uno.estado.libro is not caso_otro.estado.libro
+    assert caso_uno.hooks is not caso_otro.hooks
+    caso_uno.estado.libro.fallo_de_hook = "x"
+    assert caso_otro.estado.libro.fallo_de_hook is None
+
+
+def test_el_caso_y_ejecutar_caso_no_aceptan_un_parametro_hooks():
+    with pytest.raises(TypeError):
+        Caso(hooks={"PreToolUse": []})
+    with pytest.raises(TypeError):
+        asyncio.run(ejecutar_caso(SOLICITUD, hooks={"PreToolUse": []}))
+
+
+# ------------------------------------------------------------------ Caso.completo (#7, FR-007)
+
+
+def test_un_caso_con_los_cuatro_frentes_terminados_y_fin_normal_esta_completo():
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.completo is True
+
+
+def test_un_caso_sin_ejecutar_o_con_un_frente_sin_terminar_no_esta_completo():
+    sin_ejecutar, _, _ = _caso([])
+    assert sin_ejecutar.completo is False
+    parcial, _, _ = _caso(DELEGACIONES_DEL_EJEMPLO, en_un_turno=True)
+    asyncio.run(parcial.ejecutar(SOLICITUD))  # listas nunca se delegó
+    assert parcial.completo is False
+
+
+def test_un_caso_con_terminacion_anomala_no_esta_completo():
+    caso, _, _ = _caso(TODO_EL_EJEMPLO, en_un_turno=True, fin=_fin(stop_reason="max_tokens"))
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+    assert caso.completo is False
+
+
+def test_un_caso_con_cierre_sin_escalar_no_esta_completo():
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    caso.estado.cierre_sin_escalar = True
+    assert caso.completo is False
+
+
+def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
+    # Un PostToolUse que falló pudo dejar sin registrar una coincidencia: no es un caso completo.
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.completo is True
+    caso.estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    assert caso.completo is False

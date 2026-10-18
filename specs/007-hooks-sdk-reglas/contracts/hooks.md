@@ -72,6 +72,20 @@ determinada, y `I.2, I.3` si aplican ambas. Un rechazo por una recomendación fu
 consulta de listas lleva la regla que corresponde a esa causa (`I.2` para listas) o ninguna si no es de las
 tres reglas.
 
+## Intentos bloqueados y el frente de listas (decisión de la analista)
+
+Cuando un `PreToolUse` deniega la consulta de un subagente, el SDK entrega un `tool_result` con error y el
+texto `PreToolUse:<herramienta> hook error: <motivo>`. El lector único (`interpretar_resultado`) lo
+reconoce como un error de tipo `bloqueado_por_hook`, distinto de un error real de la herramienta:
+
+- no hace fallar el frente si las consultas necesarias (comercio y representante, cuando existe) se
+  hicieron y son válidas; lo que decide el frente es lo que sí se consultó;
+- queda como evento `bloqueo_regla` (lo deja el hook) y como traza en `estado.consultas`, pero no entra en la
+  respuesta de `delegar_frente` ni cuenta como consulta de listas;
+- si lo bloqueado era una consulta necesaria, el frente queda `no_terminado` por la consulta que falta;
+- un error real de la herramienta (por ejemplo `servicio_no_disponible`) sigue haciendo fallar el frente y es
+  lo único que decide si es reintentable.
+
 ## Fallo cerrado (FR-012)
 
 `fallar_cerrado(hook, tipo)` envuelve cada callback:

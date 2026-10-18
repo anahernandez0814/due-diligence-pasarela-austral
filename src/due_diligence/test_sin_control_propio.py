@@ -18,7 +18,8 @@ from pathlib import Path
 
 PAQUETE = Path(__file__).resolve().parent
 MODULOS_DEL_CICLO = ("coordinador.py", "ejecutor.py", "delegacion.py")
-FUERA_DE_MAX_TURNS = {"configuracion.py", "sondeo_aislamiento.py"}
+# Los sondeos manuales provocan el límite de turnos a propósito para medirlo (R5 del #6, R3 del #7).
+FUERA_DE_MAX_TURNS = {"configuracion.py", "sondeo_aislamiento.py", "sondeo_hooks.py"}
 ATRIBUTOS_DE_TEXTO = {"text", "result", "respuesta", "resumen"}
 ARCHIVO_DE_ENTORNO = "." + "env"  # construido al ejecutar: ningún archivo lo escribe literal
 

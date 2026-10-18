@@ -169,8 +169,23 @@ representante legal tal como los devolvió el registro. Las decisiones están en
   comprueba que ni `CLAUDE.md` ni los hooks del repositorio llegan a los agentes;
   `--herramientas` lista las herramientas iniciales de cada agente y `--limite` provoca el límite de turnos.
 - **Tests**: `uv run pytest src/due_diligence` usa un ejecutor simulado ([simulacion.py](src/due_diligence/simulacion.py)).
-- **Alcance**: aún no hay hooks de reglas de negocio (#7); mientras tanto el coordinador conserva
-  `registrar_informe` y `escalar_a_cumplimiento` y su instrucción le prohíbe usarlas.
+- **Reglas de negocio con hooks** (ticket #7, [specs/007-hooks-sdk-reglas/](specs/007-hooks-sdk-reglas/)):
+  las reglas 1, 2 y 3 las hacen cumplir hooks del Agent SDK, no el prompt. Listas solo se consulta
+  con el comercio identificado de forma unívoca en el registro; una coincidencia en listas, o una
+  categoría de alto riesgo, impide recomendar habilitar y obliga a escalar con
+  `escalar_a_cumplimiento`; el coordinador no puede terminar un caso que requiere escalamiento sin
+  escalar. El informe solo admite las recomendaciones `habilitar`, `no_habilitar` y
+  `decide_cumplimiento`. Cada bloqueo deja un evento con la regla y el motivo, que `python -m
+  due_diligence` imprime junto a si el caso quedó completo.
+- **Modo de demostración**: con `PASARELA_MODO_DEMO_HOOKS=1` se quitan del prompt del coordinador la
+  regla de las varias coincidencias y la guía de escalar, para que el modelo pueda intentar las
+  acciones prohibidas y se vea que el hook las bloquea. **No desactiva ningún hook** y no es una
+  configuración normal: sirve para demostrar y probar que las reglas no dependen del prompt.
+  Ejemplo: `PASARELA_MODO_DEMO_HOOKS=1 uv run python -m due_diligence "<solicitud>"`.
+- **Sondeo de los hooks** (manual, gasta tokens, unos 0,01 USD): `uv run python -m
+  due_diligence.sondeo_hooks` repite lo medido con el SDK (forma de `tool_response`, vía de los
+  errores estructurados, qué pasa si un hook falla, el `Stop` con `block`) y prueba los hooks del
+  caso con una sesión real. Sale con 0 si todo coincide, 1 si algo difiere y 2 si solo hay mediciones inconclusas.
 
 ## Guardas del entorno
 

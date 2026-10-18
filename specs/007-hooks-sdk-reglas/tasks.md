@@ -506,7 +506,7 @@ modelo simulado que intenta las tres acciones.
 
 ## Fase 9: Sondeo, servidor y documentación
 
-- [ ] T048 [P] Crear `src/due_diligence/sondeo_hooks.py` (Q4, R1 a R3): versión repetible del sondeo de la
+- [X] T048 [P] Crear `src/due_diligence/sondeo_hooks.py` (Q4, R1 a R3): versión repetible del sondeo de la
   investigación, con `python -m due_diligence.sondeo_hooks` y Haiku; imprime, para cada experimento, lo
   esperado frente a lo medido: (a) forma de `tool_response` en stdio y en proceso; (b) error estructurado por
   `PostToolUseFailure` y no por `PostToolUse`; (c) una excepción en `PreToolUse` deja pasar la acción y un
@@ -518,13 +518,13 @@ modelo simulado que intenta las tres acciones.
   `configuracion.opciones_base` con `setting_sources=[]`, no lee archivos de entorno, ni se importa desde
   el paquete. Con un test sin modelo (`test_sondeo_hooks.py`) que comprueba la comparación de lo
   esperado con lo medido usando mediciones simuladas.
-- [ ] T049 [P] Editar `src/servidor_mcp/servidor.py` (FR-020, principio IV): la descripción de `registrar_informe` y de su parámetro
+- [X] T049 [P] Editar `src/servidor_mcp/servidor.py` (FR-020, principio IV): la descripción de `registrar_informe` y de su parámetro
   `recomendacion` nombra los tres valores (`habilitar`, `no_habilitar` y `decide_cumplimiento`) **como
   guía**, sin que el servidor los valide ni cambie lo que hace (`decisiones.py` no cambia: sigue sin validar
   reglas de negocio); actualizar `src/servidor_mcp/test_servidor.py` para comprobar el texto y que el servidor
   sigue aceptando cualquier recomendación textual. Respetar `.claude/rules/herramientas-mcp.md` (qué hace
   y qué no hace) y `src/servidor_mcp/CLAUDE.md`.
-- [ ] T050 [P] Ampliar `DECISIONES.md` (solo se amplía; sin recortar entradas anteriores): decisiones del #7 con
+- [X] T050 [P] Ampliar `DECISIONES.md` (solo se amplía; sin recortar entradas anteriores): decisiones del #7 con
   una línea por decisión (hooks por agente con estado compartido; el SDK deja pasar la acción ante una excepción
   y por eso el envoltorio; límite de devoluciones del `Stop` propio; fuente única de la identificación; conjunto
   cerrado de recomendaciones; modo de demostración que no toca los hooks) y los **residuales de R12**: llamar
@@ -532,11 +532,11 @@ modelo simulado que intenta las tres acciones.
   que se cuelga no se midió; la carrera de listas en el mismo turno que registro; un informe ya registrado no se
   anula si el registro cambia de comercio; un hook de registro que falla bloquea el caso. Cerrar la desviación
   temporal del principio II del #6 solo para las reglas 1 a 3. Remitir al detalle a `research.md`.
-- [ ] T051 [P] Ampliar `README.md` con una sección breve del modo de demostración: qué hace, que se activa con
+- [X] T051 [P] Ampliar `README.md` con una sección breve del modo de demostración: qué hace, que se activa con
   `PASARELA_MODO_DEMO_HOOKS=1`, que quita del prompt la regla 3 y la instrucción de escalar, que **no desactiva
   los hooks** y que no debe usarse como configuración normal; y de qué hacen los hooks de las reglas 1 a 3 en
   tres frases. Sin valores con forma real.
-- [ ] T052 Fase 9 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde (incluida la
+- [X] T052 Fase 9 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde (incluida la
   revisión de datos con forma real de #3, `test_revision_repositorio.py`, que se ejecuta con la suite).
 
 ---

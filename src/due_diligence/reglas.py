@@ -210,6 +210,27 @@ def permite_listas(estado: EstadoCaso, entrada: Any) -> tuple[bool, str]:
     return False, MOTIVO_CONSULTA_AJENA
 
 
+# ------------------------------------------------- categoría del analista (#10, FR-020, R9)
+
+MOTIVO_CATEGORIA_NO_DEL_ANALISTA = (
+    "La categoría no aparece en los mensajes del analista: use la que dio o pregúntesela."
+)
+
+
+def categoria_en_mensajes(categoria: Any, mensajes: Iterable[str]) -> bool:
+    """Si la categoría aparece, como frase completa, en algún mensaje del analista (R9).
+
+    Compara con `normalizar` de la pasarela (mayúsculas, tildes, espacios y puntuación no importan)
+    y con límites de palabra: «ropa» no aparece en «tropa». No cubre plurales («suplemento
+    dietario» no es «suplementos dietarios»): es un riesgo declarado (US5-5). Una categoría vacía
+    o que no es texto no aparece.
+    """
+    if not isinstance(categoria, str) or not normalizar(categoria):
+        return False
+    buscada = f" {normalizar(categoria)} "
+    return any(buscada in f" {normalizar(mensaje)} " for mensaje in mensajes)
+
+
 def permite_delegar_listas(estado: EstadoCaso) -> tuple[bool, str]:
     """(permitida, motivo) de delegar el frente de listas (regla I.1, FR-018, R6).
 

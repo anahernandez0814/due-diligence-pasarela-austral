@@ -1206,3 +1206,10 @@ def test_otros_frentes_y_un_registro_rechazado_no_cambian_el_comercio_pedido():
     _delegar(delegador, frente="noticias", nombre="Taller Aurora SAS")
     _delegar(delegador, frente="registro")  # sin dato: se rechaza
     assert estado.comercio_pedido is None
+
+
+def test_la_descripcion_pide_la_categoria_que_dio_el_analista():
+    # #10, FR-020: el hook bloquea la que no aparece en los mensajes; la descripción lo anticipa.
+    from due_diligence.delegacion import DESCRIPCION
+
+    assert "La categoría tiene que ser la que dio el analista" in DESCRIPCION

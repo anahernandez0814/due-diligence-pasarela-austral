@@ -39,6 +39,14 @@ from due_diligence.test_casos_reglas import _delegaciones, _resultados
 
 NOTICIAS = {"frente": "noticias", "identificador": "CO-TA-0002"}
 SOLICITUD = "Due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, talleres."
+# Desde el #10 (FR-020) la categoría delegada tiene que aparecer en un mensaje del analista.
+SOLICITUD_G = (
+    "Due diligence de Ferretería Río Fino SAS, identificador ficticio CO-RF-0006, comercio de "
+    "calzado."
+)
+SOLICITUD_A = (
+    "Due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001, suplementos dietarios."
+)
 COBERTURA_CAMBIO = (
     "El informe registrado ya no está vigente: cambió la cobertura después de registrarlo. "
     "Registra uno nuevo."
@@ -216,9 +224,9 @@ CONFLICTO_G = {
 }
 
 
-def _caso_con(guion, resultados):
+def _caso_con(guion, resultados, solicitud=SOLICITUD):
     caso, coordinador = _ejecutar(guion, EjecutorSimulado(resultados=resultados))
-    asyncio.run(caso.ejecutar(SOLICITUD))
+    asyncio.run(caso.ejecutar(solicitud))
     return caso, coordinador
 
 
@@ -252,7 +260,7 @@ def test_caso_g_el_informe_muestra_las_dos_fechas_sin_que_el_coordinador_las_dec
         ("informe", "no_habilitar"),  # el coordinador simulado declara «sin conflictos»
         ("terminar",),
     ]
-    caso, coordinador = _caso_con(guion, _resultados_g())
+    caso, coordinador = _caso_con(guion, _resultados_g(), SOLICITUD_G)
     (informe,) = coordinador.pasarela.informes
     assert informe["conflictos"] == CONFLICTO_G
     assert informe["comercio"] == {
@@ -295,7 +303,7 @@ def test_caso_g_un_conflicto_inventado_por_el_coordinador_no_queda():
         ("informe_con", inventado),
         ("terminar",),
     ]
-    _, coordinador = _caso_con(guion, _resultados_g())
+    _, coordinador = _caso_con(guion, _resultados_g(), SOLICITUD_G)
     (informe,) = coordinador.pasarela.informes
     assert informe["conflictos"] == CONFLICTO_G
 
@@ -322,7 +330,7 @@ def test_caso_escalado_el_informe_se_rechaza_hasta_escalar_y_despues_se_registra
         ("informe", "decide_cumplimiento"),
         ("terminar",),
     ]
-    caso, coordinador = _caso_con(guion, _resultados_alto_riesgo())
+    caso, coordinador = _caso_con(guion, _resultados_alto_riesgo(), SOLICITUD_A)
     antes, despues = coordinador.resultados_de("informe")
     assert antes.denegada and "aún no se ha escalado" in antes.motivo
     assert despues.ejecutada and not despues.denegada
@@ -369,7 +377,7 @@ def test_sc003_el_cierre_solo_se_permite_con_todo(escalar, informe):
     if informe == "anterior_a_un_cambio":
         guion.append(("delegar", {"frente": "noticias", "identificador": identificador}))
     guion.append(("terminar",))
-    _, coordinador = _caso_con(guion, resultados)
+    _, coordinador = _caso_con(guion, resultados, SOLICITUD_A if escalar else SOLICITUD)
     (cierre,) = coordinador.resultados_de("terminar")
     assert cierre.termino is (informe == "vigente")
     if informe == "ninguno":

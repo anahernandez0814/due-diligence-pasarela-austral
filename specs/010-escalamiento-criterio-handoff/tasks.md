@@ -163,7 +163,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 **Prueba independiente**: con la solicitud del ejemplo, «suplementos dietarios» se permite y «ropa y accesorios» se bloquea. Con la categoría en un segundo mensaje, se permite (US5).
 
-- [ ] T020 [P] [US5] Tests en `src/due_diligence/test_reglas.py` y `test_hooks.py` (R9, FR-020):
+- [X] T020 [P] [US5] Tests en `src/due_diligence/test_reglas.py` y `test_hooks.py` (R9, FR-020):
   - **`categoria_en_mensajes`**:
     - «suplementos dietarios» está en la solicitud del ejemplo del enunciado;
     - «Suplementos  Dietarios» (mayúsculas y doble espacio) cuenta como la misma;
@@ -177,8 +177,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
     - con el sello, se sigue evaluando por la categoría, no por el sello.
   - **El motivo** no repite la categoría pedida ni datos del comercio.
   - **Espera de categoría de extremo a extremo** (US4-4): el comercio identificado, la categoría bloqueada sin resultado y el `Stop` → espera `categoria`. Si en el turno siguiente el analista da la categoría y se consulta, el `Stop` exige el cierre de siempre.
-- [ ] T021 [US5] Implementar T020 en `src/due_diligence/reglas.py` (`categoria_en_mensajes`, el motivo) y en `src/due_diligence/hooks.py` (`_delegar_previo`). En `src/due_diligence/delegacion.py`, la descripción de `delegar_frente` añade que la categoría tiene que ser la que dio el analista. El test de la descripción lo comprueba.
-- [ ] T022 [US5] Fase 4: ruff, la suite y los tests de T046. Commit «categoría de los mensajes del analista (#10, US5)».
+- [X] T021 [US5] Implementar T020 en `src/due_diligence/reglas.py` (`categoria_en_mensajes`, el motivo) y en `src/due_diligence/hooks.py` (`_delegar_previo`). En `src/due_diligence/delegacion.py`, la descripción de `delegar_frente` añade que la categoría tiene que ser la que dio el analista. El test de la descripción lo comprueba.
+  **Nota de T021**: la acción del bloqueo es `delegar_frente (categoria)`, con el formato de las acciones que ya existían (`delegar_frente (listas)`), no `delegar_frente categoria` como decía T020.
+- [X] T022 [US5] Fase 4: ruff, la suite y los tests de T046. Commit «categoría de los mensajes del analista (#10, US5)».
 
 ---
 
@@ -356,6 +357,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_hooks.py::test_con_varias_coincidencias_o_ninguna_no_se_exige_informe` | Ahora es una espera del analista y deja `espera_analista` (R3). | Sigue exigiendo `permitir()`; los eventos pasan de `[]` a exactamente `[espera_analista]`. |
   | `test_hooks.py::test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradicen`, variante de varias coincidencias | FR-016: el informe se rechaza durante la espera del identificador (es la fila del cambio respecto al #9). | Se separa en `test_con_varias_coincidencias_la_cobertura_y_los_conflictos_no_se_contradicen`: las mismas igualdades exactas de la cobertura (`registro: cubierto.`) y de los conflictos, con los cálculos puros que pondría el hook, y el rechazo con el motivo exacto. Las variantes «en curso» y «caído» no cambian. |
   | `test_coordinador.py::test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos` | Cada turno empieza con `mensaje_analista` (R2). | La secuencia exacta añade `("mensaje_analista", None)` tras `caso_iniciado`. |
+  | `test_casos_reglas.py`: casos b, c (dos) y el límite de devoluciones; `test_casos_cobertura.py`: los tres del caso f; `test_casos_informe.py`: caso g, caso escalado y SC-003 con escalamiento; `test_modo_demo.py`: los tres en demo | FR-020: la categoría delegada tiene que aparecer en un mensaje del analista, y sus solicitudes no la nombraban (por ejemplo, «talleres» o «panaderías» con la solicitud de Tienda Verde). | Cambia solo la **entrada**: cada caso pide el due diligence con la categoría que delega su guion (`SOLICITUD_B`, `SOLICITUD_C`, `SOLICITUD_G`, `SOLICITUD_A` o «Solicitud de <categoría>.» en demo). Ninguna aserción cambia. |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

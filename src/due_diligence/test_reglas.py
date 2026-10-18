@@ -953,3 +953,40 @@ def test_el_motivo_sin_comercio_lee_la_clase_y_no_el_texto(monkeypatch):
     # Un motivo del registro con otro texto: la clase sigue diciendo `varias`.
     monkeypatch.setattr(type(estado), "motivo_comercio", property(lambda self: "otro texto"))
     assert _motivo_sin_comercio(estado) == MOTIVO_VARIAS_COINCIDENCIAS
+
+
+# ------------------------------------------- #10: la categoría de los mensajes del analista (T020)
+
+SOLICITUD_DEL_EJEMPLO = (
+    "Necesito el due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001. Quieren "
+    "procesar ventas en línea de suplementos dietarios y estiman unos $80.000.000 mensuales. "
+    "¿Lo podemos habilitar esta semana?"
+)
+
+
+@pytest.mark.parametrize(
+    ("categoria", "mensajes", "aparece"),
+    [
+        ("suplementos dietarios", [SOLICITUD_DEL_EJEMPLO], True),
+        ("Suplementos  Dietarios", [SOLICITUD_DEL_EJEMPLO], True),  # mayúsculas y espacios
+        ("ropa y accesorios", [SOLICITUD_DEL_EJEMPLO], False),
+        ("ropa", ["Vende uniformes para la tropa."], False),  # límites de palabra
+        ("suplementos dietarios", ["Vende un suplemento dietario."], False),  # plural: riesgo
+        ("educación en línea", ["Ofrece educacion en linea."], True),  # tildes
+        ("talleres", ["Primer mensaje.", "La categoría es talleres."], True),  # mensaje posterior
+        ("talleres", [], False),
+        ("", [SOLICITUD_DEL_EJEMPLO], False),
+    ],
+)
+def test_la_categoria_tiene_que_aparecer_en_un_mensaje_del_analista(categoria, mensajes, aparece):
+    from due_diligence.reglas import categoria_en_mensajes
+
+    assert categoria_en_mensajes(categoria, mensajes) is aparece
+
+
+def test_el_motivo_de_la_categoria_no_repite_la_categoria_ni_el_comercio():
+    from due_diligence.reglas import MOTIVO_CATEGORIA_NO_DEL_ANALISTA
+
+    assert MOTIVO_CATEGORIA_NO_DEL_ANALISTA == (
+        "La categoría no aparece en los mensajes del analista: use la que dio o pregúntesela."
+    )

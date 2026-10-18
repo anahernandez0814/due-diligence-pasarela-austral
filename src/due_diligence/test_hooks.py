@@ -2509,3 +2509,83 @@ def test_con_el_sello_y_la_espera_el_informe_minimo_sigue_exigiendo_escalar_ante
         Escalamiento(causas_vigentes(estado.libro), clave_comercio(estado))
     )
     assert not _es_denegacion(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
+
+
+# ---------------------------------- #10: la categoría delegada es la del analista (T020, FR-020)
+
+SOLICITUD_CON_CATEGORIA = "Due diligence de Tienda Verde SAS, de suplementos dietarios."
+
+
+def _delegar(hooks, entrada):
+    return _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, entrada))
+
+
+def test_una_categoria_que_no_esta_en_los_mensajes_se_bloquea_con_i3():
+    from due_diligence.hooks import ACCION_DELEGAR_CATEGORIA
+    from due_diligence.reglas import MOTIVO_CATEGORIA_NO_DEL_ANALISTA
+
+    estado, eventos, hooks = _caso()
+    estado.solicitud = SOLICITUD_CON_CATEGORIA
+    salida = _delegar(hooks, {"frente": "categoria", "categoria": "ropa y accesorios"})
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_CATEGORIA_NO_DEL_ANALISTA
+    assert estado.categoria_bloqueada is True
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.3"
+    assert evento.accion == ACCION_DELEGAR_CATEGORIA == "delegar_frente (categoria)"
+    assert "ropa" not in evento.detalle and "Tienda Verde" not in evento.detalle
+
+
+def test_una_categoria_de_los_mensajes_se_permite_y_quita_el_bloqueo():
+    estado, eventos, hooks = _caso()
+    estado.solicitud = SOLICITUD_CON_CATEGORIA
+    estado.categoria_bloqueada = True
+    salida = _delegar(hooks, {"frente": "categoria", "categoria": "Suplementos Dietarios"})
+    assert salida == permitir()
+    assert estado.categoria_bloqueada is False and eventos.eventos() == []
+
+
+def test_la_categoria_dada_en_un_mensaje_posterior_se_permite():
+    estado, _, hooks = _caso()
+    estado.solicitud = "Due diligence de Taller Aurora SAS."
+    assert _es_denegacion(_delegar(hooks, {"frente": "categoria", "categoria": "talleres"}))
+    estado.mensajes.append("Es de talleres.")
+    assert _delegar(hooks, {"frente": "categoria", "categoria": "talleres"}) == permitir()
+
+
+def test_una_delegacion_de_categoria_sin_categoria_la_rechaza_el_delegador_no_el_hook():
+    estado, eventos, hooks = _caso()
+    assert _delegar(hooks, {"frente": "categoria"}) == permitir()
+    assert estado.categoria_bloqueada is False and eventos.eventos() == []
+
+
+def test_con_el_sello_la_categoria_se_evalua_por_la_categoria_y_no_por_el_sello():
+    estado, _, hooks = _caso()
+    estado.solicitud = SOLICITUD_CON_CATEGORIA
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    ok = {"frente": "categoria", "categoria": "suplementos dietarios"}
+    assert _delegar(hooks, ok) == permitir()
+    otra = {"frente": "categoria", "categoria": "apuestas"}
+    assert _es_denegacion(_delegar(hooks, otra))
+
+
+def test_la_espera_de_categoria_de_extremo_a_extremo_en_el_stop():
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+    from due_diligence.reglas import MOTIVO_ESPERA_CATEGORIA
+
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.solicitud = "Due diligence de Tienda Verde SAS."
+    _delegar(hooks, {"frente": "categoria", "categoria": "suplementos dietarios"})
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()  # US4-4
+    assert [e.detalle for e in eventos.eventos() if e.tipo == TIPO_ESPERA_ANALISTA] == [
+        MOTIVO_ESPERA_CATEGORIA
+    ]
+    # Turno siguiente: el analista da la categoría, se delega y se consulta; ya no es espera.
+    estado.mensajes.append("Es de suplementos dietarios.")
+    assert _delegar(hooks, {"frente": "categoria", "categoria": "suplementos dietarios"}) == (
+        permitir()
+    )
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida) and salida["reason"] == (
+        motivo_de_escalar({"alto_riesgo"}) + " Luego registra el informe."
+    )

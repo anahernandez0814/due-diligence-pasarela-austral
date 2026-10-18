@@ -62,7 +62,9 @@ from due_diligence.informe import (
 from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo, Escalamiento
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
+    MOTIVO_CATEGORIA_NO_DEL_ANALISTA,
     Rechazo,
+    categoria_en_mensajes,
     causas_vigentes,
     espera_del_analista,
     evaluar_cierre,
@@ -197,6 +199,9 @@ def _resumen_de_huella(huella: Huella) -> str:
 # Acción intentada en los bloqueos (#9, FR-017): la herramienta y, como mucho, un valor de un
 # conjunto cerrado (la recomendación o el tipo de consulta). Nunca nombres ni identificadores.
 ACCION_DELEGAR_LISTAS = "delegar_frente (listas)"
+ACCION_DELEGAR_CATEGORIA = "delegar_frente (categoria)"
+# La regla del bloqueo de la categoría (#10, FR-020): el nivel de riesgo depende de ella (I.3).
+REGLA_CATEGORIA = "I.3"
 ACCION_DELEGAR_INVALIDA = "delegar_frente (entrada no válida)"
 
 
@@ -516,6 +521,8 @@ class HooksDelCaso:
             return self._denegar_por_regla(
                 None, None, MOTIVO_ENTRADA_MALFORMADA, ACCION_DELEGAR_INVALIDA
             )
+        if frente.strip().casefold() == Frente.CATEGORIA.value:
+            return self._categoria_previa(argumentos)
         if frente.strip().casefold() != Frente.LISTAS.value:
             return permitir()
         sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS, ACCION_DELEGAR_LISTAS)
@@ -525,6 +532,27 @@ class HooksDelCaso:
         if permitida:
             return permitir()
         return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo, ACCION_DELEGAR_LISTAS)
+
+    def _categoria_previa(self, argumentos: Mapping[str, Any]) -> dict[str, Any]:
+        """La categoría delegada tiene que aparecer en un mensaje del analista (#10, FR-020, R9).
+
+        Sin categoría se deja pasar: la rechaza el `Delegador`, como desde el #6. Con el sello no se
+        deniega por el sello, porque delegar la categoría no decide nada. Si se bloquea, el caso
+        queda con `categoria_bloqueada` (la espera de la categoría, R3); si se permite, se quita.
+        """
+        categoria = argumentos.get("categoria")
+        if not isinstance(categoria, str) or not categoria.strip():
+            return permitir()
+        if categoria_en_mensajes(categoria, self.estado.mensajes):
+            self.estado.categoria_bloqueada = False
+            return permitir()
+        self.estado.categoria_bloqueada = True
+        return self._denegar_por_regla(
+            Frente.CATEGORIA,
+            REGLA_CATEGORIA,
+            MOTIVO_CATEGORIA_NO_DEL_ANALISTA,
+            ACCION_DELEGAR_CATEGORIA,
+        )
 
     # -------------------------------------------------------------- registro (FR-001)
 

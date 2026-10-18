@@ -186,7 +186,8 @@ def _caso_en_demo(guion, comercios, categoria=None, nivel=None, listas=None, ide
         entorno=DEMO, ejecutor=EjecutorSimulado(resultados=resultados), consulta=coordinador
     )
     coordinador.caso = caso
-    asyncio.run(caso.ejecutar("solicitud"))
+    # Desde el #10 (FR-020) la categoría delegada tiene que estar en un mensaje del analista.
+    asyncio.run(caso.ejecutar(f"Solicitud de {categoria}." if categoria else "solicitud"))
     return caso, coordinador
 
 

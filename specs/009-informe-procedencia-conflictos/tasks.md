@@ -444,7 +444,7 @@ hora con UTC, los conflictos y los informes.
 (habilitar)"`, y la salida de la línea de comandos muestra «UTC», el conflicto y el informe
 (SC-005).
 
-- [ ] T035 [P] [US5] Tests en `src/due_diligence/test_hooks.py` y `src/due_diligence/test_main.py`
+- [X] T035 [P] [US5] Tests en `src/due_diligence/test_hooks.py` y `src/due_diligence/test_main.py`
   (R10, R12):
   - **`accion` en cada bloqueo**:
     - `registrar_informe (<recomendación>)`; con una recomendación que no es del conjunto,
@@ -456,7 +456,7 @@ hora con UTC, los conflictos y los informes.
     - imprime la hora de los eventos con «UTC», la `accion` de los bloqueos, el bloque
       «Conflictos:» y los informes (id, recomendación, vigente sí o no, mínimo);
     - sigue mostrando la cobertura (#8).
-- [ ] T036 [US5] Implementar lo de T035 en `src/due_diligence/hooks.py` (`_denegar_por_regla`
+- [X] T036 [US5] Implementar lo de T035 en `src/due_diligence/hooks.py` (`_denegar_por_regla`
   recibe `accion`) y en `src/due_diligence/__main__.py`. El bloque «Conflictos:» lee
   `caso.conflictos` (T023), no vuelve a calcularlos. Hace pasar T035.
 

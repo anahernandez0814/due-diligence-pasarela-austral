@@ -1943,3 +1943,75 @@ def test_con_doble_fallo_el_informe_minimo_se_deniega_con_el_motivo_generico(mon
     monkeypatch.setattr(modulo_hooks, "problemas_de_fuente", roto)
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("decide_cumplimiento")))
     assert _es_denegacion(salida) and _motivo(salida) == modulo_hooks.MOTIVO_FALLO_DE_HOOK
+
+
+# ------------------------------------------- #9: la acción intentada en los bloqueos (US5, FR-017)
+
+
+def _ultimo_bloqueo(eventos):
+    (bloqueo,) = [e for e in eventos.eventos() if e.tipo == TIPO_BLOQUEO_REGLA][-1:]
+    return bloqueo
+
+
+@pytest.mark.parametrize(
+    ("recomendacion", "accion"),
+    [
+        ("habilitar", "registrar_informe (habilitar)"),
+        ("aprobar", "registrar_informe (recomendación no válida)"),
+    ],
+)
+def test_el_bloqueo_del_informe_dice_la_recomendacion_intentada(recomendacion, accion):
+    _, eventos, hooks = _caso_con_comercio()
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de(recomendacion)))
+    assert _ultimo_bloqueo(eventos).accion == accion
+
+
+def test_el_bloqueo_de_un_informe_que_no_es_un_objeto_lo_dice_sin_repetirlo():
+    _, eventos, hooks = _caso_con_comercio()
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, "texto libre"))
+    assert _ultimo_bloqueo(eventos).accion == "registrar_informe (entrada no válida)"
+
+
+@pytest.mark.parametrize(
+    ("tipo", "accion"),
+    [
+        ("persona", "consultar_listas_restrictivas (persona)"),
+        ("comercio", "consultar_listas_restrictivas (comercio)"),
+        ("otra cosa", "consultar_listas_restrictivas (tipo no válido)"),
+    ],
+)
+def test_el_bloqueo_de_listas_dice_si_la_consulta_era_del_comercio_o_del_representante(
+    tipo, accion
+):
+    _, eventos, hooks = _caso()  # sin comercio identificado: la regla I.1 bloquea
+    entrada = {"tipo": tipo, "identificador": "PE-0001"}
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), _pre(LISTAS, entrada))
+    assert _es_denegacion(salida)
+    assert _ultimo_bloqueo(eventos).accion == accion
+
+
+def test_el_bloqueo_de_delegar_listas_lo_dice():
+    _, eventos, hooks = _caso()
+    _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, {"frente": "listas"}))
+    assert _ultimo_bloqueo(eventos).accion == "delegar_frente (listas)"
+    _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, "texto"))
+    assert _ultimo_bloqueo(eventos).accion == "delegar_frente (entrada no válida)"
+
+
+def test_con_el_libro_sellado_el_bloqueo_de_listas_tambien_dice_la_accion():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), _pre(LISTAS, entrada))
+    assert _ultimo_bloqueo(eventos).accion == "consultar_listas_restrictivas (comercio)"
+
+
+def test_ninguna_accion_repite_nombres_ni_identificadores():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    entrada = {"tipo": "persona", "identificador": "PE-0001", "nombre": "Lucía Ferrer Montalvo"}
+    _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), _pre(LISTAS, entrada))
+    acciones = " ".join(e.accion or "" for e in eventos.eventos())
+    for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía"):
+        assert dato not in acciones

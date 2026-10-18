@@ -65,6 +65,7 @@ from due_diligence.reglas import (
     evaluar_informe,
     evaluar_informe_minimo,
     falta_para_cerrar,
+    normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
     reglas_de,
@@ -186,6 +187,27 @@ def _resumen_de_huella(huella: Huella) -> str:
     else:
         conflictos = "1 conflicto" if len(lista) == 1 else f"{len(lista)} conflictos"
     return f"{cobertura}; {conflictos}"
+
+
+# Acción intentada en los bloqueos (#9, FR-017): la herramienta y, como mucho, un valor de un
+# conjunto cerrado (la recomendación o el tipo de consulta). Nunca nombres ni identificadores.
+ACCION_DELEGAR_LISTAS = "delegar_frente (listas)"
+ACCION_DELEGAR_INVALIDA = "delegar_frente (entrada no válida)"
+
+
+def _accion_listas(argumentos: Any) -> str:
+    tipo = argumentos.get("tipo") if isinstance(argumentos, Mapping) else None
+    tipo = tipo.strip().casefold() if isinstance(tipo, str) else None
+    if tipo not in ("comercio", "persona"):
+        tipo = "tipo no válido"
+    return f"consultar_listas_restrictivas ({tipo})"
+
+
+def _accion_informe(argumentos: Any) -> str:
+    if not isinstance(argumentos, Mapping):
+        return "registrar_informe (entrada no válida)"
+    recomendacion = normalizar_recomendacion(argumentos.get("recomendacion"))
+    return f"registrar_informe ({recomendacion or 'recomendación no válida'})"
 
 
 # --------------------------------------------------------------------------- lectura
@@ -409,15 +431,17 @@ class HooksDelCaso:
 
     # -------------------------------------------------------------- denegar por regla
 
-    def _denegar_por_regla(self, frente: Frente | None, regla: str | None, motivo: str):
-        """Deniega, y deja el evento con la regla y el motivo (FR-013)."""
-        self.eventos.registrar(TIPO_BLOQUEO_REGLA, frente, motivo, regla=regla)
+    def _denegar_por_regla(
+        self, frente: Frente | None, regla: str | None, motivo: str, accion: str | None = None
+    ):
+        """Deniega, y deja el evento con la regla, el motivo y la acción intentada (FR-013, #9)."""
+        self.eventos.registrar(TIPO_BLOQUEO_REGLA, frente, motivo, regla=regla, accion=accion)
         return denegar(motivo)
 
-    def _sellado(self, frente: Frente | None, regla: str | None):
+    def _sellado(self, frente: Frente | None, regla: str | None, accion: str | None = None):
         """Con el libro sellado un hecho pudo quedar sin registrar: no se permite."""
         if self.estado.libro.fallo_de_hook:
-            return self._denegar_por_regla(frente, regla, MOTIVO_LIBRO_SELLADO)
+            return self._denegar_por_regla(frente, regla, MOTIVO_LIBRO_SELLADO, accion)
         return None
 
     # -------------------------------------------------------------- regla I.1: listas
@@ -426,13 +450,14 @@ class HooksDelCaso:
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
         """`PreToolUse` de la consulta de listas: solo el comercio o su representante (FR-002)."""
-        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        accion = _accion_listas(entrada.get("tool_input"))
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS, accion)
         if sellado is not None:
             return sellado
         permitida, motivo = permite_listas(self.estado, entrada.get("tool_input"))
         if permitida:
             return permitir()
-        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo, accion)
 
     async def _delegar_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
@@ -444,16 +469,18 @@ class HooksDelCaso:
         argumentos = entrada.get("tool_input")
         frente = argumentos.get("frente") if isinstance(argumentos, Mapping) else None
         if not isinstance(frente, str):
-            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
+            return self._denegar_por_regla(
+                None, None, MOTIVO_ENTRADA_MALFORMADA, ACCION_DELEGAR_INVALIDA
+            )
         if frente.strip().casefold() != Frente.LISTAS.value:
             return permitir()
-        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS, ACCION_DELEGAR_LISTAS)
         if sellado is not None:
             return sellado
         permitida, motivo = permite_delegar_listas(self.estado)
         if permitida:
             return permitir()
-        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo, ACCION_DELEGAR_LISTAS)
 
     # -------------------------------------------------------------- registro (FR-001)
 
@@ -609,7 +636,9 @@ class HooksDelCaso:
         evaluar = evaluar_informe_minimo if sellado else evaluar_informe
         rechazos = list(evaluar(self.estado, argumentos))
         if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
-            return self._denegar_informe(rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [])
+            return self._denegar_informe(
+                rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [], argumentos
+            )
         comercio = comercio_del_informe(self.estado)
         if comercio is None:
             rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_INFORME, None))
@@ -624,7 +653,7 @@ class HooksDelCaso:
         }
         problemas = self._problemas_del_informe(completa)
         if rechazos or problemas:
-            return self._denegar_informe(rechazos, problemas)
+            return self._denegar_informe(rechazos, problemas, argumentos)
         if cobertura is None:
             self.eventos.registrar(
                 TIPO_COBERTURA_SUSTITUIDA,
@@ -693,7 +722,7 @@ class HooksDelCaso:
         problemas = validar_informe(para_validar)
         return problemas + problemas_de_fuente(self.estado, completa["hallazgos"])
 
-    def _denegar_informe(self, rechazos: list[Rechazo], problemas: list[Problema]):
+    def _denegar_informe(self, rechazos: list[Rechazo], problemas: list[Problema], argumentos: Any):
         """Deniega el informe con el JSON de R3 y deja `bloqueo_regla` (I.4 si hay problemas)."""
         reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
         if problemas:
@@ -704,7 +733,11 @@ class HooksDelCaso:
             plural = "problema" if cantidad == 1 else "problemas"
             textos.append(f"{cantidad} {plural} de forma o de fuente en el informe.")
         self.eventos.registrar(
-            TIPO_BLOQUEO_REGLA, None, " ".join(textos), regla=", ".join(sorted(reglas)) or None
+            TIPO_BLOQUEO_REGLA,
+            None,
+            " ".join(textos),
+            regla=", ".join(sorted(reglas)) or None,
+            accion=_accion_informe(argumentos),
         )
         return denegar_informe(rechazos, problemas)
 

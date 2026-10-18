@@ -233,3 +233,88 @@ def test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra():
     assert "Cobertura:" in salida
     for linea in caso.cobertura.lineas():
         assert linea in salida
+
+
+# ------------------------------------------------------------------ #9: traza y conflictos (US5)
+
+
+def _caso_g_con_informe():
+    """`CO-RF-0006` identificado, con su consulta del registro, un bloqueo y un informe vigente."""
+    from due_diligence.estado import Consulta, Situacion
+    from due_diligence.eventos import TIPO_BLOQUEO_REGLA
+    from due_diligence.frentes import FRENTES
+    from due_diligence.informe import InformeRegistrado, huella_actual
+    from servidor_mcp import datos
+    from servidor_mcp.registro import consultar_registro_mercantil
+
+    datos.limpiar_cache()
+    marca = datetime(2026, 10, 18, 15, 4, 5, 678000, tzinfo=UTC)
+    caso = Caso(ejecutor=EjecutorSimulado(), reloj=lambda: marca)
+    respuesta = consultar_registro_mercantil(identificador="CO-RF-0006").structured_content
+    estado = caso.estado
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    estado.registrar_identificacion(respuesta)
+    herramienta = FRENTES[Frente.REGISTRO].herramienta_completa
+    estado.agregar_consultas([Consulta(Frente.REGISTRO, herramienta, {}, respuesta, True)])
+    caso._eventos.registrar(
+        TIPO_BLOQUEO_REGLA, None, "Motivo.", regla="I.2", accion="registrar_informe (habilitar)"
+    )
+    estado.informes.append(
+        InformeRegistrado("INF-0001", "no_habilitar", False, huella_actual(estado))
+    )
+    return caso
+
+
+def test_la_salida_muestra_la_hora_en_utc_y_la_accion_del_bloqueo():
+    lineas = []
+    principal.imprimir_caso(_caso_g_con_informe(), lineas.append)
+    assert lineas[1] == (
+        "  1  15:04:05.678 UTC  bloqueo_regla            -          Motivo. [I.2] "
+        "(acción: registrar_informe (habilitar))"
+    )
+
+
+def test_la_salida_muestra_los_conflictos_y_los_informes_registrados():
+    lineas = []
+    principal.imprimir_caso(_caso_g_con_informe(), lineas.append)
+    inicio = lineas.index("Conflictos:")
+    assert lineas[inicio : inicio + 3] == [
+        "Conflictos:",
+        "  1 conflicto entre las fuentes registrales.",
+        "  fecha_constitucion: 2016-03-14 (Registro Mercantil Ficticio del Sur, 2026-09-30); "
+        "2017-09-02 (Registro Único Ficticio de Empresas, 2026-09-28)",
+    ]
+    inicio = lineas.index("Informes registrados:")
+    assert lineas[inicio : inicio + 2] == [
+        "Informes registrados:",
+        "  INF-0001: recomendación no_habilitar; vigente: sí",
+    ]
+    assert lineas.index("Cobertura:") < lineas.index("Conflictos:")
+
+
+def test_sin_informes_la_salida_lo_dice_y_un_cierre_sin_informe_se_avisa():
+    caso = Caso(ejecutor=EjecutorSimulado())
+    caso.estado.cierre_sin_informe = True
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    inicio = lineas.index("Informes registrados:")
+    assert lineas[inicio + 1] == "  ninguno"
+    assert "El caso terminó sin el informe vigente (cierre_sin_informe)." in lineas
+
+
+def test_un_informe_minimo_que_ya_no_esta_vigente_se_marca():
+    from due_diligence.informe import InformeRegistrado, huella_actual
+
+    caso = _caso_g_con_informe()
+    caso.estado.informes.append(
+        InformeRegistrado("INF-0002", "decide_cumplimiento", True, huella_actual(caso.estado))
+    )
+    caso.estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"  # cambia las causas
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    inicio = lineas.index("Informes registrados:")
+    assert lineas[inicio + 1 : inicio + 3] == [
+        "  INF-0001: recomendación no_habilitar; vigente: no",
+        "  INF-0002: recomendación decide_cumplimiento; vigente: no; informe mínimo",
+    ]

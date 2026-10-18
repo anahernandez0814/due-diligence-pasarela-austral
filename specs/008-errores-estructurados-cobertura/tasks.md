@@ -495,18 +495,42 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
 
 ## Fase 8: Validación con el quickstart
 
-- [ ] T030 Revisión de coherencia antes de validar:
+- [X] T030 Revisión de coherencia antes de validar:
   - `Grep` de `cobertura_registrada` en `src/` (0 resultados), de `TEXTO-INTERNO-FICTICIO` (solo en
     tests) y de `{error}` en `src/due_diligence/delegacion.py` (0 resultados);
   - `calcular_cobertura` se define una sola vez y `Caso.completo` no recorre `Situacion` por su
     cuenta.
-- [ ] T031 Ejecutar Q1 a Q4 del [quickstart](quickstart.md) y anotar aquí el resultado:
+  
+  Resultado (2026-10-18):
+  - `cobertura_registrada` solo aparece en `test_eventos_estado.py`, en el test que comprueba que no
+    existe;
+  - `TEXTO-INTERNO-FICTICIO` solo en `test_delegacion.py` y `test_hooks.py`;
+  - `{error}`: 0 resultados en todo `src/due_diligence/`;
+  - `def calcular_cobertura` una sola vez (`cobertura.py`), y `coordinador.py` ya no importa ni
+    recorre `Situacion`.
+- [X] T031 Ejecutar Q1 a Q4 del [quickstart](quickstart.md) y anotar aquí el resultado:
   - número de tests frente a la línea base de T002;
   - el caso (f) simulado y la comprobación de mutación de T022;
   - la política de reintento y el error estructurado, incluido R6;
   - las 625 combinaciones.
   
-  Resultado: **____**.
+  Resultado (2026-10-18):
+  - **Q1**: `ruff format` y `ruff check` limpios; `uv run pytest` con **3917 tests en verde**
+    (línea base 2482).
+  - **Q2**: `test_casos_cobertura.py`, 4 pasan: el caso (f), los demás frentes sin cambios, el
+    contraste sin la caída y el escalamiento.
+  - **Comprobación de mutación de T022**, con un script fuera del repositorio que sustituye
+    `_sustituir_cobertura` por `permitir()` sin tocar el código: fallan el caso (f) y el del
+    escalamiento, así que la mutación se detecta.
+  - **Q3**: `test_reintentos.py`, `test_delegacion.py` y `test_hooks.py`, 857 pasan. Incluyen el
+    escalamiento que nunca se deniega y el texto fijo `COBERTURA_NO_CALCULADA` (R6).
+  - **Q4**: `test_cobertura.py`, 733 pasan, con las 625 combinaciones; `test_hooks.py` las recorre
+    también en los dos canales (G1).
+  - **Diferencias con lo planificado**, aprobadas en la parada B:
+    - el experimento «G3» del sondeo se llama `g4_informe`, porque el #7 ya tenía
+      `g3_permite_propia`, y se añadió `g5_escalamiento`;
+    - el informe con una entrada que no es un objeto lo deniega la regla del #7 con su motivo
+      (`MOTIVO_ENTRADA_INFORME`), antes de llegar a la cobertura.
 - [ ] T032 [MANUAL] Q5 del quickstart: `uv run python -m due_diligence.sondeo_hooks` (Haiku,
   ≈ 0,02 USD), en una sesión de Claude Code nueva abierta en la raíz. Anotar:
   - si (a) a (d), G2, (e), (f) y G3 coinciden;

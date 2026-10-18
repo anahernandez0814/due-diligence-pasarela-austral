@@ -64,6 +64,14 @@ con `permitir()`, `denegar()` y `bloquear_cierre()` y todo hook se envuelve con 
 
 Sin hooks. Una mención en noticias no es una coincidencia en listas (IV).
 
+## Regla del evento (I3)
+
+El evento de un rechazo de `registrar_informe` (y el de un cierre impedido) lleva la regla según las causas
+(`reglas.reglas_de`): `I.2` si hay coincidencia en listas, `I.3` si hay alto riesgo o la categoría no quedó
+determinada, y `I.2, I.3` si aplican ambas. Un rechazo por una recomendación fuera del conjunto o por falta de
+consulta de listas lleva la regla que corresponde a esa causa (`I.2` para listas) o ninguna si no es de las
+tres reglas.
+
 ## Fallo cerrado (FR-012)
 
 `fallar_cerrado(hook, tipo)` envuelve cada callback:
@@ -103,7 +111,7 @@ Todos en español, sin repetir nombres ni identificadores consultados, y con la 
 | `habilitar` en alto riesgo | «La categoría es de alto riesgo: la decisión es de un oficial de cumplimiento.» |
 | Categoría no determinada | «La categoría del caso no quedó determinada.» |
 | Falta consulta de listas | «Falta la consulta de listas restrictivas del comercio y de su representante legal.» |
-| Falta escalar | «El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: <causas>.» |
+| Falta escalar | «El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: <causas>.», con etiquetas fijas por causa: «coincidencia del comercio en listas restrictivas», «coincidencia del representante legal en listas restrictivas», «categoría de alto riesgo» (las claves `coincidencia_comercio`, `coincidencia_representante` y `alto_riesgo`; nunca nombres ni identificadores) |
 | Recomendación fuera del conjunto | «La recomendación debe ser exactamente habilitar, no_habilitar o decide_cumplimiento.» |
 
 ## Reparto (FR-010)

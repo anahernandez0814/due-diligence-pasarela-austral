@@ -48,7 +48,9 @@ que había al consultar (R7).
 
 ### Coincidencia
 
-`clave` (`listas:<tipo>:<identificador o nombre normalizado>`), `tipo`, `lista`, `fuente`, `fecha`. Se
+`tipo`, `lista`, `fuente`, `fecha`; **sin nombre ni identificador** (el hecho completo lo conserva `estado.consultas`).
+La causa que genera se deriva del tipo: `comercio` → `coincidencia_comercio`, `persona` →
+`coincidencia_representante`. Se
 añade una por cada hecho de una respuesta `coincidencias` de listas. **No se borra** aunque el registro cambie
 de comercio.
 
@@ -64,7 +66,8 @@ Reciben el libro y el comercio; no tocan el SDK ni el estado de otros módulos.
 |---------|----------|
 | `es_alto_riesgo(libro)` | `True` si alguna consulta tiene la categoría en `ALTO_RIESGO` (`igual`) o `nivel == "alto"`; persistente |
 | `categoria_determinada(libro)` | `True` si `es_alto_riesgo` o la **última** consulta tiene nivel |
-| `causas_vigentes(libro)` | `frozenset` de claves de las coincidencias más `"alto_riesgo"` si aplica |
+| `causas_vigentes(libro)` | `frozenset` de las claves fijas `coincidencia_comercio`, `coincidencia_representante` y `alto_riesgo` que apliquen; sin nombres ni identificadores |
+| `reglas_de(causas)` | las reglas del evento según las causas: `coincidencia_*` → `I.2`, `alto_riesgo` → `I.3`, `I.2, I.3` si hay de ambas |
 | `escalamiento_cubre(libro)` | `True` si alguna instantánea contiene todas las causas vigentes (vacío ⇒ `True`) |
 | `requiere_escalamiento(libro)` | `bool(causas_vigentes)` |
 | `consulta_coincide(consulta, entidad, tipo)` | `True` si el tipo es el esperado, la consulta trae al menos una clave y **cada clave que trae** (`nombre`, `identificador`) existe en la entidad del registro y coincide. Si la consulta trae una clave que la entidad no tiene (por ejemplo, un `identificador` para un representante sin identificador), **no coincide** (R7); la usa también `Delegador._falta_en_listas` |

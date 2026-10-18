@@ -90,6 +90,13 @@ Con un hook de `Stop` que siempre devuelve `{"decision": "block", "reason": "…
 - Llegado al límite, el hook **deja terminar**, marca `cierre_sin_escalar` en el estado y deja el
   evento `cierre_sin_escalar`. El caso **no se presenta como completo ni como habilitado**
   (`Caso.completo` es `False`); eso es lo que ve la interfaz (#11) y el informe (#9).
+- **Alcance exacto de la garantía** (decisión de la analista tras el análisis, C1): lo garantizado en
+  código es que un caso que requiere escalamiento **nunca se recomienda habilitar**, **nunca figura como
+  completo** y queda marcado `cierre_sin_escalar` si no se escaló. **Que el escalamiento ocurra depende del
+  modelo**, que tiene `MAX_CIERRES_IMPEDIDOS` oportunidades. No es un conflicto con el principio III: el
+  ciclo sigue terminando por `stop_reason` y el contador solo limita cuántas veces el hook contradice el
+  fin de turno, igual que `max_turns`. Quitar el contador no garantizaría el escalamiento (el modelo puede
+  seguir sin escalar) y solo gastaría turnos hasta `error_max_turns`.
 - El límite (3) es mucho menor que `MAX_TURNOS_SEGURIDAD` (30), de modo que las devoluciones no
   llevan al caso a `error_max_turns` por sí solas; un test lo comprueba con los valores reales.
 - El `Stop` solo va en el coordinador. Cada subagente es un `query()` propio, así que un `Stop`
@@ -220,9 +227,13 @@ cada agente con cierre sobre **el mismo** estado y registro de eventos:
 
 ## R9. Escalamiento y causas vigentes (FR-006, FR-007)
 
-- **Causas vigentes** (`reglas.causas_vigentes`): un conjunto de textos estables. Una por cada
-  coincidencia registrada (`listas:<tipo>:<identificador|nombre normalizado>`) y `alto_riesgo` si el
-  caso es de alto riesgo.
+- **Causas vigentes** (`reglas.causas_vigentes`): un subconjunto de **tres claves fijas**, sin nombres
+  ni identificadores (decisión de la analista, I1): `coincidencia_comercio` (hay una coincidencia
+  registrada de tipo `comercio`), `coincidencia_representante` (de tipo `persona`; el hook de listas solo
+  deja consultar a la persona que es el representante) y `alto_riesgo`. Los motivos y los eventos se
+  construyen solo con estas claves. Límite: una segunda coincidencia de la misma entidad en otra lista
+  no es una causa nueva y no exige otro escalamiento; sí lo exige la primera del representante tras
+  escalar solo por el comercio.
 - `PostToolUse` sobre `escalar_a_cumplimiento` con resultado `caso_escalado` guarda en el libro una
   **instantánea de las causas vigentes en ese momento**. Un escalamiento con error (llega por
   `PostToolUseFailure`) no cuenta.

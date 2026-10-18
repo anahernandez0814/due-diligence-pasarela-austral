@@ -11,7 +11,8 @@ SDK que bloquean la acción prohibida, tengan o no las reglas en el prompt. Se a
 `src/due_diligence/`, un **libro de reglas** dentro del estado del caso (lo que los hooks
 registran), un módulo de **evaluación pura** de las reglas y un módulo de **hooks** que los
 adapta al SDK, reparte por agente y envuelve para que fallen cerrados. El coordinador recibe
-cuatro hooks (`delegar_frente` de listas, `registrar_informe`, `escalar_a_cumplimiento` y `Stop`) y cada
+cuatro puntos de control (`delegar_frente` de listas, `registrar_informe`, `escalar_a_cumplimiento` y `Stop`;
+cinco hooks registrados, porque `escalar_a_cumplimiento` lleva `PostToolUse` y `PostToolUseFailure`) y cada
 subagente los que vigilan su propia herramienta.
 
 El sondeo real con el SDK 0.2.168 (research R1 a R3) fija el diseño: `PostToolUse` recibe el resultado
@@ -54,7 +55,7 @@ coste en modelo es el de los turnos extra de un `Stop` devuelto, acotado por `MA
 - El texto que ve el modelo no repite nombres ni identificadores consultados (FR-016).
 - Sin credenciales ni datos reales (VII, VIII); el sondeo no lee `.env`.
 
-**Scale/Scope**: un caso a la vez en memoria; cuatro hooks en el coordinador y cinco en los subagentes (R5).
+**Scale/Scope**: un caso a la vez en memoria; cinco hooks registrados en el coordinador y siete en los subagentes (registro 2, listas 3, categoría 2; R5).
 
 ## Constitution Check
 
@@ -71,8 +72,8 @@ desviaciones nuevas.**
 | **I.4** Fuente en cada afirmación | Sin cambios | El estado conserva contenido y metadatos por separado (#6); el informe con procedencia es del #9. Los hooks leen contenido, no lo transforman. |
 | **I.5** Cobertura declarada | No aplica | Es del #8. Los hooks fallan cerrados ante un fallo, sin presentar el caso como completo (`Caso.completo`). |
 | **II** Garantizado vs. sugerido | **Cumple** | I.1, I.2 e I.3 son hooks del SDK, con tests deterministas, y el modo de demostración prueba que no dependen del prompt. **Cierra** la desviación temporal del principio II declarada en el #6 *en lo que toca a las reglas 1 a 3*: `registrar_informe` y `escalar_a_cumplimiento` dejan de estar pre-aprobadas sin guarda. |
-| **III** Arquitectura de agentes | Cumple | Hooks por agente con estado compartido, sin que los subagentes compartan conversación (R5); el ciclo sigue terminando por `stop_reason` (el límite de devoluciones del `Stop` es protección documentada y propia del caso, R3). |
-| **IV** Herramientas y MCP | Cumple | Las decisiones solo salen por las dos herramientas; las descripciones del servidor no cambian de significado (solo se nombran los tres valores de recomendación como guía). |
+| **III** Arquitectura de agentes | Cumple | Hooks por agente con estado compartido, sin que los subagentes compartan conversación (R5); el ciclo sigue terminando por `stop_reason`; el límite de devoluciones del `Stop` (`MAX_CIERRES_IMPEDIDOS = 3`) es protección documentada y propia del caso (R3): solo limita cuántas veces el hook contradice el fin de turno, igual que `max_turns`, y no es un conflicto con III. **Alcance exacto de la garantía de escalamiento**: en código, un caso que requiere escalamiento nunca se recomienda habilitar, nunca figura como completo y queda marcado `cierre_sin_escalar`; que el escalamiento ocurra depende del modelo, con `MAX_CIERRES_IMPEDIDOS` oportunidades. |
+| **IV** Herramientas y MCP | Cumple | Las decisiones solo salen por las dos herramientas; la descripción de `registrar_informe` nombra los tres valores de recomendación como guía (FR-020, descripción inequívoca); el servidor no los valida ni cambia lo que hace. |
 | **V** Escalamiento con criterio | Cumple | Escalar solo por coincidencia o alto riesgo; un comercio de bajo riesgo sin hallazgos no se escala y recibe `habilitar` (US3.6). El contenido del resumen al oficial es del #10. |
 | **VI** Transparencia | Cumple | Cada bloqueo es un evento con regla y motivo en español, visible en el chat y legible sin conocer el código (R12, SC-007). |
 | **VII** Datos ficticios | Cumple | Solo los del #5; ninguna prueba añade datos reales ni valores con forma de tarjeta, NIT o cédula. |
@@ -162,6 +163,8 @@ src/due_diligence/
 ├── test_reglas.py           # NUEVO
 ├── test_hooks.py            # NUEVO
 ├── test_hooks_sesiones.py   # NUEVO: US5, frentes en sesiones separadas y dos casos
+├── test_sesion_simulada.py  # NUEVO: SesionSimulada y sus herramientas simuladas
+├── test_sondeo_hooks.py     # NUEVO: la comparación de lo esperado con lo medido, sin modelo
 ├── test_modo_demo.py        # NUEVO
 ├── test_estado_identificacion.py  # NUEVO: R4, fuente única
 ├── test_casos_reglas.py     # NUEVO: casos de prueba (a), (b), (c), (e) con el caso completo

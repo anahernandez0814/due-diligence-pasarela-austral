@@ -23,16 +23,29 @@ from claude_agent_sdk import HookMatcher
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_CONSULTA_FALLIDA,
     TIPO_FALLO_DE_HOOK,
     RegistroEventos,
 )
-from due_diligence.frentes import FRENTES, Frente
+from due_diligence.frentes import (
+    FRENTES,
+    HERRAMIENTA_DELEGAR,
+    SERVIDOR_DELEGACION,
+    Frente,
+    nombre_completo,
+)
+from due_diligence.reglas import permite_delegar_listas, permite_listas
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
 
 MOTIVO_FALLO_DE_HOOK = "No se pudo verificar la regla; se bloquea por precaución."
 MOTIVO_LIBRO_SELLADO = "No se pudo registrar un hecho de la regla; se bloquea por precaución."
+MOTIVO_ENTRADA_MALFORMADA = (
+    "La entrada de la herramienta no tiene la forma esperada; se bloquea por precaución."
+)
+REGLA_LISTAS = "I.1"
+HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
 
 # --------------------------------------------------------------------------- salidas tipadas
 
@@ -147,25 +160,80 @@ class HooksDelCaso:
     def subagente(self, frente: Frente) -> dict[str, list[HookMatcher]]:
         """Los hooks del subagente de un frente (los que vigilan su propia herramienta)."""
         herramienta = FRENTES[frente].herramienta_completa
+        hooks: dict[str, list[HookMatcher]] = {}
+        if frente is Frente.LISTAS:
+            hooks["PreToolUse"] = [
+                self._matcher(herramienta, self._listas_previo, "PreToolUse", frente)
+            ]
         if frente is Frente.REGISTRO:
-            return {
-                "PostToolUse": [
-                    self._matcher(herramienta, self._registro_posterior, "PostToolUse", frente)
-                ],
-                "PostToolUseFailure": [
-                    self._matcher(
-                        herramienta,
-                        self._fallo_de_herramienta(frente),
-                        "PostToolUseFailure",
-                        frente,
-                    )
-                ],
-            }
-        return {}
+            hooks["PostToolUse"] = [
+                self._matcher(herramienta, self._registro_posterior, "PostToolUse", frente)
+            ]
+        if frente in (Frente.REGISTRO,):
+            hooks["PostToolUseFailure"] = [
+                self._matcher(
+                    herramienta, self._fallo_de_herramienta(frente), "PostToolUseFailure", frente
+                )
+            ]
+        return hooks
 
     def coordinador(self) -> dict[str, list[HookMatcher]]:
         """Los hooks del coordinador."""
-        return {}
+        return {
+            "PreToolUse": [
+                self._matcher(
+                    HERRAMIENTA_DELEGAR_COMPLETA, self._delegar_previo, "PreToolUse", Frente.LISTAS
+                )
+            ]
+        }
+
+    # -------------------------------------------------------------- denegar por regla
+
+    def _denegar_por_regla(self, frente: Frente | None, regla: str | None, motivo: str):
+        """Deniega, y deja el evento con la regla y el motivo (FR-013)."""
+        self.eventos.registrar(TIPO_BLOQUEO_REGLA, frente, motivo, regla=regla)
+        return denegar(motivo)
+
+    def _sellado(self, frente: Frente | None, regla: str | None):
+        """Con el libro sellado un hecho pudo quedar sin registrar: no se permite."""
+        if self.estado.libro.fallo_de_hook:
+            return self._denegar_por_regla(frente, regla, MOTIVO_LIBRO_SELLADO)
+        return None
+
+    # -------------------------------------------------------------- regla I.1: listas
+
+    async def _listas_previo(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PreToolUse` de la consulta de listas: solo el comercio o su representante (FR-002)."""
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        if sellado is not None:
+            return sellado
+        permitida, motivo = permite_listas(self.estado, entrada.get("tool_input"))
+        if permitida:
+            return permitir()
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
+
+    async def _delegar_previo(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PreToolUse` de `delegar_frente`: listas necesita un comercio único (FR-018).
+
+        Cualquier otro frente se deja pasar sin leer el estado; una entrada malformada se deniega.
+        """
+        argumentos = entrada.get("tool_input")
+        frente = argumentos.get("frente") if isinstance(argumentos, Mapping) else None
+        if not isinstance(frente, str):
+            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
+        if frente.strip().casefold() != Frente.LISTAS.value:
+            return permitir()
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        if sellado is not None:
+            return sellado
+        permitida, motivo = permite_delegar_listas(self.estado)
+        if permitida:
+            return permitir()
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
 
     # -------------------------------------------------------------- registro (FR-001)
 
@@ -173,25 +241,39 @@ class HooksDelCaso:
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
         """Guarda la identificación que `derivar_comercio` saca de una respuesta válida."""
-        resultado, _ = leer_respuesta(entrada.get("tool_response"))
+        resultado, error = leer_respuesta(entrada.get("tool_response"))
         if resultado is not None:
             self.estado.registrar_identificacion(resultado)
+        else:
+            self._constancia_de_consulta_fallida(Frente.REGISTRO, error)
         return permitir()
 
     # -------------------------------------------------------------- errores de herramienta
+
+    def _constancia_de_consulta_fallida(self, frente: Frente, error: Any) -> None:
+        """Deja el evento `consulta_fallida` de una respuesta que no cuenta como consulta.
+
+        Una respuesta que no es ni el JSON del contrato ni un error estructurado, o un error
+        estructurado, no entra a ninguna regla: queda constancia del motivo (FR-001) sin repetir
+        lo recibido.
+        """
+        if isinstance(error, dict):
+            tipo = error.get("tipo")
+            etiqueta = tipo if isinstance(tipo, str) else "desconocido"
+            detalle = f"La herramienta devolvió un error estructurado ({etiqueta}); no cuenta."
+        else:
+            detalle = (
+                "La respuesta de la herramienta no tiene la forma del contrato de la pasarela "
+                "ni es un error estructurado; no cuenta."
+            )
+        self.eventos.registrar(TIPO_CONSULTA_FALLIDA, frente, detalle)
 
     def _fallo_de_herramienta(self, frente: Frente) -> Hook:
         """`PostToolUseFailure`: un error estructurado de la pasarela no cuenta como consulta."""
 
         async def hook(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
             _, error = leer_respuesta(entrada.get("error"), es_error=True)
-            tipo = error.get("tipo") if isinstance(error, dict) else None
-            etiqueta = tipo if isinstance(tipo, str) else "desconocido"
-            self.eventos.registrar(
-                TIPO_CONSULTA_FALLIDA,
-                frente,
-                f"La herramienta devolvió un error estructurado ({etiqueta}); no cuenta.",
-            )
+            self._constancia_de_consulta_fallida(frente, error)
             return permitir()
 
         return hook

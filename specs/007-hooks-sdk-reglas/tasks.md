@@ -252,7 +252,7 @@ sin modelo. Tests primero.
 de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba cada situación del registro
 (US1-1 a US1-11) sin modelo.
 
-- [ ] T018 [US1] Ampliar `src/due_diligence/test_reglas.py` (R6, R7, FR-002, FR-003, FR-018):
+- [X] T018 [US1] Ampliar `src/due_diligence/test_reglas.py` (R6, R7, FR-002, FR-003, FR-018):
   `permite_listas(estado, entrada)`: sin registro delegado → `(False, motivo)` con «Aún no hay un comercio
   identificado de forma unívoca en el registro mercantil.»; varias coincidencias → no, con el motivo de
   pedir el identificador al analista; ninguna coincidencia → no; comercio identificado y consulta del
@@ -263,10 +263,10 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   `sin_iniciar`, `rechazado` o `no_terminado` → no; `terminado` sin comercio único → no, con el motivo de
   `estado.motivo_comercio` (varias coincidencias: pide el identificador); `terminado` con comercio → sí;
   `en_curso` → **sí** (la herramienta espera; US1-10).
-- [ ] T019 [US1] Añadir a `src/due_diligence/reglas.py` `permite_listas` y `permite_delegar_listas` (R6, R7)
+- [X] T019 [US1] Añadir a `src/due_diligence/reglas.py` `permite_listas` y `permite_delegar_listas` (R6, R7)
   usando solo `estado.comercio`, `estado.motivo_comercio` y la situación del frente de registro: no
   leen `estado.consultas` ni `estado.resultados`. Hace pasar T018.
-- [ ] T020 [US1] Ampliar `src/due_diligence/test_hooks.py` (FR-002, FR-018, FR-012, US1): el `PreToolUse` de
+- [X] T020 [US1] Ampliar `src/due_diligence/test_hooks.py` (FR-002, FR-018, FR-012, US1): el `PreToolUse` de
   `mcp__pasarela__consultar_listas_restrictivas` (subagente de listas) devuelve `permitir()` o `denegar()`
   según `permite_listas`, deja un evento `bloqueo_regla` con `regla="I.1"` y `frente=listas` al
   denegar, y **no consulta la fuente** (en la sesión simulada la herramienta no se ejecuta, US1-7); el
@@ -277,10 +277,10 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   **Entradas malformadas (FR-012)**: `tool_input` que no es un `dict`, sin `frente`, o con `nombre`/`identificador` que no son texto → el hook deniega
   (fallo cerrado), sin lanzar. **Carrera (R6)**: con el registro `sin_iniciar` el hook de `delegar_frente` deniega con un motivo que pide
   delegar primero el registro, sin cambiar el estado.
-- [ ] T021 [US1] Añadir a `src/due_diligence/hooks.py` los hooks `PreToolUse` de la consulta de listas y de
+- [X] T021 [US1] Añadir a `src/due_diligence/hooks.py` los hooks `PreToolUse` de la consulta de listas y de
   `delegar_frente`, y registrarlos en `HooksDelCaso`: `.subagente(Frente.LISTAS)` lleva el de la consulta;
   `.coordinador()` lleva el de `delegar_frente` (R5, contrato). Hace pasar T020.
-- [ ] T022 [US1] Ampliar `src/due_diligence/test_hooks_sesiones.py` (nuevo) con US1 de extremo a extremo en
+- [X] T022 [US1] Ampliar `src/due_diligence/test_hooks_sesiones.py` (nuevo) con US1 de extremo a extremo en
   la sesión simulada: registro con una coincidencia y representante → listas por el comercio y por el
   representante se permiten; registro con dos comercios de nombres casi idénticos (`CO-AM-0004` y
   `CO-AM-0005`) → la consulta de listas se bloquea, la herramienta de listas no se ejecuta y el

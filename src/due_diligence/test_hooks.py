@@ -14,6 +14,7 @@ from claude_agent_sdk import types as sdk
 from due_diligence import hooks as modulo_hooks
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_CONSULTA_FALLIDA,
     TIPO_FALLO_DE_HOOK,
     RegistroEventos,
@@ -27,7 +28,18 @@ from due_diligence.hooks import (
     leer_respuesta,
     permitir,
 )
-from due_diligence.simulacion import comercio_del_registro, respuesta_del_contrato
+from due_diligence.reglas import (
+    MOTIVO_CONSULTA_AJENA,
+    MOTIVO_REGISTRO_PRIMERO,
+    MOTIVO_SIN_COMERCIO,
+)
+from due_diligence.simulacion import (
+    comercio_alto_riesgo,
+    comercio_del_registro,
+    comercios_parecidos,
+    respuesta_del_contrato,
+    respuesta_registro,
+)
 
 REGISTRO = "mcp__pasarela__consultar_registro_mercantil"
 
@@ -332,3 +344,212 @@ def test_cancelar_el_frente_antes_de_que_corra_el_hook_no_deja_una_identificacio
     _registro_terminado(estado)
     assert estado.comercio is not None
     assert estado.identificaciones[0].comercio == estado.comercio
+
+
+# ------------------------------------------------------------------ registro ilegible (FR-001)
+
+
+@pytest.mark.parametrize("ilegible", ["no es json", "{}", "[]"])
+def test_una_respuesta_ilegible_del_registro_deja_constancia_como_consulta_fallida(ilegible):
+    estado, eventos, hooks = _caso()
+    _ejecutar(_hook(hooks.subagente(Frente.REGISTRO), "PostToolUse"), _post(ilegible))
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CONSULTA_FALLIDA and evento.frente is Frente.REGISTRO
+    assert "no tiene la forma del contrato" in evento.detalle
+    assert "no es json" not in evento.detalle  # no repite lo recibido
+    assert estado.libro.fallo_de_hook is None  # una respuesta ilegible no es un fallo del hook
+
+
+def test_un_error_estructurado_que_llega_por_posttooluse_tambien_deja_constancia():
+    estado, eventos, hooks = _caso()
+    error = {
+        "error": True,
+        "tipo": "datos_no_disponibles",
+        "mensaje": "m",
+        "reintentable": False,
+        "obtenido": {},
+    }
+    _ejecutar(_hook(hooks.subagente(Frente.REGISTRO), "PostToolUse"), _post(error))
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CONSULTA_FALLIDA and "datos_no_disponibles" in evento.detalle
+    _registro_terminado(estado)
+    assert estado.comercio is None
+
+
+def test_una_respuesta_valida_del_registro_no_deja_evento_de_consulta_fallida():
+    _, eventos, hooks = _caso()
+    _ejecutar(_hook(hooks.subagente(Frente.REGISTRO), "PostToolUse"), _post(RESPUESTA))
+    assert eventos.eventos() == []
+
+
+# ------------------------------------------------------------- regla I.1: listas (FR-002, FR-018)
+
+LISTAS = "mcp__pasarela__consultar_listas_restrictivas"
+DELEGAR = "mcp__delegacion__delegar_frente"
+SELLADO = "No se pudo registrar un hecho de la regla; se bloquea por precaución."
+
+
+def _pre(nombre, entrada):
+    return {
+        "hook_event_name": "PreToolUse",
+        "tool_name": nombre,
+        "tool_input": entrada,
+        "tool_use_id": "t1",
+    }
+
+
+def _caso_con_comercio():
+    estado, eventos, hooks = _caso()
+    _registro_terminado(estado)
+    estado.registrar_identificacion(respuesta_registro(comercio_alto_riesgo()))
+    return estado, eventos, hooks
+
+
+def _es_denegacion(salida):
+    return salida.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+
+
+def _motivo(salida):
+    return salida["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_el_subagente_de_listas_tiene_el_pretooluse_de_su_herramienta():
+    _, _, hooks = _caso()
+    listas = hooks.subagente(Frente.LISTAS)
+    assert "PreToolUse" in listas
+    assert [m.matcher for m in listas["PreToolUse"]] == [LISTAS]
+
+
+def test_el_coordinador_tiene_el_pretooluse_de_delegar_frente():
+    _, _, hooks = _caso()
+    coordinador = hooks.coordinador()
+    assert [m.matcher for m in coordinador["PreToolUse"]] == [DELEGAR]
+
+
+@pytest.mark.parametrize(
+    "consulta",
+    [
+        {"tipo": "comercio", "identificador": "CO-TV-0001"},
+        {"tipo": "comercio", "nombre": "Tienda Verde SAS"},
+        {"tipo": "persona", "identificador": "PE-0001"},
+        {"tipo": "persona", "nombre": "Lucía Ferrer Montalvo"},
+    ],
+)
+def test_el_hook_de_listas_permite_al_comercio_y_a_su_representante(consulta):
+    _, eventos, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), _pre(LISTAS, consulta))
+    assert salida == permitir() and eventos.eventos() == []
+
+
+def test_el_hook_de_listas_sin_comercio_deniega_deja_evento_con_la_regla_y_el_motivo():
+    _, eventos, hooks = _caso()
+    entrada = _pre(LISTAS, {"tipo": "comercio", "nombre": "Tienda Verde SAS"})
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), entrada)
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_SIN_COMERCIO
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.1"
+    assert evento.frente is Frente.LISTAS and evento.detalle == MOTIVO_SIN_COMERCIO
+
+
+def test_el_hook_de_listas_con_una_consulta_ajena_deniega_sin_repetir_lo_consultado():
+    _, eventos, hooks = _caso_con_comercio()
+    entrada = _pre(LISTAS, {"tipo": "persona", "nombre": "Mateo Ríos Cabrera"})
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), entrada)
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_CONSULTA_AJENA
+    assert "Mateo" not in eventos.eventos()[0].detalle
+
+
+@pytest.mark.parametrize(
+    "entrada",
+    [None, "texto", ["tipo"], {}, {"tipo": "comercio", "nombre": 3}, {"tipo": 4, "nombre": "x"}],
+)
+def test_el_hook_de_listas_con_una_entrada_malformada_deniega(entrada):
+    _, _, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), _pre(LISTAS, entrada))
+    assert _es_denegacion(salida)
+
+
+def test_el_hook_de_listas_si_permite_listas_lanza_una_excepcion_deniega_y_sella(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+
+    def roto(_estado, _entrada):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr(modulo_hooks, "permite_listas", roto)
+    entrada = _pre(LISTAS, {"tipo": "comercio", "identificador": "CO-TV-0001"})
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), entrada)
+    assert _es_denegacion(salida) and "detalle interno" not in _motivo(salida)
+    assert estado.libro.fallo_de_hook
+    assert eventos.eventos()[0].tipo == TIPO_FALLO_DE_HOOK
+
+
+def test_con_el_libro_sellado_el_hook_de_listas_deniega_aunque_la_consulta_sea_valida():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = _pre(LISTAS, {"tipo": "comercio", "identificador": "CO-TV-0001"})
+    salida = _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PreToolUse"), entrada)
+    assert _es_denegacion(salida) and _motivo(salida) == SELLADO
+    assert eventos.eventos()[-1].tipo == TIPO_BLOQUEO_REGLA
+
+
+@pytest.mark.parametrize("frente", ["listas", "Listas", " LISTAS "])
+def test_el_hook_de_delegar_deniega_listas_si_el_registro_no_se_delego(frente):
+    _, eventos, hooks = _caso()
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, {"frente": frente}))
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_REGISTRO_PRIMERO
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.1"
+    assert evento.frente is Frente.LISTAS
+
+
+def test_el_hook_de_delegar_permite_listas_con_comercio_y_con_el_registro_en_curso():
+    _, _, hooks = _caso_con_comercio()
+    pre = _pre(DELEGAR, {"frente": "listas"})
+    assert _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), pre) == permitir()
+    en_curso, _, otros_hooks = _caso()
+    en_curso.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    assert _ejecutar(_hook(otros_hooks.coordinador(), "PreToolUse"), pre) == permitir()
+
+
+def test_el_hook_de_delegar_deniega_listas_si_el_registro_termino_con_varias_coincidencias():
+    estado, _, hooks = _caso()
+    _registro_terminado(estado)
+    estado.registrar_identificacion(respuesta_registro(*comercios_parecidos()))
+    pre = _pre(DELEGAR, {"frente": "listas"})
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), pre)
+    assert _es_denegacion(salida) and "varias coincidencias" in _motivo(salida)
+    assert "pida el identificador al analista" in _motivo(salida)
+
+
+@pytest.mark.parametrize("frente", ["registro", "noticias", "categoria", "foo"])
+def test_el_hook_de_delegar_deja_pasar_otros_frentes_sin_leer_el_estado(frente):
+    _, eventos, hooks = _caso()  # sin registro: listas se denegaría
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, {"frente": frente}))
+    assert salida == permitir() and eventos.eventos() == []
+
+
+@pytest.mark.parametrize("entrada", [None, "listas", [], {}, {"frente": 3}, {"frente": None}])
+def test_el_hook_de_delegar_con_una_entrada_malformada_deniega(entrada):
+    _, _, hooks = _caso()
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), _pre(DELEGAR, entrada))
+    assert _es_denegacion(salida)
+
+
+def test_con_el_libro_sellado_el_hook_de_delegar_deniega_listas():
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    pre = _pre(DELEGAR, {"frente": "listas"})
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), pre)
+    assert _es_denegacion(salida) and _motivo(salida) == SELLADO
+
+
+def test_el_hook_de_delegar_si_permite_delegar_listas_lanza_una_excepcion_deniega(monkeypatch):
+    estado, _, hooks = _caso_con_comercio()
+
+    def roto(_estado):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr(modulo_hooks, "permite_delegar_listas", roto)
+    pre = _pre(DELEGAR, {"frente": "listas"})
+    salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), pre)
+    assert _es_denegacion(salida) and estado.libro.fallo_de_hook

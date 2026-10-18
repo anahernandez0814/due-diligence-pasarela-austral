@@ -9,6 +9,8 @@ texto de un prompt (FR-008, FR-019).
 from collections.abc import Mapping
 from typing import Any
 
+from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.frentes import Frente
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
 
 # Categorías de alto riesgo (principio I.3). Se comparan normalizadas con `igual` (R8).
@@ -75,3 +77,72 @@ def consulta_coincide(consulta: Any, entidad: Any, tipo: str) -> bool:
         if not coincide(buscado, existente):
             return False
     return True
+
+
+# --------------------------------------------------------------------------- regla I.1 (listas)
+
+MOTIVO_SIN_COMERCIO = (
+    "Aún no hay un comercio identificado de forma unívoca en el registro mercantil."
+)
+MOTIVO_VARIAS_COINCIDENCIAS = (
+    "El registro devolvió varias coincidencias: pida el identificador al analista, no elija una."
+)
+MOTIVO_SIN_COINCIDENCIAS = "El registro no devolvió coincidencias para el comercio."
+MOTIVO_REGISTRO_PRIMERO = (
+    "Delegue primero el registro mercantil: listas necesita el resultado del registro."
+)
+MOTIVO_CONSULTA_AJENA = (
+    "La consulta no corresponde al comercio identificado ni a su representante legal, con el "
+    "tipo que corresponde (comercio o persona)."
+)
+
+
+def _motivo_sin_comercio(estado: EstadoCaso) -> str:
+    """El motivo de que no haya un comercio único, con textos fijos: no repite nada consultado.
+
+    Se apoya en `estado.motivo_comercio` solo para distinguir la causa (varias coincidencias,
+    ninguna) y devuelve siempre un texto propio, sin los identificadores que traiga el del registro.
+    """
+    motivo = estado.motivo_comercio
+    if "varias coincidencias" in motivo:
+        return MOTIVO_VARIAS_COINCIDENCIAS
+    if "ninguna coincidencia" in motivo:
+        return MOTIVO_SIN_COINCIDENCIAS
+    return MOTIVO_SIN_COMERCIO
+
+
+def permite_listas(estado: EstadoCaso, entrada: Any) -> tuple[bool, str]:
+    """(permitida, motivo) de una consulta de listas restrictivas (regla I.1, FR-002, R6, R7).
+
+    Solo se permite por el comercio identificado de forma unívoca (tipo `comercio`) o por su
+    representante legal (tipo `persona`); cualquier otra consulta, o una entrada malformada, se
+    bloquea. Lee solo `estado.comercio`: no mira `estado.consultas` ni `estado.resultados`.
+    """
+    comercio = estado.comercio
+    if comercio is None:
+        return False, _motivo_sin_comercio(estado)
+    if consulta_coincide(entrada, comercio, "comercio"):
+        return True, ""
+    representante = comercio.get("representante_legal")
+    if representante and consulta_coincide(entrada, representante, "persona"):
+        return True, ""
+    return False, MOTIVO_CONSULTA_AJENA
+
+
+def permite_delegar_listas(estado: EstadoCaso) -> tuple[bool, str]:
+    """(permitida, motivo) de delegar el frente de listas (regla I.1, FR-018, R6).
+
+    Se bloquea si el registro no se delegó, fue rechazado o no terminó, o si terminó sin un
+    comercio único. Con el registro en curso se permite: la herramienta espera a que termine
+    (R4 del #6) y, si termina sin coincidencia única, la propia delegación se rechaza.
+    """
+    situacion = estado.situacion(Frente.REGISTRO)
+    if situacion is Situacion.EN_CURSO:
+        return True, ""
+    if situacion is Situacion.SIN_INICIAR:
+        return False, MOTIVO_REGISTRO_PRIMERO
+    if situacion in (Situacion.RECHAZADO, Situacion.NO_TERMINADO):
+        return False, MOTIVO_SIN_COMERCIO
+    if estado.comercio is None:
+        return False, _motivo_sin_comercio(estado)
+    return True, ""

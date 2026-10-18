@@ -19,6 +19,7 @@ from due_diligence.eventos import (
     TIPO_FRENTE_INICIO,
     TIPO_FRENTE_INVALIDADO,
     TIPO_FRENTE_RECHAZADO,
+    TIPO_REINTENTO_DENEGADO,
     RegistroEventos,
 )
 from due_diligence.frentes import Frente
@@ -1102,6 +1103,74 @@ def test_un_frente_cancelado_deja_la_causa_cancelado_en_el_estado():
     assert estado.situacion(Frente.NOTICIAS) is Situacion.NO_TERMINADO
     assert estado.errores[Frente.NOTICIAS]["causa"] == "cancelado"
     assert estado.errores[Frente.NOTICIAS]["reintentable"] is False
+
+
+async def _cancelar_en_curso(delegador, entrada=NOTICIAS):
+    """Lanza la delegación, la cancela mientras el subagente corre y espera a que termine."""
+    tarea = asyncio.create_task(delegador.delegar(entrada))
+    await asyncio.sleep(0.05)
+    tarea.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await tarea
+
+
+def test_tras_cancelar_el_primer_intento_la_misma_entrada_no_vuelve_a_ejecutar():
+    delegador, _, registro, ejecutor = _crear(retardos={Frente.NOTICIAS: 5})
+    asyncio.run(_cancelar_en_curso(delegador))
+
+    respuesta = _delegar(delegador, **NOTICIAS)
+
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 1
+    assert respuesta["causa"] == "cancelado" and respuesta["reintentable"] is False
+    assert respuesta["reintentos_restantes"] == 0
+    (denegado,) = [e for e in registro.eventos() if e.tipo == TIPO_REINTENTO_DENEGADO]
+    assert denegado.frente is Frente.NOTICIAS and "no es reintentable" in denegado.detalle
+
+
+def test_tras_cancelar_un_reintento_no_hay_un_tercer_intento():
+    delegador, _, _, ejecutor = _crear(resultados={Frente.NOTICIAS: _caido(ERROR_NOTICIAS)})
+    assert _delegar(delegador, **NOTICIAS)["reintentable"] is True
+    ejecutor.retardos[Frente.NOTICIAS] = 5  # el reintento queda en curso y se cancela
+    asyncio.run(_cancelar_en_curso(delegador))
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 2
+
+    respuesta = _delegar(delegador, **NOTICIAS)
+
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 2
+    assert respuesta["causa"] == "cancelado" and respuesta["reintentable"] is False
+    assert respuesta["intento"] == 2 and respuesta["reintentos_restantes"] == 0
+
+
+def test_una_llamada_que_esperaba_a_la_ejecucion_cancelada_recibe_el_error_de_cancelacion():
+    delegador, _, _, ejecutor = _crear(retardos={Frente.NOTICIAS: 5})
+
+    async def esperar_y_cancelar():
+        primera = asyncio.create_task(delegador.delegar(NOTICIAS))
+        await asyncio.sleep(0.05)
+        segunda = asyncio.create_task(delegador.delegar(NOTICIAS))  # espera a la primera
+        await asyncio.sleep(0.05)
+        primera.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await primera
+        return await asyncio.wait_for(segunda, timeout=5)
+
+    respuesta = asyncio.run(esperar_y_cancelar())
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 1
+    assert respuesta["causa"] == "cancelado" and respuesta["reintentable"] is False
+
+
+def test_tras_la_cancelacion_un_rechazo_del_frente_no_cambia_su_situacion():
+    delegador, estado, registro, _ = _crear(retardos={Frente.NOTICIAS: 5})
+    asyncio.run(_cancelar_en_curso(delegador))
+
+    respuesta = _delegar(delegador, frente="noticias")  # sin dato del comercio: se rechaza
+
+    assert respuesta["causa"] == "rechazado" and respuesta["reintentable"] is False
+    assert estado.situacion(Frente.NOTICIAS) is Situacion.NO_TERMINADO
+    assert estado.errores[Frente.NOTICIAS]["causa"] == "cancelado"
+    assert [e.tipo for e in registro.eventos() if e.frente is Frente.NOTICIAS][
+        -1
+    ] == TIPO_FRENTE_RECHAZADO
 
 
 def test_listas_invalidada_deja_la_causa_invalidado_en_el_estado():

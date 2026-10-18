@@ -6,6 +6,7 @@ import itertools
 import pytest
 
 from due_diligence.cobertura import CoberturaCaso, CoberturaFrente, calcular_cobertura
+from due_diligence.ejecutor import TIPO_BLOQUEADO_POR_HOOK
 from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.frentes import Frente
 from due_diligence.simulacion import comercio_del_registro, respuesta_registro
@@ -88,6 +89,19 @@ def test_un_error_de_la_fuente_lleva_su_causa_su_tipo_y_sus_intentos():
     assert cobertura.lineas()[3] == (
         "noticias: no cubierto; error de la fuente (servicio_no_disponible); 2 intentos."
     )
+
+
+def test_un_bloqueo_de_hook_no_figura_entre_los_tipos_de_error_de_la_fuente():
+    situaciones = [
+        Situacion.TERMINADO,
+        Situacion.NO_TERMINADO,
+        Situacion.TERMINADO,
+        Situacion.TERMINADO,
+    ]
+    tipos = ["servicio_no_disponible", TIPO_BLOQUEADO_POR_HOOK]
+    errores = {Frente.LISTAS: _error(Causa.ERROR_DE_FUENTE, 1, tipos)}
+    listas = calcular_cobertura(_estado(situaciones, errores)).frentes[Frente.LISTAS]
+    assert listas.motivo == "error de la fuente (servicio_no_disponible)"
 
 
 def test_listas_rechazada_figura_como_no_cubierta_con_el_motivo_del_rechazo():

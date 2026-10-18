@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from due_diligence.ejecutor import es_bloqueo_de_hook
 from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.frentes import Frente
 
@@ -74,8 +75,13 @@ def _motivo(causa: Causa | None, error: Mapping[str, Any] | None) -> str:
     if causa is None:
         return MOTIVO_SIN_DETALLE
     if causa is Causa.ERROR_DE_FUENTE:
+        # Solo los errores de la fuente: un bloqueo de hook (#7) no es un error de la fuente.
         obtenido = (error or {}).get("obtenido") or {}
-        tipos = [str(e.get("tipo")) for e in obtenido.get("errores") or [] if isinstance(e, dict)]
+        tipos = [
+            str(e.get("tipo"))
+            for e in obtenido.get("errores") or []
+            if isinstance(e, dict) and not es_bloqueo_de_hook(e)
+        ]
         return f"{_MOTIVOS[causa]} ({', '.join(tipos)})" if tipos else _MOTIVOS[causa]
     return _MOTIVOS[causa]
 

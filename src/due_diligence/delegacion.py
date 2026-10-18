@@ -119,7 +119,9 @@ def _error_de_frente(
 
     `tipo` se conserva por compatibilidad con el #6; el «tipo de error» de FR-002 es `causa`.
     `reintentable` es verdadero solo si la causa lo es **y** quedan reintentos (R3).
+    `reintentos_restantes` nunca baja de 0 (data-model).
     """
+    reintentos_restantes = max(0, reintentos_restantes)
     return {
         **_error(tipo, mensaje, reintentable and reintentos_restantes > 0, obtenido),
         "frente": frente.value,
@@ -363,7 +365,7 @@ class Delegador:
         finally:
             if self.estado.situacion(frente) is Situacion.EN_CURSO:  # cancelado: no se pierde
                 self.estado.cambiar_situacion(frente, Situacion.NO_TERMINADO, MOTIVO_CANCELADO)
-                self.estado.errores[frente] = _error_de_frente(
+                cancelado = _error_de_frente(
                     "frente_no_terminado",
                     frente,
                     Causa.CANCELADO,
@@ -373,6 +375,10 @@ class Delegador:
                     intento=intento,
                     reintentos_restantes=MAX_REINTENTOS_POR_FRENTE - (intento - 1),
                 )
+                # También es lo guardado del frente: con la misma entrada no se vuelve a ejecutar,
+                # una llamada que esperaba recibe este error y un rechazo posterior no lo pisa.
+                self._respuestas[frente] = cancelado
+                self.estado.errores[frente] = cancelado
             self._hecho[frente].set()
 
     # ------------------------------------------------------------ resultado de un frente

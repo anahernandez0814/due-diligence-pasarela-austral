@@ -10,9 +10,11 @@ Lo medido con el SDK 0.2.168 (research R1 a R3) condiciona el diseño:
 - `PostToolUse` recibe `tool_response` como texto JSON (stdio) o lista de bloques (en proceso); un
   error estructurado de la pasarela llega solo por `PostToolUseFailure`. Un único lector,
   `ejecutor.interpretar_resultado`, entiende las dos formas.
-- Una excepción o una salida inválida en un hook **deja pasar la acción**. Por eso cada hook se
-  envuelve con `fallar_cerrado` y sus salidas se construyen solo con `permitir`, `denegar` y
-  `bloquear_cierre`.
+- Una excepción o una salida inválida en un hook **deja pasar la acción**. Por eso los hooks se
+  envuelven con `fallar_cerrado` y sus salidas se construyen solo con `permitir`, `denegar`,
+  `bloquear_cierre` y `reemplazar_entrada` (la cobertura calculada por el código, #8).
+- La excepción es el `PreToolUse` de `escalar_a_cumplimiento`: escalar es la acción segura, así
+  que va envuelto con `degradar_escalamiento`, que nunca deniega (#8, R6).
 """
 
 from collections.abc import Awaitable, Callable, Mapping

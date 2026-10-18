@@ -11,8 +11,10 @@ from due_diligence import configuracion
 from due_diligence.delegacion import DESCRIPCION, Delegador
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
+    TIPO_FRENTE_INVALIDADO,
     TIPO_FRENTE_REINTENTO,
     TIPO_REINTENTO_DENEGADO,
     RegistroEventos,
@@ -232,6 +234,90 @@ def test_si_el_registro_cambia_de_comercio_listas_empieza_de_nuevo_en_el_intento
     _delegar(delegador, {"frente": "registro", "identificador": "CO-PL-0003"})
     nueva = _delegar(delegador, LISTAS)
     assert nueva["intento"] == 1 and len(ejecutor.llamadas_de(Frente.LISTAS)) == 2
+
+
+def test_el_reintento_de_listas_vuelve_a_pasar_por_el_hook_de_la_consulta_de_listas():
+    # Caso límite de la spec: un reintento de listas no se salta la regla I.1.
+    caida = resultado_listas(
+        [
+            consulta_listas("comercio", identificador="CO-TV-0001"),
+            consulta(
+                Frente.LISTAS, {"tipo": "persona", "identificador": "PE-0001"}, error=REINTENTABLE
+            ),
+        ]
+    )
+    exito_con_una_de_mas = resultado_listas(
+        [
+            consulta_listas("comercio", identificador="CO-TV-0001"),
+            consulta_listas("persona", identificador="PE-0001"),
+            consulta_listas("persona", nombre="Otra Persona Ficticia"),  # el hook la bloquea
+        ]
+    )
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={Frente.LISTAS: en_secuencia(caida, exito_con_una_de_mas)}
+    )
+    _delegar(delegador, REGISTRO)
+    assert _delegar(delegador, LISTAS)["reintentable"] is True
+
+    reintento = _delegar(delegador, LISTAS)
+
+    llamadas = ejecutor.llamadas_de(Frente.LISTAS)
+    assert len(llamadas) == 2 and "PreToolUse" in llamadas[1].opciones.hooks
+    assert reintento["situacion"] == "terminado"
+    (marca,) = _eventos(registro, TIPO_FRENTE_REINTENTO, Frente.LISTAS)
+    bloqueos = [e for e in registro.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
+    assert [(e.regla, e.frente) for e in bloqueos] == [("I.1", Frente.LISTAS)]
+    assert bloqueos[0].secuencia > marca.secuencia  # el bloqueo es del reintento
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
+def test_un_reintento_del_registro_que_identifica_otro_comercio_deja_listas_invalidada():
+    # Solo hay comercio con el registro terminado: para reintentarlo, antes tiene que fallar, y esa
+    # falla ya invalida listas. El reintento identifica otro comercio y listas sigue invalidada
+    # hasta que se vuelve a delegar, ahora con el comercio nuevo.
+    caido = _caido(REINTENTABLE, Frente.REGISTRO, {"identificador": "CO-PL-0003"})
+    otro = comercio_del_registro(
+        "CO-PL-0003",
+        "Pago Latino SAS",
+        {"nombre": "Mario Quispe Vargas", "identificador": "PE-0099"},
+    )
+
+    def listas(contexto):
+        if "CO-PL-0003" in contexto:
+            return resultado_listas(
+                [
+                    consulta_listas("comercio", identificador="CO-PL-0003"),
+                    consulta_listas("persona", identificador="PE-0099"),
+                ]
+            )
+        return resultado_listas()
+
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={
+            Frente.REGISTRO: en_secuencia(resultado_registro(), caido, resultado_registro([otro])),
+            Frente.LISTAS: listas,
+        }
+    )
+    otra_entrada = {"frente": "registro", "identificador": "CO-PL-0003"}
+    _delegar(delegador, REGISTRO)
+    assert _delegar(delegador, LISTAS)["situacion"] == "terminado"
+    assert _delegar(delegador, otra_entrada)["reintentable"] is True
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+
+    reintento = _delegar(delegador, otra_entrada)
+
+    assert reintento["situacion"] == "terminado"
+    assert len(_eventos(registro, TIPO_FRENTE_REINTENTO, Frente.REGISTRO)) == 1
+    assert estado.comercio["identificador"] == "CO-PL-0003"
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    assert estado.errores[Frente.LISTAS]["causa"] == "invalidado"
+    assert _eventos(registro, TIPO_FRENTE_INVALIDADO, Frente.LISTAS)
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 1
+
+    nueva = _delegar(delegador, LISTAS)
+    assert nueva["situacion"] == "terminado"
+    assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 2
+    assert "CO-PL-0003" in ejecutor.llamadas_de(Frente.LISTAS)[1].contexto
 
 
 def test_si_el_reintento_falla_con_un_error_no_reintentable_no_hay_mas():

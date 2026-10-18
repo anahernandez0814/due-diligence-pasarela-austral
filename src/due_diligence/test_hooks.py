@@ -16,6 +16,7 @@ from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CONSULTA_FALLIDA,
+    TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
     RegistroEventos,
 )
@@ -28,6 +29,7 @@ from due_diligence.hooks import (
     leer_respuesta,
     permitir,
 )
+from due_diligence.libro import Coincidencia
 from due_diligence.reglas import (
     MOTIVO_CONSULTA_AJENA,
     MOTIVO_REGISTRO_PRIMERO,
@@ -37,7 +39,10 @@ from due_diligence.simulacion import (
     comercio_alto_riesgo,
     comercio_del_registro,
     comercios_parecidos,
+    error_estructurado,
+    respuesta_de_decision,
     respuesta_del_contrato,
+    respuesta_listas,
     respuesta_registro,
 )
 
@@ -423,7 +428,7 @@ def test_el_subagente_de_listas_tiene_el_pretooluse_de_su_herramienta():
 def test_el_coordinador_tiene_el_pretooluse_de_delegar_frente():
     _, _, hooks = _caso()
     coordinador = hooks.coordinador()
-    assert [m.matcher for m in coordinador["PreToolUse"]] == [DELEGAR]
+    assert coordinador["PreToolUse"][0].matcher == DELEGAR
 
 
 @pytest.mark.parametrize(
@@ -552,4 +557,202 @@ def test_el_hook_de_delegar_si_permite_delegar_listas_lanza_una_excepcion_denieg
     monkeypatch.setattr(modulo_hooks, "permite_delegar_listas", roto)
     pre = _pre(DELEGAR, {"frente": "listas"})
     salida = _ejecutar(_hook(hooks.coordinador(), "PreToolUse"), pre)
+    assert _es_denegacion(salida) and estado.libro.fallo_de_hook
+
+
+# ---------------------------------------------------------- regla I.2: coincidencias y escalamiento
+
+INFORME = "mcp__pasarela__registrar_informe"
+ESCALAR = "mcp__pasarela__escalar_a_cumplimiento"
+
+
+def _coincidencia_de_persona(identificador="PE-0003"):
+    return respuesta_listas(
+        {"tipo": "persona", "nombre": "(ficticio)", "identificador": identificador}
+    )
+
+
+def _post_de(nombre, respuesta, entrada):
+    return _post(respuesta, nombre=nombre, entrada=entrada)
+
+
+def _informe_de(recomendacion):
+    return {
+        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+        "recomendacion": recomendacion,
+        "hallazgos": {},
+        "cobertura": "completa",
+    }
+
+
+def test_el_subagente_de_listas_tiene_pre_post_y_failure_con_su_herramienta():
+    _, _, hooks = _caso()
+    listas = hooks.subagente(Frente.LISTAS)
+    assert set(listas) == {"PreToolUse", "PostToolUse", "PostToolUseFailure"}
+    for evento in listas:
+        assert [m.matcher for m in listas[evento]] == [LISTAS]
+
+
+def test_el_coordinador_tiene_los_hooks_de_delegar_informe_y_escalar():
+    _, _, hooks = _caso()
+    coordinador = hooks.coordinador()
+    assert [m.matcher for m in coordinador["PreToolUse"]] == [DELEGAR, INFORME]
+    assert [m.matcher for m in coordinador["PostToolUse"]] == [ESCALAR]
+    assert [m.matcher for m in coordinador["PostToolUseFailure"]] == [ESCALAR]
+
+
+def test_una_consulta_de_listas_con_coincidencia_guarda_la_consulta_y_la_coincidencia():
+    estado, _, hooks = _caso_con_comercio()
+    entrada = {"tipo": "persona", "identificador": "PE-0003"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(LISTAS, _coincidencia_de_persona(), entrada),
+    )
+    (consulta,) = estado.libro.consultas_listas
+    assert (consulta.tipo, consulta.identificador, consulta.resultado) == (
+        "persona",
+        "PE-0003",
+        "coincidencias",
+    )
+    (coincidencia,) = estado.libro.coincidencias
+    assert coincidencia.tipo == "persona" and coincidencia.lista == "Lista Restrictiva Ficticia A"
+    assert coincidencia.fuente == "Lista Restrictiva Ficticia A" and coincidencia.fecha
+    assert coincidencia.causa == "coincidencia_representante"
+
+
+def test_una_consulta_de_listas_sin_coincidencias_no_deja_coincidencia_ni_requiere_escalar():
+    estado, _, hooks = _caso_con_comercio()
+    entrada = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(LISTAS, respuesta_listas(), entrada),
+    )
+    assert estado.libro.coincidencias == []
+    (consulta,) = estado.libro.consultas_listas
+    assert consulta.tipo == "comercio" and consulta.resultado == "sin_coincidencias"
+
+
+def test_la_coincidencia_no_se_borra_aunque_el_registro_cambie_de_comercio():
+    estado, _, hooks = _caso_con_comercio()
+    entrada = {"tipo": "persona", "identificador": "PE-0003"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(LISTAS, _coincidencia_de_persona(), entrada),
+    )
+    estado.reiniciar_identificacion()
+    estado.registrar_identificacion(
+        respuesta_registro(comercio_del_registro("CO-TA-0002", "Taller Aurora SAS"))
+    )
+    assert len(estado.libro.coincidencias) == 1
+
+
+def test_una_consulta_de_listas_con_error_no_entra_al_libro_y_deja_constancia():
+    estado, eventos, hooks = _caso_con_comercio()
+    error = {
+        "error": True,
+        "tipo": "datos_no_disponibles",
+        "mensaje": "m",
+        "reintentable": False,
+        "obtenido": {},
+    }
+    entrada = _fallo(error, nombre=LISTAS)
+    _ejecutar(_hook(hooks.subagente(Frente.LISTAS), "PostToolUseFailure"), entrada)
+    assert estado.libro.consultas_listas == [] and estado.libro.coincidencias == []
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CONSULTA_FALLIDA and evento.frente is Frente.LISTAS
+
+
+def test_una_respuesta_ilegible_de_listas_no_entra_al_libro_y_deja_constancia():
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(LISTAS, "no es json", entrada),
+    )
+    assert estado.libro.consultas_listas == []
+    assert eventos.eventos()[-1].tipo == TIPO_CONSULTA_FALLIDA
+
+
+def test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_evento():
+    estado, eventos, hooks = _caso_con_comercio()
+    _ejecutar(
+        _hook(hooks.subagente(Frente.LISTAS), "PostToolUse"),
+        _post_de(
+            LISTAS, _coincidencia_de_persona(), {"tipo": "persona", "identificador": "PE-0003"}
+        ),
+    )
+    escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, {}))
+    assert estado.libro.escalamientos == [frozenset({"coincidencia_representante"})]
+    evento = eventos.eventos()[-1]
+    assert evento.tipo == TIPO_ESCALAMIENTO_REGISTRADO and evento.frente is None
+    assert "representante legal" in evento.detalle and "PE-0003" not in evento.detalle
+
+
+def test_un_escalamiento_con_error_o_con_otro_resultado_no_cuenta():
+    estado, eventos, hooks = _caso_con_comercio()
+    error = error_estructurado("campos_obligatorios_ausentes", False)
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUseFailure"), _fallo(error, nombre=ESCALAR))
+    otro = respuesta_de_decision("informe_registrado", "INF-0001")
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, otro, {}))
+    assert estado.libro.escalamientos == []
+    assert [e.tipo for e in eventos.eventos()] == [TIPO_CONSULTA_FALLIDA, TIPO_CONSULTA_FALLIDA]
+
+
+def _hook_del_informe(hooks):
+    return hooks.coordinador()["PreToolUse"][1].hooks[0]
+
+
+def test_el_hook_del_informe_deniega_habilitar_con_coincidencia_con_la_regla_i2():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert _es_denegacion(salida)
+    assert "no se puede recomendar habilitar" in _motivo(salida)
+    assert "aún no se ha escalado" in _motivo(salida)
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.2"
+
+
+def test_el_hook_del_informe_permite_no_habilitar_si_el_caso_esta_escalado():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.escalamientos.append(frozenset({"coincidencia_representante"}))
+    for recomendacion in ("no_habilitar", "decide_cumplimiento"):
+        salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de(recomendacion)))
+        assert salida == permitir()
+    assert eventos.eventos() == []
+
+
+def test_el_hook_del_informe_deniega_una_recomendacion_fuera_del_conjunto():
+    _, eventos, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("aprobar")))
+    assert _es_denegacion(salida) and "habilitar, no_habilitar o decide_cumplimiento" in _motivo(
+        salida
+    )
+    assert eventos.eventos()[0].regla is None
+
+
+@pytest.mark.parametrize("entrada", [None, "informe", [], {}, {"recomendacion": 3}])
+def test_el_hook_del_informe_con_una_entrada_malformada_deniega(entrada):
+    _, _, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _es_denegacion(salida)
+
+
+def test_con_el_libro_sellado_el_hook_del_informe_deniega():
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
+    assert _es_denegacion(salida) and _motivo(salida) == SELLADO
+
+
+def test_el_hook_del_informe_si_evaluar_informe_lanza_una_excepcion_deniega(monkeypatch):
+    estado, _, hooks = _caso_con_comercio()
+
+    def roto(_estado, _entrada):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr(modulo_hooks, "evaluar_informe", roto)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
     assert _es_denegacion(salida) and estado.libro.fallo_de_hook

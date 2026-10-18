@@ -8,13 +8,25 @@ import pytest
 
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.frentes import Frente
+from due_diligence.libro import (
+    CAUSA_ALTO_RIESGO,
+    CAUSA_COINCIDENCIA_COMERCIO,
+    CAUSA_COINCIDENCIA_REPRESENTANTE,
+    Coincidencia,
+    LibroReglas,
+)
 from due_diligence.reglas import (
     ALTO_RIESGO,
     RECOMENDACIONES,
+    causas_vigentes,
     consulta_coincide,
+    escalamiento_cubre,
+    evaluar_informe,
     normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
+    reglas_de,
+    requiere_escalamiento,
 )
 from due_diligence.simulacion import comercio_alto_riesgo, comercios_parecidos, respuesta_registro
 
@@ -291,3 +303,152 @@ def test_se_delega_listas_si_el_registro_termino_con_un_comercio_unico():
 def test_se_permite_delegar_listas_con_el_registro_en_curso_la_herramienta_espera():
     estado = _estado_con_registro(Situacion.EN_CURSO, identificar=False)
     assert permite_delegar_listas(estado) == (True, "")
+
+
+# ----------------------------------------------------------------- regla I.2: causas y escalamiento
+
+
+def _libro_con(*tipos_de_coincidencia, escalamientos=()):
+    libro = LibroReglas()
+    libro.coincidencias = [
+        Coincidencia(t, "Lista A", "Fuente A", "2026-09-30") for t in tipos_de_coincidencia
+    ]
+    libro.escalamientos = [frozenset(e) for e in escalamientos]
+    return libro
+
+
+def test_las_causas_vigentes_son_claves_fijas_sin_nombres_ni_identificadores():
+    assert causas_vigentes(LibroReglas()) == frozenset()
+    assert causas_vigentes(_libro_con("comercio")) == {CAUSA_COINCIDENCIA_COMERCIO}
+    assert causas_vigentes(_libro_con("persona")) == {CAUSA_COINCIDENCIA_REPRESENTANTE}
+    assert causas_vigentes(_libro_con("comercio", "persona", "persona")) == {
+        CAUSA_COINCIDENCIA_COMERCIO,
+        CAUSA_COINCIDENCIA_REPRESENTANTE,
+    }
+    # Las tres claves posibles son exactamente estas.
+    assert {CAUSA_COINCIDENCIA_COMERCIO, CAUSA_COINCIDENCIA_REPRESENTANTE, CAUSA_ALTO_RIESGO} == {
+        "coincidencia_comercio",
+        "coincidencia_representante",
+        "alto_riesgo",
+    }
+
+
+def test_requiere_escalamiento_es_que_haya_causas_vigentes():
+    assert requiere_escalamiento(LibroReglas()) is False
+    assert requiere_escalamiento(_libro_con("persona")) is True
+
+
+def test_el_escalamiento_cubre_segun_las_instantaneas():
+    assert escalamiento_cubre(LibroReglas()) is True  # sin causas no hay nada que cubrir
+    assert escalamiento_cubre(_libro_con("persona")) is False  # con una causa y sin escalar
+    cubierto = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    assert escalamiento_cubre(cubierto) is True
+
+
+def test_una_causa_nueva_posterior_al_escalamiento_no_queda_cubierta():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    libro.coincidencias.append(Coincidencia("comercio", "Lista B", "Fuente B", "2026-09-30"))
+    assert escalamiento_cubre(libro) is False  # hace falta escalar de nuevo
+    libro.escalamientos.append(causas_vigentes(libro))
+    assert escalamiento_cubre(libro) is True
+
+
+def test_una_segunda_coincidencia_de_la_misma_entidad_no_es_una_causa_nueva():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    libro.coincidencias.append(Coincidencia("persona", "Lista B", "Fuente B", "2026-09-30"))
+    assert escalamiento_cubre(libro) is True
+
+
+def test_la_regla_del_evento_sale_de_las_causas():
+    assert reglas_de({CAUSA_COINCIDENCIA_COMERCIO}) == "I.2"
+    assert reglas_de({CAUSA_COINCIDENCIA_REPRESENTANTE}) == "I.2"
+    assert reglas_de({CAUSA_ALTO_RIESGO}) == "I.3"
+    assert reglas_de({CAUSA_ALTO_RIESGO, CAUSA_COINCIDENCIA_COMERCIO}) == "I.2, I.3"
+    assert reglas_de(frozenset()) is None
+
+
+# ------------------------------------------------------------------ evaluar_informe (regla I.2)
+
+
+def _estado_de_informe(libro=None):
+    estado = _estado_con_registro(Situacion.TERMINADO, comercio_alto_riesgo())
+    if libro is not None:
+        estado.libro = libro
+    return estado
+
+
+def _informe(recomendacion):
+    return {
+        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+        "recomendacion": recomendacion,
+        "hallazgos": {},
+        "cobertura": "completa",
+    }
+
+
+def _textos(rechazos):
+    return " ".join(r.texto for r in rechazos)
+
+
+@pytest.mark.parametrize("valor", ["aprobar", "", None, 3, "habilitar con reservas"])
+def test_una_recomendacion_fuera_del_conjunto_se_rechaza_aunque_ninguna_regla_aplique(valor):
+    rechazos = evaluar_informe(_estado_de_informe(), _informe(valor))
+    assert rechazos, "debe rechazarse"
+    texto = _textos(rechazos)
+    assert "habilitar, no_habilitar o decide_cumplimiento" in texto
+
+
+def test_una_entrada_que_no_es_un_mapa_se_rechaza():
+    for malformada in (None, "informe", ["habilitar"]):
+        assert evaluar_informe(_estado_de_informe(), malformada)
+
+
+def test_con_coincidencia_se_rechaza_habilitar_y_el_motivo_nombra_la_coincidencia():
+    libro = _libro_con("persona")
+    rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+    texto = _textos(rechazos)
+    assert "coincidencia en listas restrictivas: no se puede recomendar habilitar" in texto
+    assert any(r.regla == "I.2" for r in rechazos)
+
+
+@pytest.mark.parametrize("recomendacion", ["habilitar", "no_habilitar", "decide_cumplimiento"])
+def test_con_coincidencia_sin_escalar_cualquier_recomendacion_se_rechaza(recomendacion):
+    libro = _libro_con("comercio")
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe(recomendacion)))
+    assert "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por" in texto
+    assert "coincidencia del comercio en listas restrictivas" in texto
+
+
+def test_el_motivo_de_escalar_usa_solo_etiquetas_fijas_y_ningun_dato_consultado():
+    libro = _libro_con("comercio", "persona")
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe("decide_cumplimiento")))
+    assert "coincidencia del comercio en listas restrictivas" in texto
+    assert "coincidencia del representante legal en listas restrictivas" in texto
+    for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía", "coincidencia_comercio"):
+        assert dato not in texto
+
+
+@pytest.mark.parametrize("recomendacion", ["no_habilitar", "decide_cumplimiento"])
+def test_con_coincidencia_y_escalamiento_cubierto_se_aceptan_las_que_no_habilitan(recomendacion):
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    assert evaluar_informe(_estado_de_informe(libro), _informe(recomendacion)) == []
+
+
+def test_con_coincidencia_y_escalamiento_cubierto_habilitar_sigue_rechazado():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe("habilitar")))
+    assert "no se puede recomendar habilitar" in texto
+    assert "aún no se ha escalado" not in texto
+
+
+def test_el_rechazo_acumula_todos_los_motivos_que_apliquen():
+    libro = _libro_con("persona")
+    rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+    textos = [r.texto for r in rechazos]
+    assert any("no se puede recomendar habilitar" in t for t in textos)
+    assert any("aún no se ha escalado" in t for t in textos)
+
+
+def test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar():
+    assert evaluar_informe(_estado_de_informe(), _informe("no_habilitar")) == []
+    assert evaluar_informe(_estado_de_informe(), _informe("decide_cumplimiento")) == []

@@ -294,7 +294,7 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
 **Meta**: toda coincidencia queda registrada; `habilitar` se rechaza y el informe exige escalar antes.
 **Prueba independiente**: representante con coincidencia (`PE-0003`) y un informe `habilitar`.
 
-- [ ] T023 [US2] Ampliar `src/due_diligence/test_reglas.py` (R9, R10, FR-005, FR-006):
+- [X] T023 [US2] Ampliar `src/due_diligence/test_reglas.py` (R9, R10, FR-005, FR-006):
   `causas_vigentes(libro)` es un subconjunto de las **claves fijas** `coincidencia_comercio`, `coincidencia_representante`
   y `alto_riesgo` (sin nombres ni identificadores; `alto_riesgo` lo prueba US3); una coincidencia de tipo `persona` da
   `coincidencia_representante`; `reglas_de(causas)` da `I.2` para las coincidencias, `I.3` para `alto_riesgo` y `I.2, I.3` si hay de
@@ -308,10 +308,10 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   por: coincidencia del comercio en listas restrictivas» (US2-3, solo etiquetas fijas); con coincidencia y escalamiento cubierto, `no_habilitar` y
   `decide_cumplimiento` → se aceptan (US2-4); acumula todos los motivos que apliquen; el motivo no repite
   nombres ni identificadores.
-- [ ] T024 [US2] Añadir a `src/due_diligence/reglas.py` `causas_vigentes`, `requiere_escalamiento`,
+- [X] T024 [US2] Añadir a `src/due_diligence/reglas.py` `causas_vigentes`, `requiere_escalamiento`,
   `escalamiento_cubre` y la parte de la regla 2 de `evaluar_informe` (devuelve la lista de motivos; vacía
   si se acepta). Hace pasar T023.
-- [ ] T025 [US2] Ampliar `src/due_diligence/test_hooks.py` (FR-004, FR-006, FR-013): `PostToolUse` de
+- [X] T025 [US2] Ampliar `src/due_diligence/test_hooks.py` (FR-004, FR-006, FR-013): `PostToolUse` de
   listas guarda en `libro.consultas_listas` una `ConsultaListas` por cada respuesta válida y, por cada
   hecho de una respuesta `coincidencias`, una `Coincidencia` con la fuente y la fecha de `metadatos`
   (US2-1); una respuesta `sin_coincidencias` no añade coincidencias (US2-6); **una consulta con error
@@ -322,10 +322,10 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   `caso_escalado` no cuenta; el `PreToolUse` de `registrar_informe` devuelve `denegar(" ".join(motivos))`
   con la regla de `reglas_de(causas)` (`I.2`, `I.3` o `I.2, I.3`, I3) si `evaluar_informe` da motivos y `permitir()` si no, y con
   `libro.fallo_de_hook` deniega; con `recomendacion` que no es texto o `tool_input` malformado, deniega (FR-012).
-- [ ] T026 [US2] Añadir a `src/due_diligence/hooks.py`: `PostToolUse` y `PostToolUseFailure` de listas
+- [X] T026 [US2] Añadir a `src/due_diligence/hooks.py`: `PostToolUse` y `PostToolUseFailure` de listas
   (subagente de listas), `PostToolUse` y `PostToolUseFailure` de `escalar_a_cumplimiento` y `PreToolUse`
   de `registrar_informe` (coordinador). Hace pasar T025.
-- [ ] T027 [US2] Ampliar `src/due_diligence/test_hooks_sesiones.py` con el caso (c) a nivel de hooks: registro
+- [X] T027 [US2] Ampliar `src/due_diligence/test_hooks_sesiones.py` con el caso (c) a nivel de hooks: registro
   con representante `PE-0003` de `CO-PL-0003`; listas devuelve coincidencia para la persona; el
   coordinador intenta `registrar_informe` con `habilitar` → rechazado (is_error con el motivo); intenta
   `no_habilitar` sin escalar → rechazado; llama a `escalar_a_cumplimiento` → se registra; intenta

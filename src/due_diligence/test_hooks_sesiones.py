@@ -17,12 +17,16 @@ from due_diligence.simulacion import (
     PasarelaSimulada,
     SesionSimulada,
     comercio_alto_riesgo,
+    comercio_con_representante_en_listas,
     comercios_parecidos,
+    error_estructurado,
 )
 
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
 LISTAS = FRENTES[Frente.LISTAS].herramienta_completa
 DELEGAR = "mcp__delegacion__delegar_frente"
+INFORME = "mcp__pasarela__registrar_informe"
+ESCALAR = "mcp__pasarela__escalar_a_cumplimiento"
 
 
 class Caso:
@@ -46,7 +50,26 @@ class Caso:
             "instrucciones",
             hooks=self.hooks.coordinador(),
         )
-        return SesionSimulada(opciones, herramientas or {DELEGAR: lambda e: {"frente": "x"}})
+        por_defecto = {**self.pasarela.herramientas, DELEGAR: lambda e: {"frente": "x"}}
+        return SesionSimulada(opciones, herramientas or por_defecto)
+
+    def coordinador(self):
+        """La sesión del coordinador, la misma durante todo el caso."""
+        if not hasattr(self, "_coordinador"):
+            self._coordinador = self.sesion_del_coordinador()
+        return self._coordinador
+
+    def informe(self, recomendacion):
+        entrada = {
+            "comercio": {"identificador": "CO-PL-0003", "nombre": "Panadería Luna Nueva SAS"},
+            "recomendacion": recomendacion,
+            "hallazgos": {},
+            "cobertura": "completa",
+        }
+        return asyncio.run(self.coordinador().llamar(INFORME, entrada))
+
+    def escalar(self):
+        return asyncio.run(self.coordinador().llamar(ESCALAR, {"causa_escalamiento": "x"}))
 
     def registrar(self, **consulta):
         """El subagente de registro consulta y el frente termina (lo que haría el `Delegador`)."""
@@ -114,3 +137,60 @@ def test_antes_de_que_el_registro_responda_se_bloquea_listas():
     caso = Caso(registro=[comercio_alto_riesgo()])
     assert caso.listas(tipo="comercio", identificador="CO-TV-0001").denegada
     assert caso.delegar_listas().denegada  # el registro ni siquiera se delegó
+
+
+# ---------------------------------------- US2: coincidencia en listas de extremo a extremo (caso c)
+
+
+def _caso_c():
+    caso = Caso(
+        registro=[comercio_con_representante_en_listas()], en_listas={"persona": {"PE-0003"}}
+    )
+    caso.registrar(identificador="CO-PL-0003")
+    assert caso.listas(tipo="comercio", identificador="CO-PL-0003").ejecutada
+    assert caso.listas(tipo="persona", identificador="PE-0003").ejecutada
+    return caso
+
+
+def test_caso_c_habilitar_se_rechaza_y_solo_se_acepta_el_informe_tras_escalar():
+    caso = _caso_c()
+    assert [c.causa for c in caso.estado.libro.coincidencias] == ["coincidencia_representante"]
+
+    habilitar = caso.informe("habilitar")
+    assert habilitar.denegada and not habilitar.ejecutada
+    assert "no se puede recomendar habilitar" in habilitar.motivo
+    sin_escalar = caso.informe("no_habilitar")  # tampoco se acepta sin escalar
+    assert sin_escalar.denegada and "aún no se ha escalado" in sin_escalar.motivo
+    assert caso.pasarela.informes == []  # ningún informe llegó al servidor
+
+    assert caso.escalar().ejecutada
+    assert caso.estado.libro.escalamientos == [frozenset({"coincidencia_representante"})]
+
+    assert caso.informe("habilitar").denegada  # escalar no habilita
+    aceptado = caso.informe("decide_cumplimiento")
+    assert aceptado.ejecutada and not aceptado.denegada
+    assert caso.informe("no_habilitar").ejecutada
+    assert len(caso.pasarela.informes) == 2
+
+
+def test_caso_c_los_rechazos_llevan_la_regla_i2_en_el_evento_y_sin_datos_consultados():
+    caso = _caso_c()
+    caso.informe("habilitar")
+    (evento,) = [e for e in caso.eventos.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
+    assert evento.regla == "I.2"
+    for dato in ("PE-0003", "Ernesto", "CO-PL-0003", "Panadería"):
+        assert dato not in evento.detalle
+
+
+def test_un_escalamiento_con_error_no_cubre_el_caso():
+    caso = _caso_c()
+    sesion = caso.sesion_del_coordinador(
+        {
+            **caso.pasarela.herramientas,
+            ESCALAR: lambda e: error_estructurado("campos_obligatorios_ausentes", False),
+        }
+    )
+    caso._coordinador = sesion
+    assert caso.escalar().es_error
+    assert caso.estado.libro.escalamientos == []
+    assert caso.informe("decide_cumplimiento").denegada

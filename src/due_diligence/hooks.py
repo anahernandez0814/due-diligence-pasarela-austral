@@ -25,6 +25,7 @@ from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CONSULTA_FALLIDA,
+    TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
     RegistroEventos,
 )
@@ -35,7 +36,14 @@ from due_diligence.frentes import (
     Frente,
     nombre_completo,
 )
-from due_diligence.reglas import permite_delegar_listas, permite_listas
+from due_diligence.libro import Coincidencia, ConsultaListas
+from due_diligence.reglas import (
+    ETIQUETAS_CAUSA,
+    causas_vigentes,
+    evaluar_informe,
+    permite_delegar_listas,
+    permite_listas,
+)
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
 
@@ -46,6 +54,8 @@ MOTIVO_ENTRADA_MALFORMADA = (
 )
 REGLA_LISTAS = "I.1"
 HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
+HERRAMIENTA_INFORME = nombre_completo("registrar_informe")
+HERRAMIENTA_ESCALAR = nombre_completo("escalar_a_cumplimiento")
 
 # --------------------------------------------------------------------------- salidas tipadas
 
@@ -160,16 +170,17 @@ class HooksDelCaso:
     def subagente(self, frente: Frente) -> dict[str, list[HookMatcher]]:
         """Los hooks del subagente de un frente (los que vigilan su propia herramienta)."""
         herramienta = FRENTES[frente].herramienta_completa
+        posterior = {
+            Frente.REGISTRO: self._registro_posterior,
+            Frente.LISTAS: self._listas_posterior,
+        }.get(frente)
         hooks: dict[str, list[HookMatcher]] = {}
         if frente is Frente.LISTAS:
             hooks["PreToolUse"] = [
                 self._matcher(herramienta, self._listas_previo, "PreToolUse", frente)
             ]
-        if frente is Frente.REGISTRO:
-            hooks["PostToolUse"] = [
-                self._matcher(herramienta, self._registro_posterior, "PostToolUse", frente)
-            ]
-        if frente in (Frente.REGISTRO,):
+        if posterior is not None:
+            hooks["PostToolUse"] = [self._matcher(herramienta, posterior, "PostToolUse", frente)]
             hooks["PostToolUseFailure"] = [
                 self._matcher(
                     herramienta, self._fallo_de_herramienta(frente), "PostToolUseFailure", frente
@@ -178,13 +189,25 @@ class HooksDelCaso:
         return hooks
 
     def coordinador(self) -> dict[str, list[HookMatcher]]:
-        """Los hooks del coordinador."""
+        """Los hooks del coordinador: delegar, informe y escalamiento."""
         return {
             "PreToolUse": [
                 self._matcher(
                     HERRAMIENTA_DELEGAR_COMPLETA, self._delegar_previo, "PreToolUse", Frente.LISTAS
+                ),
+                self._matcher(HERRAMIENTA_INFORME, self._informe_previo, "PreToolUse", None),
+            ],
+            "PostToolUse": [
+                self._matcher(HERRAMIENTA_ESCALAR, self._escalar_posterior, "PostToolUse", None)
+            ],
+            "PostToolUseFailure": [
+                self._matcher(
+                    HERRAMIENTA_ESCALAR,
+                    self._fallo_de_herramienta(None),
+                    "PostToolUseFailure",
+                    None,
                 )
-            ]
+            ],
         }
 
     # -------------------------------------------------------------- denegar por regla
@@ -248,9 +271,76 @@ class HooksDelCaso:
             self._constancia_de_consulta_fallida(Frente.REGISTRO, error)
         return permitir()
 
+    # -------------------------------------------------------------- regla I.2: coincidencias
+
+    async def _listas_posterior(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUse` de listas: guarda la consulta válida y cada coincidencia (FR-004)."""
+        resultado, error = leer_respuesta(entrada.get("tool_response"))
+        if resultado is None:
+            self._constancia_de_consulta_fallida(Frente.LISTAS, error)
+            return permitir()
+        argumentos = entrada.get("tool_input")
+        argumentos = argumentos if isinstance(argumentos, Mapping) else {}
+        tipo = str(argumentos.get("tipo", "")).strip().casefold()
+        nombre, identificador = argumentos.get("nombre"), argumentos.get("identificador")
+        hechos = (
+            resultado.get("hechos", []) if resultado.get("resultado") == "coincidencias" else []
+        )
+        self.estado.libro.consultas_listas.append(
+            ConsultaListas(
+                tipo,
+                nombre if isinstance(nombre, str) else None,
+                identificador if isinstance(identificador, str) else None,
+                "coincidencias" if hechos else "sin_coincidencias",
+            )
+        )
+        for hecho in hechos:
+            contenido, metadatos = hecho.get("contenido", {}), hecho.get("metadatos", {})
+            tipo_de_la_coincidencia = tipo if tipo in ("comercio", "persona") else "comercio"
+            self.estado.libro.coincidencias.append(
+                Coincidencia(
+                    tipo_de_la_coincidencia,
+                    str(contenido.get("lista", "")),
+                    str(metadatos.get("fuente", "")),
+                    str(metadatos.get("fecha", "")),
+                )
+            )
+        return permitir()
+
+    async def _escalar_posterior(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUse` de `escalar_a_cumplimiento`: guarda las causas que cubre."""
+        resultado, error = leer_respuesta(entrada.get("tool_response"))
+        if resultado is None or resultado.get("resultado") != "caso_escalado":
+            self._constancia_de_consulta_fallida(None, error)
+            return permitir()
+        causas = causas_vigentes(self.estado.libro)
+        self.estado.libro.escalamientos.append(causas)
+        cubiertas = ", ".join(texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas)
+        detalle = f"Escalamiento registrado; cubre: {cubiertas or 'ninguna causa vigente'}."
+        self.eventos.registrar(TIPO_ESCALAMIENTO_REGISTRADO, None, detalle)
+        return permitir()
+
+    async def _informe_previo(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PreToolUse` de `registrar_informe`: rechaza lo que las reglas no permiten (FR-005)."""
+        sellado = self._sellado(None, None)
+        if sellado is not None:
+            return sellado
+        rechazos = evaluar_informe(self.estado, entrada.get("tool_input"))
+        if not rechazos:
+            return permitir()
+        reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
+        regla = ", ".join(sorted(reglas)) or None
+        return self._denegar_por_regla(None, regla, " ".join(r.texto for r in rechazos))
+
     # -------------------------------------------------------------- errores de herramienta
 
-    def _constancia_de_consulta_fallida(self, frente: Frente, error: Any) -> None:
+    def _constancia_de_consulta_fallida(self, frente: Frente | None, error: Any) -> None:
         """Deja el evento `consulta_fallida` de una respuesta que no cuenta como consulta.
 
         Una respuesta que no es ni el JSON del contrato ni un error estructurado, o un error
@@ -268,7 +358,7 @@ class HooksDelCaso:
             )
         self.eventos.registrar(TIPO_CONSULTA_FALLIDA, frente, detalle)
 
-    def _fallo_de_herramienta(self, frente: Frente) -> Hook:
+    def _fallo_de_herramienta(self, frente: Frente | None) -> Hook:
         """`PostToolUseFailure`: un error estructurado de la pasarela no cuenta como consulta."""
 
         async def hook(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):

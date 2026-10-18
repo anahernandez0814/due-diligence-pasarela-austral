@@ -6,11 +6,17 @@ categorías de alto riesgo y el conjunto cerrado de recomendaciones son constant
 texto de un prompt (FR-008, FR-019).
 """
 
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Iterable, Mapping
+from typing import Any, NamedTuple
 
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.frentes import Frente
+from due_diligence.libro import (
+    CAUSA_ALTO_RIESGO,
+    CAUSA_COINCIDENCIA_COMERCIO,
+    CAUSA_COINCIDENCIA_REPRESENTANTE,
+    LibroReglas,
+)
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
 
 # Categorías de alto riesgo (principio I.3). Se comparan normalizadas con `igual` (R8).
@@ -146,3 +152,90 @@ def permite_delegar_listas(estado: EstadoCaso) -> tuple[bool, str]:
     if estado.comercio is None:
         return False, _motivo_sin_comercio(estado)
     return True, ""
+
+
+# ------------------------------------------------------------------------ reglas I.2 e I.3 (cierre)
+
+
+class Rechazo(NamedTuple):
+    """El motivo de un rechazo del informe y la regla que lo causa (`None` si no es de las tres)."""
+
+    texto: str
+    regla: str | None
+
+
+# Etiquetas fijas de cada causa: los motivos se construyen solo con ellas, sin nombres ni
+# identificadores consultados (FR-013, FR-016). El orden es el de aparición en los motivos.
+ETIQUETAS_CAUSA = {
+    CAUSA_COINCIDENCIA_COMERCIO: "coincidencia del comercio en listas restrictivas",
+    CAUSA_COINCIDENCIA_REPRESENTANTE: "coincidencia del representante legal en listas restrictivas",
+    CAUSA_ALTO_RIESGO: "categoría de alto riesgo",
+}
+
+MOTIVO_RECOMENDACION = (
+    "La recomendación debe ser exactamente habilitar, no_habilitar o decide_cumplimiento."
+)
+MOTIVO_ENTRADA_INFORME = "El informe no tiene la forma esperada; se bloquea por precaución."
+MOTIVO_HABILITAR_CON_COINCIDENCIA = (
+    "Hay una coincidencia en listas restrictivas: no se puede recomendar habilitar. "
+    "Escale el caso a cumplimiento."
+)
+
+
+def causas_vigentes(libro: LibroReglas) -> frozenset[str]:
+    """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9)."""
+    return frozenset(coincidencia.causa for coincidencia in libro.coincidencias)
+
+
+def requiere_escalamiento(libro: LibroReglas) -> bool:
+    return bool(causas_vigentes(libro))
+
+
+def escalamiento_cubre(libro: LibroReglas) -> bool:
+    """Si algún escalamiento exitoso cubría todas las causas vigentes (vacío ⇒ `True`).
+
+    Una causa posterior a la instantánea de un escalamiento queda sin cubrir y exige escalar de
+    nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9).
+    """
+    causas = causas_vigentes(libro)
+    return not causas or any(causas <= instantanea for instantanea in libro.escalamientos)
+
+
+def reglas_de(causas: Iterable[str]) -> str | None:
+    """Las reglas del evento según las causas: `I.2`, `I.3` o `I.2, I.3` (`None` sin causas)."""
+    causas = set(causas)
+    reglas = []
+    if causas & {CAUSA_COINCIDENCIA_COMERCIO, CAUSA_COINCIDENCIA_REPRESENTANTE}:
+        reglas.append("I.2")
+    if CAUSA_ALTO_RIESGO in causas:
+        reglas.append("I.3")
+    return ", ".join(reglas) or None
+
+
+def motivo_de_escalar(causas: Iterable[str]) -> str:
+    """El motivo de que el caso requiera escalamiento, con las etiquetas fijas de sus causas."""
+    causas = set(causas)
+    etiquetas = ", ".join(texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas)
+    return f"El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: {etiquetas}."
+
+
+def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
+    """Los motivos por los que se rechaza `registrar_informe`; vacía si se acepta (FR-005, FR-006).
+
+    Acumula todos los que apliquen: una recomendación fuera del conjunto cerrado, un caso que
+    requiere escalamiento sin cubrir (para cualquier recomendación) y, solo si se recomienda
+    habilitar, cada condición de las reglas I.2 e I.3. Una entrada malformada se rechaza.
+    """
+    if not isinstance(entrada, Mapping):
+        return [Rechazo(MOTIVO_ENTRADA_INFORME, None)]
+    libro = estado.libro
+    rechazos: list[Rechazo] = []
+    recomendacion = normalizar_recomendacion(entrada.get("recomendacion"))
+    if recomendacion is None:
+        rechazos.append(Rechazo(MOTIVO_RECOMENDACION, None))
+    causas = causas_vigentes(libro)
+    if not escalamiento_cubre(libro):
+        rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
+    if recomendacion == RECOMENDACION_HABILITAR and libro.coincidencias:
+        rechazos.append(Rechazo(MOTIVO_HABILITAR_CON_COINCIDENCIA, "I.2"))
+    return rechazos

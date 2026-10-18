@@ -41,6 +41,10 @@ TIPO_COBERTURA_SUSTITUIDA = "cobertura_sustituida"
 TIPO_INFORME_REGISTRADO = "informe_registrado"
 TIPO_DATOS_SUSTITUIDOS = "datos_sustituidos"
 TIPO_CIERRE_SIN_INFORME = "cierre_sin_informe"
+# Continuación del caso (#10, data-model «Eventos»): `mensaje_analista` al empezar cada turno, sin
+# repetir el texto; `espera_analista`, cuando el `Stop` admite una espera del analista (R3).
+TIPO_MENSAJE_ANALISTA = "mensaje_analista"
+TIPO_ESPERA_ANALISTA = "espera_analista"
 
 TIPOS = frozenset(
     {
@@ -65,6 +69,8 @@ TIPOS = frozenset(
         TIPO_INFORME_REGISTRADO,
         TIPO_DATOS_SUSTITUIDOS,
         TIPO_CIERRE_SIN_INFORME,
+        TIPO_MENSAJE_ANALISTA,
+        TIPO_ESPERA_ANALISTA,
     }
 )
 

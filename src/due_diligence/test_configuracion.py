@@ -346,3 +346,29 @@ def test_la_variable_de_demostracion_no_se_reenvia_al_servidor():
     assert configuracion.VARIABLE_MODO_DEMO not in configuracion.VARIABLES_PASARELA
     entorno = {configuracion.VARIABLE_MODO_DEMO: "1"}
     assert "env" not in configuracion.servidor_pasarela(entorno)
+
+
+# ----------------------------------------------------------- #10: continuación con resume (T007)
+
+
+def test_opciones_base_pasa_el_resume():
+    opciones = configuracion.opciones_base(
+        modelo="m",
+        system_prompt="s",
+        permitidas=[],
+        prohibidas=[],
+        mcp_servers={},
+        resume="s-1",
+    )
+    assert opciones.resume == "s-1"
+
+
+def test_sin_resume_las_opciones_no_reanudan():
+    assert _opciones_coordinador().resume is None
+    assert all(_opciones_subagente(f).resume is None for f in Frente)
+
+
+def test_el_coordinador_acepta_el_resume_y_los_subagentes_no():
+    assert _opciones_coordinador(resume="s-2").resume == "s-2"
+    with pytest.raises(TypeError):
+        _opciones_subagente(Frente.REGISTRO, resume="s-2")  # los subagentes no reanudan

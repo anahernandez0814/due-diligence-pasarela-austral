@@ -183,8 +183,13 @@ def opciones_base(
     prohibidas: list[str],
     mcp_servers: dict[str, Any],
     hooks: Any = None,
+    resume: str | None = None,
 ) -> ClaudeAgentOptions:
-    """Única función que construye `ClaudeAgentOptions` (R2)."""
+    """Única función que construye `ClaudeAgentOptions` (R2).
+
+    `resume` es el `session_id` del turno anterior del coordinador (#10, R1): la `query()` del
+    turno siguiente continúa esa conversación. Los subagentes nunca reanudan.
+    """
     return ClaudeAgentOptions(
         model=modelo,
         system_prompt=system_prompt,
@@ -198,6 +203,7 @@ def opciones_base(
         cwd=str(RAIZ),
         max_turns=MAX_TURNOS_SEGURIDAD,
         stderr=filtrar_stderr,
+        resume=resume,
     )
 
 
@@ -207,6 +213,7 @@ def opciones_coordinador(
     *,
     hooks: Any = None,
     entorno: Mapping[str, str] | None = None,
+    resume: str | None = None,
 ) -> ClaudeAgentOptions:
     permitidas, prohibidas = herramientas_coordinador()
     return opciones_base(
@@ -219,6 +226,7 @@ def opciones_coordinador(
             SERVIDOR_DELEGACION: servidor_delegacion,
         },
         hooks=hooks,
+        resume=resume,
     )
 
 

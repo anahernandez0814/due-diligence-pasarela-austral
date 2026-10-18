@@ -129,6 +129,18 @@ def problemas_de_frentes_cubiertos(cobertura: CoberturaCaso, hallazgos: Any) -> 
     ]
 
 
+def clave_comercio(estado: EstadoCaso) -> tuple[Any, Any, bool] | None:
+    """La clave `(identificador, nombre, verificado)` del comercio del caso, o `None` (R7).
+
+    Es la de la huella del informe y la del escalamiento (#10, R8): un escalamiento solo cuenta
+    para el comercio que tenía el caso cuando se aceptó.
+    """
+    comercio = comercio_del_informe(estado)
+    if comercio is None:
+        return None
+    return (comercio["identificador"], comercio["nombre"], comercio["verificado"])
+
+
 def huella_con(
     estado: EstadoCaso, cobertura: CoberturaCaso | None, conflictos: ConflictosCaso | None
 ) -> Huella:
@@ -136,7 +148,6 @@ def huella_con(
 
     Con el caso sellado no se usan: los dos componentes valen `NO_CALCULADOS` (hallazgo I1).
     """
-    comercio = comercio_del_informe(estado)
     if estado.libro.fallo_de_hook or cobertura is None or conflictos is None:
         componente_cobertura: tuple[tuple[str, bool], ...] | str = NO_CALCULADOS
         componente_conflictos: tuple[Any, ...] | str = NO_CALCULADOS
@@ -158,9 +169,7 @@ def huella_con(
         componente_cobertura,
         componente_conflictos,
         causas_vigentes(estado.libro),
-        (comercio["identificador"], comercio["nombre"], comercio["verificado"])
-        if comercio
-        else None,
+        clave_comercio(estado),
     )
 
 

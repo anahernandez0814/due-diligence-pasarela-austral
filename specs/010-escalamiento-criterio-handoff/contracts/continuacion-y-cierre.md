@@ -5,10 +5,10 @@ Amplía `contracts/cierre.md` del #9 y `contracts/caso.md` del #6. Las decisione
 ## API del caso
 
 ```python
-caso = await ejecutar_caso(solicitud, ...)   # primer turno, como hasta ahora
-await caso.continuar(mensaje)                 # turno siguiente en el mismo caso
-caso.espera                                   # Espera | None: la del último fin de turno
-caso.turnos_del_caso                          # list[Clasificacion], una por turno
+caso = await ejecutar_caso(solicitud, ...)  # primer turno, como hasta ahora
+await caso.continuar(mensaje)  # turno siguiente en el mismo caso
+caso.espera  # Espera | None: la del último fin de turno
+caso.turnos_del_caso  # list[Clasificacion], una por turno
 ```
 
 - **`continuar`** lanza `query(prompt=mensaje, options=...)` con `resume=<session_id del último ResultMessage>`. Los hooks, el `Delegador`, el estado y los eventos son los mismos.

@@ -20,6 +20,7 @@ from due_diligence.eventos import (
     TIPO_FALLO_DE_HOOK,
 )
 from due_diligence.frentes import FRENTES, Frente
+from due_diligence.libro import Escalamiento
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
@@ -148,7 +149,9 @@ def test_caso_a_un_comercio_de_alto_riesgo_nunca_se_habilita_y_va_a_un_oficial()
     pasarela = coordinador.pasarela
     assert len(pasarela.escalamientos) == 1 and len(pasarela.informes) == 1
     assert pasarela.informes[0]["recomendacion"] == "decide_cumplimiento"
-    assert caso.estado.libro.escalamientos == [frozenset({"alto_riesgo"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    ]
     assert caso.estado.cierre_sin_escalar is False
     assert caso.completo is True  # los cuatro frentes terminaron y el cierre fue normal
 

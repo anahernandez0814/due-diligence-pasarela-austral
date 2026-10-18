@@ -35,6 +35,10 @@ _MOTIVOS: dict[Causa, str] = {
     ),
     Causa.CANCELADO: "se canceló",
     Causa.INVALIDADO: "el comercio del registro cambió después de consultar listas",
+    # #10, FR-027 (R7): noticias consultado con otro nombre o identificador.
+    Causa.OTRO_COMERCIO: (
+        "se consultó con un nombre o identificador que no es el del comercio identificado"
+    ),
 }
 # Causas de un registro que no respondió (#9, R8). `error_de_fuente` solo si algún error real no es
 # `entrada_invalida`: con una entrada inválida la fuente respondió (caso límite de la spec).

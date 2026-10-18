@@ -67,30 +67,30 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 **Objetivo**: los datos nuevos del estado, el libro y los eventos, y el `resume` de las opciones, sin cambiar todavía ningún comportamiento.
 
-- [ ] T003 [P] Tests en `src/due_diligence/test_eventos_estado.py` (R2, R3, data-model):
+- [X] T003 [P] Tests en `src/due_diligence/test_eventos_estado.py` (R2, R3, data-model):
   - **`EstadoCaso.mensajes`** empieza vacía; `solicitud` es una propiedad: `mensajes[0]`, o `""` sin mensajes. Asignar `estado.solicitud = "x"` sigue funcionando (compatibilidad del #6 al #9) y deja `mensajes == ["x"]`.
   - **`categoria_bloqueada`** empieza en `False` y `escalamientos_pendientes` vacío.
   - **`Identificacion.clase`** y **`derivar_comercio`** devuelven la clase, uno por caso: `invalida` (respuesta sin la forma), `ninguna`, `varias`, `contradictoria` (fuentes que difieren en el nombre o el representante) y `unica`.
   - **`EstadoCaso.clase_identificacion`**: `None` con el registro sin terminar; la clase consolidada igual que `comercio`; `unica` exactamente cuando `comercio` no es `None`.
   - **`Causa.OTRO_COMERCIO`** existe y su valor es `otro_comercio`.
   - **Eventos**: existen `TIPO_MENSAJE_ANALISTA` (`mensaje_analista`) y `TIPO_ESPERA_ANALISTA` (`espera_analista`).
-- [ ] T004 Implementar T003:
+- [X] T004 Implementar T003:
   - en `src/due_diligence/estado.py`: `mensajes`, `solicitud` como propiedad con *setter*, `categoria_bloqueada`, `escalamientos_pendientes`, `ClaseIdentificacion`, `Identificacion.clase`, la función hermana pura `clase_de(resultado)`, `clase_identificacion` y `Causa.OTRO_COMERCIO`;
   - en `src/due_diligence/eventos.py`: los dos tipos.
 
   `derivar_comercio` sigue devolviendo `(comercio, motivo)` sin cambiar a sus llamadores; `registrar_identificacion` guarda además `clase_de(respuesta)` (data-model).
-- [ ] T005 [P] Tests en `src/due_diligence/test_libro.py` (R8, data-model):
+- [X] T005 [P] Tests en `src/due_diligence/test_libro.py` (R8, data-model):
   - `Escalamiento(causas, comercio)` es inmutable;
   - `LibroReglas.escalamientos` es `list[Escalamiento]`;
   - `comercio` es la tupla `(identificador, nombre, verificado)` o `None`.
-- [ ] T006 Implementar T005 en `src/due_diligence/libro.py`. Adaptar a `Escalamiento` los usos de `libro.escalamientos` en `reglas.py` y `hooks.py`, sin cambiar todavía su lógica: `escalamiento_cubre` compara `causas <= e.causas` para todos. Los tests del #7 al #9 que construyen `frozenset` directamente se adaptan en T046.
-- [ ] T007 [P] Tests en `src/due_diligence/test_configuracion.py` (R1):
+- [X] T006 Implementar T005 en `src/due_diligence/libro.py`. Adaptar a `Escalamiento` los usos de `libro.escalamientos` en `reglas.py` y `hooks.py`, sin cambiar todavía su lógica: `escalamiento_cubre` compara `causas <= e.causas` para todos. Los tests del #7 al #9 que construyen `frozenset` directamente se adaptan en T046.
+- [X] T007 [P] Tests en `src/due_diligence/test_configuracion.py` (R1):
   - `opciones_base(..., resume="s-1")` deja `options.resume == "s-1"`;
   - sin `resume`, es `None`;
   - `opciones_coordinador` lo acepta y lo pasa;
   - `opciones_subagente` **no** lo acepta: los subagentes no reanudan.
-- [ ] T008 Implementar T007 en `src/due_diligence/configuracion.py`.
-- [ ] T009 Fase 2: ruff, la suite completa y los tests de T046 adaptados. Commit «fundamentos del #10: mensajes, clase de la identificación, escalamientos con comercio y resume».
+- [X] T008 Implementar T007 en `src/due_diligence/configuracion.py`.
+- [X] T009 Fase 2: ruff, la suite completa y los tests de T046 adaptados. Commit «fundamentos del #10: mensajes, clase de la identificación, escalamientos con comercio y resume».
 
 ---
 
@@ -346,6 +346,11 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | Test | Por qué cambia | Cómo se adapta |
   |------|----------------|----------------|
   | **Cambio de comportamiento respecto al #9** (FR-016, hallazgo I1): antes se aceptaba el informe con el comercio pedido (`verificado: false`) ante varias coincidencias; ahora se rechaza. Los tests del #9 que lo fijaran se adaptan con el motivo nuevo (T012). | FR-016 | Igualdad exacta con `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` o `MOTIVO_INFORME_ESPERA_NOMBRE` en `motivos`. |
+  | `test_eventos_estado.py::test_los_tipos_de_evento_son_los_del_modelo` | Dos eventos nuevos (`mensaje_analista`, `espera_analista`). | El conjunto exacto añade los dos. |
+  | `test_eventos_estado.py::test_la_causa_es_un_conjunto_cerrado_de_ocho_valores`, ahora `…_de_nueve_valores` | La causa nueva `otro_comercio` (FR-027). | El conjunto exacto añade `otro_comercio`; el nombre dice nueve. |
+  | `test_reglas.py`: `_libro_con`, `test_una_causa_nueva_posterior_al_escalamiento_no_queda_cubierta`, `test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar` y el informe mínimo tras escalar | `libro.escalamientos` pasa de `frozenset` a `Escalamiento(causas, comercio)` (R8). | Las mismas causas, envueltas en `Escalamiento(…, None)`: el libro solo, sin comercio. Las aserciones no cambian. |
+  | `test_hooks.py`: el escalamiento exitoso, el informe tras escalar, el cierre con el escalamiento cubierto y el `Stop` que falla con el sello ya escalado | Lo mismo. | Igualdad exacta con `Escalamiento(frozenset(...), ("CO-TV-0001", "Tienda Verde SAS", True))`, o con `clave_comercio(estado)` donde el test construye el escalamiento. |
+  | `test_hooks_sesiones.py` (casos a y c) y `test_casos_reglas.py` (caso a) | Lo mismo. | Igualdad exacta con el `Escalamiento` y la clave del comercio del caso (`CO-PL-0003` o `CO-TV-0001`). |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

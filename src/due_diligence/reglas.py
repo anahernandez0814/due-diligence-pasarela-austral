@@ -237,7 +237,7 @@ def escalamiento_cubre(libro: LibroReglas) -> bool:
     nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9).
     """
     causas = causas_vigentes(libro)
-    return not causas or any(causas <= instantanea for instantanea in libro.escalamientos)
+    return not causas or any(causas <= e.causas for e in libro.escalamientos)
 
 
 def reglas_de(causas: Iterable[str]) -> str | None:

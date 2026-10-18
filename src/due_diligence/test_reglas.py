@@ -15,6 +15,7 @@ from due_diligence.libro import (
     Coincidencia,
     ConsultaListas,
     ConsultaRiesgo,
+    Escalamiento,
     LibroReglas,
 )
 from due_diligence.reglas import (
@@ -326,7 +327,7 @@ def _libro_con(*tipos_de_coincidencia, escalamientos=()):
     libro.coincidencias = [
         Coincidencia(t, "Lista A", "Fuente A", "2026-09-30") for t in tipos_de_coincidencia
     ]
-    libro.escalamientos = [frozenset(e) for e in escalamientos]
+    libro.escalamientos = [Escalamiento(frozenset(e), None) for e in escalamientos]
     return libro
 
 
@@ -362,7 +363,7 @@ def test_una_causa_nueva_posterior_al_escalamiento_no_queda_cubierta():
     libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
     libro.coincidencias.append(Coincidencia("comercio", "Lista B", "Fuente B", "2026-09-30"))
     assert escalamiento_cubre(libro) is False  # hace falta escalar de nuevo
-    libro.escalamientos.append(causas_vigentes(libro))
+    libro.escalamientos.append(Escalamiento(causas_vigentes(libro), None))
     assert escalamiento_cubre(libro) is True
 
 
@@ -648,7 +649,7 @@ def test_alto_riesgo_sin_escalar_rechaza_tambien_no_habilitar():
 def test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar():
     libro = _libro_del_caso_b(
         consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")],
-        escalamientos=[frozenset({CAUSA_ALTO_RIESGO})],
+        escalamientos=[Escalamiento(frozenset({CAUSA_ALTO_RIESGO}), None)],
     )
     estado = _estado_de_informe(libro)
     assert evaluar_informe(estado, _informe("decide_cumplimiento")) == []
@@ -802,7 +803,9 @@ def test_el_informe_minimo_solo_admite_decide_cumplimiento_y_tras_escalar():
             Rechazo(MOTIVO_SOLO_OFICIAL, None),
             escalar,
         ]
-    escalado = _sellado(_libro_del_caso_b(escalamientos=[frozenset({CAUSA_FALLO_DE_HOOK})]))
+    escalado = _sellado(
+        _libro_del_caso_b(escalamientos=[Escalamiento(frozenset({CAUSA_FALLO_DE_HOOK}), None)])
+    )
     assert evaluar_informe_minimo(escalado, _informe("decide_cumplimiento")) == []
     assert evaluar_informe_minimo(escalado, _informe("no_habilitar")) == [
         Rechazo(MOTIVO_SOLO_OFICIAL, None)

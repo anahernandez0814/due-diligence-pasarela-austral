@@ -52,12 +52,13 @@ from due_diligence.informe import (
     NO_CALCULADOS,
     Huella,
     InformeRegistrado,
+    clave_comercio,
     comercio_del_informe,
     huella_con,
     problemas_de_frentes_cubiertos,
     problemas_de_fuente,
 )
-from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
+from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo, Escalamiento
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     Rechazo,
@@ -637,7 +638,7 @@ class HooksDelCaso:
             self._constancia_de_consulta_fallida(None, error)
             return permitir()
         causas = causas_vigentes(self.estado.libro)
-        self.estado.libro.escalamientos.append(causas)
+        self.estado.libro.escalamientos.append(Escalamiento(causas, clave_comercio(self.estado)))
         cubiertas = ", ".join(texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas)
         detalle = f"Escalamiento registrado; cubre: {cubiertas or 'ninguna causa vigente'}."
         self.eventos.registrar(TIPO_ESCALAMIENTO_REGISTRADO, None, detalle)

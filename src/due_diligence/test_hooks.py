@@ -41,8 +41,8 @@ from due_diligence.hooks import (
     permitir,
     reemplazar_entrada,
 )
-from due_diligence.informe import InformeRegistrado, huella_actual
-from due_diligence.libro import Coincidencia, ConsultaRiesgo
+from due_diligence.informe import InformeRegistrado, clave_comercio, huella_actual
+from due_diligence.libro import Coincidencia, ConsultaRiesgo, Escalamiento
 from due_diligence.reglas import (
     MOTIVO_CATEGORIA_NO_DETERMINADA,
     MOTIVO_CONSULTA_AJENA,
@@ -907,7 +907,11 @@ def test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_e
     )
     escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
     _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, {}))
-    assert estado.libro.escalamientos == [frozenset({"coincidencia_representante"})]
+    assert estado.libro.escalamientos == [
+        Escalamiento(
+            frozenset({"coincidencia_representante"}), ("CO-TV-0001", "Tienda Verde SAS", True)
+        )
+    ]
     evento = eventos.eventos()[-1]
     assert evento.tipo == TIPO_ESCALAMIENTO_REGISTRADO and evento.frente is None
     assert "representante legal" in evento.detalle and "PE-0003" not in evento.detalle
@@ -974,7 +978,9 @@ def test_el_hook_del_informe_deniega_habilitar_con_coincidencia_con_la_regla_i2(
 def test_el_hook_del_informe_permite_no_habilitar_si_el_caso_esta_escalado():
     estado, eventos, hooks = _caso_con_comercio()
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
-    estado.libro.escalamientos.append(frozenset({"coincidencia_representante"}))
+    estado.libro.escalamientos.append(
+        Escalamiento(frozenset({"coincidencia_representante"}), clave_comercio(estado))
+    )
     for recomendacion in ("no_habilitar", "decide_cumplimiento"):
         entrada = _informe_de(recomendacion)
         antes = len(eventos.eventos())
@@ -1180,7 +1186,9 @@ def test_un_caso_que_no_requiere_escalamiento_puede_terminar():
 def test_un_caso_con_el_escalamiento_cubierto_puede_terminar():
     estado, _, hooks = _caso_con_comercio()
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
-    estado.libro.escalamientos.append(frozenset({"coincidencia_representante"}))
+    estado.libro.escalamientos.append(
+        Escalamiento(frozenset({"coincidencia_representante"}), clave_comercio(estado))
+    )
     _con_informe_vigente(estado)
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
 
@@ -1269,7 +1277,9 @@ def _sello_ya_escalado(estado):
     """Un fallo de hook anterior ya escalado: el sello es causa de escalamiento (#9, R9) y un
     escalamiento que la cubre deja de exigirlo aunque el `Stop` vuelva a sellar el libro."""
     estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
-    estado.libro.escalamientos.append(causas_vigentes(estado.libro))
+    estado.libro.escalamientos.append(
+        Escalamiento(causas_vigentes(estado.libro), clave_comercio(estado))
+    )
 
 
 def test_un_stop_que_falla_sin_informe_vigente_marca_solo_cierre_sin_informe(monkeypatch):

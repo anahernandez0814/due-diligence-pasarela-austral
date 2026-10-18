@@ -6,15 +6,16 @@ consultas realizadas. Los hooks del #7 y la interfaz lo leen con `instantanea()`
 """
 
 import copy
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from due_diligence.frentes import Frente
 from due_diligence.libro import LibroReglas
 
 if TYPE_CHECKING:
     from due_diligence.informe import Huella, InformeRegistrado
+    from due_diligence.libro import Escalamiento
     from due_diligence.terminacion import Clasificacion
 
 
@@ -55,6 +56,14 @@ class Causa(StrEnum):
     RECHAZADO = "rechazado"
     CANCELADO = "cancelado"
     INVALIDADO = "invalidado"
+    # #10, FR-027: con el comercio identificado, el frente se consultó con un nombre o un
+    # identificador que no es el suyo. No es reintentable: hace falta otra entrada.
+    OTRO_COMERCIO = "otro_comercio"
+
+
+# La clase de una respuesta del registro (#10, R3): la da `clase_de`, junto a `derivar_comercio`,
+# para que las esperas y los motivos no se decidan por subcadenas del motivo.
+ClaseIdentificacion = Literal["unica", "varias", "ninguna", "contradictoria", "invalida"]
 
 
 class TransicionInvalida(ValueError):
@@ -92,17 +101,22 @@ class Identificacion:
     """Lo que `derivar_comercio` devolvió para una consulta válida del registro (R4).
 
     `con_coincidencias` dice si esa respuesta traía coincidencias; la consolidación de varias
-    consultas ignora las que no las tienen, como hacía el #6.
+    consultas ignora las que no las tienen, como hacía el #6. `clase` es la de `clase_de` (#10).
     """
 
     comercio: dict[str, Any] | None
     motivo: str
     con_coincidencias: bool
+    clase: "ClaseIdentificacion" = "invalida"
 
 
 @dataclass
 class EstadoCaso:
-    solicitud: str = ""
+    # El primer mensaje del analista por posición (`EstadoCaso("…")`), como antes del #10: lo
+    # guarda `__post_init__` en `mensajes`. `solicitud` es ahora una propiedad (R2).
+    solicitud_inicial: InitVar[str] = ""
+    # Cada texto del analista, en orden (#10, R2): lo añaden `Caso.ejecutar` y `Caso.continuar`.
+    mensajes: list[str] = field(default_factory=list)
     terminacion: "Clasificacion | None" = None
     # Identificaciones registradas por el hook del registro (único escritor, R4). `comercio` y
     # `motivo_comercio` se derivan de ellas y de la situación del frente de registro.
@@ -126,10 +140,31 @@ class EstadoCaso:
     informes_pendientes: "dict[str, tuple[Huella, str, bool]]" = field(default_factory=dict)
     informes: "list[InformeRegistrado]" = field(default_factory=list)
     cierre_sin_informe: bool = False
+    # #10 (data-model): la última delegación de categoría la bloqueó FR-020 (la escribe el
+    # `PreToolUse` de `delegar_frente`); y los escalamientos que aceptó el `PreToolUse` de
+    # `escalar_a_cumplimiento`, por `tool_use_id`, hasta que el `PostToolUse` los confirma (R8).
+    categoria_bloqueada: bool = False
+    escalamientos_pendientes: "dict[str, Escalamiento]" = field(default_factory=dict)
     _situaciones: dict[Frente, Situacion] = field(
         default_factory=lambda: {f: Situacion.SIN_INICIAR for f in Frente}
     )
     _motivos: dict[Frente, str] = field(default_factory=dict)
+
+    def __post_init__(self, solicitud_inicial: str) -> None:
+        if solicitud_inicial:
+            self.mensajes.insert(0, solicitud_inicial)
+
+    @property
+    def solicitud(self) -> str:
+        """El primer mensaje del analista, o `""` sin mensajes (compatibilidad del #6 al #9)."""
+        return self.mensajes[0] if self.mensajes else ""
+
+    @solicitud.setter
+    def solicitud(self, texto: str) -> None:
+        if self.mensajes:
+            self.mensajes[0] = texto
+        else:
+            self.mensajes.append(texto)
 
     @property
     def frentes(self) -> dict[Frente, Situacion]:
@@ -163,7 +198,9 @@ class EstadoCaso:
         """
         comercio, motivo = derivar_comercio(respuesta)
         con_coincidencias = isinstance(respuesta, dict) and bool(respuesta.get("coincidencias"))
-        self.identificaciones.append(Identificacion(comercio, motivo, con_coincidencias))
+        self.identificaciones.append(
+            Identificacion(comercio, motivo, con_coincidencias, clase_de(respuesta))
+        )
 
     def reiniciar_identificacion(self) -> None:
         """Olvida las identificaciones: el registro se vuelve a delegar con otra entrada."""
@@ -196,6 +233,27 @@ class EstadoCaso:
     @property
     def comercio(self) -> dict[str, Any] | None:
         return self._consolidar_comercio()[0]
+
+    @property
+    def clase_identificacion(self) -> "ClaseIdentificacion | None":
+        """La clase consolidada igual que `comercio` (#10, R3); `None` si el registro no terminó.
+
+        `unica` exactamente cuando hay comercio. Dos consultas que identifican comercios distintos
+        dan `varias`: no se elige uno y hace falta el identificador.
+        """
+        if self.situacion(Frente.REGISTRO) is not Situacion.TERMINADO:
+            return None
+        if not self.identificaciones:
+            return "invalida"
+        derivadas = [i for i in self.identificaciones if i.con_coincidencias]
+        if not derivadas:
+            derivadas = self.identificaciones[:1]
+        for identificacion in derivadas:
+            if identificacion.comercio is None:
+                return identificacion.clase
+        if any(i.comercio != derivadas[0].comercio for i in derivadas):
+            return "varias"
+        return "unica"
 
     @property
     def motivo_comercio(self) -> str:
@@ -244,6 +302,31 @@ def derivar_comercio(resultado: dict[str, Any] | None) -> tuple[dict[str, Any] |
         "nombre": primero.get("nombre"),
         "representante_legal": dict(representante) if representante else None,
     }, ""
+
+
+def clase_de(resultado: Any) -> "ClaseIdentificacion":
+    """La clase de una respuesta del registro (#10, R3), con las mismas lecturas que
+    `derivar_comercio`, que no cambia. Solo `sin_coincidencias`, o `coincidencias` sin ninguna,
+    es `ninguna`: cualquier otro resultado es `invalida`."""
+    if not isinstance(resultado, dict) or not isinstance(resultado.get("hechos"), list):
+        return "invalida"
+    coincidencias = resultado.get("coincidencias") or []
+    tipo = resultado.get("resultado")
+    if tipo == "sin_coincidencias" or (tipo == "coincidencias" and not coincidencias):
+        return "ninguna"
+    if tipo != "coincidencias":
+        return "invalida"
+    if len(coincidencias) != 1:
+        return "varias"
+    contenidos = [
+        h.get("contenido", {})
+        for h in resultado["hechos"]
+        if isinstance(h, dict) and h.get("contenido", {}).get("identificador") == coincidencias[0]
+    ]
+    if not contenidos:
+        return "invalida"
+    versiones = {(c.get("nombre"), _clave(c.get("representante_legal"))) for c in contenidos}
+    return "contradictoria" if len(versiones) != 1 else "unica"
 
 
 def _clave(representante: Any) -> tuple[Any, Any] | None:

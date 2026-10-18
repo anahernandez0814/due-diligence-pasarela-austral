@@ -69,3 +69,33 @@ def test_la_copia_profunda_del_libro_es_independiente():
     libro.coincidencias.append(Coincidencia("persona", "L2", "F2", "2026-09-30"))
     libro.fallo_de_hook = "x"
     assert len(copia.coincidencias) == 1 and copia.fallo_de_hook is None
+
+
+# ---------------------------------------------------------------- #10: Escalamiento (T005)
+
+
+def test_el_escalamiento_guarda_sus_causas_y_su_comercio_y_es_inmutable():
+    import dataclasses
+
+    import pytest
+
+    from due_diligence.libro import Escalamiento
+
+    escalamiento = Escalamiento(
+        frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True)
+    )
+    assert escalamiento.causas == frozenset({"alto_riesgo"})
+    assert escalamiento.comercio == ("CO-TV-0001", "Tienda Verde SAS", True)
+    assert Escalamiento(frozenset(), None).comercio is None
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        escalamiento.causas = frozenset()  # type: ignore[misc]
+
+
+def test_los_escalamientos_del_libro_son_una_lista_de_escalamiento():
+    from due_diligence.libro import Escalamiento
+
+    libro = LibroReglas()
+    libro.escalamientos.append(Escalamiento(frozenset({"alto_riesgo"}), None))
+    assert libro.escalamientos == [Escalamiento(frozenset({"alto_riesgo"}), None)]
+    tipo = {f.name: f.type for f in fields(LibroReglas)}["escalamientos"]
+    assert "Escalamiento" in str(tipo)

@@ -23,6 +23,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.hooks import HooksDelCaso
+from due_diligence.libro import Escalamiento
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
@@ -199,7 +200,12 @@ def test_caso_c_habilitar_se_rechaza_y_solo_se_acepta_el_informe_tras_escalar():
     assert caso.pasarela.informes == []  # ningún informe llegó al servidor
 
     assert caso.escalar().ejecutada
-    assert caso.estado.libro.escalamientos == [frozenset({"coincidencia_representante"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(
+            frozenset({"coincidencia_representante"}),
+            ("CO-PL-0003", "Panadería Luna Nueva SAS", True),
+        )
+    ]
 
     assert caso.informe("habilitar").denegada  # escalar no habilita
     aceptado = caso.informe("decide_cumplimiento")
@@ -249,7 +255,9 @@ def test_caso_a_alto_riesgo_no_se_habilita_y_exige_escalar_antes_de_cualquier_in
     assert caso.pasarela.informes == []
 
     assert caso.escalar().ejecutada
-    assert caso.estado.libro.escalamientos == [frozenset({"alto_riesgo"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    ]
     assert caso.informe("habilitar").denegada  # escalar no habilita
     assert caso.informe("decide_cumplimiento").ejecutada
     assert len(caso.pasarela.informes) == 1

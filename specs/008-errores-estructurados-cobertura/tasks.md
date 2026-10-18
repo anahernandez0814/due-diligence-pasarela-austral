@@ -83,10 +83,10 @@ cierre del #8 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 ## Fase 1: Setup
 
-- [ ] T001 Confirmar que la rama es `008-errores-estructurados-cobertura` y commitear este
+- [X] T001 Confirmar que la rama es `008-errores-estructurados-cobertura` y commitear este
   `tasks.md`. La spec y el plan ya están en `f207a9f` y `5b54494`. Mensaje convencional en español.
-- [ ] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
-  aquí el número de tests que pasan (referencia para T031): **____**.
+- [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
+  aquí el número de tests que pasan (referencia para T031): **2482** (ruff limpio).
 
 ---
 
@@ -98,7 +98,7 @@ y la simulación de `updatedInput`. Tests primero.
 
 ### Eventos, estado y causa
 
-- [ ] T003 [P] Tests en `src/due_diligence/test_eventos_estado.py` (data-model, «Eventos nuevos» y
+- [X] T003 [P] Tests en `src/due_diligence/test_eventos_estado.py` (data-model, «Eventos nuevos» y
   «Cambios en entidades existentes»):
   - `frente_reintento`, `reintento_denegado` y `cobertura_sustituida` están en `eventos.TIPOS` y
     se registran sin `TipoDeEventoInvalido`;
@@ -107,7 +107,7 @@ y la simulación de `updatedInput`. Tests primero.
   - `Causa` tiene exactamente los ocho valores `terminacion_anomala`, `error_de_fuente`,
     `sin_consultas`, `resultado_invalido`, `consulta_incompleta`, `rechazado`, `cancelado` e
     `invalidado`.
-- [ ] T004 Implementar lo de T003:
+- [X] T004 Implementar lo de T003:
   - en `src/due_diligence/eventos.py`, las constantes `TIPO_FRENTE_REINTENTO`,
     `TIPO_REINTENTO_DENEGADO` y `TIPO_COBERTURA_SUSTITUIDA`, añadidas a `TIPOS`;
   - en `src/due_diligence/estado.py`, el `StrEnum` `Causa` con esos ocho valores y el campo
@@ -119,7 +119,7 @@ y la simulación de `updatedInput`. Tests primero.
 
 ### Constantes (R2, R3)
 
-- [ ] T005 [P] Tests en `src/due_diligence/test_configuracion.py`:
+- [X] T005 [P] Tests en `src/due_diligence/test_configuracion.py`:
   - `MAX_REINTENTOS_POR_FRENTE == 1` y `PASOS_FIJOS_PEOR_CASO == 8`;
   - `presupuesto_turnos_peor_caso(max_reintentos, max_cierres)` devuelve
     `PASOS_FIJOS_PEOR_CASO + len(Frente) * max_reintentos + max_cierres` con otros valores (por
@@ -129,7 +129,7 @@ y la simulación de `updatedInput`. Tests primero.
   - **`PRESUPUESTO_TURNOS_PEOR_CASO <= MAX_TURNOS_SEGURIDAD`**;
   - el valor de `PRESUPUESTO_TURNOS_PEOR_CASO` en `configuracion.py` no es un literal: el test lo
     comprueba con `ast`, como `test_sin_control_propio.py` (indicación de la analista).
-- [ ] T006 Implementar lo de T005 en `src/due_diligence/configuracion.py`, con estos comentarios:
+- [X] T006 Implementar lo de T005 en `src/due_diligence/configuracion.py`, con estos comentarios:
   - en `MAX_REINTENTOS_POR_FRENTE = 1`: «PROTECCIÓN, no control del ciclo (principio III); 1 por
     indicación de la analista; R3»;
   - en `PASOS_FIJOS_PEOR_CASO = 8`: las filas de la tabla de R2 que no dependen de otras
@@ -140,7 +140,7 @@ y la simulación de `updatedInput`. Tests primero.
 
 ### Simulación (R8)
 
-- [ ] T007 [P] Tests en `src/due_diligence/test_sesion_simulada.py`:
+- [X] T007 [P] Tests en `src/due_diligence/test_sesion_simulada.py`:
   - con un `PreToolUse` que devuelve `reemplazar_entrada(...)`, la herramienta recibe esa entrada
     **entera** y `PostToolUse` y `PostToolUseFailure` ven en `tool_input` la entrada sustituida;
   - con solo `{cobertura}`, la herramienta recibe solo `{cobertura}`, sin fusionar (R1, e3);
@@ -154,7 +154,7 @@ y la simulación de `updatedInput`. Tests primero.
   
   Para `reemplazar_entrada`, el test construye el diccionario a mano hasta que exista (T023) y
   después se cambia a la función.
-- [ ] T008 Implementar lo de T007 en `src/due_diligence/simulacion.py`:
+- [X] T008 Implementar lo de T007 en `src/due_diligence/simulacion.py`:
   - `SesionSimulada.llamar`: si no hay `deny` y alguna salida de `PreToolUse` trae
     `hookSpecificOutput.updatedInput`, `argumentos` pasa a ser esa entrada (copia), y se usa en la
     llamada y en `base["tool_input"]`;
@@ -162,7 +162,7 @@ y la simulación de `updatedInput`. Tests primero.
   - el paso `escalar_con` en `CoordinadorSimulado`, que se documenta en su docstring.
   
   Hace pasar T007.
-- [ ] T009 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
+- [X] T009 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
   verde. Los tests del #6 y del #7 no cambian. Commit «fundamentos del ticket #8».
   **PARADA DE REVISIÓN A.**
 

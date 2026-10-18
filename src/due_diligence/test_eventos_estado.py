@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from due_diligence.estado import (
+    Causa,
     Consulta,
     EstadoCaso,
     ResultadoFrente,
@@ -18,13 +19,16 @@ from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_COBERTURA_SUSTITUIDA,
     TIPO_CONSULTA_FALLIDA,
     TIPO_DELEGACION,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_FRENTE_REINTENTO,
     TIPO_MODO_DEMOSTRACION,
+    TIPO_REINTENTO_DENEGADO,
     TIPO_TERMINACION,
     TIPOS,
     RegistroEventos,
@@ -53,8 +57,22 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "escalamiento_registrado",
         "modo_demostracion",
         "consulta_fallida",
+        # Eventos del #8 (data-model, «Eventos nuevos»).
+        "frente_reintento",
+        "reintento_denegado",
+        "cobertura_sustituida",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS
+
+
+def test_los_tipos_nuevos_del_ticket_8_son_validos():
+    registro = RegistroEventos()
+    for tipo in (TIPO_FRENTE_REINTENTO, TIPO_REINTENTO_DENEGADO, TIPO_COBERTURA_SUSTITUIDA):
+        assert registro.registrar(tipo, Frente.NOTICIAS, "detalle").tipo == tipo
+    # El evento se emite antes de que la pasarela acepte la llamada: no puede llamarse «registrada».
+    assert "cobertura_registrada" not in TIPOS
+    with pytest.raises(TipoDeEventoInvalido):
+        registro.registrar("cobertura_registrada")
 
 
 def test_los_tipos_nuevos_de_los_hooks_son_validos():
@@ -246,6 +264,30 @@ def test_dos_estados_no_comparten_nada():
     uno.agregar_consultas([_consulta()])
     assert otro.situacion(Frente.LISTAS) is Situacion.SIN_INICIAR
     assert otro.consultas == []
+
+
+# ---------------------------------------------------------------- errores y causa (#8)
+
+
+def test_el_estado_empieza_sin_errores_y_no_los_comparte():
+    uno, otro = EstadoCaso("a"), EstadoCaso("b")
+    assert uno.errores == {} and otro.errores == {}
+    uno.errores[Frente.NOTICIAS] = {"causa": Causa.ERROR_DE_FUENTE.value}
+    assert otro.errores == {}
+    assert uno.instantanea().errores == {Frente.NOTICIAS: {"causa": "error_de_fuente"}}
+
+
+def test_la_causa_es_un_conjunto_cerrado_de_ocho_valores():
+    assert {c.value for c in Causa} == {
+        "terminacion_anomala",
+        "error_de_fuente",
+        "sin_consultas",
+        "resultado_invalido",
+        "consulta_incompleta",
+        "rechazado",
+        "cancelado",
+        "invalidado",
+    }
 
 
 # ---------------------------------------------------------------- ayudas

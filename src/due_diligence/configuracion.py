@@ -53,6 +53,30 @@ MAX_TURNOS_SEGURIDAD = 30
 # devoluciones gastan turnos (medido en R3) y no deben llevar por sí solas a `error_max_turns`.
 MAX_CIERRES_IMPEDIDOS = 3
 
+# PROTECCIÓN, no control del ciclo (principio III; #8, R3): cuántas veces se puede volver a
+# ejecutar un frente con la misma entrada tras un error reintentable. Lo pide el modelo y lo
+# guarda el `Delegador`; el ciclo sigue terminando por la razón de parada. 1, por indicación de
+# la analista.
+MAX_REINTENTOS_POR_FRENTE = 1
+
+# Presupuesto de turnos del peor caso razonable del coordinador (#8, R2, medido: cada reintento y
+# cada devolución del `Stop` gastan un turno). Los pasos fijos son las filas de la tabla de R2 que
+# no dependen de otras constantes: tres frentes juntos, listas, categoría con otra entrada, listas
+# rechazada por la carrera, escalar, informe rechazado, informe aceptado y respuesta final.
+PASOS_FIJOS_PEOR_CASO = 8
+
+
+def presupuesto_turnos_peor_caso(max_reintentos: int, max_cierres: int) -> int:
+    """Turnos del peor caso: pasos fijos, un reintento por frente y las devoluciones del `Stop`."""
+    return PASOS_FIJOS_PEOR_CASO + len(Frente) * max_reintentos + max_cierres
+
+
+# Se calcula, no se escribe a mano: si suben los reintentos o las devoluciones, sube con ellos y el
+# test que lo compara con `MAX_TURNOS_SEGURIDAD` protege (indicación de la analista).
+PRESUPUESTO_TURNOS_PEOR_CASO = presupuesto_turnos_peor_caso(
+    MAX_REINTENTOS_POR_FRENTE, MAX_CIERRES_IMPEDIDOS
+)
+
 # Modo de demostración (#7, R11): quita del prompt del coordinador las instrucciones de las
 # reglas de negocio para que el modelo pueda intentar las acciones prohibidas. NO desactiva ningún
 # hook y no se reenvía al servidor de la pasarela.

@@ -192,6 +192,20 @@ class EjecutorSimulado:
         return resultado_frente(frente)
 
 
+def en_secuencia(*resultados: ResultadoFrente) -> Callable[[str], ResultadoFrente]:
+    """Un resultado por ejecución del frente y, agotados, el último (#8, R8).
+
+    Sirve para `EjecutorSimulado(resultados={frente: en_secuencia(error, exito)})`: el primer
+    intento falla y el reintento responde.
+    """
+    pendientes = list(resultados)
+
+    def siguiente(contexto: str) -> ResultadoFrente:
+        return pendientes.pop(0) if len(pendientes) > 1 else pendientes[0]
+
+    return siguiente
+
+
 async def _con_hooks(resultado: ResultadoFrente, opciones: Any) -> ResultadoFrente:
     """Reproduce las consultas del resultado por una `SesionSimulada` de las `opciones` (R4).
 
@@ -286,6 +300,21 @@ class SesionSimulada:
                 return str(especifica.get("permissionDecisionReason", ""))
         return None
 
+    @staticmethod
+    def _entrada_sustituida(salidas: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """La entrada de `updatedInput`, como la aplica el SDK 0.2.168 (#8, R1, medido).
+
+        La sustituye **entera**, sin fusionarla con la del modelo. Si un hook deniega, `llamar` no
+        llega a usarla: que el `deny` gane es un supuesto conservador de la simulación, no medido;
+        producción nunca combina dos `PreToolUse` sobre la misma herramienta.
+        """
+        for salida in salidas:
+            especifica = salida.get("hookSpecificOutput") or {}
+            sustituida = especifica.get("updatedInput")
+            if isinstance(sustituida, Mapping):
+                return dict(sustituida)
+        return None
+
     async def llamar(
         self,
         herramienta: str,
@@ -308,6 +337,11 @@ class SesionSimulada:
             resultado = ResultadoLlamada(herramienta, False, True, True, texto, motivo)
             self.llamadas.append(resultado)
             return resultado
+
+        sustituida = self._entrada_sustituida(salidas)
+        if sustituida is not None:
+            argumentos = sustituida
+            base = {**base, "tool_input": argumentos}
 
         if respuesta is None:
             if herramienta not in self.herramientas:
@@ -541,8 +575,9 @@ class CoordinadorSimulado:
     y `escalar_a_cumplimiento`, a la `PasarelaSimulada`.
 
     Pasos del guion: `("delegar", entrada)`, `("delegar_paralelo", [entradas])`,
-    `("informe", recomendacion)`, `("escalar",)` y `("terminar",)`. El resultado de cada uno queda
-    en `pasos`, como `(tipo, resultado)`.
+    `("informe", recomendacion)`, `("escalar",)`, `("escalar_con", entrada)` (escala con esa
+    entrada completa, #8) y `("terminar",)`. El resultado de cada uno queda en `pasos`, como
+    `(tipo, resultado)`.
     """
 
     def __init__(
@@ -601,6 +636,8 @@ class CoordinadorSimulado:
                 resultado = await sesion.llamar(
                     "mcp__pasarela__escalar_a_cumplimiento", {"causa_escalamiento": "simulada"}
                 )
+            elif tipo == "escalar_con":
+                resultado = await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", paso[1])
             elif tipo == "terminar":
                 resultado = await sesion.terminar(self.texto)
             else:

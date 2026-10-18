@@ -51,9 +51,13 @@ Salida tipada que se añade a `hooks.py`, junto a `permitir`, `denegar` y `bloqu
 
 ```python
 def reemplazar_entrada(entrada: dict) -> dict:
-    return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                   "permissionDecision": "allow",
-                                   "updatedInput": entrada}}
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "updatedInput": entrada,
+        }
+    }
 ```
 
 ## `Caso`

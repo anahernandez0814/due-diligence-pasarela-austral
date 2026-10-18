@@ -99,6 +99,11 @@ def test_con_solicitud_carga_el_entorno_una_vez_antes_de_ejecutar_y_lo_imprime_t
         "coste total: 0.5100 USD",
         "duración de registro:",
         "duración total del caso:",
+        # Cobertura y turnos (#8, FR-014, R2): registro y noticias, sin listas ni categoría.
+        "Cobertura:",
+        "Cobertura incompleta: 2 de 4 frentes cubiertos.",
+        "listas: no cubierto; no se delegó.",
+        "turnos del coordinador: 1 de 30",
     ):
         assert esperado in salida
 
@@ -202,3 +207,17 @@ def test_el_chat_muestra_el_bloqueo_con_su_regla_y_su_motivo_y_que_el_caso_no_es
     assert "bloqueo_regla" in texto and "[I.1]" in texto
     assert "pida el identificador al analista" in texto
     assert "Caso completo: no" in texto
+
+
+def test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra():
+    async def nunca(*, prompt, options=None):
+        yield AssistantMessage(content=[TextBlock("texto")], model="simulado")
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=nunca)
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    salida = "\n".join(lineas)
+    assert "turnos del coordinador: sin dato" in salida
+    assert "Cobertura:" in salida
+    for linea in caso.cobertura.lineas():
+        assert linea in salida

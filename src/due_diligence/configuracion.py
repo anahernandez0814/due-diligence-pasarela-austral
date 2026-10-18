@@ -77,6 +77,15 @@ PRESUPUESTO_TURNOS_PEOR_CASO = presupuesto_turnos_peor_caso(
     MAX_REINTENTOS_POR_FRENTE, MAX_CIERRES_IMPEDIDOS
 )
 
+
+def turnos_usados(turnos: int | None) -> str:
+    """«N de MAX_TURNOS_SEGURIDAD» para la línea de comandos (#8, R2), o «sin dato».
+
+    Vive aquí para que el límite de turnos solo se nombre en este módulo (FR-010 del #6).
+    """
+    return "sin dato" if turnos is None else f"{turnos} de {MAX_TURNOS_SEGURIDAD}"
+
+
 # Modo de demostración (#7, R11): quita del prompt del coordinador las instrucciones de las
 # reglas de negocio para que el modelo pueda intentar las acciones prohibidas. NO desactiva ningún
 # hook y no se reenvía al servidor de la pasarela.

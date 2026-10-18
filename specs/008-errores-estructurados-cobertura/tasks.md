@@ -277,7 +277,7 @@ terminado tras 2 ejecuciones; uno no reintentable se ejecuta 1 vez; un tercer pe
 **Independent Test**: en las 625 combinaciones de situación de los cuatro frentes, la cobertura es
 completa solo con los cuatro `terminado`.
 
-- [ ] T016 [P] [US4] Tests en `src/due_diligence/test_cobertura.py`, un archivo nuevo (FR-010,
+- [X] T016 [P] [US4] Tests en `src/due_diligence/test_cobertura.py`, un archivo nuevo (FR-010,
   FR-012, US4-1 a US4-5, SC-003):
   - **las 5⁴ = 625 combinaciones** de `Situacion` (se fuerzan con `estado._situaciones`, solo en
     el test): `completa` ⇔ las cuatro `terminado`;
@@ -293,11 +293,11 @@ completa solo con los cuatro `terminado`.
   - **no repite datos**: con `estado.solicitud` y un comercio ficticio en el estado, ni el nombre
     ni el identificador aparecen en `lineas()`;
   - **es pura**: `estado.instantanea()` antes y después es igual, y no se registra ningún evento.
-- [ ] T017 [US4] Implementar `src/due_diligence/cobertura.py`: `CoberturaFrente` y `CoberturaCaso`
+- [X] T017 [US4] Implementar `src/due_diligence/cobertura.py`: `CoberturaFrente` y `CoberturaCaso`
   (dataclasses congeladas), `calcular_cobertura(estado)` y `CoberturaCaso.lineas()`, como en
   data-model y el contrato. Lee `estado.situacion`, `estado.motivo` y `estado.errores`. No importa
   `delegacion`. Hace pasar T016.
-- [ ] T018 [P] [US4] Tests (FR-012, FR-014, R2):
+- [X] T018 [P] [US4] Tests (FR-012, FR-014, R2):
   - en `src/due_diligence/test_coordinador.py`:
     - `caso.cobertura` es `calcular_cobertura(caso.estado)`;
     - `caso.completo` es falso si un frente no está cubierto aunque las condiciones del #7 se
@@ -307,7 +307,7 @@ completa solo con los cuatro `terminado`.
   - en `src/due_diligence/test_main.py`:
     - `imprimir_caso` muestra un bloque «Cobertura:» con `caso.cobertura.lineas()`;
     - muestra «turnos del coordinador: N de 30» o «turnos del coordinador: sin dato».
-- [ ] T019 [US4] Implementar lo de T018:
+- [X] T019 [US4] Implementar lo de T018:
   - en `src/due_diligence/coordinador.py`:
     - la propiedad `cobertura`;
     - `completo` usa `self.cobertura.completa` en lugar de `all(... TERMINADO ...)`, conservando las
@@ -331,7 +331,7 @@ completa solo con los cuatro `terminado`.
     coordinador añade el `PreToolUse` de `ESCALAR`;
   - `test_eventos_estado.py`, `test_los_tipos_de_evento_son_los_del_modelo` (#6), ya cambiado en
     T003: el inventario de eventos añade los tres tipos nuevos.
-- [ ] T020 [US4] Fase 5 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
+- [X] T020 [US4] Fase 5 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde. Commit «cobertura calculada por el código (#8)».
 
 ---

@@ -292,6 +292,11 @@ def test_el_presupuesto_actual_sale_de_las_constantes_y_cabe_en_max_turns():
     assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO <= configuracion.MAX_TURNOS_SEGURIDAD
 
 
+def test_los_turnos_usados_se_muestran_frente_al_limite_o_sin_dato():
+    assert configuracion.turnos_usados(7) == f"7 de {configuracion.MAX_TURNOS_SEGURIDAD}"
+    assert configuracion.turnos_usados(None) == "sin dato"
+
+
 def test_el_presupuesto_no_es_un_literal_en_el_codigo():
     """Si fuera un número escrito a mano, subir los reintentos o las devoluciones no lo movería y
     la comparación con `MAX_TURNOS_SEGURIDAD` dejaría de proteger (indicación de la analista)."""

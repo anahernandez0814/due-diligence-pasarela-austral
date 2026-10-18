@@ -114,6 +114,16 @@ def test_una_sola_fuente_con_el_comercio_no_tiene_conflictos():
     assert calcular_conflictos(_estado(respuesta)).estado == "sin_conflictos"
 
 
+def test_de_dos_consultas_que_coinciden_con_el_comercio_cuenta_la_ultima():
+    # T020: con dos consultas válidas del mismo comercio, la última decide.
+    iguales = copy.deepcopy(_respuesta("CO-RF-0006"))
+    fecha = iguales["hechos"][0]["contenido"]["fecha_constitucion"]
+    iguales["hechos"][1]["contenido"]["fecha_constitucion"] = fecha
+    con_conflicto = _respuesta("CO-RF-0006")
+    assert calcular_conflictos(_estado(con_conflicto, iguales)).estado == "sin_conflictos"
+    assert calcular_conflictos(_estado(iguales, con_conflicto)).estado == "con_conflictos"
+
+
 def test_se_usa_la_ultima_consulta_valida_que_coincide_con_el_comercio():
     estado = _estado(_respuesta("CO-TA-0002"), _respuesta("CO-RF-0006"))
     # El comercio identificado es el de la consulta con coincidencias (consolidación del #6):

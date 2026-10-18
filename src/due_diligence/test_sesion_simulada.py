@@ -459,6 +459,26 @@ def test_el_paso_informe_arma_un_informe_valido_con_las_consultas_del_caso():
     }
 
 
+def test_el_paso_informe_del_coordinador_simulado_registra_ese_informe_valido():
+    # T013: el paso `("informe", recomendacion)` del `CoordinadorSimulado`, no solo la función.
+    from types import SimpleNamespace
+
+    from due_diligence.estado import EstadoCaso
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import CoordinadorSimulado, consulta, informe_del_caso
+    from servidor_mcp.informe import validar_informe
+
+    estado = EstadoCaso()
+    estado.agregar_consultas([consulta(Frente.REGISTRO)])
+    coordinador = CoordinadorSimulado([("informe", "no_habilitar")])
+    coordinador.caso = SimpleNamespace(estado=estado)
+    _consumir(coordinador)
+    (registrado,) = coordinador.pasarela.informes
+    assert registrado == informe_del_caso(estado, "no_habilitar")
+    assert validar_informe(registrado) == []
+    assert registrado["hallazgos"]["registro"][0]["fuente"] == "Registro Mercantil Ficticio del Sur"
+
+
 def _consumir(coordinador):
     async def consumir():
         return [m async for m in coordinador(prompt="p", options=_opciones(None))]

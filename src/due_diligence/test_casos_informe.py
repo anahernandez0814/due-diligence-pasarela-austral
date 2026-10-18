@@ -17,7 +17,7 @@ from due_diligence.eventos import (
     TIPO_INFORME_REGISTRADO,
 )
 from due_diligence.frentes import Frente
-from due_diligence.hooks import ACCION_DELEGAR_LISTAS
+from due_diligence.hooks import ACCION_DELEGAR_LISTAS, HooksDelCaso
 from due_diligence.reglas import (
     MOTIVO_REGISTRO_REINTENTABLE,
     MOTIVO_SIN_COMERCIO,
@@ -107,7 +107,23 @@ def _ejecutar(guion, ejecutor):
     return caso, coordinador
 
 
-def test_un_reintento_que_termina_entre_el_pre_y_el_post_del_informe_lo_deja_sin_vigencia():
+def test_un_reintento_que_termina_entre_el_pre_y_el_post_del_informe_lo_deja_sin_vigencia(
+    monkeypatch,
+):
+    # T013 y T029: se anota, en cada Pre y Post del informe, la situación de noticias.
+    orden = []
+    previo, posterior = HooksDelCaso._informe_previo, HooksDelCaso._informe_posterior
+
+    async def previo_anotado(self, entrada, tool_use_id, contexto):
+        orden.append(("pre", self.estado.situacion(Frente.NOTICIAS)))
+        return await previo(self, entrada, tool_use_id, contexto)
+
+    async def posterior_anotado(self, entrada, tool_use_id, contexto):
+        orden.append(("post", self.estado.situacion(Frente.NOTICIAS)))
+        return await posterior(self, entrada, tool_use_id, contexto)
+
+    monkeypatch.setattr(HooksDelCaso, "_informe_previo", previo_anotado)
+    monkeypatch.setattr(HooksDelCaso, "_informe_posterior", posterior_anotado)
     ejecutor = EjecutorConEspera(resultados=_resultados_con_noticias_que_se_recuperan())
     guion = [
         *_inicio(),
@@ -118,6 +134,9 @@ def test_un_reintento_que_termina_entre_el_pre_y_el_post_del_informe_lo_deja_sin
     ]
     caso, coordinador = _ejecutar(guion, ejecutor)
     registrar = coordinador.pasarela.herramientas["mcp__pasarela__registrar_informe"]
+    # Situación de noticias justo antes de que responda la pasarela (y corra el Post) del informe
+    # del mismo mensaje: prueba que el reintento terminó entre el Pre y el Post (T029).
+    antes_del_post = []
 
     async def registrar_tras_el_reintento(entrada):
         # El `PreToolUse` del informe ya calculó su huella con noticias en curso. Se suelta el
@@ -128,6 +147,7 @@ def test_un_reintento_que_termina_entre_el_pre_y_el_post_del_informe_lo_deja_sin
                 if caso.estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO:
                     break
                 await asyncio.sleep(0)
+            antes_del_post.append(caso.estado.situacion(Frente.NOTICIAS))
         return registrar(entrada)
 
     coordinador.pasarela.herramientas["mcp__pasarela__registrar_informe"] = (
@@ -136,9 +156,22 @@ def test_un_reintento_que_termina_entre_el_pre_y_el_post_del_informe_lo_deja_sin
     asyncio.run(caso.ejecutar(SOLICITUD))
 
     # El informe del mismo mensaje se registró con noticias sin cubrir, y su huella es la del Pre.
+    assert antes_del_post == [Situacion.TERMINADO]
+    # Tres informes: el de `_inicio`, el del mismo mensaje (Pre con noticias en curso y Post ya
+    # terminado) y el nuevo que exige el cierre.
+    assert orden == [
+        ("pre", Situacion.NO_TERMINADO),
+        ("post", Situacion.NO_TERMINADO),
+        ("pre", Situacion.EN_CURSO),
+        ("post", Situacion.TERMINADO),
+        ("pre", Situacion.TERMINADO),
+        ("post", Situacion.TERMINADO),
+    ]
     _, del_mismo_mensaje, _ = caso.estado.informes
     assert dict(del_mismo_mensaje.huella.cobertura)["noticias"] is False
     assert caso.estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO
+    # Ese informe no quedó vigente: el motivo exacto del primer cierre es el del cambio de
+    # cobertura (equivale a `informe_vigente(...) is False` tras su Post).
     # El Stop ve que cambió la cobertura y exige un informe nuevo; con él, el caso cierra.
     primer_cierre, segundo_cierre = coordinador.resultados_de("terminar")
     assert primer_cierre.termino is False and primer_cierre.motivo == COBERTURA_CAMBIO
@@ -433,6 +466,27 @@ def test_un_reintento_que_vuelve_a_fallar_no_invalida_el_informe():
     assert caso.estado.errores[Frente.NOTICIAS]["intento"] == 2
     (cierre,) = coordinador.resultados_de("terminar")
     assert cierre.termino is True
+
+
+def test_un_reintento_que_sale_bien_invalida_el_informe_anterior():
+    # T038: contraste del anterior, en mensajes separados. El informe de `_inicio` es vigente con
+    # noticias sin cubrir; el reintento se recupera y el cierre exige uno nuevo.
+    ejecutor = EjecutorSimulado(resultados=_resultados_con_noticias_que_se_recuperan())
+    guion = [
+        *_inicio(),
+        ("delegar", NOTICIAS),
+        ("terminar",),
+        ("informe", "no_habilitar"),
+        ("terminar",),
+    ]
+    caso, coordinador = _ejecutar(guion, ejecutor)
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    primer_cierre, segundo_cierre = coordinador.resultados_de("terminar")
+    assert primer_cierre.termino is False and primer_cierre.motivo == COBERTURA_CAMBIO
+    assert segundo_cierre.termino is True
+    anterior, ultimo = caso.estado.informes
+    assert dict(anterior.huella.cobertura)["noticias"] is False
+    assert dict(ultimo.huella.cobertura)["noticias"] is True
 
 
 def test_sello_escalar_informe_minimo_cierre_permitido_y_caso_no_completo(monkeypatch):

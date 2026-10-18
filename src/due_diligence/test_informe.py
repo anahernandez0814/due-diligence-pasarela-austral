@@ -96,6 +96,9 @@ def test_una_afirmacion_con_una_fuente_consultada_no_es_un_problema_aunque_cambi
     estado.agregar_consultas([consulta(Frente.REGISTRO)])
     hallazgos = {"registro": [_afirmacion("  registro mercantil ficticio del SUR ")]}
     assert problemas_de_fuente(estado, hallazgos) == []
+    # Las tildes tampoco importan (T016).
+    hallazgos = {"registro": [_afirmacion("Régistro Mercantil Fictício del Sur")]}
+    assert problemas_de_fuente(estado, hallazgos) == []
 
 
 def test_un_problema_por_afirmacion_con_una_fuente_no_consultada():
@@ -246,6 +249,7 @@ def test_del_registro_en_curso_al_registro_caido_solo_cambian_los_conflictos():
 
 def test_con_el_caso_sellado_la_huella_no_calcula_cobertura_ni_conflictos(monkeypatch):
     estado = EstadoCaso()
+    estado.comercio_pedido = {"identificador": "CO-TA-0002", "nombre": None}
     estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
 
     def roto(_estado):
@@ -256,8 +260,22 @@ def test_con_el_caso_sellado_la_huella_no_calcula_cobertura_ni_conflictos(monkey
     primera = huella_actual(estado)
     assert primera.cobertura == NO_CALCULADOS and primera.conflictos == NO_CALCULADOS
     # T031 (repuesta tras la parada A): con el sello, la causa `fallo_de_hook` entra en la huella.
-    assert "fallo_de_hook" in primera.causas
+    # Las causas y el comercio se siguen calculando (T025).
+    assert primera.causas == frozenset({"fallo_de_hook"})
+    assert primera.comercio == ("CO-TA-0002", None, False)
     assert huella_actual(estado) == primera
+
+
+def test_el_sello_es_una_causa_nueva_que_cambia_la_huella():
+    estado = EstadoCaso()
+    antes = huella_actual(estado)
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    # La cobertura y los conflictos pasan a no calculados; las causas ganan el sello.
+    assert cambios(antes, huella_actual(estado)) == [
+        "la cobertura",
+        "los conflictos",
+        "las causas de escalamiento",
+    ]
 
 
 def test_informe_vigente_solo_si_la_huella_del_ultimo_coincide():
@@ -309,6 +327,10 @@ def test_una_entrada_invalida_no_es_registro_caido():
 def test_un_registro_que_no_quedo_no_terminado_no_esta_caido(situacion):
     estado = EstadoCaso()
     estado._situaciones[Frente.REGISTRO] = situacion
+    # Con un error de caída guardado: decide la situación, no la ausencia de error (T025).
+    estado.errores[Frente.REGISTRO] = _error_registro(
+        Causa.ERROR_DE_FUENTE, ("servicio_no_disponible",)
+    )
     assert registro_caido(estado) is False
 
 

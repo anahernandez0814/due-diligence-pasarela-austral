@@ -247,6 +247,9 @@ def test_la_descripcion_de_registrar_informe_dice_lo_que_pone_el_sistema_y_lo_qu
     descripcion = _herramientas()["registrar_informe"].description
     assert "El comercio, los conflictos y la cobertura los pone el sistema" in descripcion
     assert "con su fuente y su fecha" in descripcion
+    # T060: la regla de US1-6, en positivo, y lo que el servidor no comprueba de ella.
+    assert "Cada frente cubierto lleva al menos una afirmación" in descripcion
+    assert "ni que cada frente cubierto lleve su afirmación" in descripcion
     assert "tampoco comprueba que cada fuente se haya consultado" in descripcion.lower()
     assert "ni escala el caso" in descripcion
 

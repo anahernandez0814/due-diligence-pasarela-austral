@@ -58,8 +58,8 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 ## Fase 1: Setup
 
-- [ ] T001 Confirmar que la rama es `010-escalamiento-criterio-handoff` y commitear este `tasks.md`. Mensaje convencional en español.
-- [ ] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar aquí el número de tests que pasan (referencia para T045): **____**.
+- [X] T001 Confirmar que la rama es `010-escalamiento-criterio-handoff` y commitear este `tasks.md`. Mensaje convencional en español.
+- [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar aquí el número de tests que pasan (referencia para T045): **4153** (ruff limpio).
 
 ---
 
@@ -379,9 +379,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - la categoría de los mensajes, con sus riesgos;
   - FR-027;
   - el cierre por turno;
+  - el presupuesto de 21;
   - D1, D2 y D3;
   - el rechazo del informe durante la espera (cambio respecto al #9).
-  - D1 y D2.
 - [ ] T052 [P] `README.md`: la continuación del caso en la línea de comandos (`--sin-continuar`) y el resumen al oficial.
 - [ ] T053 Fase 9: commit «documentación del #10».
 

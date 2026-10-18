@@ -183,10 +183,26 @@ representante legal tal como los devolvió el registro. Las decisiones están en
   acciones prohibidas y se vea que el hook las bloquea. **No desactiva ningún hook** y no es una
   configuración normal: sirve para demostrar y probar que las reglas no dependen del prompt.
   Ejemplo: `PASARELA_MODO_DEMO_HOOKS=1 uv run python -m due_diligence "<solicitud>"`.
-- **Sondeo de los hooks** (manual, gasta tokens, unos 0,01 USD): `uv run python -m
+- **Sondeo de los hooks** (manual, gasta tokens, unos 0,02 USD): `uv run python -m
   due_diligence.sondeo_hooks` repite lo medido con el SDK (forma de `tool_response`, vía de los
-  errores estructurados, qué pasa si un hook falla, el `Stop` con `block`) y prueba los hooks del
-  caso con una sesión real. Sale con 0 si todo coincide, 1 si algo difiere y 2 si solo hay mediciones inconclusas.
+  errores estructurados, qué pasa si un hook falla, el `Stop` con `block`; desde el #8,
+  `updatedInput` y los turnos de un reintento) y prueba los hooks del caso con una sesión real,
+  incluida la cobertura que llega a `registrar_informe` y `escalar_a_cumplimiento`. Sale con 0 si
+  todo coincide, 1 si algo difiere y 2 si solo hay mediciones inconclusas.
+- **Fallas de una fuente y cobertura** (ticket #8,
+  [specs/008-errores-estructurados-cobertura/](specs/008-errores-estructurados-cobertura/)): una
+  falla en un frente no detiene el caso.
+  - El coordinador recibe un error estructurado: frente, causa, lo que se alcanzó a obtener y si
+    se puede reintentar.
+  - Con `reintentable: true` puede volver a delegar ese frente **una vez** con la misma entrada; el
+    código no vuelve a ejecutar lo que no es reintentable.
+  - La cobertura (qué frentes quedaron cubiertos y cuáles no, con su motivo) la calcula el sistema.
+    Es la que se registra en el informe y en el escalamiento, aunque el modelo declare otra, y
+    `python -m due_diligence` la muestra junto a los turnos usados del coordinador. Un caso con un
+    frente sin cubrir nunca figura como completo.
+  - Para verlo: `PASARELA_FALLA_NOTICIAS=1 uv run python -m due_diligence "<solicitud>"`. Noticias
+    falla, el coordinador puede reintentarlo una vez y el informe se entrega declarando noticias
+    como no cubierto.
 
 ## Guardas del entorno
 

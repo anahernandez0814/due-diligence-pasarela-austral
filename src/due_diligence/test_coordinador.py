@@ -11,7 +11,9 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
+from due_diligence.cobertura import calcular_cobertura
 from due_diligence.coordinador import (
+    _REGLA_FALLOS,
     INSTRUCCIONES_COORDINADOR,
     Caso,
     ejecutar_caso,
@@ -27,6 +29,7 @@ from due_diligence.eventos import (
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.simulacion import (
     EjecutorSimulado,
+    mensaje_de_resultado,
     resultado_frente,
     resultado_listas,
     terminacion_anomala,
@@ -567,7 +570,7 @@ def test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop():
     caso, _, _ = _caso([])
     coordinador = _matchers(caso.opciones_coordinador().hooks)
     assert coordinador == {
-        "PreToolUse": [DELEGAR, INFORME],
+        "PreToolUse": [DELEGAR, INFORME, ESCALAR],
         "PostToolUse": [ESCALAR],
         "PostToolUseFailure": [ESCALAR],
         "Stop": [None],
@@ -709,3 +712,46 @@ def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
     assert caso.completo is True
     caso.estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     assert caso.completo is False
+
+
+# ------------------------------------------------------------ cobertura y turnos (#8, R2, R5)
+
+
+def test_la_cobertura_del_caso_es_la_calculada_por_el_codigo():
+    caso, _, _ = _caso_completo()
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.cobertura == calcular_cobertura(caso.estado)
+    assert caso.cobertura.completa is True and caso.completo is True
+
+
+def test_un_frente_no_cubierto_impide_el_caso_completo_aunque_lo_demas_se_cumpla():
+    caso, _, _ = _caso(DELEGACIONES_DEL_EJEMPLO, en_un_turno=True)  # sin listas
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.terminacion.terminacion is Terminacion.NORMAL
+    assert not caso.estado.cierre_sin_escalar and caso.estado.libro.fallo_de_hook is None
+    assert caso.cobertura.frentes[Frente.LISTAS].cubierto is False
+    assert caso.cobertura.completa is False and caso.completo is False
+
+
+def test_los_turnos_del_coordinador_salen_del_mensaje_de_resultado():
+    caso, _, _ = _caso([], fin=mensaje_de_resultado(num_turns=7))
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.turnos == 7
+
+
+def test_las_instrucciones_explican_el_reintento_y_que_la_cobertura_la_calcula_el_sistema():
+    # #8, R7, FR-008: el reintento lo pide el modelo; el código lo guarda.
+    assert "reintentable true" in _REGLA_FALLOS and "una vez" in _REGLA_FALLOS
+    assert "reintentable false" in _REGLA_FALLOS
+    assert "la calcula el sistema" in _REGLA_FALLOS
+    assert _REGLA_FALLOS in INSTRUCCIONES_COORDINADOR
+
+
+def test_sin_mensaje_de_resultado_no_hay_dato_de_turnos():
+    async def sin_resultado(*, prompt, options=None):
+        yield AssistantMessage(content=[TextBlock("texto")], model="simulado")
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=sin_resultado)
+    assert caso.turnos is None
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.turnos is None

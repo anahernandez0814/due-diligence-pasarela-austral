@@ -19,10 +19,11 @@ from claude_agent_sdk import (
 from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
+from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
 from due_diligence.contexto import instrucciones
 from due_diligence.delegacion import Delegador
 from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
-from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
     TIPO_MODO_DEMOSTRACION,
@@ -90,6 +91,16 @@ _REGLA_CUANDO_USAR_CADA_RECOMENDACION = (
     "categoría quedó determinada."
 )
 
+# Guía del reintento y de la cobertura (#8, R7, FR-008). No es una regla de negocio I.1 a I.3: está
+# también en el modo de demostración. Lo que no puede fallar lo hace el código: el `Delegador`
+# solo vuelve a ejecutar lo reintentable, y los hooks registran la cobertura calculada.
+_REGLA_FALLOS = (
+    "Si un frente devuelve un error con reintentable true, puedes volver a delegarlo una vez con "
+    "la misma entrada; si devuelve reintentable false, no lo repitas: sigue con los demás "
+    "frentes y registra el informe igualmente. La cobertura del informe la calcula el sistema a "
+    "partir de lo que devolvieron los frentes."
+)
+
 _REGLA_RESUMEN = (
     "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
     "fecha, y qué frentes no se pudieron cubrir y por qué."
@@ -106,11 +117,12 @@ def instrucciones_coordinador(demo: bool = False) -> str:
     hooks no cambian.
     """
     if demo:
-        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_INFORME, _REGLA_RESUMEN]
+        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_FALLOS, _REGLA_INFORME, _REGLA_RESUMEN]
     else:
         reglas = [
             _REGLA_DELEGAR,
             _REGLA_DATOS,
+            _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             _REGLA_RESUMEN,
@@ -146,6 +158,9 @@ class Caso:
         )
         self.respuesta = ""
         self.coste_usd: float | None = None  # `total_cost_usd` del coordinador
+        # `num_turns` del coordinador (#8, R2): para comprobar que los reintentos y las
+        # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. `None` sin `ResultMessage`.
+        self.turnos: int | None = None
 
     def eventos(self) -> list[Evento]:
         return self._eventos.eventos()
@@ -155,17 +170,22 @@ class Caso:
         return self.estado.terminacion
 
     @property
-    def completo(self) -> bool:
-        """Si el caso puede presentarse como completo (#7, FR-007).
+    def cobertura(self) -> CoberturaCaso:
+        """La cobertura calculada por el código (#8, R5): la misma que se registra."""
+        return calcular_cobertura(self.estado)
 
-        Solo si los cuatro frentes terminaron, el ciclo terminó con normalidad, el `Stop` no tuvo
-        que dejar terminar un caso sin su escalamiento obligatorio y ningún hook falló: un
-        `PostToolUse` que falló pudo dejar sin registrar una coincidencia o una identificación.
-        La cobertura declarada es del #8.
+    @property
+    def completo(self) -> bool:
+        """Si el caso puede presentarse como completo (#7, FR-007; #8, FR-012).
+
+        Solo si la cobertura calculada es completa (los cuatro frentes cubiertos, R5), el ciclo
+        terminó con normalidad, el `Stop` no tuvo que dejar terminar un caso sin su escalamiento
+        obligatorio y ningún hook falló: un `PostToolUse` que falló pudo dejar sin registrar una
+        coincidencia o una identificación.
         """
         estado = self.estado
         return (
-            all(estado.situacion(frente) is Situacion.TERMINADO for frente in Frente)
+            self.cobertura.completa
             and estado.terminacion is not None
             and estado.terminacion.terminacion is Terminacion.NORMAL
             and not estado.cierre_sin_escalar
@@ -211,6 +231,7 @@ class Caso:
                 elif isinstance(mensaje, ResultMessage):
                     clasificacion = clasificar_resultado(mensaje)
                     self.coste_usd = mensaje.total_cost_usd
+                    self.turnos = mensaje.num_turns
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:

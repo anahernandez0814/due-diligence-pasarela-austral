@@ -80,6 +80,11 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     if caso.estado.comercio:
         escribir(f"  comercio del registro: {caso.estado.comercio.get('identificador')}")
     escribir("")
+    # La misma cobertura que se registra en el informe y en el escalamiento (#8, FR-014).
+    escribir("Cobertura:")
+    for linea in caso.cobertura.lineas():
+        escribir(f"  {linea}")
+    escribir("")
     escribir("Números de la validación:")
     for frente, segundos in duraciones(eventos).items():
         escribir(f"  duración de {frente.value}: {segundos:.1f} s")
@@ -95,6 +100,7 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
         escribir(f"  coste de {nombre}: {'sin dato' if coste is None else f'{coste:.4f} USD'}")
     conocidos = [c for c in costes.values() if c is not None]
     escribir(f"  coste total: {sum(conocidos):.4f} USD")
+    escribir(f"  turnos del coordinador: {configuracion.turnos_usados(caso.turnos)}")
     escribir("")
     if caso.terminacion:
         escribir(f"Terminación del caso: {caso.terminacion.terminacion.value}")

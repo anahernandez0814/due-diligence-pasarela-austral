@@ -4,8 +4,10 @@
 Ningún test llama al modelo ni carga el archivo de entorno real: `load_dotenv` se parchea.
 """
 
+import ast
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -262,6 +264,55 @@ def test_todas_las_opciones_usan_el_filtro_de_stderr():
 def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos():
     assert configuracion.MAX_CIERRES_IMPEDIDOS == 3
     assert configuracion.MAX_CIERRES_IMPEDIDOS < configuracion.MAX_TURNOS_SEGURIDAD
+
+
+# ------------------------------------------------ reintentos y presupuesto de turnos (#8, R2, R3)
+
+
+def test_un_reintento_por_frente_y_ocho_pasos_fijos():
+    assert configuracion.MAX_REINTENTOS_POR_FRENTE == 1
+    assert configuracion.PASOS_FIJOS_PEOR_CASO == 8
+
+
+@pytest.mark.parametrize(
+    ("reintentos", "cierres", "esperado"), [(1, 3, 15), (0, 0, 8), (3, 5, 25), (2, 3, 19)]
+)
+def test_el_presupuesto_se_calcula_con_los_reintentos_y_las_devoluciones(
+    reintentos, cierres, esperado
+):
+    # 8 pasos fijos + un reintento por frente (4 frentes) + devoluciones del Stop (R2).
+    assert configuracion.presupuesto_turnos_peor_caso(reintentos, cierres) == esperado
+
+
+def test_el_presupuesto_actual_sale_de_las_constantes_y_cabe_en_max_turns():
+    esperado = configuracion.presupuesto_turnos_peor_caso(
+        configuracion.MAX_REINTENTOS_POR_FRENTE, configuracion.MAX_CIERRES_IMPEDIDOS
+    )
+    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO == esperado == 15
+    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO <= configuracion.MAX_TURNOS_SEGURIDAD
+
+
+def test_los_turnos_usados_se_muestran_frente_al_limite_o_sin_dato():
+    assert configuracion.turnos_usados(7) == f"7 de {configuracion.MAX_TURNOS_SEGURIDAD}"
+    assert configuracion.turnos_usados(None) == "sin dato"
+
+
+def test_el_presupuesto_no_es_un_literal_en_el_codigo():
+    """Si fuera un número escrito a mano, subir los reintentos o las devoluciones no lo movería y
+    la comparación con `MAX_TURNOS_SEGURIDAD` dejaría de proteger (indicación de la analista)."""
+    arbol = ast.parse(Path(configuracion.__file__).read_text(encoding="utf-8"))
+    valores = [
+        nodo.value
+        for nodo in ast.walk(arbol)
+        if isinstance(nodo, ast.Assign)
+        and any(
+            isinstance(t, ast.Name) and t.id == "PRESUPUESTO_TURNOS_PEOR_CASO" for t in nodo.targets
+        )
+    ]
+    assert len(valores) == 1
+    assert isinstance(valores[0], ast.Call)
+    nombres = {n.id for n in ast.walk(valores[0]) if isinstance(n, ast.Name)}
+    assert {"MAX_REINTENTOS_POR_FRENTE", "MAX_CIERRES_IMPEDIDOS"} <= nombres
 
 
 @pytest.mark.parametrize("valor", ["0", "true", "", " ", "11", "si", "yes"])

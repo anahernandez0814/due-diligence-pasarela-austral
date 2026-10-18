@@ -12,7 +12,7 @@ import json
 
 from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
 
-from due_diligence.hooks import bloquear_cierre, denegar, permitir
+from due_diligence.hooks import bloquear_cierre, denegar, permitir, reemplazar_entrada
 from due_diligence.simulacion import SesionSimulada
 
 HERRAMIENTA = "mcp__pasarela__consultar_registro_mercantil"
@@ -267,3 +267,113 @@ def test_la_pasarela_simulada_guarda_informes_y_escalamientos():
     assert escalamiento["resultado"] == "caso_escalado"
     assert pasarela.informes == [{"recomendacion": "habilitar"}]
     assert pasarela.escalamientos == [{"causa_escalamiento": "x"}]
+
+
+# ------------------------------------------------------------------ updatedInput (#8, R1, R8)
+
+INFORME = "mcp__pasarela__registrar_informe"
+ENTRADA_DEL_MODELO = {
+    "comercio": {"identificador": "CO-TA-0002", "nombre": "Taller Aurora SAS"},
+    "recomendacion": "habilitar",
+    "hallazgos": {},
+    "cobertura": "completa",
+}
+
+
+def _sustituye(entrada):
+    # La salida que usa producción (contrato `cobertura.md`, R1).
+    return reemplazar_entrada(entrada)
+
+
+def _sesion_con_pre(salidas_pre, recibido):
+    def herramienta(entrada):
+        recibido.append(entrada)
+        return OK
+
+    traza = _Traza()
+    opciones = _opciones(
+        {
+            "PreToolUse": [
+                HookMatcher(matcher=INFORME, hooks=[traza.hook("pre", s) for s in salidas_pre])
+            ],
+            "PostToolUse": [HookMatcher(matcher=INFORME, hooks=[traza.hook("post")])],
+            "PostToolUseFailure": [HookMatcher(matcher=INFORME, hooks=[traza.hook("fallo")])],
+        }
+    )
+    return SesionSimulada(opciones, {INFORME: herramienta}), traza
+
+
+def test_updated_input_sustituye_la_entrada_entera_y_post_la_ve():
+    sustituida = {**ENTRADA_DEL_MODELO, "cobertura": ["Cobertura incompleta: 3 de 4."]}
+    recibido = []
+    sesion, traza = _sesion_con_pre([_sustituye(sustituida)], recibido)
+    resultado = _ejecutar(sesion, INFORME, ENTRADA_DEL_MODELO)
+    assert resultado.ejecutada and not resultado.denegada
+    assert recibido == [sustituida]
+    (post,) = [e for n, e, _ in traza.entradas if n == "post"]
+    assert post["tool_input"] == sustituida
+
+
+def test_updated_input_parcial_no_se_fusiona_con_la_entrada_del_modelo():
+    # R1, e3 (medido): el SDK sustituye la entrada entera; con solo la cobertura, la herramienta no
+    # recibe los demás campos.
+    recibido = []
+    sesion, _ = _sesion_con_pre([_sustituye({"cobertura": ["x"]})], recibido)
+    _ejecutar(sesion, INFORME, ENTRADA_DEL_MODELO)
+    assert recibido == [{"cobertura": ["x"]}]
+
+
+def test_post_tool_use_failure_tambien_ve_la_entrada_sustituida():
+    sustituida = {**ENTRADA_DEL_MODELO, "cobertura": ["y"]}
+    sesion, traza = _sesion_con_pre([_sustituye(sustituida)], [])
+    _ejecutar(sesion, INFORME, ENTRADA_DEL_MODELO, respuesta=ERROR)
+    (fallo,) = [e for n, e, _ in traza.entradas if n == "fallo"]
+    assert fallo["tool_input"] == sustituida
+
+
+def test_un_deny_gana_aunque_otro_hook_devuelva_updated_input():
+    # Supuesto conservador de la simulación, NO medido (R1): no se midió cómo mezcla el SDK un deny
+    # y un updatedInput de hooks distintos. Producción nunca combina dos PreToolUse sobre la misma
+    # herramienta: un solo hook decide deny o sustitución.
+    recibido = []
+    sesion, _ = _sesion_con_pre(
+        [_sustituye({**ENTRADA_DEL_MODELO, "cobertura": ["z"]}), denegar("no")], recibido
+    )
+    resultado = _ejecutar(sesion, INFORME, ENTRADA_DEL_MODELO)
+    assert resultado.denegada and recibido == []
+
+
+def test_sin_updated_input_la_entrada_llega_sin_cambios():
+    recibido = []
+    sesion, _ = _sesion_con_pre([permitir()], recibido)
+    _ejecutar(sesion, INFORME, ENTRADA_DEL_MODELO)
+    assert recibido == [ENTRADA_DEL_MODELO]
+
+
+# ------------------------------------------------------------------ en_secuencia y escalar_con (#8)
+
+
+def test_en_secuencia_da_un_resultado_por_ejecucion_y_repite_el_ultimo():
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import en_secuencia, resultado_frente
+
+    primero, segundo = resultado_frente(Frente.NOTICIAS), resultado_frente(Frente.NOTICIAS)
+    siguiente = en_secuencia(primero, segundo)
+    assert siguiente("contexto") is primero
+    assert siguiente("contexto") is segundo
+    assert siguiente("otro contexto") is segundo
+
+
+def test_el_paso_escalar_con_llama_a_escalar_con_esa_entrada():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    entrada = {"causa_escalamiento": "alto riesgo", "cobertura": "completa"}
+    coordinador = CoordinadorSimulado([("escalar_con", entrada)])
+
+    async def consumir():
+        return [m async for m in coordinador(prompt="p", options=_opciones(None))]
+
+    asyncio.run(consumir())
+    assert coordinador.pasarela.escalamientos == [entrada]
+    ((tipo, resultado),) = coordinador.pasos
+    assert tipo == "escalar_con" and resultado.ejecutada

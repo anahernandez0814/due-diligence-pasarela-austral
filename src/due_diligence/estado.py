@@ -27,14 +27,33 @@ class Situacion(StrEnum):
 
 # Transiciones permitidas. `rechazado` puede volver a delegarse con el dato corregido, y un frente
 # terminado o no terminado, volver a ejecutarse cuando se delega con otra entrada. Uno terminado
-# pasa a no terminado si lo que lo sustenta cambia (listas, si cambia el comercio del registro).
+# pasa a no terminado si lo que lo sustenta cambia (listas, si cambia el comercio del registro), y
+# uno no terminado sigue no terminado con el motivo nuevo en el mismo caso, como `rechazado` (#8:
+# antes, listas fallido e invalidado después lanzaba `TransicionInvalida`).
 _TRANSICIONES: dict[Situacion, frozenset[Situacion]] = {
     Situacion.SIN_INICIAR: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
     Situacion.EN_CURSO: frozenset({Situacion.TERMINADO, Situacion.NO_TERMINADO}),
     Situacion.TERMINADO: frozenset({Situacion.EN_CURSO, Situacion.NO_TERMINADO}),
-    Situacion.NO_TERMINADO: frozenset({Situacion.EN_CURSO}),
+    Situacion.NO_TERMINADO: frozenset({Situacion.EN_CURSO, Situacion.NO_TERMINADO}),
     Situacion.RECHAZADO: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
 }
+
+
+class Causa(StrEnum):
+    """Por qué un frente no quedó cubierto: el «tipo de error» de FR-002 (#8, R4, data-model).
+
+    Conjunto cerrado. Vive aquí, y no en la delegación, para que `cobertura.py` lo use sin
+    importarla. El campo `tipo` del error se conserva por compatibilidad con el #6.
+    """
+
+    TERMINACION_ANOMALA = "terminacion_anomala"
+    ERROR_DE_FUENTE = "error_de_fuente"
+    SIN_CONSULTAS = "sin_consultas"
+    RESULTADO_INVALIDO = "resultado_invalido"
+    CONSULTA_INCOMPLETA = "consulta_incompleta"
+    RECHAZADO = "rechazado"
+    CANCELADO = "cancelado"
+    INVALIDADO = "invalidado"
 
 
 class TransicionInvalida(ValueError):
@@ -93,6 +112,9 @@ class EstadoCaso:
     cierre_sin_escalar: bool = False
     resultados: dict[Frente, ResultadoFrente] = field(default_factory=dict)
     consultas: list[Consulta] = field(default_factory=list)
+    # Último error estructurado de cada frente no cubierto (#8, data-model `ErrorFrente`). Lo
+    # escribe la delegación; un frente que termina con normalidad borra su entrada.
+    errores: dict[Frente, dict[str, Any]] = field(default_factory=dict)
     _situaciones: dict[Frente, Situacion] = field(
         default_factory=lambda: {f: Situacion.SIN_INICIAR for f in Frente}
     )

@@ -28,6 +28,12 @@ TIPO_ESCALAMIENTO_REGISTRADO = "escalamiento_registrado"
 TIPO_MODO_DEMOSTRACION = "modo_demostracion"
 # Una herramienta de una regla devolvió un error estructurado (llega por `PostToolUseFailure`, R1).
 TIPO_CONSULTA_FALLIDA = "consulta_fallida"
+# Errores estructurados y cobertura (#8, data-model). `cobertura_sustituida` se emite en el
+# `PreToolUse`, antes de que la pasarela acepte la llamada: dice qué cobertura se puso en ella,
+# nunca que quedó registrada.
+TIPO_FRENTE_REINTENTO = "frente_reintento"
+TIPO_REINTENTO_DENEGADO = "reintento_denegado"
+TIPO_COBERTURA_SUSTITUIDA = "cobertura_sustituida"
 
 TIPOS = frozenset(
     {
@@ -46,6 +52,9 @@ TIPOS = frozenset(
         TIPO_ESCALAMIENTO_REGISTRADO,
         TIPO_MODO_DEMOSTRACION,
         TIPO_CONSULTA_FALLIDA,
+        TIPO_FRENTE_REINTENTO,
+        TIPO_REINTENTO_DENEGADO,
+        TIPO_COBERTURA_SUSTITUIDA,
     }
 )
 

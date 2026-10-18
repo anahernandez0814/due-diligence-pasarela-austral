@@ -103,6 +103,23 @@ def test_con_solicitud_carga_el_entorno_una_vez_antes_de_ejecutar_y_lo_imprime_t
         assert esperado in salida
 
 
+def test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador(monkeypatch, capsys):
+    # #8, FR-014, R2: el caso simulado delega registro y noticias, sin listas ni categoría.
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _ejecutar_caso_simulado(_fin(), []))
+    assert principal.main(["solicitud"]) == 0
+    salida = capsys.readouterr().out
+    for esperado in (
+        "Cobertura:",
+        "Cobertura incompleta: 2 de 4 frentes cubiertos.",
+        "registro: cubierto.",
+        "listas: no cubierto; no se delegó.",
+        "turnos del coordinador: 1 de 30",
+        "Caso completo: no",
+    ):
+        assert esperado in salida
+
+
 def test_una_terminacion_anomala_devuelve_uno(monkeypatch, capsys):
     monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
     monkeypatch.setattr(
@@ -202,3 +219,17 @@ def test_el_chat_muestra_el_bloqueo_con_su_regla_y_su_motivo_y_que_el_caso_no_es
     assert "bloqueo_regla" in texto and "[I.1]" in texto
     assert "pida el identificador al analista" in texto
     assert "Caso completo: no" in texto
+
+
+def test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra():
+    async def nunca(*, prompt, options=None):
+        yield AssistantMessage(content=[TextBlock("texto")], model="simulado")
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=nunca)
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    salida = "\n".join(lineas)
+    assert "turnos del coordinador: sin dato" in salida
+    assert "Cobertura:" in salida
+    for linea in caso.cobertura.lineas():
+        assert linea in salida

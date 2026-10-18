@@ -27,12 +27,14 @@ class Situacion(StrEnum):
 
 # Transiciones permitidas. `rechazado` puede volver a delegarse con el dato corregido, y un frente
 # terminado o no terminado, volver a ejecutarse cuando se delega con otra entrada. Uno terminado
-# pasa a no terminado si lo que lo sustenta cambia (listas, si cambia el comercio del registro).
+# pasa a no terminado si lo que lo sustenta cambia (listas, si cambia el comercio del registro), y
+# uno no terminado sigue no terminado con el motivo nuevo en el mismo caso, como `rechazado` (#8:
+# antes, listas fallido e invalidado después lanzaba `TransicionInvalida`).
 _TRANSICIONES: dict[Situacion, frozenset[Situacion]] = {
     Situacion.SIN_INICIAR: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
     Situacion.EN_CURSO: frozenset({Situacion.TERMINADO, Situacion.NO_TERMINADO}),
     Situacion.TERMINADO: frozenset({Situacion.EN_CURSO, Situacion.NO_TERMINADO}),
-    Situacion.NO_TERMINADO: frozenset({Situacion.EN_CURSO}),
+    Situacion.NO_TERMINADO: frozenset({Situacion.EN_CURSO, Situacion.NO_TERMINADO}),
     Situacion.RECHAZADO: frozenset({Situacion.EN_CURSO, Situacion.RECHAZADO}),
 }
 

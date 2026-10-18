@@ -178,7 +178,7 @@ texto interno de una excepción.
 `frente`, `tipo`, `causa`, `mensaje`, `reintentable`, `intento`, `reintentos_restantes` y
 `obtenido`.
 
-- [ ] T010 [US2] Tests en `src/due_diligence/test_delegacion.py` (FR-001 a FR-004, US2-1 a US2-7,
+- [X] T010 [US2] Tests en `src/due_diligence/test_delegacion.py` (FR-001 a FR-004, US2-1 a US2-7,
   SC-004). Un test por causa:
   - `error_de_fuente` reintentable (`error_estructurado("servicio_no_disponible", True)`) →
     `reintentable is True`, `intento == 1` y `reintentos_restantes == 1`;
@@ -206,7 +206,7 @@ texto interno de una excepción.
   - un frente cancelado (`asyncio.CancelledError` del ejecutor) deja `estado.errores[frente]`
     con la causa `cancelado`;
   - `entrada_invalida` no lleva `frente`.
-- [ ] T011 [US2] Implementar lo de T010 en `src/due_diligence/delegacion.py`:
+- [X] T011 [US2] Implementar lo de T010 en `src/due_diligence/delegacion.py`:
   - `_evaluar` devuelve `(situacion, motivo, causa)` con la prioridad de data-model;
   - `_respuesta` y `_rechazar` añaden `frente`, `causa`, `intento` y `reintentos_restantes` (en
     esta fase, `intento = 1` o `0`; el historial llega en T014). `reintentable` es la causa
@@ -216,7 +216,7 @@ texto interno de una excepción.
   - en `_ejecutar`, `detalle_terminacion = f"excepción {type(error).__name__}"`, sin `{error}`.
   
   Hace pasar T010 sin romper el resto de la suite.
-- [ ] T012 [US2] Fase 3 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
+- [X] T012 [US2] Fase 3 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde.
 
 ---
@@ -229,7 +229,7 @@ modelo, la guarda el `Delegador`, con 1 reintento por `(frente, contexto)` (R3).
 **Independent Test**: con `en_secuencia`, un error reintentable seguido de un éxito deja el frente
 terminado tras 2 ejecuciones; uno no reintentable se ejecuta 1 vez; un tercer pedido se deniega.
 
-- [ ] T013 [US3] Tests en `src/due_diligence/test_reintentos.py`, un archivo nuevo (FR-005 a
+- [X] T013 [US3] Tests en `src/due_diligence/test_reintentos.py`, un archivo nuevo (FR-005 a
   FR-009, US3-1 a US3-6, SC-002):
   - **US3-1 y US3-2**: noticias con `en_secuencia(error reintentable, éxito)`. El segundo
     `delegar` con la misma entrada ejecuta otra vez (`len(ejecutor.llamadas_de(NOTICIAS)) == 2`),
@@ -253,7 +253,7 @@ terminado tras 2 ejecuciones; uno no reintentable se ejecuta 1 vez; un tercer pe
   - **reintento con otro error**: si el segundo intento falla con un error no reintentable, no hay
     más reintentos;
   - **el texto de `DESCRIPCION`** contiene «reintentable true» y «una vez más» (R7).
-- [ ] T014 [US3] Implementar lo de T013 en `src/due_diligence/delegacion.py`:
+- [X] T014 [US3] Implementar lo de T013 en `src/due_diligence/delegacion.py`:
   - `self._intentos: dict[tuple[Frente, str], int]` y `self._ultimo: dict[tuple[Frente, str],
     dict]`;
   - en `delegar`, tras construir el contexto, la regla de data-model, «Historial de intentos»;
@@ -264,7 +264,7 @@ terminado tras 2 ejecuciones; uno no reintentable se ejecuta 1 vez; un tercer pe
   - `DESCRIPCION` ampliada como dice el contrato.
   
   Sin `while` (`test_sin_control_propio.py`). Hace pasar T013.
-- [ ] T015 [US3] Fase 4 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
+- [X] T015 [US3] Fase 4 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde. Commit «error estructurado y política de reintento (#8)».
 
 ---
@@ -315,7 +315,10 @@ completa solo con los cuatro `terminado`.
       citar R5);
     - el atributo `turnos`, con `num_turns` en `ejecutar`;
   - en `src/due_diligence/__main__.py`, el bloque «Cobertura:» tras «Frentes:» y la línea de
-    turnos en «Números de la validación», con `MAX_TURNOS_SEGURIDAD`.
+    turnos en «Números de la validación», con `MAX_TURNOS_SEGURIDAD`;
+  - en `src/due_diligence/simulacion.py`, el parámetro `num_turns: int = 1` en
+    `mensaje_de_resultado` (U1 del análisis), para que T018 construya un `ResultMessage` con
+    otros turnos.
   
   Hace pasar T018.
   
@@ -325,7 +328,9 @@ completa solo con los cuatro `terminado`.
   - `test_hooks.py:798` y `test_hooks.py:866-867`: el informe aceptado devuelve
     `reemplazar_entrada` y registra `cobertura_sustituida`;
   - `test_hooks.py:603-608` y `test_coordinador.py:564-572`: el inventario de hooks del
-    coordinador añade el `PreToolUse` de `ESCALAR`.
+    coordinador añade el `PreToolUse` de `ESCALAR`;
+  - `test_eventos_estado.py`, `test_los_tipos_de_evento_son_los_del_modelo` (#6), ya cambiado en
+    T003: el inventario de eventos añade los tres tipos nuevos.
 - [ ] T020 [US4] Fase 5 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde. Commit «cobertura calculada por el código (#8)».
 
@@ -342,8 +347,9 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
 - [ ] T021 [US1] Tests en `src/due_diligence/test_hooks.py` (FR-011, R6,
   [contracts/cobertura.md](contracts/cobertura.md)).
   
-  **Tests del #7 que cambian (I1 del análisis).** Son exactamente cuatro; ningún otro test del #7
-  se edita. Esta lista y su justificación van también en la descripción del PR (T034).
+  **Tests de los tickets #6 y #7 que cambian (I1 del análisis).** Son exactamente cinco: cuatro del
+  #7 y un inventario del #6. Ningún otro test de esos tickets se edita. Esta lista y su
+  justificación van también en la descripción del PR (T034).
   
   | Test | Hoy | Por qué cambia | Cómo queda (sin debilitarse) |
   |------|-----|----------------|------------------------------|
@@ -351,6 +357,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
   | `test_hooks.py:866-867`, en `test_el_hook_del_informe_permite_no_habilitar_si_el_caso_esta_escalado` | `no_habilitar` y `decide_cumplimiento` dan `== permitir()` y `eventos == []` | igual que el anterior, y la llamada registra `cobertura_sustituida` | ver la lista de abajo |
   | `test_hooks.py:603-608`, `test_el_coordinador_tiene_los_hooks_de_delegar_informe_y_escalar` | `PreToolUse == [DELEGAR, INFORME]` | hay un `PreToolUse` nuevo de `escalar_a_cumplimiento` (R6) | `PreToolUse == [DELEGAR, INFORME, ESCALAR]`; el resto, igual |
   | `test_coordinador.py:564-572`, `test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop` | inventario de hooks del coordinador | el mismo `PreToolUse` nuevo | solo se añade `ESCALAR` a `"PreToolUse"`; el resto del diccionario, igual |
+  | `test_eventos_estado.py`, `test_los_tipos_de_evento_son_los_del_modelo` (#6; cambiado en T003) | inventario exacto de `TIPOS` | tres tipos de evento nuevos (data-model) | solo se añaden `frente_reintento`, `reintento_denegado` y `cobertura_sustituida`; ningún tipo anterior sale |
   
   Los dos tests del informe aceptado comprueban, **como mínimo**, lo mismo que hoy, para cada
   recomendación que hoy prueban:
@@ -444,8 +451,8 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
 - [ ] T025 [US1] Fase 6 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde. Los tests del #7 (`test_hooks.py`, `test_casos_reglas.py`, `test_hooks_sesiones.py`,
   `test_modo_demo.py`) pasan, y `git diff main -- src/due_diligence/test_hooks.py
-  src/due_diligence/test_coordinador.py` muestra que de los tests del #7 solo cambiaron los cuatro de
-  T021, de la forma descrita allí. Commit «cobertura registrada y caso (f)
+  src/due_diligence/test_coordinador.py src/due_diligence/test_eventos_estado.py` muestra que de los
+  tests del #6 y del #7 solo cambiaron los cinco de T021, de la forma descrita allí. Commit «cobertura registrada y caso (f)
   (#8)». **PARADA DE REVISIÓN B.**
 
 ---
@@ -509,7 +516,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
   la analista sin abrir el código). En Q7, cobertura completa y `habilitar`. Resultado: **____**.
 - [ ] T034 Commitear la anotación de T031 a T033 en este archivo. **Ningún commit después de la
   revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de los
-  cuatro tests del #7 que cambian (T021), con su justificación, y en «Lo pendiente» el riesgo
+  cinco tests del #6 y del #7 que cambian (T021), con su justificación, y en «Lo pendiente» el riesgo
   residual 6, que hereda el #9 (C1 del análisis).
 
 ---

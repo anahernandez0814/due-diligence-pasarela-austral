@@ -14,9 +14,11 @@ from typing import Any
 from claude_agent_sdk import ClaudeAgentOptions, SdkMcpTool, create_sdk_mcp_server, tool
 from mcp_types import ToolAnnotations
 
+from due_diligence.configuracion import MAX_REINTENTOS_POR_FRENTE
 from due_diligence.contexto import FrenteRechazado, construir_contexto
 from due_diligence.ejecutor import EjecutorSubagente, es_bloqueo_de_hook
 from due_diligence.estado import (
+    Causa,
     Consulta,
     EstadoCaso,
     ResultadoFrente,
@@ -29,6 +31,8 @@ from due_diligence.eventos import (
     TIPO_FRENTE_INICIO,
     TIPO_FRENTE_INVALIDADO,
     TIPO_FRENTE_RECHAZADO,
+    TIPO_FRENTE_REINTENTO,
+    TIPO_REINTENTO_DENEGADO,
     RegistroEventos,
 )
 from due_diligence.frentes import HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION, Frente
@@ -46,7 +50,9 @@ DESCRIPCION = (
     "ejemplo «suplementos dietarios», no «venta en línea de suplementos dietarios»). Si "
     "consultar_riesgo_categoria devuelve categoria_desconocida, solo vuelve a delegar con un "
     "nombre del catálogo que aparezca en la solicitud. Repetir un frente con la misma entrada "
-    "devuelve el resultado guardado; con otra entrada, vuelve a ejecutarlo. "
+    "devuelve el resultado guardado si terminó; con otra entrada, vuelve a ejecutarlo. Si un "
+    "frente devolvió un error con reintentable true, se puede pedir una vez más con la misma "
+    "entrada; con reintentable false no se vuelve a ejecutar: sigue con los demás frentes. "
     "Esta herramienta no consulta fuentes por sí misma, no registra el informe ni escala "
     "el caso."
 )
@@ -83,6 +89,9 @@ ESQUEMA = {
 }
 
 
+MOTIVO_CANCELADO = "Se canceló el frente."
+
+
 def _error(
     tipo: str, mensaje: str, reintentable: bool, obtenido: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -95,8 +104,71 @@ def _error(
     }
 
 
+def _error_de_frente(
+    tipo: str,
+    frente: Frente,
+    causa: Causa,
+    mensaje: str,
+    reintentable: bool,
+    obtenido: dict[str, Any] | None = None,
+    *,
+    intento: int,
+    reintentos_restantes: int,
+) -> dict[str, Any]:
+    """El `ErrorFrente` del #8 (data-model, contrato `delegar-frente.md`).
+
+    `tipo` se conserva por compatibilidad con el #6; el «tipo de error» de FR-002 es `causa`.
+    `reintentable` es verdadero solo si la causa lo es **y** quedan reintentos (R3).
+    """
+    return {
+        **_error(tipo, mensaje, reintentable and reintentos_restantes > 0, obtenido),
+        "frente": frente.value,
+        "causa": causa.value,
+        "intento": intento,
+        "reintentos_restantes": reintentos_restantes,
+    }
+
+
+def _rechazo(frente: Frente, motivo: str, reintentable: bool = False) -> dict[str, Any]:
+    """Un rechazo sin ejecución: no lanza al subagente ni consume reintentos (FR-003)."""
+    return _error_de_frente(
+        "frente_rechazado",
+        frente,
+        Causa.RECHAZADO,
+        motivo,
+        reintentable,
+        {"frente": frente.value},
+        intento=0,
+        reintentos_restantes=MAX_REINTENTOS_POR_FRENTE,
+    )
+
+
 def _nombre_corto(herramienta: str) -> str:
     return herramienta.rsplit("__", 1)[-1]
+
+
+def _errores_reales(respuesta: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Los errores de la fuente de una respuesta, sin los bloqueos de hook (#7)."""
+    obtenido = respuesta.get("obtenido") or {}
+    return [e for e in obtenido.get("errores") or [] if not es_bloqueo_de_hook(e)]
+
+
+def _fuente_reintentable(respuesta: Mapping[str, Any]) -> bool:
+    """Si la causa del error es reintentable por sí misma, sin contar los reintentos que quedan."""
+    reales = _errores_reales(respuesta)
+    return (
+        respuesta.get("causa") == Causa.ERROR_DE_FUENTE
+        and bool(reales)
+        and all(e.get("reintentable") is True for e in reales)
+    )
+
+
+def _causa_legible(respuesta: Mapping[str, Any]) -> str:
+    """La causa de un error, en palabras, para los eventos de reintento (FR-009)."""
+    if respuesta.get("causa") == Causa.ERROR_DE_FUENTE:
+        tipos = ", ".join(str(e.get("tipo")) for e in _errores_reales(respuesta))
+        return f"error de la fuente: {tipos}"
+    return str(respuesta.get("causa", "")).replace("_", " ")
 
 
 class Delegador:
@@ -116,6 +188,10 @@ class Delegador:
         self._hecho: dict[Frente, asyncio.Event] = {f: asyncio.Event() for f in Frente}
         self._respuestas: dict[Frente, dict[str, Any]] = {}
         self._contextos: dict[Frente, str] = {}
+        # Historial de la política de reintento (#8, R3): ejecuciones por `(frente, contexto)`.
+        # El contexto lo construye el código desde la entrada, así que «la misma entrada» es
+        # exactamente la misma clave; otra entrada es otra clave con su propio reintento.
+        self._intentos: dict[tuple[Frente, str], int] = {}
         self.herramienta: SdkMcpTool[Any] = self._crear_herramienta()
 
     # ------------------------------------------------------------ servidor en proceso
@@ -152,7 +228,7 @@ class Delegador:
                 "entrada_invalida", f"El frente debe ser uno de: {valores}.", reintentable=False
             )
 
-        await self._esperar_si_en_curso(frente)
+        espero = await self._esperar_si_en_curso(frente)
 
         if frente is Frente.LISTAS:
             previa = await self._esperar_al_registro()
@@ -160,7 +236,7 @@ class Delegador:
                 return previa
             # Esperar al registro cede el control: otra llamada a `listas` pudo lanzar el frente
             # mientras tanto. Desde esta última comprobación hasta `_ejecutar` no hay ningún await.
-            await self._esperar_si_en_curso(frente)
+            espero = await self._esperar_si_en_curso(frente) or espero
 
         try:
             contexto = construir_contexto(frente, entrada, self.estado)
@@ -168,33 +244,68 @@ class Delegador:
             if frente in self._respuestas:  # ya tiene resultado: se conserva, no se rechaza
                 motivo = str(rechazo)
                 self.eventos.registrar(TIPO_FRENTE_RECHAZADO, frente, motivo)
-                return _error("frente_rechazado", motivo, False, {"frente": frente.value})
+                return _rechazo(frente, motivo)
             return self._rechazar(frente, str(rechazo))
 
         if frente in self._respuestas and self._contextos.get(frente) == contexto:
+            return await self._misma_entrada(frente, contexto, espero)
+
+        return await self._ejecutar(frente, contexto, repite=frente in self._respuestas)
+
+    async def _misma_entrada(self, frente: Frente, contexto: str, espero: bool) -> dict[str, Any]:
+        """La política de reintento con la misma entrada (#8, R3, contrato `delegar-frente.md`).
+
+        - Terminado, o una llamada que esperó a esa misma ejecución en curso: lo guardado.
+        - Error con `reintentable` (la causa lo es y quedan reintentos): se ejecuta de nuevo.
+        - En otro caso: el mismo error con `reintentable: false` y sin reintentos.
+        """
+        guardada = self._respuestas[frente]
+        if espero or not guardada.get("error"):
             self.eventos.registrar(
                 TIPO_DELEGACION_REPETIDA,
                 frente,
                 f"Misma entrada que la anterior: se devuelve lo guardado de {frente.value}.",
             )
-            return self._respuestas[frente]
-
-        return await self._ejecutar(frente, contexto, repite=frente in self._respuestas)
+            return guardada
+        if guardada.get("reintentable") is True:
+            intento = self._intentos.get((frente, contexto), 0) + 1
+            self.eventos.registrar(
+                TIPO_FRENTE_REINTENTO,
+                frente,
+                f"Reintento {intento - 1} de {MAX_REINTENTOS_POR_FRENTE} del frente "
+                f"{frente.value}: el intento anterior falló ({_causa_legible(guardada)}).",
+            )
+            return await self._ejecutar(frente, contexto, reintento=True)
+        motivo = (
+            "se agotaron los reintentos"
+            if guardada.get("reintentos_restantes") == 0 and _fuente_reintentable(guardada)
+            else "el error no es reintentable"
+        )
+        self.eventos.registrar(
+            TIPO_REINTENTO_DENEGADO, frente, f"No se reintenta el frente {frente.value}: {motivo}."
+        )
+        return {**guardada, "reintentable": False, "reintentos_restantes": 0}
 
     def _rechazar(self, frente: Frente, motivo: str, reintentable: bool = False) -> dict[str, Any]:
         self.estado.cambiar_situacion(frente, Situacion.RECHAZADO, motivo)
         self.eventos.registrar(TIPO_FRENTE_RECHAZADO, frente, motivo)
-        return _error("frente_rechazado", motivo, reintentable, {"frente": frente.value})
+        respuesta = _rechazo(frente, motivo, reintentable)
+        self.estado.errores[frente] = respuesta
+        return respuesta
 
-    async def _esperar_si_en_curso(self, frente: Frente) -> None:
+    async def _esperar_si_en_curso(self, frente: Frente) -> bool:
         """Espera mientras el frente siga en curso: un frente en curso no se lanza dos veces.
 
         Se vuelve a comprobar tras cada espera (otra llamada pudo relanzarlo). Es recursiva y no un
         `while` porque `test_sin_control_propio` prohíbe `while` en los módulos del ciclo (FR-010).
+        Devuelve si esperó: una llamada que esperó recibe el resultado de esa ejecución y no
+        reintenta (#8, R3, pedidos simultáneos).
         """
         if self.estado.situacion(frente) is Situacion.EN_CURSO:
             await self._hecho[frente].wait()
             await self._esperar_si_en_curso(frente)
+            return True
+        return False
 
     async def _esperar_al_registro(self) -> dict[str, Any] | None:
         """El orden de `listas` (R4): espera al registro en curso; sin iniciar, se rechaza.
@@ -211,14 +322,19 @@ class Delegador:
         return None
 
     async def _ejecutar(
-        self, frente: Frente, contexto: str, repite: bool = False
+        self, frente: Frente, contexto: str, repite: bool = False, reintento: bool = False
     ) -> dict[str, Any]:
-        detalle = (
-            f"Se vuelve a delegar el frente {frente.value} con otra entrada."
-            if repite
-            else f"Se delega el frente {frente.value}."
-        )
+        if reintento:
+            detalle = f"Se reintenta el frente {frente.value} con la misma entrada."
+        elif repite:
+            detalle = f"Se vuelve a delegar el frente {frente.value} con otra entrada."
+        else:
+            detalle = f"Se delega el frente {frente.value}."
         self.eventos.registrar(TIPO_DELEGACION, frente, detalle)
+        # Cada lanzamiento del subagente con esta entrada es un intento (#8, R3).
+        clave = (frente, contexto)
+        intento = self._intentos.get(clave, 0) + 1
+        self._intentos[clave] = intento
         # El comercio que ya estaba identificado se conserva para decidir, al concluir, si el nuevo
         # es otro y `listas` deja de valer. Se reinicia la identificación antes de lanzar el frente:
         # la registra el hook del registro durante esta ejecución (R4).
@@ -233,31 +349,49 @@ class Delegador:
             try:
                 resultado = await self._ejecutor(frente, contexto, self._opciones(frente))
             except Exception as error:  # el subagente falló: se conserva como no terminado
+                # Solo el tipo de la excepción: su texto interno no llega al modelo, a los
+                # eventos ni al estado (US2-7 del #8), como en `hooks._registrar_fallo` del #7.
+                detalle = f"excepción {type(error).__name__}"
                 resultado = ResultadoFrente(
                     frente,
                     [],
                     "",
-                    Clasificacion(
-                        Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
-                    ),
-                    f"excepción {type(error).__name__}: {error}",
+                    Clasificacion(Terminacion.ANOMALA, None, None, detalle, True),
+                    detalle,
                 )
-            return self._concluir(frente, resultado, anterior)
+            return self._concluir(frente, resultado, anterior, intento)
         finally:
             if self.estado.situacion(frente) is Situacion.EN_CURSO:  # cancelado: no se pierde
-                self.estado.cambiar_situacion(
-                    frente, Situacion.NO_TERMINADO, "Se canceló el frente."
+                self.estado.cambiar_situacion(frente, Situacion.NO_TERMINADO, MOTIVO_CANCELADO)
+                self.estado.errores[frente] = _error_de_frente(
+                    "frente_no_terminado",
+                    frente,
+                    Causa.CANCELADO,
+                    MOTIVO_CANCELADO,
+                    False,
+                    {"frente": frente.value, "resultados": [], "errores": [], "terminacion": ""},
+                    intento=intento,
+                    reintentos_restantes=MAX_REINTENTOS_POR_FRENTE - (intento - 1),
                 )
             self._hecho[frente].set()
 
     # ------------------------------------------------------------ resultado de un frente
 
-    def _evaluar(self, frente: Frente, resultado: ResultadoFrente) -> tuple[Situacion, str]:
-        """(situación final, motivo) de un frente según cómo terminó y qué devolvió."""
+    def _evaluar(
+        self, frente: Frente, resultado: ResultadoFrente
+    ) -> tuple[Situacion, str, Causa | None]:
+        """(situación final, motivo, causa) de un frente según cómo terminó y qué devolvió.
+
+        El orden de las comprobaciones es la prioridad de las causas (data-model del #8).
+        """
         clasificacion = resultado.terminacion
         if clasificacion is None or clasificacion.terminacion is not Terminacion.NORMAL:
             donde = resultado.detalle_terminacion
-            return Situacion.NO_TERMINADO, f"El subagente no terminó con normalidad ({donde})."
+            return (
+                Situacion.NO_TERMINADO,
+                f"El subagente no terminó con normalidad ({donde}).",
+                Causa.TERMINACION_ANOMALA,
+            )
         # Un intento que un hook bloqueó (regla I.1) no cuenta contra el frente: queda como evento
         # de la regla y como traza en el estado, pero decide lo que sí se consultó (#7).
         efectivas = [c for c in resultado.consultas if not es_bloqueo_de_hook(c.error)]
@@ -267,19 +401,25 @@ class Delegador:
             return (
                 Situacion.NO_TERMINADO,
                 f"La herramienta devolvió un error estructurado ({tipos}).",
+                Causa.ERROR_DE_FUENTE,
             )
         if not efectivas:
-            return Situacion.NO_TERMINADO, "El subagente no hizo ninguna consulta."
+            return (
+                Situacion.NO_TERMINADO,
+                "El subagente no hizo ninguna consulta.",
+                Causa.SIN_CONSULTAS,
+            )
         if any(not c.valido for c in efectivas):
             return (
                 Situacion.NO_TERMINADO,
                 "Un resultado no tiene la forma del contrato de la pasarela.",
+                Causa.RESULTADO_INVALIDO,
             )
         if frente is Frente.LISTAS:
             faltante = self._falta_en_listas(resultado)
             if faltante:
-                return Situacion.NO_TERMINADO, faltante
-        return Situacion.TERMINADO, ""
+                return Situacion.NO_TERMINADO, faltante, Causa.CONSULTA_INCOMPLETA
+        return Situacion.TERMINADO, "", None
 
     def _falta_en_listas(self, resultado: ResultadoFrente) -> str:
         """Comprueba que `listas` consultó al comercio y, si lo hay, a su representante (FR-005).
@@ -310,11 +450,15 @@ class Delegador:
         return ""
 
     def _concluir(
-        self, frente: Frente, resultado: ResultadoFrente, anterior: dict[str, Any] | None = None
+        self,
+        frente: Frente,
+        resultado: ResultadoFrente,
+        anterior: dict[str, Any] | None = None,
+        intento: int = 1,
     ) -> dict[str, Any]:
         self.estado.guardar_resultado(resultado)
         self.estado.agregar_consultas(resultado.consultas)
-        situacion, motivo = self._evaluar(frente, resultado)
+        situacion, motivo, causa = self._evaluar(frente, resultado)
         self.estado.cambiar_situacion(frente, situacion, motivo)
         # El comercio ya no se deriva aquí: lo identifica el hook del registro (R4) y
         # `estado.comercio` lo consolida. Solo se compara con el que había antes de esta ejecución.
@@ -322,8 +466,13 @@ class Delegador:
             self._invalidar_listas()
         detalle = f"{situacion.value}: {resultado.detalle_terminacion}"
         self.eventos.registrar(TIPO_FRENTE_FIN, frente, f"{detalle}. {motivo}".strip())
-        respuesta = self._respuesta(frente, situacion, motivo, resultado)
+        respuesta = self._respuesta(frente, situacion, motivo, causa, resultado, intento)
         self._respuestas[frente] = respuesta
+        # Último error de cada frente no cubierto (#8): un frente que termina bien lo borra.
+        if situacion is Situacion.TERMINADO:
+            self.estado.errores.pop(frente, None)
+        else:
+            self.estado.errores[frente] = respuesta
         return respuesta
 
     def _invalidar_listas(self) -> None:
@@ -340,9 +489,26 @@ class Delegador:
         self.estado.cambiar_situacion(Frente.LISTAS, Situacion.NO_TERMINADO, MOTIVO_COMERCIO_CAMBIO)
         self._contextos.pop(Frente.LISTAS, None)
         self.eventos.registrar(TIPO_FRENTE_INVALIDADO, Frente.LISTAS, MOTIVO_COMERCIO_CAMBIO)
+        # Solo en el estado y la cobertura: volver a delegar listas es una ejecución nueva (#6).
+        self.estado.errores[Frente.LISTAS] = _error_de_frente(
+            "frente_no_terminado",
+            Frente.LISTAS,
+            Causa.INVALIDADO,
+            MOTIVO_COMERCIO_CAMBIO,
+            False,
+            {"frente": Frente.LISTAS.value},
+            intento=0,
+            reintentos_restantes=MAX_REINTENTOS_POR_FRENTE,
+        )
 
     def _respuesta(
-        self, frente: Frente, situacion: Situacion, motivo: str, resultado: ResultadoFrente
+        self,
+        frente: Frente,
+        situacion: Situacion,
+        motivo: str,
+        causa: Causa | None,
+        resultado: ResultadoFrente,
+        intento: int = 1,
     ) -> dict[str, Any]:
         if situacion is Situacion.TERMINADO:
             return {
@@ -353,9 +519,17 @@ class Delegador:
             }
         errores = [c.error for c in resultado.consultas if c.error]
         reales = [e for e in errores if not es_bloqueo_de_hook(e)]
-        reintentable = bool(reales) and all(e.get("reintentable") is True for e in reales)
-        return _error(
+        # Solo un error de la fuente que la fuente declara reintentable lo es (FR-003): un
+        # indicador ausente o que no es exactamente `True` cuenta como no reintentable.
+        reintentable = (
+            causa is Causa.ERROR_DE_FUENTE
+            and bool(reales)
+            and all(e.get("reintentable") is True for e in reales)
+        )
+        return _error_de_frente(
             "frente_no_terminado",
+            frente,
+            causa or Causa.TERMINACION_ANOMALA,
             motivo,
             reintentable,
             {
@@ -364,6 +538,8 @@ class Delegador:
                 "errores": errores,
                 "terminacion": resultado.detalle_terminacion,
             },
+            intento=intento,
+            reintentos_restantes=MAX_REINTENTOS_POR_FRENTE - (intento - 1),
         )
 
     @staticmethod

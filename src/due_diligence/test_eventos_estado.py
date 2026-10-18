@@ -269,6 +269,15 @@ def test_dos_estados_no_comparten_nada():
 # ---------------------------------------------------------------- errores y causa (#8)
 
 
+def test_un_frente_no_terminado_sigue_no_terminado_con_el_motivo_nuevo():
+    # Listas que falló y después queda invalidado porque el registro cambió de comercio (#8).
+    estado = EstadoCaso("")
+    _llevar_a(estado, Frente.LISTAS, Situacion.NO_TERMINADO)
+    estado.cambiar_situacion(Frente.LISTAS, Situacion.NO_TERMINADO, "el comercio cambió")
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    assert estado.motivo(Frente.LISTAS) == "el comercio cambió"
+
+
 def test_el_estado_empieza_sin_errores_y_no_los_comparte():
     uno, otro = EstadoCaso("a"), EstadoCaso("b")
     assert uno.errores == {} and otro.errores == {}

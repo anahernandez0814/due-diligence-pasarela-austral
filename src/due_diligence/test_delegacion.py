@@ -10,7 +10,7 @@ import pytest
 
 from due_diligence import configuracion
 from due_diligence.delegacion import Delegador
-from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_DELEGACION,
@@ -925,3 +925,195 @@ def _registro_y_listas_con_eventos(consultas_de_listas):
     delegador, estado, registro, ejecutor = _crear(resultados=resultados)
     _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
     return listas, estado, registro, ejecutor
+
+
+# ------------------------------------------------------------------ error estructurado (#8, R4)
+
+TEXTO_INTERNO = "TEXTO-INTERNO-FICTICIO"
+
+
+def _caido(error):
+    return resultado_frente(
+        Frente.NOTICIAS, [consulta(Frente.NOTICIAS, {"nombre": "Tienda Verde SAS"}, error=error)]
+    )
+
+
+def _noticias_con(resultado):
+    delegador, estado, registro, ejecutor = _crear(resultados={Frente.NOTICIAS: resultado})
+    return _delegar(delegador, **NOTICIAS), estado, registro, ejecutor
+
+
+def test_un_error_de_fuente_reintentable_lleva_todos_los_campos_del_error_de_frente():
+    respuesta, estado, _, _ = _noticias_con(_caido(ERROR_NOTICIAS))
+    assert respuesta["error"] is True and respuesta["tipo"] == "frente_no_terminado"
+    assert respuesta["frente"] == "noticias"
+    assert respuesta["causa"] == Causa.ERROR_DE_FUENTE == "error_de_fuente"
+    assert isinstance(respuesta["mensaje"], str) and respuesta["mensaje"]
+    assert respuesta["reintentable"] is True
+    assert respuesta["intento"] == 1
+    assert respuesta["reintentos_restantes"] == configuracion.MAX_REINTENTOS_POR_FRENTE
+    assert respuesta["obtenido"]["errores"] == [ERROR_NOTICIAS]
+    # El tipo concreto de la pasarela sigue en `obtenido.errores[].tipo` (T1 del análisis).
+    assert respuesta["obtenido"]["errores"][0]["tipo"] == "servicio_no_disponible"
+    assert estado.errores[Frente.NOTICIAS] == respuesta
+
+
+def test_un_error_de_fuente_no_reintentable_no_es_reintentable():
+    respuesta, _, _, _ = _noticias_con(_caido({**ERROR_NOTICIAS, "reintentable": False}))
+    assert respuesta["causa"] == "error_de_fuente" and respuesta["reintentable"] is False
+
+
+@pytest.mark.parametrize("valor", [None, "true", 1, "sí"])
+def test_un_indicador_de_reintento_ausente_o_invalido_cuenta_como_no_reintentable(valor):
+    error = {k: v for k, v in ERROR_NOTICIAS.items() if k != "reintentable"}
+    if valor is not None:
+        error["reintentable"] = valor
+    respuesta, _, _, _ = _noticias_con(_caido(error))
+    assert respuesta["causa"] == "error_de_fuente" and respuesta["reintentable"] is False
+
+
+def test_una_terminacion_anomala_gana_al_error_de_fuente_y_no_es_reintentable():
+    anomalo = _caido(ERROR_NOTICIAS)
+    anomalo.terminacion = terminacion_anomala()
+    respuesta, _, _, _ = _noticias_con(anomalo)
+    assert respuesta["causa"] == "terminacion_anomala"
+    assert respuesta["reintentable"] is False
+
+
+def test_el_error_de_fuente_gana_al_resultado_invalido():
+    resultado = resultado_frente(
+        Frente.NOTICIAS,
+        [
+            consulta(Frente.NOTICIAS, {"nombre": "x"}, error=ERROR_NOTICIAS),
+            consulta(Frente.NOTICIAS, {}, None, None),
+        ],
+    )
+    resultado.consultas[1].valido = False
+    resultado.consultas[1].resultado = None
+    respuesta, _, _, _ = _noticias_con(resultado)
+    assert respuesta["causa"] == "error_de_fuente"
+
+
+def test_sin_consultas_y_resultado_invalido_tienen_su_propia_causa():
+    vacio, _, _, _ = _noticias_con(resultado_frente(Frente.NOTICIAS, []))
+    assert vacio["causa"] == "sin_consultas" and vacio["reintentable"] is False
+
+    invalido = resultado_frente(Frente.NOTICIAS, [consulta(Frente.NOTICIAS, {}, None, None)])
+    invalido.consultas[0].valido = False
+    invalido.consultas[0].resultado = None
+    respuesta, _, _, _ = _noticias_con(invalido)
+    assert respuesta["causa"] == "resultado_invalido" and respuesta["reintentable"] is False
+
+
+def test_listas_sin_el_representante_es_consulta_incompleta():
+    listas, estado, _ = _registro_y_listas(
+        [consulta_listas("comercio", identificador="CO-TV-0001")]
+    )
+    assert listas["causa"] == "consulta_incompleta" and listas["reintentable"] is False
+    assert estado.errores[Frente.LISTAS]["causa"] == "consulta_incompleta"
+
+
+def test_un_bloqueo_de_hook_no_es_causa_y_listas_queda_con_consulta_incompleta():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),  # bloqueada por el hook (I.1)
+    ]
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["causa"] == "consulta_incompleta" and listas["reintentable"] is False
+
+
+def test_listas_con_el_comercio_bien_y_el_representante_con_error_conserva_lo_obtenido():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta(
+            Frente.LISTAS, {"tipo": "persona", "identificador": "PE-0001"}, error=ERROR_NOTICIAS
+        ),
+    ]
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["causa"] == "error_de_fuente"
+    (obtenido,) = listas["obtenido"]["resultados"]
+    assert obtenido["argumentos"] == {"tipo": "comercio", "identificador": "CO-TV-0001"}
+    # Contenido y metadatos llegan separados, como los entregó la pasarela.
+    assert obtenido["metadatos"]["fuentes"]
+    assert all({"contenido", "metadatos"} <= set(hecho) for hecho in obtenido["hechos"])
+
+
+def test_una_excepcion_del_subagente_solo_nombra_su_tipo_en_ninguna_salida():
+    delegador, estado, registro, _ = _crear(
+        excepciones={Frente.NOTICIAS: RuntimeError(TEXTO_INTERNO)}
+    )
+    respuesta = _delegar(delegador, **NOTICIAS)
+    assert respuesta["causa"] == "terminacion_anomala" and respuesta["reintentable"] is False
+    assert "excepción RuntimeError" in respuesta["obtenido"]["terminacion"]
+    salidas = [
+        json.dumps(respuesta, ensure_ascii=False),
+        estado.motivo(Frente.NOTICIAS),
+        json.dumps(estado.errores[Frente.NOTICIAS], ensure_ascii=False, default=str),
+        estado.resultados[Frente.NOTICIAS].detalle_terminacion,
+        *(e.detalle for e in registro.eventos()),
+    ]
+    assert all(TEXTO_INTERNO not in salida for salida in salidas)
+
+
+def test_un_rechazo_sin_ejecucion_lleva_causa_rechazado_e_intento_cero():
+    delegador, estado, _, ejecutor = _crear()
+    respuesta = _delegar(delegador, frente="categoria")  # sin la categoría: se rechaza
+    assert respuesta["tipo"] == "frente_rechazado" and respuesta["frente"] == "categoria"
+    assert respuesta["causa"] == "rechazado"
+    assert respuesta["intento"] == 0
+    assert respuesta["reintentos_restantes"] == configuracion.MAX_REINTENTOS_POR_FRENTE
+    assert respuesta["reintentable"] is False
+    assert estado.errores[Frente.CATEGORIA]["causa"] == "rechazado"
+    assert ejecutor.llamadas == []
+
+
+def test_listas_antes_del_registro_es_rechazo_reintentable_sin_intento():
+    # FR-003: el rechazo sigue siendo reintentable, como fijan los tests de listas de arriba.
+    delegador, _, _, _ = _crear()
+    respuesta = _delegar(delegador, **LISTAS)
+    assert respuesta["causa"] == "rechazado" and respuesta["reintentable"] is True
+    assert respuesta["intento"] == 0
+
+
+def test_un_frente_que_despues_termina_bien_borra_su_error_del_estado():
+    def noticias(contexto):
+        if "Nombre Que Falla" in contexto:
+            return _caido(ERROR_NOTICIAS)
+        return resultado_frente(Frente.NOTICIAS)
+
+    delegador, estado, _, _ = _crear(resultados={Frente.NOTICIAS: noticias})
+    _delegar(delegador, frente="noticias", nombre="Nombre Que Falla")
+    assert estado.errores[Frente.NOTICIAS]["causa"] == "error_de_fuente"
+    _delegar(delegador, frente="noticias", nombre="Tienda Verde SAS")
+    assert Frente.NOTICIAS not in estado.errores
+
+
+def test_un_frente_cancelado_deja_la_causa_cancelado_en_el_estado():
+    delegador, estado, _, _ = _crear(retardos={Frente.NOTICIAS: 5})
+
+    async def cancelar():
+        tarea = asyncio.create_task(delegador.delegar(NOTICIAS))
+        await asyncio.sleep(0.05)
+        tarea.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await tarea
+
+    asyncio.run(cancelar())
+    assert estado.situacion(Frente.NOTICIAS) is Situacion.NO_TERMINADO
+    assert estado.errores[Frente.NOTICIAS]["causa"] == "cancelado"
+    assert estado.errores[Frente.NOTICIAS]["reintentable"] is False
+
+
+def test_listas_invalidada_deja_la_causa_invalidado_en_el_estado():
+    delegador, estado, _, _ = _registro_cambia_de_comercio()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    _delegar(delegador, frente="registro", identificador="CO-PL-0003")
+    assert estado.errores[Frente.LISTAS]["causa"] == "invalidado"
+
+
+def test_una_entrada_invalida_no_es_un_error_de_frente():
+    delegador, _, _, _ = _crear()
+    respuesta = _delegar(delegador, frente="inventado")
+    assert respuesta["tipo"] == "entrada_invalida"
+    assert "frente" not in respuesta and "causa" not in respuesta

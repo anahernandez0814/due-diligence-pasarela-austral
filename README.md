@@ -129,7 +129,7 @@ credenciales. Las decisiones están en la entrada 6 de [DECISIONES.md](DECISIONE
 | `consultar_listas_restrictivas` | Verifica un comercio o una persona; coincide solo por nombre completo o identificador. |
 | `buscar_noticias` | Busca menciones en un corpus de noticias; una mención no es una coincidencia en listas. |
 | `consultar_riesgo_categoria` | Devuelve el nivel de riesgo (alto, medio o bajo) de una categoría. |
-| `registrar_informe` | Registra el informe con su recomendación; uno de los dos canales de decisión. |
+| `registrar_informe` | Registra el informe con su recomendación, sus hallazgos con fuente y fecha, los conflictos y la cobertura; uno de los dos canales de decisión. Rechaza el que no tiene esa forma. |
 | `escalar_a_cumplimiento` | Escala el caso con un resumen autosuficiente; el otro canal de decisión. |
 
 - **Antes de abrir Claude Code**: ejecute `uv sync`. El servidor se lanza con
@@ -139,6 +139,9 @@ credenciales. Las decisiones están en la entrada 6 de [DECISIONES.md](DECISIONE
 - **`PASARELA_FALLA_NOTICIAS=1`** simula la caída del servicio de noticias: `buscar_noticias`
   devuelve un error reintentable y las demás herramientas siguen respondiendo. Se lee en cada
   llamada, pero un servidor ya lanzado hereda el entorno de Claude Code al arrancar.
+- **`PASARELA_FALLA_REGISTRO=1`** (desde el #9) simula, igual, la caída del registro mercantil:
+  `consultar_registro_mercantil` devuelve `servicio_no_disponible` reintentable y el comercio no
+  queda identificado.
 - **`PASARELA_RESULTADOS_DIR`** fija la carpeta de los informes y los casos escalados. Por defecto
   es `resultados/` en la raíz, que git ignora.
 - **Los datos son ficticios**: nombres inventados, dominios `.example` y ningún documento, NIT o
@@ -203,6 +206,21 @@ representante legal tal como los devolvió el registro. Las decisiones están en
   - Para verlo: `PASARELA_FALLA_NOTICIAS=1 uv run python -m due_diligence "<solicitud>"`. Noticias
     falla, el coordinador puede reintentarlo una vez y el informe se entrega declarando noticias
     como no cubierto.
+- **Informe con procedencia y conflictos** (ticket #9,
+  [specs/009-informe-procedencia-conflictos/](specs/009-informe-procedencia-conflictos/)):
+  - Cada afirmación del informe lleva su fuente y su fecha, y la fuente debe haberse consultado
+    para ese frente. Un informe que no cumple se rechaza con un error estructurado que dice qué
+    falla.
+  - El comercio, los conflictos y la cobertura los pone el sistema. Si dos fuentes registrales
+    dicen cosas distintas (por ejemplo, la fecha de constitución), el informe muestra los dos
+    valores, cada uno con su fuente y su fecha, sin elegir.
+  - Todo caso con comercio identificado, o con el registro caído, termina con un informe vigente
+    registrado; si hay que escalar, el informe va después del escalamiento.
+  - `python -m due_diligence` muestra la hora de los eventos en UTC, la acción intentada de cada
+    bloqueo, el bloque **Conflictos** (el resumen y una línea por dato con cada valor, su fuente y
+    su fecha) y los **Informes registrados**, con su recomendación y si siguen vigentes.
+  - Para ver el registro caído: `PASARELA_FALLA_REGISTRO=1 uv run python -m due_diligence
+    "<solicitud>"`. El informe lleva el comercio pedido con `verificado: false`.
 
 ## Guardas del entorno
 

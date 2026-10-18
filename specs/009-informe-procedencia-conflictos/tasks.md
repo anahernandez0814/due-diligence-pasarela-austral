@@ -555,9 +555,9 @@ hora con UTC, los conflictos y los informes.
 
 ## Fase 9: sondeo y documentación
 
-- [ ] T041 [P] `src/due_diligence/sondeo_hooks.py`: `ENTRADA_INFORME` en el formato nuevo (R12),
+- [X] T041 [P] `src/due_diligence/sondeo_hooks.py`: `ENTRADA_INFORME` en el formato nuevo (R12),
   con su test en `src/due_diligence/test_sondeo_hooks.py`.
-- [ ] T042 [P] `DECISIONES.md` (solo se amplía):
+- [X] T042 [P] `DECISIONES.md` (solo se amplía):
   - **decisión (a)**: si el registro responde que no hay ningún comercio, se pide al analista que
     revise el nombre y no se exige informe;
   - **decisión (b)**: con el registro caído, el comercio del informe es el que pidió el analista,
@@ -573,9 +573,9 @@ hora con UTC, los conflictos y los informes.
   - **la ampliación del comercio pedido** (fase 3, R5; pedido de la analista en la parada A):
     siempre que no hay comercio identificado, el informe lleva el comercio pedido con
     `verificado: false`, no solo con el registro caído; sin comercio pedido, el hook deniega.
-- [ ] T043 [P] `README.md`: la variable `PASARELA_FALLA_REGISTRO`, junto a
+- [X] T043 [P] `README.md`: la variable `PASARELA_FALLA_REGISTRO`, junto a
   `PASARELA_FALLA_NOTICIAS`, y el bloque de conflictos de la salida.
-- [ ] T044 Fase 9: ruff, la suite completa y commit «sondeo y documentación del #9».
+- [X] T044 Fase 9: ruff, la suite completa y commit «sondeo y documentación del #9». Resultado: **4120** tests en verde.
 
 ---
 

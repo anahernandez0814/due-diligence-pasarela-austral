@@ -86,8 +86,9 @@ Constitución v1.0.1. Resultado: **cumple, sin desviaciones.**
   los tests del #7, que deben seguir en verde sin debilitarse.
 - I.4 sigue delegada al #9.
 
-**Re-evaluación tras el diseño (Fase 1)**: se mantiene. El diseño declara cinco riesgos residuales
-(R10) en vez de ocultarlos. El principal: la respuesta final al analista sigue siendo texto del
+**Re-evaluación tras el diseño (Fase 1)**: se mantiene. El diseño declara sus riesgos residuales
+(R10 de [research.md](research.md)) en vez de ocultarlos; el 7, que hereda el #10, es que
+`_REGLA_FALLOS` puede impedir volver a pedir listas tras resolver una ambigüedad (caso d). El principal: la respuesta final al analista sigue siendo texto del
 modelo, mientras que lo autoritativo (informe, escalamiento, eventos y línea de comandos) sale del
 código.
 

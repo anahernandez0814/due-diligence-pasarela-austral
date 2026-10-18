@@ -301,3 +301,9 @@ aplicar el plan B de la analista (`deny` con motivo).
    queda sellado y el informe ya no se puede registrar. Se prefiere escalar a bloquear el canal
    seguro. **Lo resolverá el #9**, dueño de «todo caso terminado queda registrado»: este ticket no
    cambia el diseño (C1 del análisis, decisión de la analista).
+7. **`_REGLA_FALLOS` dice «no lo repitas» ante `reintentable: false`** (`coordinador.py`). El
+   rechazo de listas porque el registro devolvió varias coincidencias trae `reintentable: false`.
+   Si después el analista da el identificador y el registro identifica un comercio único, el código
+   sí ejecutaría listas, pero el prompt puede llevar al modelo a no volver a pedirla, y listas
+   quedaría sin cubrir en el caso (d). **Lo resolverá el #10**, dueño de la ambigüedad del
+   registro (revisión independiente del #8, decisión de la analista).

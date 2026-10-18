@@ -100,3 +100,45 @@ def test_el_sondeo_usa_las_opciones_aisladas_del_paquete():
     fuente = pathlib.Path(sondeo_hooks.__file__).read_text(encoding="utf-8")
     assert "opciones_base" in fuente  # setting_sources=[] y tools=[] salen de ahí (R2 del #6)
     assert "ClaudeAgentOptions(" not in fuente
+
+
+# ------------------------------------------------------------------ la salida de error de la CLI
+
+
+def test_las_opciones_del_sondeo_recogen_el_stderr_de_la_cli_en_vez_de_imprimirlo():
+    from due_diligence import configuracion
+
+    opciones = sondeo_hooks._opciones([], {}, None)
+    assert opciones.stderr is sondeo_hooks.recoger_stderr
+    assert opciones.stderr is not configuracion.filtrar_stderr
+
+
+def _con_stderr(monkeypatch, *mediciones):
+    async def sondear():
+        sondeo_hooks.recoger_stderr("Error in hook callback hook_0: 11 | // Version: 2.1.301")
+        sondeo_hooks.recoger_stderr("error: fallo simulado del hook")
+        return list(mediciones)
+
+    monkeypatch.setattr(sondeo_hooks, "sondear", sondear)
+    sondeo_hooks.STDERR_DE_LA_CLI.clear()
+
+
+def test_si_todo_coincide_solo_se_ven_las_mediciones_y_el_resumen(monkeypatch, capsys):
+    _con_stderr(monkeypatch, _medicion("a", "a"), _medicion("b", "b"))
+    assert main() == 0
+    salida = capsys.readouterr()
+    assert "Error in hook callback" not in salida.out + salida.err
+    assert "Resumen:" in salida.out
+
+
+def test_si_algo_no_coincide_se_muestra_el_stderr_recogido_para_diagnosticar(monkeypatch, capsys):
+    _con_stderr(monkeypatch, _medicion("a", "a"), _medicion("b", "otra"))
+    assert main() == 1
+    salida = capsys.readouterr().out
+    assert "Salida de error de la CLI" in salida and "Error in hook callback" in salida
+
+
+def test_el_aviso_de_conectores_no_se_recoge():
+    sondeo_hooks.STDERR_DE_LA_CLI.clear()
+    sondeo_hooks.recoger_stderr("claude.ai connectors are disabled")
+    assert sondeo_hooks.STDERR_DE_LA_CLI == []

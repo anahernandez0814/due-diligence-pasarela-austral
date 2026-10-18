@@ -11,8 +11,9 @@ uv sync
 ```
 
 - Las pruebas **no** llaman al modelo. Q4 y Q5 sí, y usan la sesión de Claude Code (sin clave ni `.env`).
-- Q4 cuesta ≈ 0,01 USD (Haiku); Q5 usa el coordinador real y cuesta más: la primera ejecución del día
-  en frío ronda 0,13 USD (medido en el #6, R9).
+- Q4 cuesta ≈ 0,01 USD (Haiku: mide el SDK, no el modelo). Q5 usa el producto real, que desde el #7 es
+  Opus 5.5 en los cinco agentes: el doble por token que Sonnet 5.5, así que cada solicitud se estima en
+  0,12 a 0,25 USD (0,06 USD medidos con Sonnet en el #6, más los turnos que añaden las devoluciones del cierre).
 
 ## Q1. Suite y formato
 

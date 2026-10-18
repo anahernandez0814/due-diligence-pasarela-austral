@@ -174,28 +174,37 @@ def test_el_servidor_reenvia_solo_las_variables_pasarela_presentes():
 # ---------------------------------------------------------------- modelos (R9)
 
 
-def test_el_modelo_por_defecto_es_sonnet_para_el_coordinador_y_los_cuatro_subagentes():
-    assert configuracion.MODELO_POR_DEFECTO == "claude-sonnet-5-5"
-    assert configuracion.modelo_coordinador({}) == "claude-sonnet-5-5"
-    assert configuracion.modelo_subagentes({}) == "claude-sonnet-5-5"
+def test_el_modelo_por_defecto_es_opus_para_el_coordinador_y_los_cuatro_subagentes():
+    # Decisión de la analista en el #7: Opus 5.5 en el código, sin depender del archivo de entorno.
+    assert configuracion.MODELO_POR_DEFECTO == "claude-opus-5-5"
+    assert configuracion.modelo_coordinador({}) == "claude-opus-5-5"
+    assert configuracion.modelo_subagentes({}) == "claude-opus-5-5"
+
+
+def test_las_variables_permiten_volver_a_sonnet():
+    entorno = {
+        "PASARELA_MODELO_COORDINADOR": "claude-sonnet-5-5",
+        "PASARELA_MODELO_SUBAGENTES": "claude-sonnet-5-5",
+    }
+    assert configuracion.modelo_coordinador(entorno) == "claude-sonnet-5-5"
+    assert configuracion.modelo_subagentes(entorno) == "claude-sonnet-5-5"
 
 
 def test_cada_modelo_se_sustituye_por_separado_con_su_variable(monkeypatch):
     monkeypatch.setenv("PASARELA_MODELO_COORDINADOR", "modelo-del-coordinador")
     monkeypatch.delenv("PASARELA_MODELO_SUBAGENTES", raising=False)
     assert _opciones_coordinador().model == "modelo-del-coordinador"
-    assert all(_opciones_subagente(f).model == "claude-sonnet-5-5" for f in Frente)
+    assert all(_opciones_subagente(f).model == "claude-opus-5-5" for f in Frente)
 
     monkeypatch.delenv("PASARELA_MODELO_COORDINADOR")
     monkeypatch.setenv("PASARELA_MODELO_SUBAGENTES", "modelo-de-subagentes")
-    assert _opciones_coordinador().model == "claude-sonnet-5-5"
+    assert _opciones_coordinador().model == "claude-opus-5-5"
     assert all(_opciones_subagente(f).model == "modelo-de-subagentes" for f in Frente)
 
 
 def test_un_valor_vacio_usa_el_modelo_por_defecto():
     assert (
-        configuracion.modelo_coordinador({"PASARELA_MODELO_COORDINADOR": "  "})
-        == "claude-sonnet-5-5"
+        configuracion.modelo_coordinador({"PASARELA_MODELO_COORDINADOR": "  "}) == "claude-opus-5-5"
     )
 
 

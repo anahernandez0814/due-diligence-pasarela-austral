@@ -158,10 +158,11 @@ representante legal tal como los devolvió el registro. Las decisiones están en
 - **Ejecutar un caso con el modelo real** (gasta tokens):
   `uv run python -m due_diligence "<solicitud del analista>"`. Imprime los eventos con su hora, la
   situación de cada frente, la duración de cada uno, si hubo solape, el coste y la respuesta del
-  coordinador. **Coste**: en la validación real, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
-  diferencia apreciable entre frío y caliente. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
-- **Modelos**: `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` (por defecto
-  `claude-sonnet-5-5`). El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
+  coordinador. **Coste**: en la validación real del #6, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
+  diferencia apreciable entre frío y caliente; con Opus 5.5, que cuesta el doble por token, se estima en unos 0,12 USD. Sale con 0 si el ciclo terminó con una razón de parada normal, 1 si no y 2 sin solicitud.
+- **Modelos**: por defecto `claude-opus-5-5` en el coordinador y en los cuatro subagentes (desde el
+  #7); `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` permiten cambiarlo, por ejemplo a
+  `claude-sonnet-5-5`. El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
   por la razón de parada del modelo.
 - **Credenciales**: el modelo se autentica con las variables de entorno que carga `__main__` desde el
   archivo de entorno local con python-dotenv. Los tests no lo cargan ni llaman al modelo.

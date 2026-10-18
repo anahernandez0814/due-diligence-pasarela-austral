@@ -31,9 +31,11 @@ from due_diligence.frentes import (
 # Raíz del repositorio: src/due_diligence/configuracion.py → tres niveles arriba.
 RAIZ = Path(__file__).resolve().parents[2]
 
-# Un mismo modelo para el coordinador y los cuatro subagentes (R9). Cada uno se sustituye por
-# separado con su variable de entorno, sin tocar el código.
-MODELO_POR_DEFECTO = "claude-sonnet-5-5"
+# Un mismo modelo para el coordinador y los cuatro subagentes (R9 del #6). Desde el #7 es Opus 5.5
+# por decisión de la analista, fijado aquí y no solo por variable de entorno, para que quien ejecute
+# el producto sin archivo de entorno obtenga el mismo modelo. Cada uno se sustituye por separado con
+# su variable de entorno (por ejemplo, para volver a `claude-sonnet-5-5`), sin tocar el código.
+MODELO_POR_DEFECTO = "claude-opus-5-5"
 VARIABLE_MODELO_COORDINADOR = "PASARELA_MODELO_COORDINADOR"
 VARIABLE_MODELO_SUBAGENTES = "PASARELA_MODELO_SUBAGENTES"
 

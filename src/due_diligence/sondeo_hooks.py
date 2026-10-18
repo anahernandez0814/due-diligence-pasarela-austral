@@ -5,11 +5,20 @@ Repite lo que `research.md` midió con el SDK 0.2.168 y comprueba que los hooks 
 
     uv run python -m due_diligence.sondeo_hooks
 
-Usa Haiku (unos 0,01 USD) y las credenciales de la sesión de Claude Code: no hay clave en el
-repositorio ni se leen archivos de entorno. Cada experimento compara lo esperado con lo medido:
-`coincide`, `difiere` (el SDK cambió: la versión está acotada a `<0.3`) o `inconcluso` (el modelo
-no hizo la llamada que se le pidió; no es un fallo del hook). Código de salida: 0 si todo coincide,
-1 si algo difiere y 2 si solo hay mediciones inconclusas.
+Usa Haiku (unos 0,01 USD) aunque el producto use Opus 5.5: el sondeo mide el SDK (qué recibe cada
+hook y qué hace con su salida), no el modelo, y basta con que el modelo haga la llamada pedida. Usa
+las credenciales de la sesión de Claude Code: no hay clave en el repositorio ni se leen archivos de
+entorno.
+
+La salida de error de la CLI no se imprime: al medir el hook que falla a propósito, la CLI vuelca su
+código JavaScript y ensucia el informe. Se recoge en memoria (sin el aviso de conectores, como hace
+`configuracion.filtrar_stderr`) y solo se muestra si alguna medición no coincide, para
+diagnosticar.
+
+Cada experimento compara lo esperado con lo medido: `coincide`, `difiere` (el SDK cambió: la
+versión está acotada a `<0.3`) o `inconcluso` (el modelo no hizo la llamada que se le pidió; no es
+un fallo del hook). Código de salida: 0 si todo coincide, 1 si algo difiere y 2 si solo hay
+mediciones inconclusas.
 
 Es una herramienta manual: no la importa el paquete ni la ejecuta la suite de pruebas.
 """
@@ -49,6 +58,21 @@ REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
 LISTAS = FRENTES[Frente.LISTAS].herramienta_completa
 NOTICIAS = FRENTES[Frente.NOTICIAS].herramienta_completa
 DELEGAR = "mcp__delegacion__delegar_frente"
+
+# ------------------------------------------------------------------ salida de error de la CLI
+
+STDERR_DE_LA_CLI: list[str] = []
+
+
+def recoger_stderr(linea: str) -> None:
+    """Callback `stderr` del SDK para el sondeo: guarda la línea en vez de imprimirla.
+
+    Descarta el aviso de conectores, igual que `configuracion.filtrar_stderr`.
+    """
+    if configuracion.AVISO_CONECTORES in linea.lower():
+        return
+    STDERR_DE_LA_CLI.append(linea)
+
 
 # ------------------------------------------------------------------ mediciones
 
@@ -120,6 +144,7 @@ def _opciones(
         mcp_servers=servidores,
         hooks=hooks,
     )
+    base = dataclasses.replace(base, stderr=recoger_stderr)
     return dataclasses.replace(base, max_turns=max_turns) if max_turns else base
 
 
@@ -307,7 +332,7 @@ async def _hooks_del_caso() -> list[Medicion]:
     opciones = configuracion.opciones_subagente(
         Frente.REGISTRO, INSTRUCCION, hooks=hooks.subagente(Frente.REGISTRO)
     )
-    opciones = dataclasses.replace(opciones, mcp_servers=servidores)
+    opciones = dataclasses.replace(opciones, mcp_servers=servidores, stderr=recoger_stderr)
     traza = await _correr(PEDIR_REGISTRO, opciones)
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
@@ -324,7 +349,7 @@ async def _hooks_del_caso() -> list[Medicion]:
     listas = configuracion.opciones_subagente(
         Frente.LISTAS, INSTRUCCION, hooks=hooks.subagente(Frente.LISTAS)
     )
-    listas = dataclasses.replace(listas, mcp_servers=servidores)
+    listas = dataclasses.replace(listas, mcp_servers=servidores, stderr=recoger_stderr)
     ajena = (
         "Llama una vez a consultar_listas_restrictivas con tipo persona y nombre "
         "Mateo Ríos Cabrera."
@@ -361,6 +386,7 @@ async def _hooks_del_caso() -> list[Medicion]:
 
 async def sondear() -> list[Medicion]:
     """Todos los experimentos, uno tras otro, y sus mediciones."""
+    STDERR_DE_LA_CLI.clear()
     mediciones: list[Medicion] = []
     for experimento in (
         _forma_de_tool_response,
@@ -379,6 +405,11 @@ def main() -> int:
     mediciones = asyncio.run(sondear())
     print(informe(mediciones))
     veredictos = {veredicto(m) for m in mediciones}
+    if veredictos != {"coincide"} and STDERR_DE_LA_CLI:
+        print()
+        print("Salida de error de la CLI (para diagnosticar):")
+        for linea in STDERR_DE_LA_CLI:
+            print(f"  {linea}")
     if "difiere" in veredictos:
         return 1
     return 2 if "inconcluso" in veredictos else 0

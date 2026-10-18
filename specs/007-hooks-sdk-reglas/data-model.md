@@ -105,6 +105,7 @@ literales del SDK:
 | `fallo_de_hook` | el envoltorio atrapa una excepción | el del agente | `None` |
 | `escalamiento_registrado` | `PostToolUse` de `escalar_a_cumplimiento` con éxito | `None` | `None` |
 | `modo_demostracion` | al iniciar un caso con la variable activa | `None` | `None` |
+| `consulta_fallida` | una herramienta vigilada devuelve un error estructurado (llega por `PostToolUseFailure`); no cuenta como consulta ni como escalamiento | el del agente | `None` |
 
 `Evento` gana `regla: str | None = None`. El detalle es el motivo en español y no repite el nombre ni el
 identificador consultados.

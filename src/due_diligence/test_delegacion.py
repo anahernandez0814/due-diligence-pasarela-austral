@@ -8,6 +8,7 @@ import json
 
 import pytest
 
+from due_diligence import configuracion
 from due_diligence.delegacion import Delegador
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
@@ -20,6 +21,7 @@ from due_diligence.eventos import (
     RegistroEventos,
 )
 from due_diligence.frentes import Frente
+from due_diligence.hooks import HooksDelCaso
 from due_diligence.simulacion import (
     EjecutorSimulado,
     comercio_del_registro,
@@ -47,7 +49,17 @@ def _crear(**kwargs):
         RegistroEventos(),
         EjecutorSimulado(**kwargs),
     )
-    delegador = Delegador(estado, registro, ejecutor, lambda frente: ("opciones", frente))
+    # Desde el #7 la identificación la registra el hook del registro (R4): las opciones de cada
+    # subagente llevan los hooks del caso y el ejecutor simulado los ejecuta como el SDK.
+    hooks = HooksDelCaso(estado, registro)
+    delegador = Delegador(
+        estado,
+        registro,
+        ejecutor,
+        lambda frente: configuracion.opciones_subagente(
+            frente, "instrucciones", hooks=hooks.subagente(frente)
+        ),
+    )
     return delegador, estado, registro, ejecutor
 
 
@@ -75,7 +87,9 @@ def test_registro_con_identificador_delega_y_devuelve_el_json_tal_cual():
     assert resultado["hechos"][0]["metadatos"]["fuente"]
     assert len(ejecutor.llamadas) == 1
     assert "CO-TV-0001" in ejecutor.llamadas[0].contexto
-    assert ejecutor.llamadas[0].opciones == ("opciones", Frente.REGISTRO)
+    opciones = ejecutor.llamadas[0].opciones
+    assert opciones.model == configuracion.modelo_subagentes()
+    assert set(opciones.hooks) == {"PostToolUse", "PostToolUseFailure"}  # los hooks del registro
     assert estado.situacion(Frente.REGISTRO) is Situacion.TERMINADO
 
 
@@ -796,3 +810,38 @@ def test_volver_al_comercio_anterior_tampoco_reutiliza_el_resultado_viejo_de_lis
     _delegar(delegador, frente="registro", identificador="CO-TV-0001")
     _delegar(delegador, frente="listas")
     assert len(ejecutor.llamadas_de(Frente.LISTAS)) == 3
+
+
+def test_al_volver_a_delegar_el_registro_se_reinicia_la_identificacion_antes_de_lanzar_el_frente():
+    visto = {}
+
+    def segundo_registro(contexto):
+        # Cuando el ejecutor arranca por segunda vez, lo identificado antes ya se olvidó (R4).
+        visto["identificaciones"] = list(estado.identificaciones)
+        visto["comercio"] = estado.comercio
+        return resultado_registro()
+
+    resultados = iter([resultado_registro(), None])
+
+    def registro(contexto):
+        siguiente = next(resultados)
+        return siguiente if siguiente is not None else segundo_registro(contexto)
+
+    delegador, estado, registro_eventos, _ = _crear(resultados={Frente.REGISTRO: registro})
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    assert estado.comercio == COMERCIO_ESPERADO
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001 ")
+    assert visto == {"identificaciones": [], "comercio": None}
+    assert estado.comercio == COMERCIO_ESPERADO  # y al terminar vuelve a identificarse
+
+
+def test_el_comercio_anterior_se_conserva_para_decidir_la_invalidacion_de_listas():
+    # El comercio que ya estaba (capturado antes de reiniciar) es contra el que se compara al
+    # concluir: con el mismo comercio listas sigue terminado; con otro, deja de estarlo.
+    delegador, estado, registro, _ = _registro_cambia_de_comercio()
+    _delegar(delegador, frente="registro", identificador="CO-TV-0001")
+    _delegar(delegador, frente="listas")
+    _delegar(delegador, frente="registro", identificador="CO-PL-0003")
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    invalidaciones = [e for e in registro.eventos() if e.tipo == TIPO_FRENTE_INVALIDADO]
+    assert len(invalidaciones) == 1

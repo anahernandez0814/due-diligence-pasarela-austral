@@ -127,7 +127,7 @@ sin modelo. Tests primero.
 
 ### Reglas: constantes y comparación de consultas
 
-- [ ] T008 Escribir la primera parte de `src/due_diligence/test_reglas.py` (R7, R8, R10): 
+- [X] T008 Escribir la primera parte de `src/due_diligence/test_reglas.py` (R7, R8, R10): 
   `ALTO_RIESGO == ("apuestas", "criptoactivos", "suplementos dietarios", "venta de medicamentos")`
   (constante en el código, FR-008); `RECOMENDACIONES == ("habilitar", "no_habilitar",
   "decide_cumplimiento")`; `normalizar_recomendacion` devuelve el valor para `"Habilitar"`,
@@ -140,7 +140,7 @@ sin modelo. Tests primero.
   registro devolvió sin identificador → no coincide** (test explícito, el representante del #5 sin
   identificador, aunque el nombre coincida); consulta con solo `nombre` para un representante con
   identificador → coincide por el nombre. Ningún caso usa valores con forma real.
-- [ ] T009 Crear `src/due_diligence/reglas.py` con `ALTO_RIESGO`, `RECOMENDACIONES`,
+- [X] T009 Crear `src/due_diligence/reglas.py` con `ALTO_RIESGO`, `RECOMENDACIONES`,
   `normalizar_recomendacion` y `consulta_coincide(consulta, entidad, tipo)` según R7: el tipo debe ser
   el esperado, la consulta debe traer al menos una clave y **cada clave que trae debe existir en la
   entidad y coincidir**, con `igual` e `igual_identificador` de `servidor_mcp.normalizar` (no hay
@@ -148,7 +148,7 @@ sin modelo. Tests primero.
 
 ### Fuente única de la identificación (R4)
 
-- [ ] T010 Escribir `src/due_diligence/test_estado_identificacion.py` (R4, FR-001, FR-013): 
+- [X] T010 Escribir `src/due_diligence/test_estado_identificacion.py` (R4, FR-001, FR-013): 
   `EstadoCaso.registrar_identificacion(respuesta)` guarda **el resultado de `derivar_comercio`**
   (probar con un `monkeypatch` que `derivar_comercio` se llama una vez por consulta y que el estado
   no interpreta la respuesta por su cuenta); `comercio` y `motivo_comercio` son propiedades:
@@ -164,7 +164,7 @@ sin modelo. Tests primero.
   y deja `comercio` en `None`; **no existen** `fijar_comercio` ni `Delegador._fijar_comercio`
   (`not hasattr`); `instantanea()` copia también `identificaciones` y `libro`; `cierre_sin_escalar`
   empieza en `False`.
-- [ ] T011 Editar `src/due_diligence/estado.py` (R4, data-model): añadir `identificaciones`, `libro`
+- [X] T011 Editar `src/due_diligence/estado.py` (R4, data-model): añadir `identificaciones`, `libro`
   (`LibroReglas`) y `cierre_sin_escalar`; convertir `comercio` y `motivo_comercio` en **propiedades
   derivadas** con la lógica de `Delegador._fijar_comercio` del #6, **movida** y no copiada; añadir
   `registrar_identificacion(respuesta)` (llama a `derivar_comercio`, que no cambia) y
@@ -172,7 +172,7 @@ sin modelo. Tests primero.
 
 ### Hooks base y sesión simulada
 
-- [ ] T012 Escribir la primera parte de `src/due_diligence/test_hooks.py` (R1, R2, contrato): 
+- [X] T012 Escribir la primera parte de `src/due_diligence/test_hooks.py` (R1, R2, contrato): 
   **salidas tipadas**: `permitir()` es `{}`; `denegar("x")` tiene
   `hookSpecificOutput.hookEventName == "PreToolUse"`, `permissionDecision == "deny"` y
   `permissionDecisionReason == "x"`; `bloquear_cierre("x")` es `{"decision": "block", "reason":
@@ -192,7 +192,7 @@ sin modelo. Tests primero.
   `PostToolUseFailure` del registro deja un evento y no identifica. **Cancelación (spec, caso límite)**: si el frente
   se cancela (`asyncio.CancelledError`) mientras un hook actualiza el estado, el estado queda consistente: la
   identificación se guarda completa o no se guarda (nunca una identificación a medias).
-- [ ] T013 Crear `src/due_diligence/hooks.py` (R2, R5, contrato): `permitir`, `denegar`,
+- [X] T013 Crear `src/due_diligence/hooks.py` (R2, R5, contrato): `permitir`, `denegar`,
   `bloquear_cierre`; `leer_respuesta` (reutiliza `ejecutor.interpretar_resultado`); `fallar_cerrado`
   (envoltorio de cada callback, con el comportamiento por evento de `contracts/hooks.md`);
   `HooksDelCaso(estado, eventos, entorno=None)` con `.subagente(frente)` y `.coordinador()` que
@@ -201,7 +201,7 @@ sin modelo. Tests primero.
   `.subagente(Frente.REGISTRO)` lleva `PostToolUse` y `PostToolUseFailure` sobre
   `mcp__pasarela__consultar_registro_mercantil`; el resto de agentes devuelve `{}` hasta sus
   historias. Hace pasar T012. No hay estado de módulo.
-- [ ] T014 Escribir `src/due_diligence/test_sesion_simulada.py` (R4): `SesionSimulada(opciones)` ejecuta,
+- [X] T014 Escribir `src/due_diligence/test_sesion_simulada.py` (R4): `SesionSimulada(opciones)` ejecuta,
   para cada llamada simulada a una herramienta, los hooks de `opciones.hooks` **en el orden del SDK**:
   `PreToolUse` coincidente; si alguno devuelve `deny`, la herramienta **no se ejecuta** y la llamada
   devuelve un resultado con `is_error` y el motivo (como medido en R2); si no, se ejecuta la función
@@ -212,7 +212,7 @@ sin modelo. Tests primero.
   la sesión lo reproduce para probar el envoltorio de T013; el `Stop` se evalúa con
   `sesion.terminar(ultimo_mensaje)`, que invoca los hooks de `Stop` y devuelve «terminó» o
   «continúa» con el motivo.
-- [ ] T015 [P] Editar `src/due_diligence/simulacion.py` (R4, R12, G1): añadir `SesionSimulada` (T014), con **implementaciones
+- [X] T015 [P] Editar `src/due_diligence/simulacion.py` (R4, R12, G1): añadir `SesionSimulada` (T014), con **implementaciones
   simuladas de las seis herramientas de la pasarela y de `delegar_frente`** (la de delegar llama a
   `caso.delegador.delegar`), y **los datos simulados de los casos**: respuestas del registro con dos comercios
   parecidos (`CO-AM-0004` y `CO-AM-0005`), con una coincidencia y representante (`CO-TV-0001`, `CO-TA-0002`) y con
@@ -222,7 +222,7 @@ sin modelo. Tests primero.
   que `EjecutorSimulado` reproduzca cada `Consulta` de su `ResultadoFrente` a través de la sesión de las
   `opciones` que recibe, para que los hooks de ese agente vean las llamadas. Si `opciones.hooks` es
   `None` el comportamiento no cambia. Los datos son los ficticios del #5. Hace pasar T014.
-- [ ] T016 Adaptar los tests del #6 a la fuente única (R4, R7; **primera mitad**, en rojo): actualizar los tests del #6 que
+- [X] T016 Adaptar los tests del #6 a la fuente única (R4, R7; **primera mitad**, en rojo): actualizar los tests del #6 que
   dependían de `fijar_comercio` o de que el `Delegador` derivara el comercio:
   `src/due_diligence/test_delegacion.py` (el auxiliar `_crear` construye el `Delegador` con
   `HooksDelCaso(estado, eventos)` y opciones de `configuracion.opciones_subagente(frente, "x",
@@ -233,13 +233,13 @@ sin modelo. Tests primero.
   `test_delegacion.py`: al volver a delegar el registro con otra entrada se llama a
   `reiniciar_identificacion` **antes** de lanzar el frente y se conserva el comercio anterior para
   decidir la invalidación de `listas` (`frente_invalidado` como en el #6). Estos tests fallan hasta T016b.
-- [ ] T016b Adaptar la delegación a la fuente única (R4, R7; **segunda mitad**): editar
+- [X] T016b Adaptar la delegación a la fuente única (R4, R7; **segunda mitad**): editar
   `src/due_diligence/delegacion.py`: **eliminar** `_fijar_comercio`; en `_ejecutar` del registro,
   capturar `estado.comercio` y llamar a `reiniciar_identificacion()` antes de lanzar; en `_concluir`,
   comparar con el comercio capturado para invalidar `listas`; `_falta_en_listas` usa
   `reglas.consulta_coincide` (una sola comparación, R7) y no su propio `consultada`. Hace pasar T016: toda la suite del #6
   vuelve a verde.
-- [ ] T017 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde.
+- [X] T017 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en verde.
   Comprobar a mano que `derivar_comercio` aparece **una sola vez** en `src/due_diligence/estado.py` como
   definición y no se reimplementa en `hooks.py` ni `delegacion.py` (`Grep` de `coincidencias` en
   `src/due_diligence/*.py` fuera de tests). **PARADA DE REVISIÓN A.**

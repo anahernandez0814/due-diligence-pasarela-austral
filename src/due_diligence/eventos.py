@@ -26,6 +26,8 @@ TIPO_CIERRE_SIN_ESCALAR = "cierre_sin_escalar"
 TIPO_FALLO_DE_HOOK = "fallo_de_hook"
 TIPO_ESCALAMIENTO_REGISTRADO = "escalamiento_registrado"
 TIPO_MODO_DEMOSTRACION = "modo_demostracion"
+# Una herramienta de una regla devolvió un error estructurado (llega por `PostToolUseFailure`, R1).
+TIPO_CONSULTA_FALLIDA = "consulta_fallida"
 
 TIPOS = frozenset(
     {
@@ -43,6 +45,7 @@ TIPOS = frozenset(
         TIPO_FALLO_DE_HOOK,
         TIPO_ESCALAMIENTO_REGISTRADO,
         TIPO_MODO_DEMOSTRACION,
+        TIPO_CONSULTA_FALLIDA,
     }
 )
 

@@ -287,13 +287,22 @@ def test_otra_excepcion_del_sdk_registra_la_terminacion_anomala_y_se_relanza():
 # ------------------------------------------------------------------ hooks y entorno (R7, R8)
 
 
-def test_los_hooks_se_reparten_al_coordinador_y_a_cada_subagente():
-    hooks = {"PreToolUse": []}
-    caso, ejecutor, _ = _caso([*DELEGACIONES_DEL_EJEMPLO, {"frente": "listas"}], hooks=hooks)
-    assert caso.opciones_coordinador().hooks is hooks
+def test_los_hooks_del_caso_cierran_sobre_su_propio_estado_y_se_reparten_por_agente():
+    """Desde el #7 el `Caso` construye sus hooks con `HooksDelCaso` sobre su estado (R5)."""
+    caso, ejecutor, _ = _caso([*DELEGACIONES_DEL_EJEMPLO, {"frente": "listas"}])
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert len(ejecutor.llamadas) == 4
-    assert all(llamada.opciones.hooks is hooks for llamada in ejecutor.llamadas)
+    registro = ejecutor.llamadas_de(Frente.REGISTRO)[0].opciones.hooks
+    assert set(registro) == {"PostToolUse", "PostToolUseFailure"}
+    assert not ejecutor.llamadas_de(Frente.NOTICIAS)[0].opciones.hooks
+    # El hook del registro escribió en el estado de este caso: la identificación salió del hook.
+    assert caso.estado.identificaciones
+    assert caso.estado.comercio is not None
+
+
+def test_el_caso_no_acepta_un_parametro_hooks():
+    with pytest.raises(TypeError):
+        Caso(hooks={"PreToolUse": []})  # las reglas no se desactivan desde fuera
 
 
 def test_las_opciones_de_cada_subagente_son_las_aisladas_de_su_frente():

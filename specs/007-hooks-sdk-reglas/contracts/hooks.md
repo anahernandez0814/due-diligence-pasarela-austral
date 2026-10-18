@@ -43,7 +43,7 @@ con `permitir()`, `denegar()` y `bloquear_cierre()` y todo hook se envuelve con 
 | Evento | Matcher | Regla | Qué hace |
 |--------|---------|-------|----------|
 | `PostToolUse` | `mcp__pasarela__consultar_registro_mercantil` | I.1 | `estado.registrar_identificacion(resultado)`; una coincidencia identifica, cualquier otra respuesta no |
-| `PostToolUseFailure` | ídem | I.1 | Evento con el tipo de error; no identifica |
+| `PostToolUseFailure` | ídem | I.1 | Evento `consulta_fallida` con el tipo de error (sin datos consultados); no identifica |
 
 ### Subagente de listas
 

@@ -30,6 +30,7 @@ from due_diligence.eventos import (
     RegistroEventos,
 )
 from due_diligence.frentes import Frente
+from due_diligence.hooks import HooksDelCaso
 from due_diligence.terminacion import (
     Clasificacion,
     Terminacion,
@@ -78,13 +79,14 @@ class Caso:
         *,
         ejecutor: EjecutorSubagente | None = None,
         consulta: Callable[..., Any] | None = None,
-        hooks: Any = None,
         reloj: Callable[[], datetime] | None = None,
         entorno: Mapping[str, str] | None = None,
     ) -> None:
         self.estado = EstadoCaso()
         self._eventos = RegistroEventos(reloj)
-        self.hooks = hooks
+        # Los hooks de las reglas (#7, R5) cierran sobre el estado y los eventos de este caso y se
+        # reparten por agente. No se pueden desactivar desde fuera: no hay parámetro `hooks`.
+        self.hooks = HooksDelCaso(self.estado, self._eventos, entorno)
         self.entorno = entorno
         self._consulta = consulta or query
         self.delegador = Delegador(
@@ -102,14 +104,17 @@ class Caso:
 
     def _opciones_subagente(self, frente: Frente) -> ClaudeAgentOptions:
         return configuracion.opciones_subagente(
-            frente, instrucciones(frente), hooks=self.hooks, entorno=self.entorno
+            frente,
+            instrucciones(frente),
+            hooks=self.hooks.subagente(frente),
+            entorno=self.entorno,
         )
 
     def opciones_coordinador(self) -> ClaudeAgentOptions:
         return configuracion.opciones_coordinador(
             self.delegador.servidor(),
             INSTRUCCIONES_COORDINADOR,
-            hooks=self.hooks,
+            hooks=self.hooks.coordinador(),
             entorno=self.entorno,
         )
 
@@ -157,11 +162,10 @@ async def ejecutar_caso(
     *,
     ejecutor: EjecutorSubagente | None = None,
     consulta: Callable[..., Any] | None = None,
-    hooks: Any = None,
     reloj: Callable[[], datetime] | None = None,
     entorno: Mapping[str, str] | None = None,
 ) -> Caso:
     """Crea un caso, lo ejecuta y lo devuelve. No carga el entorno (R8): lo hace `__main__`."""
-    caso = Caso(ejecutor=ejecutor, consulta=consulta, hooks=hooks, reloj=reloj, entorno=entorno)
+    caso = Caso(ejecutor=ejecutor, consulta=consulta, reloj=reloj, entorno=entorno)
     await caso.ejecutar(solicitud)
     return caso

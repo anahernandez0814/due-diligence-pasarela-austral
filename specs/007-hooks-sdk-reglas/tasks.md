@@ -379,13 +379,13 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
 **Meta**: el coordinador no puede terminar un caso que requiere escalamiento sin haber escalado.
 **Prueba independiente**: `Stop` simulado en un caso con coincidencia.
 
-- [ ] T033 [US4] Ampliar `src/due_diligence/test_reglas.py` (R3, R9): `evaluar_cierre(estado)` devuelve
+- [X] T033 [US4] Ampliar `src/due_diligence/test_reglas.py` (R3, R9): `evaluar_cierre(estado)` devuelve
   `None` si no requiere escalamiento o está cubierto, y el motivo «El caso requiere escalamiento a
   cumplimiento y aún no se ha escalado por: <causas>.» con las etiquetas fijas de cada causa (coincidencia del comercio,
   coincidencia del representante, alto riesgo; US4-1), y el motivo **no contiene** el nombre ni el identificador
   de ninguna consulta (FR-016) si no.
-- [ ] T034 [US4] Añadir `evaluar_cierre` a `src/due_diligence/reglas.py`. Hace pasar T033.
-- [ ] T035 [US4] Ampliar `src/due_diligence/test_hooks.py` (R3, FR-007, Q7): hook `Stop` del coordinador: caso
+- [X] T034 [US4] Añadir `evaluar_cierre` a `src/due_diligence/reglas.py`. Hace pasar T033.
+- [X] T035 [US4] Ampliar `src/due_diligence/test_hooks.py` (R3, FR-007, Q7): hook `Stop` del coordinador: caso
   sin escalamiento requerido → `permitir()`; con escalamiento cubierto → `permitir()`; requerido y sin
   escalar → `bloquear_cierre(motivo)`, `libro.cierres_impedidos += 1` y un evento `cierre_impedido` con la
   regla (US4-1, US4-4); **no usa `stop_hook_active`** (se llama con `True` y con `False` y decide igual);
@@ -395,10 +395,10 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   límite usado es la constante real de `configuracion.py`, y con 3 devoluciones no se alcanza
   `MAX_TURNOS_SEGURIDAD`. **Un `Stop` de subagente no existe**: `.subagente(f)` no contiene la clave
   `"Stop"` para ningún frente (US5-5).
-- [ ] T036 [US4] Añadir a `src/due_diligence/hooks.py` el hook `Stop` del coordinador y registrarlo en
+- [X] T036 [US4] Añadir a `src/due_diligence/hooks.py` el hook `Stop` del coordinador y registrarlo en
   `.coordinador()`. El contador es `libro.cierres_impedidos`, sin `while` ni comparación de texto. Hace
   pasar T035.
-- [ ] T037 [US4] Ampliar `src/due_diligence/test_hooks_sesiones.py`: con `SesionSimulada.terminar`, un caso con
+- [X] T037 [US4] Ampliar `src/due_diligence/test_hooks_sesiones.py`: con `SesionSimulada.terminar`, un caso con
   coincidencia en `PE-0003` intenta terminar → «continúa» con el motivo; tras `escalar_a_cumplimiento`
   → «terminó»; un coordinador simulado que insiste en terminar sin escalar recibe el motivo
   `MAX_CIERRES_IMPEDIDOS` veces y a la siguiente termina con `cierre_sin_escalar` (Q7).

@@ -10,7 +10,12 @@ import json
 
 from due_diligence import configuracion
 from due_diligence.estado import EstadoCaso, Situacion
-from due_diligence.eventos import TIPO_BLOQUEO_REGLA, RegistroEventos
+from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_CIERRE_SIN_ESCALAR,
+    RegistroEventos,
+)
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.hooks import HooksDelCaso
 from due_diligence.simulacion import (
@@ -26,6 +31,7 @@ from due_diligence.simulacion import (
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
 LISTAS = FRENTES[Frente.LISTAS].herramienta_completa
 DELEGAR = "mcp__delegacion__delegar_frente"
+MAX_CIERRES_IMPEDIDOS = configuracion.MAX_CIERRES_IMPEDIDOS
 INFORME = "mcp__pasarela__registrar_informe"
 RIESGO = FRENTES[Frente.CATEGORIA].herramienta_completa
 ESCALAR = "mcp__pasarela__escalar_a_cumplimiento"
@@ -69,6 +75,9 @@ class Caso:
             "cobertura": "completa",
         }
         return asyncio.run(self.coordinador().llamar(INFORME, entrada))
+
+    def terminar(self, mensaje="listo"):
+        return asyncio.run(self.coordinador().terminar(mensaje))
 
     def escalar(self):
         return asyncio.run(self.coordinador().llamar(ESCALAR, {"causa_escalamiento": "x"}))
@@ -262,3 +271,59 @@ def test_habilitar_sin_haber_consultado_listas_se_rechaza_aunque_el_riesgo_sea_b
     caso.riesgo("talleres")
     rechazado = caso.informe("habilitar")
     assert rechazado.denegada and "Falta la consulta de listas restrictivas" in rechazado.motivo
+
+
+# --------------------------------------------- US4: el cierre garantizado de extremo a extremo
+
+
+def test_un_caso_con_coincidencia_no_termina_hasta_que_se_escala():
+    caso = _caso_c()
+    sin_escalar = caso.terminar()
+    assert sin_escalar.termino is False
+    assert "coincidencia del representante legal en listas restrictivas" in sin_escalar.motivo
+    assert caso.terminar().termino is False  # insiste y se le sigue devolviendo
+    assert caso.escalar().ejecutada
+    assert caso.terminar("ya escalé").termino is True
+    assert caso.estado.cierre_sin_escalar is False
+    tipos = [e.tipo for e in caso.eventos.eventos()]
+    assert tipos.count(TIPO_CIERRE_IMPEDIDO) == 2 and TIPO_CIERRE_SIN_ESCALAR not in tipos
+
+
+def test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar():
+    caso = Caso(registro=[comercio_alto_riesgo()])
+    caso.registrar(identificador="CO-TV-0001")
+    caso.riesgo("suplementos dietarios")
+    cierre = caso.terminar()
+    assert cierre.termino is False and "categoría de alto riesgo" in cierre.motivo
+    caso.escalar()
+    assert caso.terminar().termino is True
+
+
+def test_un_caso_de_bajo_riesgo_sin_hallazgos_termina_sin_trabas():
+    caso = Caso(registro=[comercio_bajo_riesgo()])
+    caso.registrar(identificador="CO-TA-0002")
+    caso.riesgo("talleres")
+    assert caso.terminar().termino is True
+    assert caso.eventos.eventos() == []
+
+
+def test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no_completo():
+    caso = _caso_c()
+    devoluciones = [caso.terminar() for _ in range(MAX_CIERRES_IMPEDIDOS)]
+    assert [d.termino for d in devoluciones] == [False] * MAX_CIERRES_IMPEDIDOS
+    ultimo = caso.terminar()
+    assert ultimo.termino is True  # se agotaron las oportunidades
+    assert caso.estado.cierre_sin_escalar is True
+    assert caso.estado.libro.escalamientos == []  # y nunca se escaló
+    assert caso.pasarela.escalamientos == []
+    assert caso.informe("habilitar").denegada  # el caso sigue sin poder habilitarse
+    tipos = [e.tipo for e in caso.eventos.eventos()]
+    assert tipos.count(TIPO_CIERRE_IMPEDIDO) == MAX_CIERRES_IMPEDIDOS
+    assert TIPO_CIERRE_SIN_ESCALAR in tipos
+
+
+def test_el_fin_de_turno_de_un_subagente_no_se_bloquea():
+    caso = _caso_c()
+    for frente in Frente:
+        sesion = caso.sesion(frente)
+        assert asyncio.run(sesion.terminar("listo")).termino is True

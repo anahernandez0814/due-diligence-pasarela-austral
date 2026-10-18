@@ -298,3 +298,16 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
         if not _listas_consultadas(estado):
             rechazos.append(Rechazo(MOTIVO_FALTA_LISTAS, "I.2"))
     return rechazos
+
+
+def evaluar_cierre(estado: EstadoCaso) -> str | None:
+    """El motivo por el que el caso no puede terminar, o `None` si puede (FR-007, R3).
+
+    No puede terminar un caso que requiere escalamiento (coincidencia en listas o alto riesgo) sin
+    que `escalar_a_cumplimiento` haya cubierto sus causas vigentes. El motivo usa solo las etiquetas
+    fijas de las causas.
+    """
+    libro = estado.libro
+    if escalamiento_cubre(libro):
+        return None
+    return motivo_de_escalar(causas_vigentes(libro))

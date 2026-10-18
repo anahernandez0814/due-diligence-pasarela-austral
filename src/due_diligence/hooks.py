@@ -20,10 +20,13 @@ from typing import Any
 
 from claude_agent_sdk import HookMatcher
 
+from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_CIERRE_SIN_ESCALAR,
     TIPO_CONSULTA_FALLIDA,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
@@ -40,9 +43,11 @@ from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     causas_vigentes,
+    evaluar_cierre,
     evaluar_informe,
     permite_delegar_listas,
     permite_listas,
+    reglas_de,
 )
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
@@ -137,6 +142,10 @@ def fallar_cerrado(
             if tipo == "PreToolUse":
                 return denegar(MOTIVO_FALLO_DE_HOOK)
             if tipo == "Stop":
+                # Sin poder evaluar el cierre se bloquea, pero con el mismo límite de devoluciones.
+                if estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
+                    estado.cierre_sin_escalar = True
+                    return permitir()
                 estado.libro.cierres_impedidos += 1
                 return bloquear_cierre(MOTIVO_FALLO_DE_HOOK)
             return permitir()
@@ -163,7 +172,7 @@ class HooksDelCaso:
     # -------------------------------------------------------------- construcción
 
     def _matcher(
-        self, herramienta: str, hook: Hook, tipo: str, frente: Frente | None
+        self, herramienta: str | None, hook: Hook, tipo: str, frente: Frente | None
     ) -> HookMatcher:
         envuelto = fallar_cerrado(hook, tipo, self.estado, self.eventos, frente)
         return HookMatcher(matcher=herramienta, hooks=[envuelto])
@@ -210,6 +219,7 @@ class HooksDelCaso:
                     None,
                 )
             ],
+            "Stop": [self._matcher(None, self._cierre, "Stop", None)],
         }
 
     # -------------------------------------------------------------- denegar por regla
@@ -272,6 +282,35 @@ class HooksDelCaso:
         else:
             self._constancia_de_consulta_fallida(Frente.REGISTRO, error)
         return permitir()
+
+    # -------------------------------------------------------------- cierre garantizado (FR-007)
+
+    async def _cierre(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`Stop` del coordinador: un caso que requiere escalamiento no termina sin escalar.
+
+        La decisión usa el contador `cierres_impedidos` del libro, no `stop_hook_active` (R3). Es
+        una protección: pasadas `MAX_CIERRES_IMPEDIDOS` devoluciones deja terminar, pero el caso
+        queda marcado `cierre_sin_escalar` y nunca figura como completo ni habilitado.
+        """
+        motivo = evaluar_cierre(self.estado)
+        if motivo is None:
+            return permitir()
+        regla = reglas_de(causas_vigentes(self.estado.libro))
+        if self.estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
+            self.estado.cierre_sin_escalar = True
+            self.eventos.registrar(
+                TIPO_CIERRE_SIN_ESCALAR,
+                None,
+                "El caso termina sin el escalamiento obligatorio: se agotaron las "
+                f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
+                regla=regla,
+            )
+            return permitir()
+        self.estado.libro.cierres_impedidos += 1
+        self.eventos.registrar(TIPO_CIERRE_IMPEDIDO, None, motivo, regla=regla)
+        return bloquear_cierre(motivo)
 
     # -------------------------------------------------------------- regla I.3: riesgo de categoría
 

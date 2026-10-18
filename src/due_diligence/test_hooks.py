@@ -11,10 +11,13 @@ import typing
 import pytest
 from claude_agent_sdk import types as sdk
 
+from due_diligence import configuracion
 from due_diligence import hooks as modulo_hooks
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_CIERRE_SIN_ESCALAR,
     TIPO_CONSULTA_FALLIDA,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
@@ -48,6 +51,8 @@ from due_diligence.simulacion import (
 )
 
 REGISTRO = "mcp__pasarela__consultar_registro_mercantil"
+MAX_CIERRES_IMPEDIDOS = configuracion.MAX_CIERRES_IMPEDIDOS
+MAX_TURNOS_SEGURIDAD = configuracion.MAX_TURNOS_SEGURIDAD
 
 
 def _caso():
@@ -848,3 +853,125 @@ def test_el_hook_del_informe_deniega_habilitar_sin_categoria_determinada():
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
     assert "La categoría del caso no quedó determinada." in _motivo(salida)
     assert eventos.eventos()[-1].regla in {"I.3", "I.2, I.3"}
+
+
+# ------------------------------------------------------------------ cierre garantizado (FR-007, R3)
+
+
+def _stop(hooks):
+    return hooks.coordinador()["Stop"][0].hooks[0]
+
+
+def _fin_de_turno(activo=False, mensaje="listo"):
+    return {
+        "hook_event_name": "Stop",
+        "stop_hook_active": activo,
+        "last_assistant_message": mensaje,
+    }
+
+
+def _es_bloqueo(salida):
+    return salida.get("decision") == "block"
+
+
+def test_el_coordinador_tiene_el_stop_sin_matcher_y_ningun_subagente_lo_tiene():
+    _, _, hooks = _caso()
+    assert hooks.coordinador()["Stop"][0].matcher is None
+    for frente in Frente:
+        assert "Stop" not in hooks.subagente(frente)
+
+
+def test_un_caso_que_no_requiere_escalamiento_puede_terminar():
+    _, eventos, hooks = _caso_con_comercio()
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert eventos.eventos() == []
+
+
+def test_un_caso_con_el_escalamiento_cubierto_puede_terminar():
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.escalamientos.append(frozenset({"coincidencia_representante"}))
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+
+
+def test_un_caso_que_requiere_escalamiento_sin_escalar_no_puede_terminar():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida)
+    assert "por: coincidencia del representante legal en listas restrictivas" in salida["reason"]
+    assert estado.libro.cierres_impedidos == 1
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CIERRE_IMPEDIDO and evento.regla == "I.2"
+    assert evento.frente is None and evento.detalle == salida["reason"]
+
+
+def test_el_cierre_por_alto_riesgo_lleva_la_regla_i3_y_con_ambas_causas_i2_i3():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+    _ejecutar(_stop(hooks), _fin_de_turno())
+    assert eventos.eventos()[-1].regla == "I.3"
+    estado.libro.coincidencias.append(Coincidencia("comercio", "L", "F", "2026-09-30"))
+    _ejecutar(_stop(hooks), _fin_de_turno())
+    assert eventos.eventos()[-1].regla == "I.2, I.3"
+
+
+def test_el_stop_no_usa_stop_hook_active_para_decidir():
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno(activo=False)))
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno(activo=True)))
+    assert estado.libro.cierres_impedidos == 2  # cuenta el contador del libro, no el indicador
+
+
+def test_agotadas_las_devoluciones_el_stop_deja_terminar_y_marca_cierre_sin_escalar():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    for _ in range(MAX_CIERRES_IMPEDIDOS):
+        assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno(activo=True)))
+    assert estado.cierre_sin_escalar is False
+    siguiente = _ejecutar(_stop(hooks), _fin_de_turno(activo=True))
+    assert siguiente == permitir()
+    assert estado.cierre_sin_escalar is True
+    assert estado.libro.cierres_impedidos == MAX_CIERRES_IMPEDIDOS
+    ultimo = eventos.eventos()[-1]
+    assert ultimo.tipo == TIPO_CIERRE_SIN_ESCALAR and ultimo.regla == "I.2"
+    assert "sin el escalamiento obligatorio" in ultimo.detalle
+    assert [e.tipo for e in eventos.eventos()].count(TIPO_CIERRE_IMPEDIDO) == MAX_CIERRES_IMPEDIDOS
+
+
+def test_el_limite_de_devoluciones_es_la_constante_real_y_menor_que_el_de_turnos():
+    assert MAX_CIERRES_IMPEDIDOS == 3
+    assert MAX_CIERRES_IMPEDIDOS < MAX_TURNOS_SEGURIDAD
+
+
+def test_un_stop_que_lanza_una_excepcion_bloquea_y_cuenta_hasta_el_limite(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+
+    def roto(_estado):
+        raise RuntimeError("detalle interno")
+
+    monkeypatch.setattr(modulo_hooks, "evaluar_cierre", roto)
+    for _ in range(MAX_CIERRES_IMPEDIDOS):
+        salida = _ejecutar(_stop(hooks), _fin_de_turno())
+        assert _es_bloqueo(salida) and "detalle interno" not in salida["reason"]
+    assert estado.libro.cierres_impedidos == MAX_CIERRES_IMPEDIDOS
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()  # el límite también vale aquí
+    assert estado.cierre_sin_escalar is True
+    assert estado.libro.fallo_de_hook
+
+
+def test_con_el_libro_sellado_y_escalamiento_requerido_el_cierre_se_bloquea_igual():
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    assert _es_bloqueo(_ejecutar(_stop(hooks), _fin_de_turno()))
+
+
+def test_el_motivo_del_cierre_no_repite_nada_consultado():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("comercio", "L", "F", "2026-09-30"))
+    salida = _ejecutar(_stop(hooks), _fin_de_turno(mensaje="Tienda Verde SAS: listo"))
+    texto = salida["reason"] + eventos.eventos()[-1].detalle
+    for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía"):
+        assert dato not in texto

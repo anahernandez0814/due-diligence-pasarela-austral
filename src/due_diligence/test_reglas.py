@@ -25,6 +25,7 @@ from due_diligence.reglas import (
     consulta_coincide,
     es_alto_riesgo,
     escalamiento_cubre,
+    evaluar_cierre,
     evaluar_informe,
     normalizar_recomendacion,
     permite_delegar_listas,
@@ -660,3 +661,52 @@ def test_la_regla_de_un_rechazo_por_alto_riesgo_y_coincidencia_es_i2_i3():
     rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
     reglas = {r.regla for r in rechazos}
     assert "I.2, I.3" in reglas  # el de falta de escalamiento lleva las dos reglas
+
+
+# ------------------------------------------------------------------ evaluar_cierre (US4, FR-007)
+
+
+def test_sin_causas_el_caso_puede_cerrar():
+    assert evaluar_cierre(_estado_de_informe(_libro_del_caso_b())) is None
+
+
+def test_con_una_coincidencia_sin_escalar_el_cierre_se_impide_nombrando_la_causa():
+    motivo = evaluar_cierre(_estado_de_informe(_libro_con("persona")))
+    assert motivo == (
+        "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
+        "coincidencia del representante legal en listas restrictivas."
+    )
+
+
+def test_con_alto_riesgo_sin_escalar_el_cierre_se_impide_nombrando_la_causa():
+    libro = _libro_del_caso_b(consultas_riesgo=[ConsultaRiesgo("apuestas", "alto")])
+    assert "por: categoría de alto riesgo." in evaluar_cierre(_estado_de_informe(libro))
+
+
+def test_con_coincidencia_y_alto_riesgo_el_motivo_nombra_las_dos_causas():
+    libro = _libro_con("comercio")
+    libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+    motivo = evaluar_cierre(_estado_de_informe(libro))
+    assert "coincidencia del comercio en listas restrictivas" in motivo
+    assert "categoría de alto riesgo" in motivo
+
+
+def test_con_el_escalamiento_cubierto_el_caso_puede_cerrar():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    assert evaluar_cierre(_estado_de_informe(libro)) is None
+
+
+def test_una_causa_nueva_tras_escalar_vuelve_a_impedir_el_cierre():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+    motivo = evaluar_cierre(_estado_de_informe(libro))
+    # Un escalamiento nuevo cubriría todas las causas vigentes, así que el motivo las nombra todas.
+    assert "categoría de alto riesgo" in motivo
+    assert "coincidencia del representante legal" in motivo
+
+
+def test_el_motivo_del_cierre_no_repite_nombres_ni_identificadores():
+    libro = _libro_con("comercio", "persona")
+    motivo = evaluar_cierre(_estado_de_informe(libro))
+    for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía", "coincidencia_comercio"):
+        assert dato not in motivo

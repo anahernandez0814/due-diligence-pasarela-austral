@@ -1558,7 +1558,7 @@ def test_los_dos_canales_ponen_exactamente_la_cobertura_calculada(situaciones):
     estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
     estado.agregar_consultas([consulta(frente) for frente in Frente])
     esperada = calcular_cobertura(estado).lineas()
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    entrada = {**_informe_de("no_habilitar"), "hallazgos": afirmaciones_del_caso(estado)}
     informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     resumen = _escalamiento(hallazgos=afirmaciones_del_caso(estado))
     escalamiento = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, resumen))
@@ -1632,7 +1632,7 @@ def test_el_rechazo_del_informe_es_un_error_estructurado_con_reglas_y_problemas_
 
 def test_una_afirmacion_con_una_fuente_no_consultada_se_rechaza_con_la_regla_i4():
     estado, eventos, hooks = _caso_con_comercio()
-    entrada = _informe_de("decide_cumplimiento")
+    entrada = _informe_de("no_habilitar")
     entrada["hallazgos"]["listas"] = [
         {"texto": "Sin coincidencias.", "fuente": FUENTE_REGISTRO, "fecha": "2026-09-30"}
     ]
@@ -1656,7 +1656,7 @@ def test_un_informe_sin_ninguna_afirmacion_se_acepta_si_ningun_frente_quedo_cubi
     estado, _, hooks = _caso()
     estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
     assert not any(c.cubierto for c in calcular_cobertura(estado).frentes.values())
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {}}
+    entrada = {**_informe_de("no_habilitar"), "hallazgos": {}}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     comercio = {"identificador": "CO-TV-0001", "nombre": None, "verificado": False}
     conflictos = {
@@ -1676,7 +1676,7 @@ FRENTE_CUBIERTO_SIN_AFIRMACION = (
 def test_un_frente_cubierto_sin_afirmaciones_se_rechaza_con_la_regla_i4(hallazgos):
     # US1-6: «sin hallazgos» también es una afirmación con su fuente y su fecha.
     estado, eventos, hooks = _caso_con_comercio()
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": hallazgos}
+    entrada = {**_informe_de("no_habilitar"), "hallazgos": hallazgos}
     rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
     assert rechazo["motivos"] == []
     assert rechazo["problemas"] == [
@@ -1708,7 +1708,7 @@ def test_cada_frente_cubierto_sin_afirmaciones_se_nombra_y_los_no_cubiertos_no()
 def test_un_frente_no_cubierto_puede_ir_sin_afirmaciones(hallazgos_de_listas):
     # I.5: listas no se delegó; puede faltar o ir vacía mientras el registro, cubierto, se cita.
     estado, _, hooks = _caso_con_comercio()
-    entrada = _informe_de("decide_cumplimiento")
+    entrada = _informe_de("no_habilitar")
     if hallazgos_de_listas is not None:
         entrada["hallazgos"]["listas"] = hallazgos_de_listas
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
@@ -1717,7 +1717,7 @@ def test_un_frente_no_cubierto_puede_ir_sin_afirmaciones(hallazgos_de_listas):
 
 def test_el_comercio_declarado_distinto_se_sustituye_y_el_evento_lo_dice_sin_datos():
     estado, eventos, hooks = _caso_con_comercio()
-    entrada = _informe_de("decide_cumplimiento")
+    entrada = _informe_de("no_habilitar")
     entrada["comercio"] = {"identificador": "CO-XX-9999", "nombre": "Otro", "verificado": True}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     _comprobar_informe_aceptado(salida, entrada, estado)
@@ -1732,7 +1732,7 @@ def test_el_comercio_declarado_distinto_se_sustituye_y_el_evento_lo_dice_sin_dat
 def test_el_comercio_y_los_conflictos_declarados_iguales_el_evento_dice_que_coinciden():
     # T017: la otra rama de `datos_sustituidos`.
     estado, eventos, hooks = _caso_con_comercio()
-    entrada = {**_informe_de("decide_cumplimiento"), "conflictos": dict(SIN_CONFLICTOS)}
+    entrada = {**_informe_de("no_habilitar"), "conflictos": dict(SIN_CONFLICTOS)}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     _comprobar_informe_aceptado(salida, entrada, estado)
     (datos,) = [e for e in eventos.eventos() if e.tipo == TIPO_DATOS_SUSTITUIDOS]
@@ -1745,7 +1745,7 @@ def test_el_comercio_y_los_conflictos_declarados_iguales_el_evento_dice_que_coin
 def test_un_problema_solo_de_esquema_se_rechaza_con_la_regla_i4():
     # T017: sin motivos de las reglas, un único problema de forma deja `bloqueo_regla [I.4]`.
     estado, eventos, hooks = _caso_con_comercio()
-    entrada = _informe_de("decide_cumplimiento")
+    entrada = _informe_de("no_habilitar")
     entrada["hallazgos"]["registro"][0]["fecha"] = "2026-02-30"
     rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
     assert rechazo["motivos"] == []
@@ -1759,7 +1759,7 @@ def test_sin_comercio_identificado_va_el_pedido_sin_verificar():
     estado, _, hooks = _caso()
     estado.comercio_pedido = {"identificador": None, "nombre": "Taller Aurora SAS"}
     estado.agregar_consultas([consulta(Frente.REGISTRO)])
-    entrada = _informe_de("decide_cumplimiento")
+    entrada = _informe_de("no_habilitar")
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     _comprobar_informe_aceptado(
         salida,
@@ -1810,7 +1810,7 @@ def test_con_varias_coincidencias_la_cobertura_y_los_conflictos_no_se_contradice
     assert calcular_conflictos(estado).resumen == (
         "No se compararon las fuentes registrales: no hay comercio identificado."
     )
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    entrada = {**_informe_de("no_habilitar"), "hallazgos": afirmaciones_del_caso(estado)}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     assert _rechazo(salida)["motivos"] == [
         {"regla": "V", "texto": MOTIVO_INFORME_ESPERA_IDENTIFICADOR}
@@ -1841,7 +1841,7 @@ def test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradic
     estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
     preparar(estado)
     # Con varias coincidencias el registro quedó cubierto y se cita (US1-6); si no, va vacío.
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    entrada = {**_informe_de("no_habilitar"), "hallazgos": afirmaciones_del_caso(estado)}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     comercio = {"identificador": None, "nombre": "Almacén Mirador", "verificado": False}
     conflictos = {"resumen": resumen, "lista": []}
@@ -3006,3 +3006,151 @@ def test_una_excepcion_sin_comercio_calculable_deja_pasar_el_comercio_fijo(monke
     assert validar_resumen(sustituida) == []
     assert estado.libro.fallo_de_hook is not None
     assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())
+
+
+# ------------------------------- #10: escalar con criterio en el hook (T041, R5 pasos 2 y 3, D3)
+
+
+def _bajo_riesgo_en_el_hook():
+    """El caso (b) comprobado sobre `_caso`: los cuatro frentes y sin hallazgos (FR-002)."""
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.libro import ConsultaListas
+    from due_diligence.simulacion import (
+        comercio_bajo_riesgo,
+        respuesta_del_contrato,
+        terminacion_normal,
+    )
+
+    estado, eventos, hooks = _caso()
+    _registro_terminado(estado)
+    respuesta = respuesta_registro(comercio_bajo_riesgo())
+    estado.registrar_identificacion(respuesta)
+    estado.agregar_consultas(
+        [consulta(Frente.REGISTRO, {"identificador": "CO-TA-0002"}, respuesta)]
+    )
+    for frente in (Frente.NOTICIAS, Frente.CATEGORIA, Frente.LISTAS):
+        estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+        estado.cambiar_situacion(frente, Situacion.TERMINADO)
+    noticias = respuesta_del_contrato("sin_coincidencias", fuente="Noticias Ficticias")
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, noticias)],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    estado.libro.consultas_listas = [
+        ConsultaListas("comercio", None, "CO-TA-0002", "sin_coincidencias"),
+        ConsultaListas("persona", None, "PE-0002", "sin_coincidencias"),
+    ]
+    return estado, eventos, hooks
+
+
+def test_escalar_un_bajo_riesgo_sin_hallazgos_comprobado_se_rechaza_con_v():
+    from due_diligence.reglas import MOTIVO_SIN_CAUSA
+
+    estado, eventos, hooks = _bajo_riesgo_en_el_hook()
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    rechazo = _denegado_por_resumen(salida)
+    assert rechazo["motivos"] == [{"regla": "V", "texto": MOTIVO_SIN_CAUSA}]
+    assert rechazo["problemas"] == []  # el rechazo por criterio va antes que la forma
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "V"
+    assert evento.accion == "escalar_a_cumplimiento"
+    assert estado.escalamientos_pendientes == {}
+
+
+@pytest.mark.parametrize(
+    ("preparar", "motivo"),
+    [
+        (_registro_con_varias_coincidencias, "MOTIVO_ESPERA_IDENTIFICADOR"),
+        (_registro_sin_coincidencias, "MOTIVO_ESPERA_NOMBRE"),
+    ],
+)
+def test_escalar_durante_la_espera_del_registro_se_rechaza_tambien_con_alto_riesgo(
+    preparar, motivo
+):
+    # FR-016 y D3 del plan: sin identificar al comercio no se escala, ni con alto riesgo.
+    from due_diligence import reglas
+
+    estado, eventos, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    preparar(estado)
+    _con_alto_riesgo(estado)
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    rechazo = _denegado_por_resumen(salida)
+    assert rechazo["motivos"] == [{"regla": "V", "texto": getattr(reglas, motivo)}]
+    assert eventos.eventos()[-1].regla == "V"
+
+
+def test_con_el_sello_la_espera_no_impide_escalar():
+    # El orden de R5: el sello va antes que la espera (excepción de FR-016).
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    assert not _es_denegacion(salida)
+
+
+def test_la_espera_va_antes_que_la_forma_y_el_bajo_riesgo_antes_que_la_forma():
+    from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR, MOTIVO_SIN_CAUSA
+
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    mal_formado = {**_escalamiento({}), "accion_recomendada": ["x"]}
+    rechazo = _denegado_por_resumen(
+        _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, mal_formado))
+    )
+    assert rechazo["motivos"] == [{"regla": "V", "texto": MOTIVO_ESPERA_IDENTIFICADOR}]
+    assert rechazo["problemas"] == []
+    _, _, hooks_b = _bajo_riesgo_en_el_hook()
+    rechazo = _denegado_por_resumen(
+        _ejecutar(_hook_del_escalamiento(hooks_b), _pre(ESCALAR, mal_formado))
+    )
+    assert rechazo["motivos"] == [{"regla": "V", "texto": MOTIVO_SIN_CAUSA}]
+
+
+def test_en_la_espera_de_la_categoria_el_escalamiento_se_admite():
+    estado, _, hooks = _caso_con_comercio()
+    estado.categoria_bloqueada = True
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    assert not _es_denegacion(salida)
+
+
+def test_un_bajo_riesgo_con_una_mencion_en_noticias_se_puede_escalar():
+    # US1-7: no es de bajo riesgo sin hallazgos comprobado; escalar se admite (y no se exige).
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.simulacion import consulta_listas, respuesta_del_contrato, terminacion_normal
+
+    estado, _, hooks = _bajo_riesgo_en_el_hook()
+    mencion = respuesta_del_contrato(
+        "coincidencias", [{"titular": "Una noticia ficticia"}], fuente="Noticias Ficticias"
+    )
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, mencion)],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+    estado.agregar_consultas(
+        [
+            consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, mencion),
+            consulta(Frente.CATEGORIA, {"categoria": "talleres"}),
+            consulta_listas("comercio", identificador="CO-TA-0002"),
+        ]
+    )
+    resumen = _escalamiento(hallazgos=afirmaciones_del_caso(estado))
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, resumen))
+    assert not _es_denegacion(salida), _motivo(salida) if _es_denegacion(salida) else ""
+    assert _sustituida(salida)["causa_escalamiento"] == [
+        "Sin causa de escalamiento vigente: hay menciones en noticias."
+    ]

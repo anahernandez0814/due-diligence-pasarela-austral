@@ -70,12 +70,14 @@ from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     MOTIVO_CATEGORIA_NO_DEL_ANALISTA,
     MOTIVO_SIN_COMERCIO_ESCALAMIENTO,
+    REGLA_ESPERA,
     Rechazo,
     categoria_en_mensajes,
     causas_del_resumen,
     causas_vigentes,
     espera_del_analista,
     evaluar_cierre,
+    evaluar_escalamiento,
     evaluar_informe,
     evaluar_informe_minimo,
     falta_para_cerrar,
@@ -986,6 +988,18 @@ class HooksDelCaso:
             self._evento_datos(argumentos, completa, "escalar_a_cumplimiento")
             self._dejar_pendiente(tool_use_id, completa, "no calculada")
             return reemplazar_entrada(completa)
+        # Pasos 2 y 3 (FR-016, FR-002): la espera del identificador o del nombre, y el bajo riesgo
+        # sin hallazgos comprobado. Van antes que la forma: con ellos no se escala, esté como esté.
+        criterio = evaluar_escalamiento(estado)
+        if criterio:
+            self.eventos.registrar(
+                TIPO_BLOQUEO_REGLA,
+                None,
+                " ".join(r.texto for r in criterio),
+                regla=REGLA_ESPERA,
+                accion=ACCION_ESCALAR,
+            )
+            return denegar_resumen(criterio, [])
         rechazos: list[Rechazo] = []
         comercio = comercio_del_informe(estado)
         if comercio is None:

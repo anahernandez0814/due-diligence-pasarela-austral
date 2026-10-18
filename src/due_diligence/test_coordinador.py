@@ -1014,3 +1014,28 @@ def test_la_regla_de_varias_coincidencias_pide_terminar_el_turno_y_seguir_en_el_
     )
     assert _REGLA_VARIAS_COINCIDENCIAS in INSTRUCCIONES_COORDINADOR
     assert _REGLA_VARIAS_COINCIDENCIAS not in instrucciones_coordinador(demo=True)
+
+
+# ------------------------------------------- #10: guías del escalamiento y del resumen (T043)
+
+
+def test_la_regla_de_escalar_pide_no_escalar_el_bajo_riesgo_sin_hallazgos():
+    from due_diligence.coordinador import _REGLA_ESCALAR, instrucciones_coordinador
+
+    assert "No escales un comercio de bajo riesgo sin ningún hallazgo" in _REGLA_ESCALAR
+    assert _REGLA_ESCALAR in INSTRUCCIONES_COORDINADOR
+    assert _REGLA_ESCALAR not in instrucciones_coordinador(demo=True)
+
+
+def test_la_guia_del_resumen_al_oficial_esta_en_los_dos_modos():
+    from due_diligence.coordinador import _REGLA_RESUMEN_OFICIAL, instrucciones_coordinador
+
+    for fragmento in (
+        "resumen al oficial de cumplimiento",
+        "los hallazgos de cada frente como las afirmaciones del informe",
+        "una acción recomendada dirigida al oficial",
+        "el comercio, la cobertura, la causa y los conflictos los pone el sistema",
+    ):
+        assert fragmento in _REGLA_RESUMEN_OFICIAL, fragmento
+    for demo in (False, True):
+        assert _REGLA_RESUMEN_OFICIAL in instrucciones_coordinador(demo=demo)

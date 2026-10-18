@@ -81,7 +81,18 @@ _REGLA_VARIAS_COINCIDENCIAS = (
 # y del fin de turno. El modo de demostración la quita.
 _REGLA_ESCALAR = (
     "Si hay una coincidencia en listas restrictivas o la categoría es de alto riesgo, llama a "
-    "escalar_a_cumplimiento."
+    "escalar_a_cumplimiento. No escales un comercio de bajo riesgo sin ningún hallazgo."
+)
+
+# Guía del resumen al oficial (#10, R11, FR-011). Es la forma del canal, no una regla I.1 a I.3:
+# está también en el modo de demostración, y no dice cuándo se lleva el caso al oficial. Lo que no
+# puede fallar lo hace el código: el hook valida el resumen y pone el comercio, la cobertura, la
+# causa y los conflictos.
+_REGLA_RESUMEN_OFICIAL = (
+    "En el resumen al oficial de cumplimiento, escribe los hallazgos de cada frente como las "
+    "afirmaciones del informe, con texto, fuente y fecha, y una acción recomendada dirigida al "
+    "oficial, que no tiene acceso a la conversación; el comercio, la cobertura, la causa y los "
+    "conflictos los pone el sistema."
 )
 
 _REGLA_INFORME = (
@@ -158,6 +169,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_TRAS_IDENTIFICAR,
             _REGLA_INFORME,
             _REGLA_AFIRMACIONES,
+            _REGLA_RESUMEN_OFICIAL,
             _REGLA_RESUMEN,
         ]
     else:
@@ -169,6 +181,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_TRAS_IDENTIFICAR,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
+            _REGLA_RESUMEN_OFICIAL,
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))

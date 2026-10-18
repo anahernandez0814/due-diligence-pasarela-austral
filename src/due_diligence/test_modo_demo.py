@@ -297,3 +297,11 @@ def test_la_guia_tras_identificar_esta_en_los_dos_modos_y_no_trae_reglas_de_nego
         assert _REGLA_TRAS_IDENTIFICAR in instrucciones_coordinador(demo=demo)
     assert "escalar" not in _REGLA_TRAS_IDENTIFICAR.casefold()
     assert "varias coincidencias" not in _REGLA_TRAS_IDENTIFICAR
+
+
+def test_la_guia_del_resumen_no_trae_la_guia_de_escalar():
+    # #10, R11: es la forma del canal, no una regla I.1 a I.3; no dice cuándo escalar.
+    from due_diligence.coordinador import _REGLA_RESUMEN_OFICIAL
+
+    assert "escalar" not in _REGLA_RESUMEN_OFICIAL.casefold()
+    assert "varias coincidencias" not in _REGLA_RESUMEN_OFICIAL

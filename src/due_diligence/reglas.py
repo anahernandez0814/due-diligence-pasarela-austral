@@ -31,6 +31,7 @@ ALTO_RIESGO = (
 # Conjunto cerrado de recomendaciones del informe (R10). Solo `habilitar` está sujeta a las reglas
 # 1 a 3; cualquier otro valor se rechaza.
 RECOMENDACION_HABILITAR = "habilitar"
+RECOMENDACION_DECIDE = "decide_cumplimiento"
 RECOMENDACIONES = (RECOMENDACION_HABILITAR, "no_habilitar", "decide_cumplimiento")
 
 
@@ -351,14 +352,43 @@ def requiere_escalamiento(libro: LibroReglas) -> bool:
     return bool(causas_vigentes(libro))
 
 
-def escalamiento_cubre(libro: LibroReglas) -> bool:
+# Sin comercio dado, `escalamiento_cubre` mira los escalamientos de cualquier comercio: el libro
+# solo, como en el #7. Quien tiene el estado pasa la clave de su comercio (#10, R8).
+_CUALQUIER_COMERCIO = object()
+
+
+def escalamiento_cubre(libro: LibroReglas, comercio: Any = _CUALQUIER_COMERCIO) -> bool:
     """Si algún escalamiento exitoso cubría todas las causas vigentes (vacío ⇒ `True`).
 
     Una causa posterior a la instantánea de un escalamiento queda sin cubrir y exige escalar de
-    nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9).
+    nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9). Desde el #10
+    (R8, FR-004) solo cuentan los escalamientos del comercio `comercio` (su clave): uno de otro
+    comercio del mismo caso no cubre al actual.
     """
     causas = causas_vigentes(libro)
-    return not causas or any(causas <= e.causas for e in libro.escalamientos)
+    return not causas or any(
+        causas <= e.causas
+        for e in libro.escalamientos
+        if comercio is _CUALQUIER_COMERCIO or e.comercio == comercio
+    )
+
+
+def _clave(estado: EstadoCaso) -> Any:
+    """La clave del comercio del caso (`informe.clave_comercio`), con importación diferida."""
+    from due_diligence.informe import clave_comercio
+
+    return clave_comercio(estado)
+
+
+def escalamiento_del_caso_cubre(estado: EstadoCaso) -> bool:
+    """`escalamiento_cubre` con los escalamientos del comercio actual del caso (#10, R8)."""
+    return escalamiento_cubre(estado.libro, _clave(estado))
+
+
+def escalado_para_el_comercio(estado: EstadoCaso) -> bool:
+    """Si hay algún escalamiento del comercio actual, tenga o no causas (FR-004, R8)."""
+    clave = _clave(estado)
+    return any(e.comercio == clave for e in estado.libro.escalamientos)
 
 
 def reglas_de(causas: Iterable[str]) -> str | None:
@@ -400,6 +430,54 @@ def _listas_consultadas(estado: EstadoCaso) -> bool:
     return hay("comercio", comercio) and (not representante or hay("persona", representante))
 
 
+MOTIVO_DECIDE_SIN_ESCALAR = (
+    "decide_cumplimiento exige escalar antes: el oficial solo decide un caso que le llegó escalado."
+)
+MOTIVO_SIN_CAUSA = (
+    "El caso no tiene ninguna causa de escalamiento: es de bajo riesgo y no tiene hallazgos. No se "
+    "escala; registre el informe."
+)
+
+
+def bajo_riesgo_sin_hallazgos(estado: EstadoCaso) -> bool:
+    """El caso de bajo riesgo sin hallazgos comprobado (FR-002, R5): el único en que escalar se
+    rechaza. Exige todo a la vez: el comercio identificado, los cuatro frentes cubiertos (con
+    FR-027), ninguna coincidencia, la categoría determinada y no alta, ninguna mención en noticias,
+    ningún conflicto entre fuentes y ningún sello. Cualquier otro caso sin causas admite escalar.
+    """
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.conflictos import calcular_conflictos
+
+    libro = estado.libro
+    return (
+        estado.comercio is not None
+        and not libro.fallo_de_hook
+        and not libro.coincidencias
+        and categoria_determinada(libro)
+        and not es_alto_riesgo(libro)
+        and not menciones_en_noticias(estado)
+        and calcular_cobertura(estado).completa
+        and calcular_conflictos(estado).estado == "sin_conflictos"
+    )
+
+
+def evaluar_escalamiento(estado: EstadoCaso) -> list[Rechazo]:
+    """Los motivos por los que se rechaza escalar sin el sello (FR-002, FR-016, R5 pasos 2 y 3).
+
+    Durante la espera del identificador o del nombre, su motivo, también con alto riesgo (D3 del
+    plan); con un caso de bajo riesgo sin hallazgos comprobado, `MOTIVO_SIN_CAUSA`. La espera de
+    la categoría no impide escalar. Vacía si se admite.
+    """
+    espera = espera_del_analista(estado)
+    if espera is not None and espera.clase == "identificador":
+        return [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, REGLA_ESPERA)]
+    if espera is not None and espera.clase == "nombre":
+        return [Rechazo(MOTIVO_ESPERA_NOMBRE, REGLA_ESPERA)]
+    if bajo_riesgo_sin_hallazgos(estado):
+        return [Rechazo(MOTIVO_SIN_CAUSA, REGLA_ESPERA)]
+    return []
+
+
 MOTIVO_SOLO_OFICIAL = (
     "Tras un fallo de hook solo decide el oficial: la recomendación debe ser decide_cumplimiento."
 )
@@ -417,7 +495,7 @@ def evaluar_informe_minimo(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     if normalizar_recomendacion(entrada.get("recomendacion")) != "decide_cumplimiento":
         rechazos.append(Rechazo(MOTIVO_SOLO_OFICIAL, None))
     libro = estado.libro
-    if not escalamiento_cubre(libro):
+    if not escalamiento_del_caso_cubre(estado):
         causas = causas_vigentes(libro)
         rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
     return rechazos
@@ -438,8 +516,16 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     if recomendacion is None:
         rechazos.append(Rechazo(MOTIVO_RECOMENDACION, None))
     causas = causas_vigentes(libro)
-    if not escalamiento_cubre(libro):
+    if not escalamiento_del_caso_cubre(estado):
         rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
+    # #10 (FR-004, R8): el oficial solo decide un caso que le llegó escalado. Con causas sin
+    # cubrir ya lo pide el motivo de escalar.
+    if (
+        recomendacion == RECOMENDACION_DECIDE
+        and escalamiento_del_caso_cubre(estado)
+        and not escalado_para_el_comercio(estado)
+    ):
+        rechazos.append(Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, REGLA_ESPERA))
     if recomendacion == RECOMENDACION_HABILITAR:
         if libro.coincidencias:
             rechazos.append(Rechazo(MOTIVO_HABILITAR_CON_COINCIDENCIA, "I.2"))
@@ -540,7 +626,7 @@ def falta_para_cerrar(estado: EstadoCaso) -> tuple[bool, bool]:
     # Importación diferida: `informe.py` importa este módulo (`causas_vigentes`).
     from due_diligence import informe
 
-    falta_escalar = not escalamiento_cubre(estado.libro)
+    falta_escalar = not escalamiento_del_caso_cubre(estado)
     falta_informe = informe.requiere_informe(estado) and not informe.informe_vigente(estado)
     return falta_escalar, falta_informe
 

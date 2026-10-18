@@ -45,6 +45,7 @@ from due_diligence.simulacion import (
 )
 
 COMERCIO = {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"}
+CLAVE_TV = ("CO-TV-0001", "Tienda Verde SAS", True)
 REPRESENTANTE = {"identificador": "PE-0001", "nombre": "Lucía Ferrer Montalvo"}
 REPRESENTANTE_SIN_IDENTIFICADOR = {"nombre": "Lucía Ferrer Montalvo"}
 
@@ -327,7 +328,8 @@ def _libro_con(*tipos_de_coincidencia, escalamientos=()):
     libro.coincidencias = [
         Coincidencia(t, "Lista A", "Fuente A", "2026-09-30") for t in tipos_de_coincidencia
     ]
-    libro.escalamientos = [Escalamiento(frozenset(e), None) for e in escalamientos]
+    # #10 (R8): el escalamiento guarda el comercio del caso, el `CO-TV-0001` de estos estados.
+    libro.escalamientos = [Escalamiento(frozenset(e), CLAVE_TV) for e in escalamientos]
     return libro
 
 
@@ -363,7 +365,7 @@ def test_una_causa_nueva_posterior_al_escalamiento_no_queda_cubierta():
     libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
     libro.coincidencias.append(Coincidencia("comercio", "Lista B", "Fuente B", "2026-09-30"))
     assert escalamiento_cubre(libro) is False  # hace falta escalar de nuevo
-    libro.escalamientos.append(Escalamiento(causas_vigentes(libro), None))
+    libro.escalamientos.append(Escalamiento(causas_vigentes(libro), CLAVE_TV))
     assert escalamiento_cubre(libro) is True
 
 
@@ -463,9 +465,18 @@ def test_el_rechazo_acumula_todos_los_motivos_que_apliquen():
     assert any("aún no se ha escalado" in t for t in textos)
 
 
-def test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar():
+def test_sin_causas_no_habilitar_se_acepta_sin_escalar_y_decide_cumplimiento_exige_escalar():
+    # Desde el #10 (FR-004) `decide_cumplimiento` exige un escalamiento del comercio actual, también
+    # sin causas: el oficial solo decide lo que le llega. `no_habilitar` no cambia.
+    from due_diligence.reglas import MOTIVO_DECIDE_SIN_ESCALAR
+
     assert evaluar_informe(_estado_de_informe(), _informe("no_habilitar")) == []
-    assert evaluar_informe(_estado_de_informe(), _informe("decide_cumplimiento")) == []
+    assert evaluar_informe(_estado_de_informe(), _informe("decide_cumplimiento")) == [
+        Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, "V")
+    ]
+    escalado = _estado_de_informe()
+    escalado.libro.escalamientos.append(Escalamiento(frozenset(), CLAVE_TV))
+    assert evaluar_informe(escalado, _informe("decide_cumplimiento")) == []
 
 
 # --------------------------------------------------------------- regla I.3: categoría y alto riesgo
@@ -649,7 +660,7 @@ def test_alto_riesgo_sin_escalar_rechaza_tambien_no_habilitar():
 def test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar():
     libro = _libro_del_caso_b(
         consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")],
-        escalamientos=[Escalamiento(frozenset({CAUSA_ALTO_RIESGO}), None)],
+        escalamientos=[Escalamiento(frozenset({CAUSA_ALTO_RIESGO}), CLAVE_TV)],
     )
     estado = _estado_de_informe(libro)
     assert evaluar_informe(estado, _informe("decide_cumplimiento")) == []
@@ -804,7 +815,7 @@ def test_el_informe_minimo_solo_admite_decide_cumplimiento_y_tras_escalar():
             escalar,
         ]
     escalado = _sellado(
-        _libro_del_caso_b(escalamientos=[Escalamiento(frozenset({CAUSA_FALLO_DE_HOOK}), None)])
+        _libro_del_caso_b(escalamientos=[Escalamiento(frozenset({CAUSA_FALLO_DE_HOOK}), CLAVE_TV)])
     )
     assert evaluar_informe_minimo(escalado, _informe("decide_cumplimiento")) == []
     assert evaluar_informe_minimo(escalado, _informe("no_habilitar")) == [
@@ -1100,3 +1111,222 @@ def test_la_consulta_es_del_comercio_solo_si_su_dato_es_el_del_comercio(argument
     from due_diligence.reglas import consulta_del_comercio
 
     assert consulta_del_comercio(argumentos, NORTE) is es_suya
+
+
+# ------------------------------------------- #10: escalamiento con criterio (T039, R5, R8)
+
+
+def _bajo_riesgo_comprobado():
+    """El caso (b) completo: cuatro frentes, listas limpias, bajo, sin menciones ni conflictos."""
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.simulacion import (
+        comercio_bajo_riesgo,
+        consulta,
+        respuesta_del_contrato,
+        terminacion_normal,
+    )
+
+    estado = _estado_con_registro(Situacion.TERMINADO, comercio_bajo_riesgo())
+    # La consulta del registro que identificó al comercio, como en producción: sin ella, los
+    # conflictos quedan «sin consulta» y no «sin conflictos».
+    estado.agregar_consultas(
+        [
+            consulta(
+                Frente.REGISTRO,
+                {"identificador": "CO-TA-0002"},
+                respuesta_registro(comercio_bajo_riesgo()),
+            )
+        ]
+    )
+    for frente in (Frente.NOTICIAS, Frente.CATEGORIA, Frente.LISTAS):
+        estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+        estado.cambiar_situacion(frente, Situacion.TERMINADO)
+    noticias = respuesta_del_contrato("sin_coincidencias", fuente="Noticias Ficticias")
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, noticias)],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    estado.libro.consultas_listas = [
+        ConsultaListas("comercio", None, "CO-TA-0002", "sin_coincidencias"),
+        ConsultaListas("persona", None, "PE-0002", "sin_coincidencias"),
+    ]
+    return estado
+
+
+def test_el_bajo_riesgo_sin_hallazgos_comprobado():
+    from due_diligence.reglas import bajo_riesgo_sin_hallazgos
+
+    assert bajo_riesgo_sin_hallazgos(_bajo_riesgo_comprobado()) is True
+
+
+def _con_mencion(estado):
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.simulacion import consulta, respuesta_del_contrato, terminacion_normal
+
+    mencion = respuesta_del_contrato("coincidencias", [{"titular": "x"}], fuente="Noticias")
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [consulta(Frente.NOTICIAS, {"identificador": "CO-TA-0002"}, mencion)],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+
+
+def _con_conflicto(estado):
+    from due_diligence.simulacion import comercio_bajo_riesgo, consulta
+
+    otra = {**comercio_bajo_riesgo(), "fecha_constitucion": "2001-01-01"}
+    respuesta = {
+        "resultado": "coincidencias",
+        "hechos": [
+            {
+                "contenido": comercio_bajo_riesgo(),
+                "metadatos": {"fuente": "A", "fecha": "2026-09-30"},
+            },
+            {"contenido": otra, "metadatos": {"fuente": "B", "fecha": "2026-09-28"}},
+        ],
+        "coincidencias": ["CO-TA-0002"],
+        "metadatos": {"fuentes": ["A", "B"], "fecha": "2026-09-30"},
+    }
+    estado.reiniciar_identificacion()
+    estado.registrar_identificacion(respuesta)
+    estado.agregar_consultas(
+        [consulta(Frente.REGISTRO, {"identificador": "CO-TA-0002"}, respuesta)]
+    )
+
+
+def _noticias_caido(estado):
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "caído")
+    estado.errores[Frente.NOTICIAS] = {"causa": "error_de_fuente", "reintentable": False}
+
+
+def _registro_caido_en(estado):
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.NO_TERMINADO, "caído")
+    estado.errores[Frente.REGISTRO] = {"causa": "terminacion_anomala", "reintentable": False}
+
+
+def _categoria_desconocida(estado):
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("otra", None))
+
+
+def _coincidencia(estado):
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+
+
+def _alto_riesgo(estado):
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+
+
+def _sello(estado):
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+
+
+@pytest.mark.parametrize(
+    "romper",
+    [
+        _con_mencion,  # US1-7
+        _con_conflicto,  # US1-8
+        _noticias_caido,
+        _categoria_desconocida,
+        _registro_caido_en,
+        _coincidencia,
+        _alto_riesgo,
+        _sello,
+    ],
+)
+def test_cada_condicion_por_separado_quita_el_bajo_riesgo_comprobado(romper):
+    from due_diligence.reglas import bajo_riesgo_sin_hallazgos
+
+    estado = _bajo_riesgo_comprobado()
+    romper(estado)
+    assert bajo_riesgo_sin_hallazgos(estado) is False
+
+
+def test_el_escalamiento_de_otro_comercio_no_cubre_al_actual():
+    clave_0004 = ("CO-AM-0004", "Almacén Mirador SAS", True)
+    clave_0005 = ("CO-AM-0005", "Almacén Mirador Norte SAS", True)
+    libro = _libro_con("persona")
+    libro.escalamientos = [Escalamiento(frozenset({CAUSA_COINCIDENCIA_REPRESENTANTE}), clave_0004)]
+    assert escalamiento_cubre(libro, clave_0004) is True
+    assert escalamiento_cubre(libro, clave_0005) is False  # las causas coinciden, el comercio no
+    assert escalamiento_cubre(libro) is True  # el libro solo: cualquier comercio, como en el #7
+
+
+def test_escalado_para_el_comercio_aunque_no_haya_causas():
+    from due_diligence.reglas import escalado_para_el_comercio
+
+    estado = _estado_de_informe()
+    assert escalado_para_el_comercio(estado) is False
+    estado.libro.escalamientos.append(Escalamiento(frozenset(), CLAVE_TV))
+    assert escalado_para_el_comercio(estado) is True
+    otro = _estado_de_informe()
+    otro.libro.escalamientos.append(Escalamiento(frozenset(), ("CO-AM-0004", "x", True)))
+    assert escalado_para_el_comercio(otro) is False
+
+
+def test_decide_cumplimiento_sin_escalamiento_del_comercio_actual_se_rechaza():
+    from due_diligence.reglas import MOTIVO_DECIDE_SIN_ESCALAR
+
+    estado = _estado_de_informe(_libro_del_caso_b())
+    assert evaluar_informe(estado, _informe("decide_cumplimiento")) == [
+        Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, "V")
+    ]
+    assert MOTIVO_DECIDE_SIN_ESCALAR == (
+        "decide_cumplimiento exige escalar antes: el oficial solo decide un caso que le llegó "
+        "escalado."
+    )
+    estado.libro.escalamientos.append(Escalamiento(frozenset(), ("CO-AM-0004", "x", True)))
+    assert evaluar_informe(estado, _informe("decide_cumplimiento")) == [
+        Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, "V")
+    ]
+    estado.libro.escalamientos.append(Escalamiento(frozenset(), CLAVE_TV))
+    assert evaluar_informe(estado, _informe("decide_cumplimiento")) == []
+    for recomendacion in ("no_habilitar", "habilitar"):  # no cambian
+        assert Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, "V") not in evaluar_informe(
+            estado, _informe(recomendacion)
+        )
+
+
+def test_con_causas_sin_escalar_decide_cumplimiento_da_solo_el_motivo_de_escalar():
+    from due_diligence.reglas import MOTIVO_DECIDE_SIN_ESCALAR
+
+    estado = _estado_de_informe(_libro_con("persona"))
+    textos = [r.texto for r in evaluar_informe(estado, _informe("decide_cumplimiento"))]
+    assert textos == [motivo_de_escalar({CAUSA_COINCIDENCIA_REPRESENTANTE})]
+    assert MOTIVO_DECIDE_SIN_ESCALAR not in textos
+
+
+def test_evaluar_escalamiento_en_la_espera_y_con_el_bajo_riesgo_comprobado():
+    from due_diligence.reglas import (
+        MOTIVO_ESPERA_IDENTIFICADOR,
+        MOTIVO_ESPERA_NOMBRE,
+        MOTIVO_SIN_CAUSA,
+        evaluar_escalamiento,
+    )
+
+    varias = _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    assert evaluar_escalamiento(varias) == [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, "V")]
+    ninguna = _estado_con_registro(Situacion.TERMINADO)
+    assert evaluar_escalamiento(ninguna) == [Rechazo(MOTIVO_ESPERA_NOMBRE, "V")]
+    assert evaluar_escalamiento(_bajo_riesgo_comprobado()) == [Rechazo(MOTIVO_SIN_CAUSA, "V")]
+    assert MOTIVO_SIN_CAUSA == (
+        "El caso no tiene ninguna causa de escalamiento: es de bajo riesgo y no tiene hallazgos. "
+        "No se escala; registre el informe."
+    )
+    categoria = _con_comercio()
+    categoria.categoria_bloqueada = True
+    assert evaluar_escalamiento(categoria) == []  # la espera de la categoría no lo impide
+    # D3 del plan: el alto riesgo en la espera del identificador tampoco escala sin identificar.
+    varias.libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+    assert evaluar_escalamiento(varias) == [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, "V")]

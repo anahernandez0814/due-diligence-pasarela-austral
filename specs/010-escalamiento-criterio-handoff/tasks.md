@@ -297,7 +297,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 **Prueba independiente**: el caso (b) no se puede escalar y termina con `habilitar`. El (a) termina escalado con `decide_cumplimiento`. `decide_cumplimiento` sin escalar se rechaza (SC-001).
 
-- [ ] T039 [P] [US1] Tests en `src/due_diligence/test_reglas.py` (R5 paso 3, R8, FR-001 a FR-005):
+- [X] T039 [P] [US1] Tests en `src/due_diligence/test_reglas.py` (R5 paso 3, R8, FR-001 a FR-005):
   - **`bajo_riesgo_sin_hallazgos`** es cierto solo con todo esto a la vez:
     - la cobertura completa (con FR-027);
     - sin coincidencias;
@@ -317,17 +317,23 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
     - en la espera del identificador o del nombre, `MOTIVO_ESPERA_IDENTIFICADOR` o `MOTIVO_ESPERA_NOMBRE` con la regla `V`;
     - con `bajo_riesgo_sin_hallazgos`, `MOTIVO_SIN_CAUSA` con la regla `V`;
     - en la espera de la categoría, ninguno.
-- [ ] T040 [US1] Implementar T039 en `src/due_diligence/reglas.py`. Con el sello, `evaluar_informe_minimo` no cambia: el sello ya es causa.
-- [ ] T041 [P] [US1] Tests en `src/due_diligence/test_hooks.py` (R5 pasos 2 y 3, FR-016):
+- [X] T040 [US1] Implementar T039 en `src/due_diligence/reglas.py`. Con el sello, `evaluar_informe_minimo` no cambia: el sello ya es causa.
+- [X] T041 [P] [US1] Tests en `src/due_diligence/test_hooks.py` (R5 pasos 2 y 3, FR-016):
   - **`_escalar_previo`** deniega con los motivos de `evaluar_escalamiento` y deja `bloqueo_regla` con la regla `V` y la acción `escalar_a_cumplimiento`;
   - **el orden de R5**: el sello va antes que la espera, la espera antes que el bajo riesgo y el bajo riesgo antes que la forma;
   - **D3**: con alto riesgo y la espera del identificador o del nombre, el escalamiento se rechaza (sin sello) y se admite (con sello).
 
   El rechazo del informe durante la espera ya está en T012 y T013 (hallazgo I1).
-- [ ] T042 [US1] Implementar T041 en `src/due_diligence/hooks.py` (`_escalar_previo` pasos 2 y 3).
-- [ ] T043 [US1] Instrucciones (R11) en `src/due_diligence/coordinador.py`, con sus tests en `test_coordinador.py` y `test_modo_demo.py`:
+- [X] T042 [US1] Implementar T041 en `src/due_diligence/hooks.py` (`_escalar_previo` pasos 2 y 3).
+- [X] T043 [US1] Instrucciones (R11) en `src/due_diligence/coordinador.py`, con sus tests en `test_coordinador.py` y `test_modo_demo.py`:
   - **`_REGLA_ESCALAR`** añade «No escales un comercio de bajo riesgo sin ningún hallazgo»; la quita el modo de demostración;
   - **`_REGLA_RESUMEN_OFICIAL`** va en los dos modos: hallazgos como afirmaciones, acción recomendada para el oficial, y lo que pone el sistema.
+
+  **Notas de la fase 7**:
+  - `escalamiento_cubre(libro, comercio=<cualquiera>)`: sin comercio mira todos, como el libro solo del #7; las reglas con el estado pasan la clave del comercio actual (`escalamiento_del_caso_cubre`).
+  - `MOTIVO_DECIDE_SIN_ESCALAR` solo se añade cuando no hay causas sin cubrir; con causas, el motivo de escalar ya lo pide.
+  - `_REGLA_RESUMEN_OFICIAL` no contiene «escalar», porque el modo de demostración lo exige (test del #9).
+  - Mutaciones: sin el criterio en el hook fallan 4; sin la exigencia de escalar para `decide_cumplimiento`, 2.
 
 ---
 
@@ -374,6 +380,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `servidor_mcp/test_servidor.py`: la ayuda `_escalamiento`, `…sin_campos_da_los_cinco_faltantes` (seis), `TIPOS_JSON` (causa texto o lista, y `conflictos`) y `TIPOS_INCORRECTOS` (más `conflictos`) | Lo mismo, por el protocolo. | Igualdades exactas sobre el contrato nuevo. |
   | `test_hooks.py`: la ayuda `_escalamiento`, `test_el_escalamiento_sustituye_la_cobertura_aunque_el_libro_este_sellado` (parametrizado), `test_una_excepcion_en_el_escalamiento…` y el de las 625 combinaciones | El hook valida el resumen y pone comercio, causa y conflictos (R5); con el sello, la cobertura y los conflictos van como no calculados. | El resumen cita la consulta del caso; las igualdades exactas incluyen ahora todo lo que pone el código (con el sello, `COBERTURA_NO_CALCULADA` en vez de la calculada: cambio a sabiendas de R5) y los eventos `[cobertura_sustituida, datos_sustituidos]`. |
   | `test_hooks_sesiones.py::Caso.escalar`, `test_casos_cobertura.py` (escalamiento con noticias caído), `test_sesion_simulada.py` (pasarela y `escalar_con`) | La simulación y la pasarela simulada validan el resumen como la real. | Cambia la **entrada** a un resumen válido (`resumen_del_caso` o `_resumen_valido`); el caso f comprueba exactamente las afirmaciones, la acción y la causa que llegan. |
+  | `test_reglas.py`: `_libro_con` y las ayudas con escalamientos | `escalamiento_cubre` cuenta solo el comercio actual (R8) y estos estados tienen `CO-TV-0001` identificado. | Los escalamientos llevan `CLAVE_TV`, la clave de su comercio; las aserciones no cambian. |
+  | `test_reglas.py::test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar`, ahora `…no_habilitar_se_acepta_sin_escalar_y_decide_cumplimiento_exige_escalar` | FR-004: `decide_cumplimiento` exige un escalamiento del comercio actual (D5 del #9). | `no_habilitar` sigue aceptándose igual; `decide_cumplimiento` pasa de `[]` al rechazo exacto, y con el escalamiento vuelve a `[]`. |
+  | `test_hooks.py`: 11 tests del #8 y del #9 sobre cobertura, forma, fuentes y comercio del informe (las 625 combinaciones, los frentes cubiertos sin afirmación, el comercio pedido, los eventos de datos, etc.) | Usaban `decide_cumplimiento` como recomendación de relleno, sin escalar: FR-004 la rechaza. | Cambia solo la **entrada** a `no_habilitar`; lo que prueban (cobertura, forma, fuentes, comercio) no depende de la recomendación. |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

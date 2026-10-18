@@ -381,8 +381,14 @@ comercio pedido sin verificar. Lo cubre Q5 con el modelo real y la demo puede mo
   - con el registro caído, informe con el comercio pedido.
 
   La regla del informe también está en el modo de demostración, porque no es una regla I.1 a I.3.
+  La excepción es «primero escalar y después registrar el informe»: es guía de escalamiento (I.2 e
+  I.3), así que va aparte y el modo de demostración la quita junto con la guía de escalar
+  (fase 13).
 
 ## R13. Riesgos residuales
+
+Los que contradicen un FR, un escenario de la spec o un principio de la constitución están como
+desviaciones justificadas (D1 a D7) en [plan.md](plan.md), con su motivo y su mitigación.
 
 1. **Informe vigente con afirmaciones viejas**: una nueva delegación que no cambia la cobertura,
    los conflictos, las causas ni el comercio (noticias con otro nombre, otra categoría del mismo

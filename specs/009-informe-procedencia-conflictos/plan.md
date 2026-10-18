@@ -83,18 +83,19 @@ en modelo es un turno por informe rechazado, ya incluido en los pasos fijos del 
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitución v1.0.1. Resultado: **cumple, sin desviaciones.**
+Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas** de la sección
+siguiente (D1 a D7), cada una con su motivo, su mitigación y el ticket que la resuelve.
 
 | Principio | Estado | Cómo |
 |-----------|--------|------|
 | **I.1** Listas tras la identificación | Sin cambios | Los hooks del #7 se conservan. Con el registro caído no hay comercio y listas se sigue rechazando. |
 | **I.2 / I.3** Coincidencia y alto riesgo | Sin cambios en la regla; más estricto el cierre | `evaluar_informe` sigue igual y fija el orden escalamiento → informe (FR-012). El sello es una causa más (R9): un caso sellado tiene que llegar al oficial. |
-| **I.4** Fuente en cada afirmación y conflictos | **Cumple, garantizado en código** | Esquema en la pasarela y en el hook (R1, R2), fuente consultada y una afirmación por frente cubierto en el hook (R1, R4), conflictos calculados y sustituidos (R5, R6). Caso (g). |
-| **I.5** Cobertura declarada | Cumple, se amplía | Cobertura del #8 sin cambios. Además, el informe obligatorio en el cierre (R8) incluye el registro caído (regla 5 del enunciado). |
+| **I.4** Fuente en cada afirmación y conflictos | **Cumple, garantizado en código**, con D1, D2, D3 y D4 | Esquema en la pasarela y en el hook (R1, R2), fuente consultada y una afirmación por frente cubierto en el hook (R1, R4), conflictos calculados y sustituidos (R5, R6). Caso (g). |
+| **I.5** Cobertura declarada | Cumple, se amplía, con D4 y D6 | Cobertura del #8 sin cambios. Además, el informe obligatorio en el cierre (R8) incluye el registro caído (regla 5 del enunciado). |
 | **II** Garantizado vs. sugerido | Cumple | Esquema, fuente, comercio, conflictos, informe obligatorio y vigente, e informe mínimo: todo en código (pasarela, hooks y `Stop`). El prompt solo orienta cómo escribir las afirmaciones (R12). |
 | **III** Arquitectura de agentes | Cumple | Sin cambios en la delegación; el `Delegador` solo guarda el comercio pedido. Los resultados conservan contenido y metadatos separados, que es de donde salen las fuentes admitidas. El ciclo sigue terminando por `stop_reason`. |
 | **IV** Herramientas y MCP | Cumple | Cambia el contrato de `registrar_informe`, con una descripción que dice qué pone el sistema. Los rechazos son errores estructurados: el JSON `informe_rechazado` del hook (R3) y `entrada_invalida` con `problemas` en la pasarela. |
-| **V** Escalamiento con criterio | Cumple | Los escalamientos solo aumentan con un fallo de hook, que es excepcional. El contenido del resumen al oficial es del #10. |
+| **V** Escalamiento con criterio | Cumple, con D5 | Los escalamientos solo aumentan con un fallo de hook, que es excepcional. El contenido del resumen al oficial es del #10. |
 | **VI** Transparencia | Cumple | `informe_registrado`, `datos_sustituidos`, `cierre_sin_informe`, la acción en los bloqueos y la hora en UTC (R10). |
 | **VII** Datos ficticios | Cumple | `CO-RF-0006` y el resto de datos del #5; sin datos nuevos. |
 | **VIII** Sin credenciales | Cumple | Los tests y el sondeo no leen `.env`. |
@@ -109,11 +110,37 @@ Constitución v1.0.1. Resultado: **cumple, sin desviaciones.**
   causa o por el formato nuevo se adaptan sin debilitarse, y la tabla va en el PR.
 
 **Re-evaluación tras el diseño (Fase 1)**: se mantiene. Los riesgos residuales están declarados en
-R13 de [research.md](research.md). Los principales son dos:
-- un informe puede seguir vigente con afirmaciones viejas de un frente que se volvió a delegar sin
-  cambiar la huella (decisión de la analista);
-- con el registro caído y sin otras causas, el informe puede salir con `decide_cumplimiento` sin
-  escalar; la regla general es del #10.
+R13 de [research.md](research.md); los que contradicen un FR, un escenario de la spec o un
+principio son las desviaciones D1 a D7, y el resto se explica al final de esa sección.
+
+## Desviaciones justificadas
+
+Revisadas tras la tercera revisión de `/abrir-pr` (fase 13 de [tasks.md](tasks.md)): todo lo que
+figuraba como riesgo residual (R13) o como declaración del PR (T050) y contradice un FR, un
+escenario de la spec o un principio de la constitución.
+
+| # | Desviación | Contradice | Motivo | Mitigación y dónde se resuelve |
+|---|------------|------------|--------|--------------------------------|
+| D1 | **La fecha de una afirmación no se contrasta** con la del resultado que cita; solo se valida que sea una fecha real (riesgo residual 3, R4). | Entidad «Afirmación» de la spec (la fecha es la de los metadatos del resultado citado) e I.4. | Una afirmación no apunta a un hecho concreto: puede resumir varios hechos con fechas distintas (las dos fuentes registrales del caso (g) tienen fechas distintas) o una respuesta sin hechos. Contrastarla exigiría una referencia al hecho citado que el esquema (R2) no tiene. | La fuente sí se contrasta con las consultadas (FR-004) y la fecha se valida como fecha (FR-002). El #10 puede añadir la referencia al hecho si reutiliza el esquema de afirmaciones. |
+| D2 | **Un informe aceptado por la pasarela sin huella pendiente no deja evento** ni constancia: si el `PostToolUse` no encuentra la huella de un `PreToolUse` que lo aceptara, no hace nada (`hooks.py`, `_informe_posterior`). | FR-016 y US5-1 (todo informe aceptado deja `informe_registrado`). | La huella solo se calcula en el `PreToolUse`, con los mismos datos que se sustituyen (R7); recalcularla en el `PostToolUse` daría por vigente un informe con datos que no se comprobaron. Sin un `PreToolUse` que aceptara la llamada no se ejecuta (un deny la impide), así que solo ocurre si el `tool_use_id` no coincide entre los dos hooks, algo que no se ha observado. | El informe no cuenta como vigente: el `Stop` sigue exigiendo uno y el caso no figura como completo. Si el #11 necesita la constancia, puede añadir un evento sin huella. |
+| D3 | **Un conflicto en el nombre o en el representante legal no llega al informe**: el #6 no identifica el comercio cuando las fuentes difieren en esos datos (`estado.py`, `derivar_comercio`), así que los conflictos quedan `sin_comercio` y no se muestran los dos valores. | I.4 (si dos fuentes se contradicen, se muestran ambas), US2 y FR-007. | Esos datos definen la identidad del comercio: si las fuentes no coinciden, el comercio no está identificado de forma unívoca y no se pueden consultar listas (I.1). Es un caso para pedir el identificador al analista (V), no para un informe. | No se exige informe (FR-011); si el coordinador lo registra, va con el comercio pedido `verificado: false` y no se puede habilitar. La ambigüedad y lo que se muestra al analista son del #10. |
+| D4 | **El informe mínimo va sin conflictos ni cobertura calculados**, aunque se pudieran calcular: con el sello `fallo_de_hook` los dos son textos fijos y no se exige una afirmación por frente cubierto (FR-014, R9). | I.4 (mostrar los conflictos), I.5 (declarar qué frente quedó sin cubrir), FR-009 y US1-6. | FR-014 lo manda: tras un fallo de hook el libro puede haber perdido un hecho (una coincidencia o una identificación), así que cualquier cálculo puede estar mal. Declarar que no se calculó es lo único que no afirma algo falso. | Solo admite `decide_cumplimiento` y después de escalar (el sello es causa, R9); el caso nunca figura como completo. |
+| D5 | **Con el registro caído y sin otras causas, el informe puede salir con `decide_cumplimiento` sin escalar** (riesgo residual 2). | V (el oficial solo decide lo que recibe) y el sentido de «decisión del oficial» de US3. | La regla general («¿`decide_cumplimiento` exige escalar?») afecta al resumen al oficial, que está fuera de alcance (FR-022). | `habilitar` sigue bloqueado sin listas y el caso no figura como completo (cobertura incompleta). Lo resuelve el #10. |
+| D6 | **Con un doble fallo de hooks el informe mínimo puede no registrarse** (riesgo residual 6): si con el caso sellado también falla la comprobación de FR-004, `fallar_cerrado` deniega. | US3 y FR-011 (todo due diligence terminado queda registrado). | Ante un fallo no se deja pasar lo que no se pudo verificar (FR-012 del #7, R2); aceptar el informe sin validarlo rompería I.4. | El `Stop` agota las devoluciones y marca `cierre_sin_informe` con su evento (FR-013), también cuando el que falla es el propio `Stop` (fase 13); el caso nunca figura como completo. |
+| D7 | **El comercio pedido es el de la última delegación del registro, no el de la solicitud**: si el coordinador consulta solo con el identificador, el informe va con `nombre: null` aunque el analista diera el nombre (T048). | FR-006 (el comercio es el que pidió el analista). | La solicitud es texto libre; la delegación es lo único estructurado que el código tiene del pedido. Sacar el nombre del texto sería adivinar, y el comercio pedido no inventa el dato que falta (R5). | El comercio va `verificado: false` y no se puede habilitar. Lo retoma el #10 o el #11 (observación de T050). |
+
+**Riesgos de R13 que no son desviaciones**:
+- **1, informe vigente con afirmaciones viejas**: FR-023 lo admite de forma explícita, por decisión
+  de la analista.
+- **4, el texto no se verifica contra el contenido**: I.4 exige la fuente de cada afirmación, y eso
+  se garantiza; la exactitud de la frase no la exige ni la constitución ni la spec.
+- **5, `Stop` en cualquier fin de turno**: es el escenario 8 de US3 y la limitación conocida de los
+  supuestos de la spec; lo resuelve el #10.
+- **7, motivo del deny en JSON**: FR-003 se cumple en el código; falta observar cómo lo usa el
+  modelo real, y en Q3 no hubo rechazos.
+- **8, fuentes de un comercio anterior**: FR-004 pide una fuente que el caso consultó para ese
+  frente, y lo fue. Los nombres de fuente son genéricos, así que no permite citar una fuente que
+  el caso no consultó.
 
 ## Decisiones del plan
 
@@ -251,4 +278,5 @@ cada módulo (principio X). El esquema vive en `servidor_mcp`, porque es el cont
 
 ## Complexity Tracking
 
-Sin violaciones de la constitución que justificar.
+Sin complejidad añadida que justificar. Las desviaciones de la constitución y de la spec están en
+«Desviaciones justificadas».

@@ -545,8 +545,9 @@ hora con UTC, los conflictos y los informes.
   - primero escalar y después registrar el informe;
   - con el registro caído, reintentar o registrar el informe con el comercio pedido.
 
-  La guía del informe está también en el modo de demostración, porque no es una regla I.1 a I.3.
-  Los tests de T037 de estas instrucciones se adaptan.
+  La guía del informe está también en el modo de demostración, porque no es una regla I.1 a I.3,
+  salvo «primero escalar y después registrar el informe», que es guía de escalamiento y el modo
+  de demostración quita (T066). Los tests de T037 de estas instrucciones se adaptan.
 - [X] T040 Fases 7 y 8: ruff, la suite completa (anotar el número de tests, frente a T002), la
   tabla de T037 completa y commit «casos de extremo a extremo e instrucciones (#9)». **PARADA DE
   REVISIÓN B.** Resultado: **4118** tests en verde (3928 en T002), ruff y formato limpios.
@@ -659,9 +660,11 @@ hora con UTC, los conflictos y los informes.
   **Tras la revisión del commit `f9b4132`** (veredicto `con bloqueantes`: 1 bloqueante en la
   revisión de código; la auditoría, sin bloqueantes), las correcciones van en la fase 11, con
   commits nuevos y sin amend. La descripción del PR declara además:
-  - riesgo residual: un `Stop` que falla con una excepción y agota las devoluciones siempre marca
-    `cierre_sin_escalar`, aunque lo que falte sea el informe (`hooks.py`, en el envoltorio del
-    `Stop`); no se corrige en este ticket;
+  - ~~riesgo residual: un `Stop` que falla con una excepción y agota las devoluciones siempre marca
+    `cierre_sin_escalar`, aunque lo que falte sea el informe~~: la tercera revisión lo declaró
+    bloqueante y se corrige en la fase 13 (T063);
+  - **las desviaciones justificadas D1 a D7 de [plan.md](plan.md)**, que recogen las dos
+    declaraciones siguientes y los riesgos residuales que contradicen la spec (fase 13, T064);
   - el informe mínimo va sin conflictos ni cobertura calculados aunque se pudieran calcular: lo
     manda FR-014;
   - si la pasarela acepta el informe y no hay huella pendiente (sin `PreToolUse` que lo
@@ -726,6 +729,69 @@ revisión de código y en la auditoría). Commits nuevos, sin amend.
 
 ---
 
+## Fase 13: correcciones de la tercera revisión de `/abrir-pr`
+
+Tras la tercera revisión (veredicto `con bloqueantes`). Se corrige el bloqueante y se barre de una
+vez lo que podría volver a bloquear. Commits nuevos, sin amend.
+
+- [X] T063 Bloqueante (`hooks.py`, `fallar_cerrado` en el `Stop`): agotadas las devoluciones, un
+  `Stop` que falla marca y deja el evento de lo que falta, igual que el `Stop` normal
+  (`_marcar_cierre_agotado`, compartido): `cierre_sin_escalar` si falta el escalamiento y
+  `cierre_sin_informe` si se requiere informe y no hay uno vigente. Si tampoco se puede saber qué
+  falta, marca los dos por prudencia. El sello del propio fallo es causa de escalamiento (R9), así
+  que falta el escalamiento salvo que uno anterior ya cubriera el sello. Tests en `test_hooks.py`:
+  faltan los dos; falta solo el informe; falta solo el escalamiento; la consulta también falla.
+- [X] T064 `plan.md`: «cumple, sin desviaciones» pasa a la sección «Desviaciones justificadas»
+  (D1 a D7), con lo que contradecía un FR, un escenario o un principio: la fecha no contrastada,
+  el informe aceptado sin huella pendiente, los conflictos de nombre o representante, el informe
+  mínimo, `decide_cumplimiento` sin escalar con el registro caído, el doble fallo de hooks y el
+  comercio pedido sin el nombre. Los riesgos de R13 que no contradicen la spec se explican aparte.
+- [X] T065 Tests que no comprobaban lo que decían:
+  - `test_hooks_sesiones.py`: el coordinador que insiste en terminar comprueba `cierre_sin_informe`
+    y que su evento sale una vez, después del de `cierre_sin_escalar` (lo que prometía T037);
+  - `test_conflictos.py`: `_NO_SE_COMPARA` no tenía efecto, porque los hechos ya se agrupan por el
+    identificador exacto; se quita, y el test pasa a comprobar que un hecho con otro identificador
+    y otra fecha de constitución no da conflictos (una mutación sin el filtro lo hace fallar);
+  - `test_hooks.py`: el informe mínimo tras escalar comprueba `Caso.completo is False` con la
+    cobertura completa, el fin normal, sin marcas y el informe vigente, de modo que solo el sello
+    lo impide.
+
+  Con el mismo criterio se revisaron las tareas marcadas, y se completaron estas:
+  - **T016**: la comparación de fuentes prueba también las tildes (`test_informe.py`).
+  - **T017**: `datos_sustituidos` cuando lo declarado coincide con lo del código, y un único
+    problema de esquema que deja `bloqueo_regla [I.4]` (`test_hooks.py`).
+  - **T020**: de dos consultas válidas del mismo comercio cuenta la última; la mutación
+    `coinciden[0]` hace fallar el test (`test_conflictos.py`).
+  - **T025**:
+    - el registro que no quedó `no_terminado` no está caído aunque tenga un error de caída
+      guardado (antes pasaba por no tener error; la mutación de la situación lo hace fallar);
+    - la huella con el sello comprueba las causas y el comercio con igualdad exacta;
+    - el sello como causa nueva cambia la huella (`test_informe.py`).
+  - **T027**: el detalle exacto de `informe_registrado` con 1 conflicto (caso g), con 2 y con el
+    registro caído (`test_hooks.py`).
+  - **T013 y T029**: el reintento termina entre el `PreToolUse` y el `PostToolUse` del informe
+    del mismo mensaje. Se anota la situación de noticias en cada hook del informe (igualdad exacta
+    del orden) y justo antes de que responda la pasarela (`test_casos_informe.py`). Además, el
+    paso `("informe", recomendacion)` se prueba a través del `CoordinadorSimulado`
+    (`test_sesion_simulada.py`).
+  - **T032**: el `Stop` tras el fallo del `PostToolUse` del informe exige el motivo exacto: escalar
+    por el sello y luego el informe (`test_hooks.py`).
+  - **T037**:
+    - `problemas == []` en los rechazos de alto riesgo, sin categoría y con el sello;
+    - igualdad exacta de `motivos` y de las rutas de `problemas` en las entradas malformadas
+      (`test_hooks.py`).
+  - **T038**: un reintento que sale bien en otro mensaje invalida el informe anterior
+    (`test_casos_informe.py`).
+  - **T060**: la descripción de `registrar_informe` dice en positivo que cada frente cubierto
+    lleva al menos una afirmación, con su test (`servidor.py`, `test_servidor.py`).
+- [X] T066 `coordinador.py`: «primero escalar y después registrar el informe» sale de
+  `_REGLA_AFIRMACIONES` a `_REGLA_INFORME_TRAS_ESCALAR`, que solo va en el modo normal. Test en
+  `test_modo_demo.py`: en modo de demostración no queda ninguna mención a escalar.
+- [X] T067 Ruff y la suite completa en verde. Resultado: **4153** tests en verde, ruff y formato
+  limpios.
+
+---
+
 ## Dependencias y orden de ejecución
 
 - **Fase 1** (T001, T002) → **Fase 2**:
@@ -747,6 +813,8 @@ revisión de código y en la auditoría). Commits nuevos, sin amend.
 - **Fase 11**: tras el veredicto `con bloqueantes` de T050; T051 a T056 → T057 → `/abrir-pr`.
 - **Fase 12**: tras el veredicto `con bloqueantes` del commit `2004581`; T058 → T059 y T060,
   T061 → T062 → `/abrir-pr`.
+- **Fase 13**: tras el veredicto `con bloqueantes` de la tercera revisión; T063 a T066 → T067 →
+  `/abrir-pr`.
 
 ## Oportunidades de paralelismo
 

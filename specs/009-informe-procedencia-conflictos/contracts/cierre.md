@@ -32,6 +32,10 @@ envuelto con `fallar_cerrado`.
 - Con `cierres_impedidos >= MAX_CIERRES_IMPEDIDOS` el cierre se permite y se marca lo que faltaba:
   `cierre_sin_escalar` (evento `cierre_sin_escalar`), `cierre_sin_informe` (evento
   `cierre_sin_informe`) o los dos.
+- Si el propio `Stop` falla con una excepción, `fallar_cerrado` bloquea y cuenta igual. Agotadas
+  las devoluciones, marca lo que falta con los mismos eventos; si tampoco puede saberlo, marca los
+  dos por prudencia (fase 13). Como el sello del fallo es una causa (R9), falta el escalamiento
+  salvo que uno anterior ya cubriera el sello.
 - `PRESUPUESTO_TURNOS_PEOR_CASO` pasa a 19 de 30: se suma un informe nuevo por cada reintento
   posible, porque un reintento con éxito invalida el informe (R8).
 

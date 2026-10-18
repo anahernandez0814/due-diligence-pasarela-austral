@@ -13,7 +13,6 @@ from claude_agent_sdk._errors import ResultError
 from due_diligence import configuracion
 from due_diligence.coordinador import (
     INSTRUCCIONES_COORDINADOR,
-    PROHIBICION_DECISION,
     Caso,
     ejecutar_caso,
 )
@@ -132,17 +131,59 @@ def test_las_herramientas_del_coordinador_son_exactamente_las_de_r3():
     assert opciones.tools == [] and opciones.setting_sources == []
 
 
-def test_la_instruccion_del_coordinador_prohibe_registrar_y_escalar_pero_las_herramientas_siguen():
+def test_ya_no_existe_la_prohibicion_de_decidir_del_6():
+    from due_diligence import coordinador
+
+    assert not hasattr(coordinador, "PROHIBICION_DECISION")
+    texto = INSTRUCCIONES_COORDINADOR
+    for retirado in (
+        "NO llames a registrar_informe",
+        "aún no está disponible",
+        "limítate a delegar",
+    ):
+        assert retirado not in texto
+    assert "No decidas la habilitación" not in texto
+
+
+def test_la_instruccion_minima_pide_escalar_y_registrar_el_informe_con_los_tres_valores():
+    texto = INSTRUCCIONES_COORDINADOR
+    assert "llama a escalar_a_cumplimiento" in texto
+    assert "coincidencia en listas restrictivas o la categoría es de alto riesgo" in texto
+    assert "registra el informe con registrar_informe" in texto
+    assert "exactamente habilitar, no_habilitar o decide_cumplimiento" in texto
+
+
+def test_la_instruccion_dice_cuando_usar_cada_recomendacion():
+    texto = INSTRUCCIONES_COORDINADOR
+    assert (
+        "se escaló (coincidencia en listas o alto riesgo), la recomendación es decide_cumplimiento"
+        in texto
+    )
+    assert "no_habilitar es para un caso que no requiere escalamiento y no se habilita" in texto
+    assert "habilitar, solo si no hay coincidencia, el comercio no es de alto riesgo" in texto
+    assert "categoría quedó determinada" in texto
+
+
+def test_las_instrucciones_conservan_la_regla_de_varias_coincidencias_y_el_orden_de_listas():
+    texto = INSTRUCCIONES_COORDINADOR
+    assert (
+        "Si el registro devuelve varias coincidencias, no elijas una ni sigas con listas" in texto
+    )
+    assert "Después delega listas: usa el comercio que devolvió el registro" in texto
+    assert "pide al analista el identificador" in texto
+
+
+def test_las_instrucciones_conservan_el_resumen_al_analista_sin_decidir_por_el_texto():
+    texto = INSTRUCCIONES_COORDINADOR
+    assert "resume al analista, frente por frente" in texto
+    assert "qué frentes no se pudieron cubrir y por qué" in texto
+
+
+def test_el_coordinador_usa_las_instrucciones_normales_sin_el_modo_de_demostracion():
     caso, _, _ = _caso([])
     opciones = caso.opciones_coordinador()
-    assert PROHIBICION_DECISION in opciones.system_prompt
     assert opciones.system_prompt == INSTRUCCIONES_COORDINADOR
-    assert (
-        "registrar_informe" in PROHIBICION_DECISION
-        and "escalar_a_cumplimiento" in PROHIBICION_DECISION
-    )
-    assert "NO llames" in PROHIBICION_DECISION
-    # FR-002: no se le quitan las herramientas, solo se le instruye.
+    # FR-002: las herramientas de decisión siguen entre las del coordinador, ahora con sus hooks.
     assert "mcp__pasarela__registrar_informe" in opciones.allowed_tools
     assert "mcp__pasarela__escalar_a_cumplimiento" in opciones.allowed_tools
 
@@ -167,8 +208,6 @@ def test_la_categoria_es_el_sector_sin_canal_y_lo_desconocido_se_confirma_en_las
 
 def test_el_coordinador_trata_de_usted_y_no_menciona_tickets_al_analista():
     assert "de usted" in INSTRUCCIONES_COORDINADOR
-    assert "aún no está disponible" in PROHIBICION_DECISION
-    assert "ticket" not in PROHIBICION_DECISION.lower()
     # La única mención a «tickets» es la orden de no mencionarlos.
     assert INSTRUCCIONES_COORDINADOR.lower().count("ticket") == 1
 

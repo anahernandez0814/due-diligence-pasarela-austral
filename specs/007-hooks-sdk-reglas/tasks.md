@@ -471,7 +471,7 @@ extremo a extremo. **Prueba independiente**: ejecutor y sesión simulados, sin m
 quita las reglas del prompt sin tocar los hooks. **Prueba independiente**: textos de las instrucciones y un
 modelo simulado que intenta las tres acciones.
 
-- [ ] T045 [US6] Reescribir en `src/due_diligence/test_coordinador.py` los tests que citan la prohibición
+- [X] T045 [US6] Reescribir en `src/due_diligence/test_coordinador.py` los tests que citan la prohibición
   (líneas ≈ 16, 138-144 y 170-171 del #6, R11): ya **no** existe `PROHIBICION_DECISION` y las
   instrucciones del coordinador no contienen «NO llames a registrar_informe», «aún no está disponible» ni «No
   decidas la habilitación»; sí contienen la instrucción mínima (FR-019): escalar con
@@ -483,7 +483,7 @@ modelo simulado que intenta las tres acciones.
   mencionan tickets; hablan de usted; contienen la regla 3 (varias coincidencias) y la regla de delegar
   listas tras el registro. Las instrucciones de los cuatro subagentes **no cambian**
   (`test_contexto.py` sigue igual: no contienen las reglas 1 a 3).
-- [ ] T046 [US6] Escribir `src/due_diligence/test_modo_demo.py` (R11, FR-014, SC-005): con
+- [X] T046 [US6] Escribir `src/due_diligence/test_modo_demo.py` (R11, FR-014, SC-005): con
   `instrucciones_coordinador(demo=True)` **no** aparecen la regla 3 del coordinador (no seguir con
   listas ante varias coincidencias) ni la instrucción de escalar, pero sí la delegación, el resumen y la
   instrucción de registrar el informe con los tres valores; con `demo=False` son las instrucciones
@@ -493,7 +493,7 @@ modelo simulado que intenta las tres acciones.
   simulado en modo demo: delegar listas sin registro identificado, `registrar_informe` con `habilitar` en
   alto riesgo y con coincidencia, y terminar sin escalar); `Caso`, `ejecutar_caso` y `opciones_*` del caso **no aceptan un parámetro `hooks`** (T038) y las claves y matchers de
   los hooks son idénticos con y sin demo (no hay forma de desactivarlos).
-- [ ] T047 [US6] Editar `src/due_diligence/coordinador.py`: eliminar `PROHIBICION_DECISION` y la regla 5
+- [X] T047 [US6] Editar `src/due_diligence/coordinador.py`: eliminar `PROHIBICION_DECISION` y la regla 5
   («No decidas la habilitación del comercio»); la regla 4 pasa a ser la instrucción mínima de T045; el
   resumen al analista (regla 5) se conserva sin la frase prohibida; añadir
   `instrucciones_coordinador(demo: bool)` (en demo omite la regla 3 y la instrucción de escalar,

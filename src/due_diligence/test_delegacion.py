@@ -12,6 +12,7 @@ from due_diligence import configuracion
 from due_diligence.delegacion import Delegador
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_DELEGACION,
     TIPO_DELEGACION_REPETIDA,
     TIPO_FRENTE_FIN,
@@ -855,17 +856,72 @@ def test_el_comercio_anterior_se_conserva_para_decidir_la_invalidacion_de_listas
     assert len(invalidaciones) == 1
 
 
-def test_con_el_hook_de_listas_una_consulta_de_mas_se_bloquea_y_el_frente_no_termina():
-    # Con el hook activo (I.1) una consulta que no es del comercio ni de su representante no llega
-    # a la fuente: queda como un error de herramienta y el frente no figura como terminado.
+def _consultas_de_listas_con_una_de_mas():
+    return [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", identificador="PE-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),  # de más: el hook la bloquea
+    ]
+
+
+def test_una_consulta_de_mas_bloqueada_no_hace_fallar_el_frente_si_las_necesarias_se_hicieron():
+    # Decisión de la analista: lo bloqueado no cuenta contra el frente si el comercio y el
+    # representante se consultaron de forma válida. El intento queda como evento de la regla.
+    listas, estado, registro, _ = _registro_y_listas_con_eventos(
+        _consultas_de_listas_con_una_de_mas()
+    )
+    assert listas["situacion"] == "terminado" and "error" not in listas
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+    bloqueos = [e for e in registro.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
+    assert [(e.regla, e.frente) for e in bloqueos] == [("I.1", Frente.LISTAS)]
+    # La respuesta al coordinador solo trae las consultas válidas, sin el intento bloqueado.
+    assert len(listas["resultados"]) == 2
+    assert "Otra Persona" not in json.dumps(listas)
+    # El estado conserva el intento como traza, con su tipo de error.
+    bloqueadas = [
+        c for c in estado.consultas if c.error and c.error["tipo"] == "bloqueado_por_hook"
+    ]
+    assert len(bloqueadas) == 1 and bloqueadas[0].valido is False
+
+
+def test_si_lo_bloqueado_era_una_consulta_necesaria_el_frente_no_termina():
+    consultas = [
+        consulta_listas("comercio", nombre="Otro Comercio SAS"),  # no es el comercio: se bloquea
+        consulta_listas("persona", identificador="PE-0001"),
+    ]
+    listas, estado, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert "consulta del comercio" in listas["mensaje"]
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+
+
+def test_un_error_real_de_la_herramienta_sigue_haciendo_fallar_el_frente():
     consultas = [
         consulta_listas("comercio", identificador="CO-TV-0001"),
         consulta_listas("persona", identificador="PE-0001"),
-        consulta_listas("persona", nombre="Otra Persona Ficticia"),
+        consulta(
+            Frente.LISTAS, {"tipo": "persona", "identificador": "PE-0001"}, error=ERROR_NOTICIAS
+        ),
     ]
-    listas, estado, _ = _registro_y_listas(consultas)
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
     assert listas["tipo"] == "frente_no_terminado"
-    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
-    errores = listas["obtenido"]["errores"]
-    assert [e["tipo"] for e in errores] == ["error_de_herramienta"]
-    assert "Otra Persona" not in json.dumps(errores)  # el motivo no repite lo consultado
+    assert listas["reintentable"] is True  # solo cuentan los errores reales para reintentar
+
+
+def test_el_bloqueo_de_un_hook_no_vuelve_reintentable_a_un_frente_que_fallo_por_otra_causa():
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),  # bloqueada
+    ]
+    listas, _, _, _ = _registro_y_listas_con_eventos(consultas)
+    assert listas["tipo"] == "frente_no_terminado" and listas["reintentable"] is False
+
+
+def _registro_y_listas_con_eventos(consultas_de_listas):
+    resultados = {
+        Frente.REGISTRO: resultado_registro(),
+        Frente.LISTAS: resultado_listas(consultas_de_listas),
+    }
+    delegador, estado, registro, ejecutor = _crear(resultados=resultados)
+    _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
+    return listas, estado, registro, ejecutor

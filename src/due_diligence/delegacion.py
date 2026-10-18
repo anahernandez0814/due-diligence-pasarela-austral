@@ -15,7 +15,7 @@ from claude_agent_sdk import ClaudeAgentOptions, SdkMcpTool, create_sdk_mcp_serv
 from mcp_types import ToolAnnotations
 
 from due_diligence.contexto import FrenteRechazado, construir_contexto
-from due_diligence.ejecutor import EjecutorSubagente
+from due_diligence.ejecutor import EjecutorSubagente, es_bloqueo_de_hook
 from due_diligence.estado import (
     Consulta,
     EstadoCaso,
@@ -258,16 +258,19 @@ class Delegador:
         if clasificacion is None or clasificacion.terminacion is not Terminacion.NORMAL:
             donde = resultado.detalle_terminacion
             return Situacion.NO_TERMINADO, f"El subagente no terminó con normalidad ({donde})."
-        errores = [c.error for c in resultado.consultas if c.error]
+        # Un intento que un hook bloqueó (regla I.1) no cuenta contra el frente: queda como evento
+        # de la regla y como traza en el estado, pero decide lo que sí se consultó (#7).
+        efectivas = [c for c in resultado.consultas if not es_bloqueo_de_hook(c.error)]
+        errores = [c.error for c in efectivas if c.error]
         if errores:
             tipos = ", ".join(str(e.get("tipo")) for e in errores)
             return (
                 Situacion.NO_TERMINADO,
                 f"La herramienta devolvió un error estructurado ({tipos}).",
             )
-        if not resultado.consultas:
+        if not efectivas:
             return Situacion.NO_TERMINADO, "El subagente no hizo ninguna consulta."
-        if any(not c.valido for c in resultado.consultas):
+        if any(not c.valido for c in efectivas):
             return (
                 Situacion.NO_TERMINADO,
                 "Un resultado no tiene la forma del contrato de la pasarela.",
@@ -293,7 +296,7 @@ class Delegador:
 
         def consultada(tipo: str, entidad: Mapping[str, Any]) -> bool:
             return any(
-                consulta_coincide(consulta.argumentos, entidad, tipo)
+                consulta.valido and consulta_coincide(consulta.argumentos, entidad, tipo)
                 for consulta in resultado.consultas
             )
 
@@ -345,11 +348,12 @@ class Delegador:
             return {
                 "frente": frente.value,
                 "situacion": situacion.value,
-                "resultados": [self._resultado_de(c) for c in resultado.consultas],
+                "resultados": [self._resultado_de(c) for c in resultado.consultas if c.valido],
                 "resumen": resultado.resumen,
             }
         errores = [c.error for c in resultado.consultas if c.error]
-        reintentable = bool(errores) and all(e.get("reintentable") is True for e in errores)
+        reales = [e for e in errores if not es_bloqueo_de_hook(e)]
+        reintentable = bool(reales) and all(e.get("reintentable") is True for e in reales)
         return _error(
             "frente_no_terminado",
             motivo,

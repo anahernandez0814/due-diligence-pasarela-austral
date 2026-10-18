@@ -9,6 +9,7 @@ y los metadatos llegan separados como los entrega el servidor y no se reescriben
 """
 
 import json
+import re
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -34,6 +35,18 @@ from due_diligence.terminacion import (
 )
 
 _CLAVES_DEL_CONTRATO = ("resultado", "hechos", "metadatos")
+
+# Cuando un `PreToolUse` deniega una herramienta, el SDK entrega al agente un `tool_result` con
+# error y el texto `PreToolUse:<herramienta> hook error: <motivo>` (medido en el #7, R2). Es el
+# bloqueo de una regla, no un fallo de la herramienta, y no hace fallar el frente si lo necesario
+# se hizo.
+TIPO_BLOQUEADO_POR_HOOK = "bloqueado_por_hook"
+_BLOQUEO_DE_HOOK = re.compile(r"PreToolUse:\S+ hook error:")
+
+
+def es_bloqueo_de_hook(error: dict[str, Any] | None) -> bool:
+    """Si el error de una consulta es el bloqueo de un hook y no un fallo de la herramienta."""
+    return bool(error) and error.get("tipo") == TIPO_BLOQUEADO_POR_HOOK
 
 
 class EjecutorSubagente(Protocol):
@@ -85,7 +98,9 @@ def interpretar_resultado(
     if es_error:
         error = {
             "error": True,
-            "tipo": "error_de_herramienta",
+            "tipo": TIPO_BLOQUEADO_POR_HOOK
+            if _BLOQUEO_DE_HOOK.search(texto)
+            else "error_de_herramienta",
             "mensaje": texto,
             "reintentable": False,
             "obtenido": {},

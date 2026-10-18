@@ -16,6 +16,7 @@ from typing import Any
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
+from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import Consulta, ResultadoFrente
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.terminacion import Clasificacion, clasificar
@@ -206,13 +207,7 @@ async def _con_hooks(resultado: ResultadoFrente, opciones: Any) -> ResultadoFren
         respuesta = c.error if c.error is not None else (c.resultado or {})
         llamada = await sesion.llamar(c.herramienta, c.argumentos, respuesta=respuesta)
         if llamada.denegada:
-            error = {
-                "error": True,
-                "tipo": "error_de_herramienta",
-                "mensaje": llamada.texto,
-                "reintentable": False,
-                "obtenido": {},
-            }
+            _, error = interpretar_resultado(llamada.texto, True)  # el mismo lector del ejecutor
             c = Consulta(c.frente, c.herramienta, c.argumentos, None, False, error)
         consultas.append(c)
     return replace(resultado, consultas=consultas)

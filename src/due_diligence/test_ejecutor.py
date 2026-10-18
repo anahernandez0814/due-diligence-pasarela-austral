@@ -317,3 +317,30 @@ def test_el_coste_del_subagente_se_toma_del_resultado_y_sin_resultado_no_hay_cos
     assert resultado.coste_usd == 0.0123
     sin_resultado, _ = _ejecutar([_texto("sin cierre")])
     assert sin_resultado.coste_usd is None
+
+
+def test_un_bloqueo_de_un_hook_se_reconoce_y_no_se_confunde_con_un_fallo_de_la_herramienta():
+    mensaje = f"PreToolUse:{LISTAS} hook error: La consulta no corresponde al comercio."
+    resultado, _ = _ejecutar(
+        [
+            _uso("t1", {"tipo": "persona", "nombre": "Alguien Ajeno"}, LISTAS),
+            _respuesta_de_herramienta("t1", mensaje, True),
+            _fin(),
+        ],
+        frente=Frente.LISTAS,
+    )
+    error = resultado.consultas[0].error
+    assert error is not None and error["tipo"] == "bloqueado_por_hook"
+    assert error["mensaje"] == mensaje and error["reintentable"] is False
+    assert resultado.consultas[0].resultado is None and not resultado.consultas[0].valido
+
+
+def test_un_error_de_texto_libre_que_no_viene_de_un_hook_sigue_siendo_error_de_herramienta():
+    resultado, _ = _ejecutar(
+        [
+            _uso("t1", {"nombre": "x"}),
+            _respuesta_de_herramienta("t1", "Fallo en PreToolUse de otra cosa", True),
+            _fin(),
+        ]
+    )
+    assert resultado.consultas[0].error["tipo"] == "error_de_herramienta"

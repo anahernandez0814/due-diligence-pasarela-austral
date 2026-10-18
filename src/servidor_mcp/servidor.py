@@ -21,7 +21,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
 from pydantic import Field
 
-from servidor_mcp import datos, decisiones, listas, noticias, registro, riesgo
+from servidor_mcp import datos, decisiones, informe, listas, noticias, registro, riesgo
 from servidor_mcp.respuestas import error
 
 _registro = logging.getLogger(__name__)
@@ -195,7 +195,31 @@ def consultar_riesgo_categoria(
 
 # --- registrar_informe y escalar_a_cumplimiento ----------------------------------------------
 
+
+def _esquema(descripcion: str, esquema: dict[str, Any]) -> Any:
+    """Como `_p`, con el esquema JSON completo de un objeto (#9, R2): documentación para el
+    modelo; la validación sigue siendo `informe.validar_informe`."""
+    return Field(description=descripcion, json_schema_extra=esquema)
+
+
 _COMERCIO = _p("Objeto. El comercio: «identificador» y «nombre», ambos texto.", "object")
+_COMERCIO_INFORME = _esquema(
+    "Objeto. El comercio: «identificador» y «nombre» (texto o null) y «verificado» (verdadero o "
+    "falso). Lo pone el sistema con el comercio identificado en el registro mercantil.",
+    informe.ESQUEMA_COMERCIO,
+)
+_AFIRMACIONES = _esquema(
+    "Objeto. Las afirmaciones del informe por frente: la clave es el frente (registro, listas, "
+    "noticias o categoria) y el valor, una lista de objetos con «texto», «fuente» y «fecha» "
+    "(AAAA-MM-DD), los tres obligatorios. Ninguna afirmación sin su fuente y su fecha.",
+    informe.ESQUEMA_HALLAZGOS,
+)
+_CONFLICTOS = _esquema(
+    "Objeto. Los datos en que las fuentes registrales se contradicen: «resumen» (texto) y "
+    "«lista», con cada dato y sus valores, uno por fuente con su «fuente» y su «fecha». Lo pone "
+    "el sistema; ningún valor prevalece sobre otro.",
+    informe.ESQUEMA_CONFLICTOS,
+)
 _HALLAZGOS = _p(
     "Objeto. Un hallazgo por frente: la clave es el frente (por ejemplo «registro») y el valor es "
     "un objeto con «contenido» y «fuente», ambos texto. Ningún hallazgo sin fuente.",
@@ -209,20 +233,28 @@ _COBERTURA = _p(
 @servidor.tool(
     name="registrar_informe",
     description=(
-        "Registra el informe de due diligence con su recomendación, sus hallazgos por frente con "
-        "la fuente de cada uno y la cobertura alcanzada. Es uno de los dos canales de decisión. "
-        "La recomendación es habilitar, no_habilitar o decide_cumplimiento (es una guía: el "
-        "servidor no la valida). No valida reglas de negocio ni decide: guarda lo que recibe. Si "
-        "falta un campo obligatorio devuelve un error no reintentable que lo nombra."
+        "Registra el informe de due diligence con su recomendación, las afirmaciones de cada "
+        "frente con su fuente y su fecha, los conflictos entre fuentes y la cobertura alcanzada. "
+        "Es uno de los dos canales de decisión. El comercio, los conflictos y la cobertura los "
+        "pone el sistema a partir de lo consultado; las afirmaciones y la recomendación, quien "
+        "registra. Cada frente cubierto lleva al menos una afirmación, también si no hubo "
+        "hallazgos; un frente sin cubrir puede ir sin afirmaciones. La recomendación es "
+        "habilitar, no_habilitar o decide_cumplimiento (es una guía: el servidor no la "
+        "valida). No valida reglas de negocio ni decide: guarda lo que "
+        "recibe. Tampoco comprueba que cada fuente se haya consultado ni que cada frente cubierto "
+        "lleve su afirmación (eso lo hace el sistema antes de llamarla) ni escala el caso: para "
+        "eso está escalar_a_cumplimiento. Si falta un campo obligatorio o una afirmación no tiene "
+        "la forma esperada, devuelve un error no reintentable que nombra cada problema."
     ),
 )
 def registrar_informe(
-    comercio: Annotated[Any, _COMERCIO] = None,
+    comercio: Annotated[Any, _COMERCIO_INFORME] = None,
     recomendacion: Annotated[
         Any,
         _p("Texto. La recomendación del informe: habilitar, no_habilitar o decide_cumplimiento."),
     ] = None,
-    hallazgos: Annotated[Any, _HALLAZGOS] = None,
+    hallazgos: Annotated[Any, _AFIRMACIONES] = None,
+    conflictos: Annotated[Any, _CONFLICTOS] = None,
     cobertura: Annotated[Any, _COBERTURA] = None,
 ) -> CallToolResult:
     return _protegido(
@@ -230,6 +262,7 @@ def registrar_informe(
             comercio=comercio,
             recomendacion=recomendacion,
             hallazgos=hallazgos,
+            conflictos=conflictos,
             cobertura=cobertura,
         )
     )

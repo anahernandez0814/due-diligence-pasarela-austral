@@ -170,6 +170,42 @@ def test_el_pedido_lleva_los_argumentos_exactos_con_cobertura_completa():
     assert argumentos["cobertura"] == "completa"  # lo que el hook debe sustituir
 
 
+def test_la_entrada_del_informe_tiene_la_forma_del_9():
+    from servidor_mcp.informe import validar_informe
+
+    assert validar_informe(sondeo_hooks.ENTRADA_INFORME) == []
+
+
+def test_el_hook_del_informe_acepta_la_entrada_de_g4_y_pone_los_datos_del_codigo():
+    # Sin el modelo: si el hook la rechazara, g4 mediría «no concluyente» en vez de la cobertura.
+    import asyncio
+
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.conflictos import sin_comparar
+
+    estado, hooks = sondeo_hooks.caso_del_sondeo_de_cobertura()
+    (matcher,) = [m for m in hooks.coordinador()["PreToolUse"] if m.matcher == sondeo_hooks.INFORME]
+    entrada = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": sondeo_hooks.INFORME,
+        "tool_input": sondeo_hooks.ENTRADA_INFORME,
+        "tool_use_id": "t1",
+    }
+    salida = asyncio.run(matcher.hooks[0](entrada, "t1", None))
+    assert salida["hookSpecificOutput"]["updatedInput"] == {
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": False,
+        },
+        "recomendacion": "no_habilitar",
+        "hallazgos": sondeo_hooks.ENTRADA_INFORME["hallazgos"],
+        # El registro del sondeo no se delegó: no hay comercio identificado (no está caído).
+        "conflictos": sin_comparar("sin_comercio").como_entrada(),
+        "cobertura": calcular_cobertura(estado).lineas(),
+    }
+
+
 def test_guardados_lee_solo_los_json_que_son_objetos(tmp_path):
     (tmp_path / "informes").mkdir()
     (tmp_path / "informes" / "a.json").write_text('{"cobertura": ["x"]}', encoding="utf-8")

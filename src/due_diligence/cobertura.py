@@ -4,6 +4,9 @@
 `registrar_informe` y `escalar_a_cumplimiento` y la línea de comandos. Es puro: lee la situación de
 cada frente y su último error en el estado, no escribe nada y no registra eventos.
 
+`registro_caido` (#9, R8) lee lo mismo para el frente de registro. Vive aquí para que lo usen
+`informe.py` y `conflictos.py` sin importarse entre ellos.
+
 Los motivos son textos fijos por situación y causa: el motivo crudo del estado puede traer
 identificadores del registro (por ejemplo, las coincidencias de un nombre ambiguo) y la cobertura
 no repite datos del comercio.
@@ -33,6 +36,11 @@ _MOTIVOS: dict[Causa, str] = {
     Causa.CANCELADO: "se canceló",
     Causa.INVALIDADO: "el comercio del registro cambió después de consultar listas",
 }
+# Causas de un registro que no respondió (#9, R8). `error_de_fuente` solo si algún error real no es
+# `entrada_invalida`: con una entrada inválida la fuente respondió (caso límite de la spec).
+_CAUSAS_DE_CAIDA = frozenset(
+    {Causa.TERMINACION_ANOMALA, Causa.SIN_CONSULTAS, Causa.RESULTADO_INVALIDO, Causa.CANCELADO}
+)
 
 
 @dataclass(frozen=True)
@@ -106,3 +114,21 @@ def calcular_cobertura(estado: EstadoCaso) -> CoberturaCaso:
     """La cobertura de los cuatro frentes: cubierto solo si terminó con normalidad (FR-010)."""
     frentes = {frente: _del_frente(estado, frente) for frente in Frente}
     return CoberturaCaso(frentes, all(c.cubierto for c in frentes.values()))
+
+
+def registro_caido(estado: EstadoCaso) -> bool:
+    """El registro no terminó y la fuente no respondió, quede o no un reintento (R8)."""
+    if estado.situacion(Frente.REGISTRO) is not Situacion.NO_TERMINADO:
+        return False
+    error = estado.errores.get(Frente.REGISTRO) or {}
+    try:
+        causa = Causa(error.get("causa"))
+    except ValueError:
+        return False
+    if causa in _CAUSAS_DE_CAIDA:
+        return True
+    if causa is not Causa.ERROR_DE_FUENTE:
+        return False
+    errores = (error.get("obtenido") or {}).get("errores") or []
+    tipos = [e.get("tipo") for e in errores if isinstance(e, Mapping) and not es_bloqueo_de_hook(e)]
+    return any(tipo != "entrada_invalida" for tipo in tipos)

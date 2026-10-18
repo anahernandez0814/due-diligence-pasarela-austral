@@ -17,23 +17,28 @@ Lo medido con el SDK 0.2.168 (research R1 a R3) condiciona el diseño:
   que va envuelto con `degradar_escalamiento`, que nunca deniega (#8, R6).
 """
 
+import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
 from claude_agent_sdk import HookMatcher
 
-from due_diligence.cobertura import calcular_cobertura
+from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
 from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
+from due_diligence.conflictos import SIN_COMPARAR, calcular_conflictos, no_calculados
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_CIERRE_SIN_INFORME,
     TIPO_COBERTURA_SUSTITUIDA,
     TIPO_CONSULTA_FALLIDA,
+    TIPO_DATOS_SUSTITUIDOS,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
+    TIPO_INFORME_REGISTRADO,
     RegistroEventos,
 )
 from due_diligence.frentes import (
@@ -43,16 +48,30 @@ from due_diligence.frentes import (
     Frente,
     nombre_completo,
 )
+from due_diligence.informe import (
+    NO_CALCULADOS,
+    Huella,
+    InformeRegistrado,
+    comercio_del_informe,
+    huella_con,
+    problemas_de_frentes_cubiertos,
+    problemas_de_fuente,
+)
 from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
+    Rechazo,
     causas_vigentes,
     evaluar_cierre,
     evaluar_informe,
+    evaluar_informe_minimo,
+    falta_para_cerrar,
+    normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
     reglas_de,
 )
+from servidor_mcp.informe import Problema, validar_informe
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
 
@@ -64,6 +83,15 @@ MOTIVO_ENTRADA_MALFORMADA = (
 # Cobertura con la que sale un escalamiento si falla su cálculo (#8, R6): escalar nunca se deniega.
 COBERTURA_NO_CALCULADA = "No se pudo calcular la cobertura; debe tratarse como incompleta."
 REGLA_LISTAS = "I.1"
+# Fuente y forma de cada afirmación del informe (#9, FR-001 a FR-004).
+REGLA_FUENTE = "I.4"
+MOTIVO_SIN_COMERCIO_INFORME = (
+    "No hay comercio para el informe: el registro no identificó uno único y no hay un comercio "
+    "pedido por el analista."
+)
+# Solo para validar la forma del resto del informe cuando falta el comercio o la recomendación:
+# esas dos ausencias ya son motivos propios y `validar_informe` se detendría en ellas.
+_COMERCIO_PARA_VALIDAR = {"identificador": None, "nombre": "-", "verificado": False}
 NIVELES_DE_RIESGO = ("alto", "medio", "bajo")
 HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
 HERRAMIENTA_INFORME = nombre_completo("registrar_informe")
@@ -88,6 +116,29 @@ def denegar(motivo: str) -> dict[str, Any]:
     }
 
 
+def denegar_informe(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[str, Any]:
+    """`PreToolUse` de `registrar_informe`: deniega con un error estructurado en JSON (#9, R3).
+
+    Junta en un solo rechazo los motivos de las reglas (con su regla) y los problemas de forma o de
+    fuente (con su ruta). `reintentable: false`: la misma entrada volvería a fallar.
+    """
+    textos = [r.texto for r in rechazos]
+    if problemas:
+        detalle = "; ".join(
+            f"{p.ruta}: {p.texto[0].lower()}{p.texto[1:].rstrip('.')}" for p in problemas
+        )
+        textos.append(f"Problemas de forma o de fuente: {detalle}.")
+    cuerpo = {
+        "error": True,
+        "tipo": "informe_rechazado",
+        "mensaje": f"No se registra el informe. {' '.join(textos)} Corrige y vuelve a registrarlo.",
+        "reintentable": False,
+        "motivos": [{"regla": r.regla, "texto": r.texto} for r in rechazos],
+        "problemas": [p.como_dict() for p in problemas],
+    }
+    return denegar(json.dumps(cuerpo, ensure_ascii=False))
+
+
 def bloquear_cierre(motivo: str) -> dict[str, Any]:
     """`Stop`: el coordinador no termina y el motivo llega al modelo."""
     return {"decision": "block", "reason": motivo}
@@ -106,6 +157,58 @@ def reemplazar_entrada(entrada: dict[str, Any]) -> dict[str, Any]:
             "updatedInput": entrada,
         }
     }
+
+
+# --------------------------------------------------------------------------- informe (#9)
+
+
+def _identificador_del_informe(resultado: Any) -> str | None:
+    """El id `INF-…` de una respuesta `informe_registrado` de la pasarela, o `None`."""
+    if not isinstance(resultado, Mapping) or resultado.get("resultado") != "informe_registrado":
+        return None
+    hechos = resultado.get("hechos") or []
+    contenido = hechos[0].get("contenido") if hechos and isinstance(hechos[0], Mapping) else None
+    identificador = contenido.get("id") if isinstance(contenido, Mapping) else None
+    return identificador if isinstance(identificador, str) and identificador else None
+
+
+def _resumen_de_huella(huella: Huella) -> str:
+    """La cobertura y los conflictos de un informe, en texto fijo y sin datos del comercio."""
+    if huella.cobertura == NO_CALCULADOS:
+        return "cobertura y conflictos no calculados"
+    cubiertos = sum(cubierto for _, cubierto in huella.cobertura)
+    total = len(huella.cobertura)
+    completa = "completa" if cubiertos == total else "incompleta"
+    cobertura = f"cobertura {completa}, {cubiertos} de {total} frentes"
+    estado, lista = huella.conflictos
+    if estado in SIN_COMPARAR:
+        conflictos = "fuentes registrales no comparadas"
+    elif not lista:
+        conflictos = "sin conflictos"
+    else:
+        conflictos = "1 conflicto" if len(lista) == 1 else f"{len(lista)} conflictos"
+    return f"{cobertura}; {conflictos}"
+
+
+# Acción intentada en los bloqueos (#9, FR-017): la herramienta y, como mucho, un valor de un
+# conjunto cerrado (la recomendación o el tipo de consulta). Nunca nombres ni identificadores.
+ACCION_DELEGAR_LISTAS = "delegar_frente (listas)"
+ACCION_DELEGAR_INVALIDA = "delegar_frente (entrada no válida)"
+
+
+def _accion_listas(argumentos: Any) -> str:
+    tipo = argumentos.get("tipo") if isinstance(argumentos, Mapping) else None
+    tipo = tipo.strip().casefold() if isinstance(tipo, str) else None
+    if tipo not in ("comercio", "persona"):
+        tipo = "tipo no válido"
+    return f"consultar_listas_restrictivas ({tipo})"
+
+
+def _accion_informe(argumentos: Any) -> str:
+    if not isinstance(argumentos, Mapping):
+        return "registrar_informe (entrada no válida)"
+    recomendacion = normalizar_recomendacion(argumentos.get("recomendacion"))
+    return f"registrar_informe ({recomendacion or 'recomendación no válida'})"
 
 
 # --------------------------------------------------------------------------- lectura
@@ -182,6 +285,44 @@ def _registrar_fallo(
     )
 
 
+def _marcar_cierre_agotado(
+    estado: EstadoCaso,
+    eventos: RegistroEventos,
+    falta_escalar: bool,
+    falta_informe: bool,
+    regla: str | None,
+) -> None:
+    """Agotadas las devoluciones del `Stop`, marca y deja el evento de lo que falta (#7; #9, R8)."""
+    if falta_escalar:
+        estado.cierre_sin_escalar = True
+        eventos.registrar(
+            TIPO_CIERRE_SIN_ESCALAR,
+            None,
+            "El caso termina sin el escalamiento obligatorio: se agotaron las "
+            f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
+            regla=regla,
+        )
+    if falta_informe:
+        estado.cierre_sin_informe = True
+        eventos.registrar(
+            TIPO_CIERRE_SIN_INFORME,
+            None,
+            "El caso termina sin el informe vigente: se agotaron las "
+            f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
+        )
+
+
+def _lo_que_falta(estado: EstadoCaso) -> tuple[bool, bool, str | None]:
+    """(falta escalar, falta el informe, regla) para un `Stop` que falló; si tampoco se puede
+    saber, faltan los dos por prudencia."""
+    try:
+        falta_escalar, falta_informe = falta_para_cerrar(estado)
+        regla = reglas_de(causas_vigentes(estado.libro)) if falta_escalar else None
+    except Exception:
+        return True, True, None
+    return falta_escalar, falta_informe, regla
+
+
 def fallar_cerrado(
     hook: Hook,
     tipo: str,
@@ -192,7 +333,8 @@ def fallar_cerrado(
     """Envuelve un hook para que un fallo no deje pasar la acción (FR-012, R2).
 
     - `PreToolUse`: deniega con un motivo genérico.
-    - `Stop`: bloquea el cierre y cuenta como una devolución.
+    - `Stop`: bloquea el cierre y cuenta como una devolución; agotadas, marca lo que falte
+      (escalamiento, informe o, si tampoco se puede saber, los dos).
     - `PostToolUse` y `PostToolUseFailure`: no pueden impedir nada; sellan el libro y los
       `PreToolUse` de las reglas deniegan mientras el sello exista.
 
@@ -209,7 +351,7 @@ def fallar_cerrado(
             if tipo == "Stop":
                 # Sin poder evaluar el cierre se bloquea, pero con el mismo límite de devoluciones.
                 if estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
-                    estado.cierre_sin_escalar = True
+                    _marcar_cierre_agotado(estado, eventos, *_lo_que_falta(estado))
                     return permitir()
                 estado.libro.cierres_impedidos += 1
                 return bloquear_cierre(MOTIVO_FALLO_DE_HOOK)
@@ -309,7 +451,9 @@ class HooksDelCaso:
                 ),
             ],
             "PostToolUse": [
-                self._matcher(HERRAMIENTA_ESCALAR, self._escalar_posterior, "PostToolUse", None)
+                self._matcher(HERRAMIENTA_ESCALAR, self._escalar_posterior, "PostToolUse", None),
+                # #9, R7: confirma la huella que dejó pendiente el `PreToolUse` del informe.
+                self._matcher(HERRAMIENTA_INFORME, self._informe_posterior, "PostToolUse", None),
             ],
             "PostToolUseFailure": [
                 self._matcher(
@@ -317,22 +461,27 @@ class HooksDelCaso:
                     self._fallo_de_herramienta(None),
                     "PostToolUseFailure",
                     None,
-                )
+                ),
+                self._matcher(
+                    HERRAMIENTA_INFORME, self._informe_fallido, "PostToolUseFailure", None
+                ),
             ],
             "Stop": [self._matcher(None, self._cierre, "Stop", None)],
         }
 
     # -------------------------------------------------------------- denegar por regla
 
-    def _denegar_por_regla(self, frente: Frente | None, regla: str | None, motivo: str):
-        """Deniega, y deja el evento con la regla y el motivo (FR-013)."""
-        self.eventos.registrar(TIPO_BLOQUEO_REGLA, frente, motivo, regla=regla)
+    def _denegar_por_regla(
+        self, frente: Frente | None, regla: str | None, motivo: str, accion: str | None = None
+    ):
+        """Deniega, y deja el evento con la regla, el motivo y la acción intentada (FR-013, #9)."""
+        self.eventos.registrar(TIPO_BLOQUEO_REGLA, frente, motivo, regla=regla, accion=accion)
         return denegar(motivo)
 
-    def _sellado(self, frente: Frente | None, regla: str | None):
+    def _sellado(self, frente: Frente | None, regla: str | None, accion: str | None = None):
         """Con el libro sellado un hecho pudo quedar sin registrar: no se permite."""
         if self.estado.libro.fallo_de_hook:
-            return self._denegar_por_regla(frente, regla, MOTIVO_LIBRO_SELLADO)
+            return self._denegar_por_regla(frente, regla, MOTIVO_LIBRO_SELLADO, accion)
         return None
 
     # -------------------------------------------------------------- regla I.1: listas
@@ -341,13 +490,14 @@ class HooksDelCaso:
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
         """`PreToolUse` de la consulta de listas: solo el comercio o su representante (FR-002)."""
-        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        accion = _accion_listas(entrada.get("tool_input"))
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS, accion)
         if sellado is not None:
             return sellado
         permitida, motivo = permite_listas(self.estado, entrada.get("tool_input"))
         if permitida:
             return permitir()
-        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo, accion)
 
     async def _delegar_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
@@ -359,16 +509,18 @@ class HooksDelCaso:
         argumentos = entrada.get("tool_input")
         frente = argumentos.get("frente") if isinstance(argumentos, Mapping) else None
         if not isinstance(frente, str):
-            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
+            return self._denegar_por_regla(
+                None, None, MOTIVO_ENTRADA_MALFORMADA, ACCION_DELEGAR_INVALIDA
+            )
         if frente.strip().casefold() != Frente.LISTAS.value:
             return permitir()
-        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS)
+        sellado = self._sellado(Frente.LISTAS, REGLA_LISTAS, ACCION_DELEGAR_LISTAS)
         if sellado is not None:
             return sellado
         permitida, motivo = permite_delegar_listas(self.estado)
         if permitida:
             return permitir()
-        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo)
+        return self._denegar_por_regla(Frente.LISTAS, REGLA_LISTAS, motivo, ACCION_DELEGAR_LISTAS)
 
     # -------------------------------------------------------------- registro (FR-001)
 
@@ -388,25 +540,20 @@ class HooksDelCaso:
     async def _cierre(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
-        """`Stop` del coordinador: un caso que requiere escalamiento no termina sin escalar.
+        """`Stop` del coordinador: no termina sin el escalamiento ni sin el informe vigente.
 
-        La decisión usa el contador `cierres_impedidos` del libro, no `stop_hook_active` (R3). Es
-        una protección: pasadas `MAX_CIERRES_IMPEDIDOS` devoluciones deja terminar, pero el caso
-        queda marcado `cierre_sin_escalar` y nunca figura como completo ni habilitado.
+        Escalamiento (#7) e informe (#9, R8) comparten el contador `cierres_impedidos` del libro,
+        no `stop_hook_active` (R3). Es una protección: pasadas `MAX_CIERRES_IMPEDIDOS` devoluciones
+        deja terminar, pero el caso queda marcado `cierre_sin_escalar`, `cierre_sin_informe` o los
+        dos, y nunca figura como completo ni habilitado.
         """
         motivo = evaluar_cierre(self.estado)
         if motivo is None:
             return permitir()
-        regla = reglas_de(causas_vigentes(self.estado.libro))
+        falta_escalar, falta_informe = falta_para_cerrar(self.estado)
+        regla = reglas_de(causas_vigentes(self.estado.libro)) if falta_escalar else None
         if self.estado.libro.cierres_impedidos >= MAX_CIERRES_IMPEDIDOS:
-            self.estado.cierre_sin_escalar = True
-            self.eventos.registrar(
-                TIPO_CIERRE_SIN_ESCALAR,
-                None,
-                "El caso termina sin el escalamiento obligatorio: se agotaron las "
-                f"{MAX_CIERRES_IMPEDIDOS} devoluciones del cierre.",
-                regla=regla,
-            )
+            _marcar_cierre_agotado(self.estado, self.eventos, falta_escalar, falta_informe, regla)
             return permitir()
         self.estado.libro.cierres_impedidos += 1
         self.eventos.registrar(TIPO_CIERRE_IMPEDIDO, None, motivo, regla=regla)
@@ -499,20 +646,155 @@ class HooksDelCaso:
     async def _informe_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
-        """`PreToolUse` de `registrar_informe`: rechaza lo que las reglas no permiten (FR-005)."""
-        sellado = self._sellado(None, None)
-        if sellado is not None:
-            return sellado
+        """`PreToolUse` de `registrar_informe` (#7 FR-005; #8 R6; #9 R1, R3, R5).
+
+        Junta en un solo rechazo estructurado las reglas del #7 (`evaluar_informe`), la forma del
+        informe (`validar_informe`, la misma de la pasarela), la fuente consultada de cada
+        afirmación (FR-004) y al menos una afirmación por frente cubierto (US1-6; no con el
+        sello). Si acepta, la entrada completa lleva el comercio, los conflictos y la cobertura del
+        código, `hallazgos` tal como los envió el coordinador y `recomendacion` en su forma
+        canónica (FR-011: `No-Habilitar` llega como `no_habilitar` a la pasarela, al informe
+        registrado y al evento).
+        """
+        # Con el sello (#9, R9, FR-014): solo el informe mínimo, `decide_cumplimiento` tras
+        # escalar, con la cobertura y los conflictos en textos fijos y sin calcularlos.
+        sellado = bool(self.estado.libro.fallo_de_hook)
         argumentos = entrada.get("tool_input")
-        rechazos = evaluar_informe(self.estado, argumentos)
-        if rechazos:
-            reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
-            regla = ", ".join(sorted(reglas)) or None
-            return self._denegar_por_regla(None, regla, " ".join(r.texto for r in rechazos))
-        if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan; por si acaso
-            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
-        # Aceptado por las reglas: se registra con la cobertura del código (#8, FR-011, R6).
-        return self._sustituir_cobertura("registrar_informe", argumentos)
+        evaluar = evaluar_informe_minimo if sellado else evaluar_informe
+        rechazos = list(evaluar(self.estado, argumentos))
+        if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
+            return self._denegar_informe(
+                rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [], argumentos
+            )
+        comercio = comercio_del_informe(self.estado)
+        if comercio is None:
+            rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_INFORME, None))
+        cobertura = None if sellado else calcular_cobertura(self.estado)
+        conflictos = None if sellado else calcular_conflictos(self.estado)
+        # Una recomendación no válida ya la rechazan las reglas: va tal cual al rechazo.
+        recomendacion = argumentos.get("recomendacion")
+        completa = {
+            "comercio": comercio,
+            "recomendacion": normalizar_recomendacion(recomendacion) or recomendacion,
+            "hallazgos": argumentos.get("hallazgos"),
+            "conflictos": (conflictos or no_calculados()).como_entrada(),
+            "cobertura": cobertura.lineas() if cobertura else [COBERTURA_NO_CALCULADA],
+        }
+        problemas = self._problemas_del_informe(completa, cobertura)
+        if rechazos or problemas:
+            return self._denegar_informe(rechazos, problemas, argumentos)
+        if cobertura is None:
+            self.eventos.registrar(
+                TIPO_COBERTURA_SUSTITUIDA,
+                None,
+                "Cobertura puesta en registrar_informe: no calculada tras un fallo de hook "
+                "(informe mínimo).",
+            )
+        else:
+            self._evento_cobertura("registrar_informe", argumentos, cobertura)
+        self._evento_datos(argumentos, completa)
+        # R7: la huella se calcula aquí, con los mismos datos que se sustituyen, y queda pendiente
+        # hasta que el `PostToolUse` confirme que la pasarela aceptó.
+        self.estado.informes_pendientes[tool_use_id or ""] = (
+            huella_con(self.estado, cobertura, conflictos),
+            completa["recomendacion"],
+            sellado,
+        )
+        return reemplazar_entrada(completa)
+
+    async def _informe_posterior(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUse` de `registrar_informe`: confirma la huella pendiente (R7, FR-016).
+
+        No la recalcula: usa la del `PreToolUse`, así un frente que terminó entre los dos hooks
+        deja el informe sin vigencia. Emite `informe_registrado`, sin datos del comercio.
+        """
+        pendiente = self.estado.informes_pendientes.pop(tool_use_id or "", None)
+        resultado, error = leer_respuesta(entrada.get("tool_response"))
+        identificador = _identificador_del_informe(resultado)
+        if identificador is None:
+            self._constancia_de_consulta_fallida(None, error)
+            return permitir()
+        if pendiente is None:  # sin `PreToolUse` que aceptara: no hay huella que confirmar
+            return permitir()
+        huella, recomendacion, minimo = pendiente
+        self.estado.informes.append(InformeRegistrado(identificador, recomendacion, minimo, huella))
+        minimo_texto = " Informe mínimo tras un fallo de hook." if minimo else ""
+        self.eventos.registrar(
+            TIPO_INFORME_REGISTRADO,
+            None,
+            f"Informe {identificador} registrado; recomendación: {recomendacion}; "
+            f"{_resumen_de_huella(huella)}.{minimo_texto}",
+        )
+        return permitir()
+
+    async def _informe_fallido(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUseFailure` de `registrar_informe`: descarta la huella pendiente."""
+        self.estado.informes_pendientes.pop(tool_use_id or "", None)
+        _, error = leer_respuesta(entrada.get("error"), es_error=True)
+        self._constancia_de_consulta_fallida(None, error)
+        return permitir()
+
+    def _problemas_del_informe(
+        self, completa: dict[str, Any], cobertura: CoberturaCaso | None
+    ) -> list[Problema]:
+        """La forma, las fuentes y los frentes cubiertos sin afirmación (US1-6).
+
+        El comercio y la recomendación no son problemas de forma: son motivos propios. Sin
+        cobertura (el informe mínimo, R9) no se exige afirmación a ningún frente.
+        """
+        recomendacion = completa["recomendacion"]
+        para_validar = {
+            **completa,
+            "comercio": completa["comercio"] or _COMERCIO_PARA_VALIDAR,
+            "recomendacion": recomendacion
+            if isinstance(recomendacion, str) and recomendacion.strip()
+            else "-",
+        }
+        problemas = validar_informe(para_validar)
+        problemas += problemas_de_fuente(self.estado, completa["hallazgos"])
+        if cobertura is not None:
+            problemas += problemas_de_frentes_cubiertos(cobertura, completa["hallazgos"])
+        return problemas
+
+    def _denegar_informe(self, rechazos: list[Rechazo], problemas: list[Problema], argumentos: Any):
+        """Deniega el informe con el JSON de R3 y deja `bloqueo_regla` (I.4 si hay problemas)."""
+        reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
+        if problemas:
+            reglas.add(REGLA_FUENTE)
+        textos = [r.texto for r in rechazos]
+        if problemas:
+            cantidad = len(problemas)
+            plural = "problema" if cantidad == 1 else "problemas"
+            textos.append(f"{cantidad} {plural} de forma o de fuente en el informe.")
+        self.eventos.registrar(
+            TIPO_BLOQUEO_REGLA,
+            None,
+            " ".join(textos),
+            regla=", ".join(sorted(reglas)) or None,
+            accion=_accion_informe(argumentos),
+        )
+        return denegar_informe(rechazos, problemas)
+
+    def _evento_datos(self, argumentos: Mapping[str, Any], completa: dict[str, Any]) -> None:
+        """`datos_sustituidos`: lo que el código puso, sin datos del comercio (#9, R5)."""
+        comercio, conflictos = completa["comercio"], completa["conflictos"]
+        verificado = "comercio verificado" if comercio["verificado"] else "comercio sin verificar"
+        distintos = [p for p in ("comercio", "conflictos") if argumentos.get(p) != completa[p]]
+        declarado = (
+            f"Lo declarado por el coordinador era distinto en: {', '.join(distintos)}."
+            if distintos
+            else "Coincide con lo declarado por el coordinador."
+        )
+        self.eventos.registrar(
+            TIPO_DATOS_SUSTITUIDOS,
+            None,
+            f"Datos del código puestos en registrar_informe: {verificado}; "
+            f"{conflictos['resumen']} {declarado}",
+        )
 
     async def _escalar_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
@@ -528,12 +810,19 @@ class HooksDelCaso:
         return self._sustituir_cobertura("escalar_a_cumplimiento", argumentos)
 
     def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):
-        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`.
-
-        El evento se emite antes de que la pasarela acepte la llamada: dice qué cobertura se puso
-        en ella y si la que declaró el coordinador era distinta, nunca que quedó registrada.
-        """
+        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`."""
         cobertura = calcular_cobertura(self.estado)
+        self._evento_cobertura(herramienta, argumentos, cobertura)
+        return reemplazar_entrada({**argumentos, "cobertura": cobertura.lineas()})
+
+    def _evento_cobertura(
+        self, herramienta: str, argumentos: Mapping[str, Any], cobertura: CoberturaCaso
+    ) -> None:
+        """`cobertura_sustituida` (#8): se emite antes de que la pasarela acepte la llamada.
+
+        Dice qué cobertura se puso en ella y si la que declaró el coordinador era distinta, nunca
+        que quedó registrada.
+        """
         lineas = cobertura.lineas()
         cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
         faltan = [f.value for f, c in cobertura.frentes.items() if not c.cubierto]
@@ -553,7 +842,6 @@ class HooksDelCaso:
             None,
             f"Cobertura puesta en {herramienta}: {resumen}. {declarada}",
         )
-        return reemplazar_entrada({**argumentos, "cobertura": lineas})
 
     # -------------------------------------------------------------- errores de herramienta
 

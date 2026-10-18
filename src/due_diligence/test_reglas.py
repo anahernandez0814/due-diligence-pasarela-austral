@@ -19,7 +19,9 @@ from due_diligence.libro import (
 )
 from due_diligence.reglas import (
     ALTO_RIESGO,
+    MOTIVO_ENTRADA_INFORME,
     RECOMENDACIONES,
+    Rechazo,
     categoria_determinada,
     causas_vigentes,
     consulta_coincide,
@@ -27,6 +29,7 @@ from due_diligence.reglas import (
     escalamiento_cubre,
     evaluar_cierre,
     evaluar_informe,
+    motivo_de_escalar,
     normalizar_recomendacion,
     permite_delegar_listas,
     permite_listas,
@@ -666,12 +669,24 @@ def test_la_regla_de_un_rechazo_por_alto_riesgo_y_coincidencia_es_i2_i3():
 # ------------------------------------------------------------------ evaluar_cierre (US4, FR-007)
 
 
+def _estado_de_cierre(libro=None):
+    """Como `_estado_de_informe`, con un informe vigente (#9, T037): estos tests del #7 siguen
+    probando solo el escalamiento, con sus mismas igualdades exactas."""
+    from due_diligence.informe import InformeRegistrado, huella_actual
+
+    estado = _estado_de_informe(libro)
+    estado.informes.append(
+        InformeRegistrado("INF-0001", "no_habilitar", False, huella_actual(estado))
+    )
+    return estado
+
+
 def test_sin_causas_el_caso_puede_cerrar():
-    assert evaluar_cierre(_estado_de_informe(_libro_del_caso_b())) is None
+    assert evaluar_cierre(_estado_de_cierre(_libro_del_caso_b())) is None
 
 
 def test_con_una_coincidencia_sin_escalar_el_cierre_se_impide_nombrando_la_causa():
-    motivo = evaluar_cierre(_estado_de_informe(_libro_con("persona")))
+    motivo = evaluar_cierre(_estado_de_cierre(_libro_con("persona")))
     assert motivo == (
         "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
         "coincidencia del representante legal en listas restrictivas."
@@ -680,26 +695,26 @@ def test_con_una_coincidencia_sin_escalar_el_cierre_se_impide_nombrando_la_causa
 
 def test_con_alto_riesgo_sin_escalar_el_cierre_se_impide_nombrando_la_causa():
     libro = _libro_del_caso_b(consultas_riesgo=[ConsultaRiesgo("apuestas", "alto")])
-    assert "por: categoría de alto riesgo." in evaluar_cierre(_estado_de_informe(libro))
+    assert "por: categoría de alto riesgo." in evaluar_cierre(_estado_de_cierre(libro))
 
 
 def test_con_coincidencia_y_alto_riesgo_el_motivo_nombra_las_dos_causas():
     libro = _libro_con("comercio")
     libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
-    motivo = evaluar_cierre(_estado_de_informe(libro))
+    motivo = evaluar_cierre(_estado_de_cierre(libro))
     assert "coincidencia del comercio en listas restrictivas" in motivo
     assert "categoría de alto riesgo" in motivo
 
 
 def test_con_el_escalamiento_cubierto_el_caso_puede_cerrar():
     libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
-    assert evaluar_cierre(_estado_de_informe(libro)) is None
+    assert evaluar_cierre(_estado_de_cierre(libro)) is None
 
 
 def test_una_causa_nueva_tras_escalar_vuelve_a_impedir_el_cierre():
     libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
     libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
-    motivo = evaluar_cierre(_estado_de_informe(libro))
+    motivo = evaluar_cierre(_estado_de_cierre(libro))
     # Un escalamiento nuevo cubriría todas las causas vigentes, así que el motivo las nombra todas.
     assert "categoría de alto riesgo" in motivo
     assert "coincidencia del representante legal" in motivo
@@ -707,6 +722,103 @@ def test_una_causa_nueva_tras_escalar_vuelve_a_impedir_el_cierre():
 
 def test_el_motivo_del_cierre_no_repite_nombres_ni_identificadores():
     libro = _libro_con("comercio", "persona")
-    motivo = evaluar_cierre(_estado_de_informe(libro))
+    motivo = evaluar_cierre(_estado_de_cierre(libro))
     for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía", "coincidencia_comercio"):
         assert dato not in motivo
+
+
+# ------------------------------------------------------------------ #9: el informe en el cierre
+
+
+def test_falta_para_cerrar_distingue_escalamiento_e_informe():
+    from due_diligence.reglas import falta_para_cerrar
+
+    assert falta_para_cerrar(_estado_de_informe(_libro_del_caso_b())) == (False, True)
+    assert falta_para_cerrar(_estado_de_cierre(_libro_del_caso_b())) == (False, False)
+    assert falta_para_cerrar(_estado_de_informe(_libro_con("persona"))) == (True, True)
+
+
+def test_sin_informe_el_motivo_es_fijo_y_con_escalamiento_pendiente_va_despues():
+    from due_diligence.reglas import MOTIVO_SIN_INFORME, SUFIJO_LUEGO_INFORME
+
+    assert evaluar_cierre(_estado_de_informe(_libro_del_caso_b())) == MOTIVO_SIN_INFORME
+    motivo = evaluar_cierre(_estado_de_informe(_libro_con("persona")))
+    assert motivo == (
+        "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
+        "coincidencia del representante legal en listas restrictivas." + SUFIJO_LUEGO_INFORME
+    )
+
+
+def test_varios_cambios_se_nombran_juntos_en_el_motivo():
+    from due_diligence.estado import Situacion
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import consulta
+
+    estado = _estado_de_cierre(_libro_del_caso_b())
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.TERMINADO)
+    respuesta = respuesta_registro(comercio_alto_riesgo())
+    estado.agregar_consultas([consulta(Frente.REGISTRO, {}, respuesta)])  # ya se pueden comparar
+    assert evaluar_cierre(estado) == (
+        "El informe registrado ya no está vigente: cambió la cobertura y los conflictos después "
+        "de registrarlo. Registra uno nuevo."
+    )
+
+
+# ------------------------------------------------------------------ #9: fallo de hook (US4, R9)
+
+
+def _sellado(libro=None):
+    estado = _estado_de_informe(libro or _libro_del_caso_b())
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    return estado
+
+
+def test_el_sello_es_una_causa_de_escalamiento_con_su_etiqueta_y_sin_regla():
+    from due_diligence.libro import CAUSA_FALLO_DE_HOOK
+    from due_diligence.reglas import ETIQUETAS_CAUSA
+
+    assert CAUSA_FALLO_DE_HOOK == "fallo_de_hook"
+    estado = _sellado()
+    assert causas_vigentes(estado.libro) == frozenset({CAUSA_FALLO_DE_HOOK})
+    assert ETIQUETAS_CAUSA[CAUSA_FALLO_DE_HOOK] == "fallo de un hook de verificación"
+    assert reglas_de({CAUSA_FALLO_DE_HOOK}) is None
+    assert causas_vigentes(_estado_de_informe(_libro_del_caso_b()).libro) == frozenset()
+
+
+def test_el_informe_minimo_solo_admite_decide_cumplimiento_y_tras_escalar():
+    from due_diligence.libro import CAUSA_FALLO_DE_HOOK
+    from due_diligence.reglas import MOTIVO_SOLO_OFICIAL, evaluar_informe_minimo
+
+    assert MOTIVO_SOLO_OFICIAL == (
+        "Tras un fallo de hook solo decide el oficial: la recomendación debe ser "
+        "decide_cumplimiento."
+    )
+    sin_escalar = _sellado()
+    escalar = Rechazo(motivo_de_escalar({CAUSA_FALLO_DE_HOOK}), None)
+    assert evaluar_informe_minimo(sin_escalar, _informe("decide_cumplimiento")) == [escalar]
+    for recomendacion in ("habilitar", "no_habilitar", "aprobar"):
+        assert evaluar_informe_minimo(sin_escalar, _informe(recomendacion)) == [
+            Rechazo(MOTIVO_SOLO_OFICIAL, None),
+            escalar,
+        ]
+    escalado = _sellado(_libro_del_caso_b(escalamientos=[frozenset({CAUSA_FALLO_DE_HOOK})]))
+    assert evaluar_informe_minimo(escalado, _informe("decide_cumplimiento")) == []
+    assert evaluar_informe_minimo(escalado, _informe("no_habilitar")) == [
+        Rechazo(MOTIVO_SOLO_OFICIAL, None)
+    ]
+    assert evaluar_informe_minimo(escalado, "no es un objeto") == [
+        Rechazo(MOTIVO_ENTRADA_INFORME, None)
+    ]
+
+
+def test_con_el_sello_y_sin_otras_causas_el_cierre_exige_escalar():
+    # Cambio respecto al #7 (R9): un caso sellado sin otras causas ya no puede cerrarse sin escalar.
+    from due_diligence.reglas import falta_para_cerrar
+
+    estado = _sellado()
+    assert falta_para_cerrar(estado)[0] is True
+    assert evaluar_cierre(estado).startswith(
+        "El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: "
+        "fallo de un hook de verificación."
+    )

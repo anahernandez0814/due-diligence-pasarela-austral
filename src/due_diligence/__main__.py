@@ -11,12 +11,13 @@ de chat es del ticket #11.
 import asyncio
 import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from due_diligence import configuracion
 from due_diligence.coordinador import Caso, ejecutar_caso
 from due_diligence.eventos import TIPO_FRENTE_FIN, TIPO_FRENTE_INICIO, Evento
 from due_diligence.frentes import Frente
+from due_diligence.informe import informe_vigente
 from due_diligence.terminacion import Terminacion
 
 USO = 'Uso: uv run python -m due_diligence "<solicitud del analista>"'
@@ -24,7 +25,11 @@ INDEPENDIENTES = (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
 
 
 def _hora(marca: datetime) -> str:
-    return marca.strftime("%H:%M:%S.%f")[:-3]
+    """La hora del evento en UTC, como los eventos y los informes guardados (#9, R10).
+
+    Convierte antes de formatear: un reloj inyectado en otra zona no se muestra como UTC.
+    """
+    return marca.astimezone(UTC).strftime("%H:%M:%S.%f")[:-3] + " UTC"
 
 
 def _eventos_de(eventos: list[Evento], tipo: str) -> dict[Frente, Evento]:
@@ -67,9 +72,11 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
         frente = evento.frente.value if evento.frente else "-"
         # Los eventos de las reglas (#7) llevan la regla de negocio que los causó: se ve en el chat.
         regla = f" [{evento.regla}]" if evento.regla else ""
+        # La acción que un bloqueo impidió, sin datos del comercio (#9, FR-017).
+        accion = f" (acción: {evento.accion})" if evento.accion else ""
         escribir(
             f"{evento.secuencia:>3}  {_hora(evento.marca)}  {evento.tipo:<24} {frente:<10} "
-            f"{evento.detalle}{regla}"
+            f"{evento.detalle}{regla}{accion}"
         )
     escribir("")
     escribir("Frentes:")
@@ -84,6 +91,27 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     escribir("Cobertura:")
     for linea in caso.cobertura.lineas():
         escribir(f"  {linea}")
+    escribir("")
+    # Los conflictos que el código pone en el informe (#9, FR-010): todos los valores, sin elegir.
+    conflictos = caso.conflictos
+    escribir("Conflictos:")
+    escribir(f"  {conflictos.resumen}")
+    for conflicto in conflictos.lista:
+        valores = "; ".join(f"{v.valor} ({v.fuente}, {v.fecha})" for v in conflicto.valores)
+        escribir(f"  {conflicto.dato}: {valores}")
+    escribir("")
+    escribir("Informes registrados:")
+    informes = caso.estado.informes
+    if not informes:
+        escribir("  ninguno")
+    vigente = informe_vigente(caso.estado)
+    for posicion, informe in enumerate(informes):
+        es_vigente = vigente and posicion == len(informes) - 1
+        minimo = "; informe mínimo" if informe.minimo else ""
+        escribir(
+            f"  {informe.id}: recomendación {informe.recomendacion}; "
+            f"vigente: {'sí' if es_vigente else 'no'}{minimo}"
+        )
     escribir("")
     escribir("Números de la validación:")
     for frente, segundos in duraciones(eventos).items():
@@ -107,6 +135,8 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     escribir(f"Caso completo: {'sí' if caso.completo else 'no'}")
     if caso.estado.cierre_sin_escalar:
         escribir("El caso terminó sin el escalamiento obligatorio (cierre_sin_escalar).")
+    if caso.estado.cierre_sin_informe:
+        escribir("El caso terminó sin el informe vigente (cierre_sin_informe).")
     if caso.estado.libro.fallo_de_hook:
         escribir("Un hook de las reglas falló: el caso se bloqueó por precaución.")
     escribir("")

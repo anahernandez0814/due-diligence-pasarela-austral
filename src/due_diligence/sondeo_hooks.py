@@ -49,7 +49,7 @@ from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
 from due_diligence.cobertura import calcular_cobertura
-from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.estado import Consulta, EstadoCaso, Situacion
 from due_diligence.eventos import TIPO_BLOQUEO_REGLA, RegistroEventos
 from due_diligence.frentes import FRENTES, Frente, nombre_completo
 from due_diligence.hooks import (
@@ -400,10 +400,15 @@ ESCALAR = nombre_completo("escalar_a_cumplimiento")
 COBERTURA_DEL_SONDEO = ["Cobertura incompleta: 3 de 4 frentes cubiertos.", "noticias: no cubierto."]
 TIPO_ERROR_ENTRADA_PARCIAL = "campos_obligatorios_ausentes"  # el de `servidor_mcp.decisiones`
 TURNOS_REINTENTO_Y_DOS_DEVOLUCIONES = 5
+# El informe en el formato del #9 (R2, R12): afirmaciones con texto, fuente y fecha, y conflictos.
+FUENTE_DEL_SONDEO = "Registro Mercantil Ficticio del Sur"
 ENTRADA_INFORME = {
-    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS", "verificado": True},
     "recomendacion": "no_habilitar",
-    "hallazgos": {"registro": {"contenido": "Existe", "fuente": "Registro ficticio"}},
+    "hallazgos": {
+        "registro": [{"texto": "Existe.", "fuente": FUENTE_DEL_SONDEO, "fecha": "2026-09-30"}]
+    },
+    "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
     "cobertura": "completa",
 }
 ENTRADA_ESCALAMIENTO = {
@@ -542,12 +547,33 @@ async def _turnos_de_reintento() -> list[Medicion]:
     ]
 
 
-async def _cobertura_del_caso() -> list[Medicion]:
-    """(g4, g5) Los hooks reales del caso ponen la cobertura del código en los dos canales."""
-    estado, eventos = EstadoCaso("sondeo"), RegistroEventos()
-    hooks = HooksDelCaso(estado, eventos)
+def caso_del_sondeo_de_cobertura() -> tuple[EstadoCaso, HooksDelCaso]:
+    """El caso de g4 y g5: noticias caídas y, para que el hook del informe acepte (#9), el comercio
+    que pidió el analista y una consulta válida del registro con la fuente de la afirmación
+    (FR-004).
+    """
+    estado = EstadoCaso("sondeo")
+    hooks = HooksDelCaso(estado, RegistroEventos())
     estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
     estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "noticias caídas")
+    estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"}
+    estado.agregar_consultas(
+        [
+            Consulta(
+                Frente.REGISTRO,
+                REGISTRO,
+                {"identificador": "CO-TV-0001"},
+                {"hechos": [], "metadatos": {"fuentes": [FUENTE_DEL_SONDEO]}},
+                True,
+            )
+        ]
+    )
+    return estado, hooks
+
+
+async def _cobertura_del_caso() -> list[Medicion]:
+    """(g4, g5) Los hooks reales del caso ponen la cobertura del código en los dos canales."""
+    estado, hooks = caso_del_sondeo_de_cobertura()
     esperada = calcular_cobertura(estado).lineas()
     mediciones = []
     for clave, corto, completo, entrada in (

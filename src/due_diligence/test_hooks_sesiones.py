@@ -10,11 +10,15 @@ import json
 
 from due_diligence import configuracion
 from due_diligence.coordinador import Caso as CasoReal
-from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.estado import Consulta, EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_CIERRE_SIN_INFORME,
+    TIPO_COBERTURA_SUSTITUIDA,
+    TIPO_DATOS_SUSTITUIDOS,
+    TIPO_INFORME_REGISTRADO,
     RegistroEventos,
 )
 from due_diligence.frentes import FRENTES, Frente
@@ -29,6 +33,7 @@ from due_diligence.simulacion import (
     comercio_con_representante_en_listas,
     comercios_parecidos,
     error_estructurado,
+    informe_del_caso,
 )
 
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
@@ -71,13 +76,21 @@ class Caso:
         return self._coordinador
 
     def informe(self, recomendacion):
-        entrada = {
-            "comercio": {"identificador": "CO-PL-0003", "nombre": "Panadería Luna Nueva SAS"},
-            "recomendacion": recomendacion,
-            "hallazgos": {},
-            "cobertura": "completa",
-        }
+        """Un informe válido del #9: una afirmación por consulta del caso (R12, hallazgo U1)."""
+        entrada = informe_del_caso(self.estado, recomendacion)
         return asyncio.run(self.coordinador().llamar(INFORME, entrada))
+
+    def _guardar_consulta(self, frente, herramienta, argumentos, llamada):
+        """Lo que hace el `Delegador` en producción: la consulta válida queda en `estado.consultas`.
+
+        FR-004 y los conflictos (#9) leen de ahí; sin esto, los hooks no verían ninguna fuente.
+        """
+        if llamada.ejecutada and not llamada.es_error:
+            resultado = json.loads(llamada.texto)
+            self.estado.agregar_consultas(
+                [Consulta(frente, herramienta, dict(argumentos), resultado, True)]
+            )
+        return llamada
 
     def terminar(self, mensaje="listo"):
         return asyncio.run(self.coordinador().terminar(mensaje))
@@ -88,12 +101,14 @@ class Caso:
     def registrar(self, **consulta):
         """El subagente de registro consulta y el frente termina (lo que haría el `Delegador`)."""
         sesion = self.sesion(Frente.REGISTRO)
-        asyncio.run(sesion.llamar(REGISTRO, consulta, en_proceso=False))
+        llamada = asyncio.run(sesion.llamar(REGISTRO, consulta, en_proceso=False))
+        self._guardar_consulta(Frente.REGISTRO, REGISTRO, consulta, llamada)
         self.estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
         self.estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
 
     def listas(self, **consulta):
-        return asyncio.run(self.sesion(Frente.LISTAS).llamar(LISTAS, consulta))
+        llamada = asyncio.run(self.sesion(Frente.LISTAS).llamar(LISTAS, consulta))
+        return self._guardar_consulta(Frente.LISTAS, LISTAS, consulta, llamada)
 
     def delegar_listas(self):
         sesion = self.sesion_del_coordinador()
@@ -101,7 +116,9 @@ class Caso:
 
     def riesgo(self, categoria):
         sesion = self.sesion(Frente.CATEGORIA)
-        return asyncio.run(sesion.llamar(RIESGO, {"categoria": categoria}))
+        argumentos = {"categoria": categoria}
+        llamada = asyncio.run(sesion.llamar(RIESGO, argumentos))
+        return self._guardar_consulta(Frente.CATEGORIA, RIESGO, argumentos, llamada)
 
     def consultas_de_listas(self):
         return [e for fuente, e in self.pasarela.consultas_a_fuentes if fuente == "listas"]
@@ -286,10 +303,12 @@ def test_un_caso_con_coincidencia_no_termina_hasta_que_se_escala():
     assert "coincidencia del representante legal en listas restrictivas" in sin_escalar.motivo
     assert caso.terminar().termino is False  # insiste y se le sigue devolviendo
     assert caso.escalar().ejecutada
+    assert caso.informe("decide_cumplimiento").ejecutada  # #9: después de escalar, el informe
     assert caso.terminar("ya escalé").termino is True
     assert caso.estado.cierre_sin_escalar is False
     tipos = [e.tipo for e in caso.eventos.eventos()]
     assert tipos.count(TIPO_CIERRE_IMPEDIDO) == 2 and TIPO_CIERRE_SIN_ESCALAR not in tipos
+    assert TIPO_CIERRE_SIN_INFORME not in tipos
 
 
 def test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar():
@@ -299,15 +318,25 @@ def test_un_caso_de_alto_riesgo_tampoco_termina_sin_escalar():
     cierre = caso.terminar()
     assert cierre.termino is False and "categoría de alto riesgo" in cierre.motivo
     caso.escalar()
+    assert caso.informe("decide_cumplimiento").ejecutada  # #9: después de escalar, el informe
     assert caso.terminar().termino is True
+    assert TIPO_CIERRE_SIN_INFORME not in [e.tipo for e in caso.eventos.eventos()]
 
 
 def test_un_caso_de_bajo_riesgo_sin_hallazgos_termina_sin_trabas():
     caso = Caso(registro=[comercio_bajo_riesgo()])
     caso.registrar(identificador="CO-TA-0002")
     caso.riesgo("talleres")
+    # #9: el cierre exige el informe; sin listas consultadas, `habilitar` se rechazaría.
+    assert caso.informe("no_habilitar").ejecutada
     assert caso.terminar().termino is True
-    assert caso.eventos.eventos() == []
+    # Antes, `eventos == []`. Ahora la lista exacta de lo que emite registrar el informe, en orden;
+    # `terminar()` no añade ninguno (T037).
+    assert [e.tipo for e in caso.eventos.eventos()] == [
+        TIPO_COBERTURA_SUSTITUIDA,
+        TIPO_DATOS_SUSTITUIDOS,
+        TIPO_INFORME_REGISTRADO,
+    ]
 
 
 def test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no_completo():
@@ -317,12 +346,16 @@ def test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no
     ultimo = caso.terminar()
     assert ultimo.termino is True  # se agotaron las oportunidades
     assert caso.estado.cierre_sin_escalar is True
+    assert caso.estado.cierre_sin_informe is True  # #9: tampoco registró el informe (T037)
     assert caso.estado.libro.escalamientos == []  # y nunca se escaló
     assert caso.pasarela.escalamientos == []
-    assert caso.informe("habilitar").denegada  # el caso sigue sin poder habilitarse
+    assert caso.pasarela.informes == []
     tipos = [e.tipo for e in caso.eventos.eventos()]
     assert tipos.count(TIPO_CIERRE_IMPEDIDO) == MAX_CIERRES_IMPEDIDOS
-    assert TIPO_CIERRE_SIN_ESCALAR in tipos
+    assert tipos.count(TIPO_CIERRE_SIN_ESCALAR) == 1
+    assert tipos.count(TIPO_CIERRE_SIN_INFORME) == 1
+    assert tipos[-2:] == [TIPO_CIERRE_SIN_ESCALAR, TIPO_CIERRE_SIN_INFORME]
+    assert caso.informe("habilitar").denegada  # el caso sigue sin poder habilitarse
 
 
 def test_el_fin_de_turno_de_un_subagente_no_se_bloquea():

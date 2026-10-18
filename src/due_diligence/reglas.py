@@ -15,6 +15,7 @@ from due_diligence.libro import (
     CAUSA_ALTO_RIESGO,
     CAUSA_COINCIDENCIA_COMERCIO,
     CAUSA_COINCIDENCIA_REPRESENTANTE,
+    CAUSA_FALLO_DE_HOOK,
     LibroReglas,
 )
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
@@ -170,6 +171,7 @@ ETIQUETAS_CAUSA = {
     CAUSA_COINCIDENCIA_COMERCIO: "coincidencia del comercio en listas restrictivas",
     CAUSA_COINCIDENCIA_REPRESENTANTE: "coincidencia del representante legal en listas restrictivas",
     CAUSA_ALTO_RIESGO: "categoría de alto riesgo",
+    CAUSA_FALLO_DE_HOOK: "fallo de un hook de verificación",
 }
 
 MOTIVO_RECOMENDACION = (
@@ -211,10 +213,16 @@ def categoria_determinada(libro: LibroReglas) -> bool:
 
 
 def causas_vigentes(libro: LibroReglas) -> frozenset[str]:
-    """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9)."""
+    """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9).
+
+    Desde el #9 (R9) incluye el sello `fallo_de_hook`: un caso sellado tiene que llegar al oficial,
+    también sin coincidencias ni alto riesgo (cambio respecto al #7). No es una regla I.2 ni I.3.
+    """
     causas = {coincidencia.causa for coincidencia in libro.coincidencias}
     if es_alto_riesgo(libro):
         causas.add(CAUSA_ALTO_RIESGO)
+    if libro.fallo_de_hook:
+        causas.add(CAUSA_FALLO_DE_HOOK)
     return frozenset(causas)
 
 
@@ -271,6 +279,29 @@ def _listas_consultadas(estado: EstadoCaso) -> bool:
     return hay("comercio", comercio) and (not representante or hay("persona", representante))
 
 
+MOTIVO_SOLO_OFICIAL = (
+    "Tras un fallo de hook solo decide el oficial: la recomendación debe ser decide_cumplimiento."
+)
+
+
+def evaluar_informe_minimo(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
+    """Los motivos por los que se rechaza el informe con el caso sellado (#9, FR-014, R9).
+
+    Solo `decide_cumplimiento` y solo después de un escalamiento que cubra las causas vigentes,
+    entre ellas el sello. Las reglas de `habilitar` no hacen falta: con el sello no se admite.
+    """
+    if not isinstance(entrada, Mapping):
+        return [Rechazo(MOTIVO_ENTRADA_INFORME, None)]
+    rechazos: list[Rechazo] = []
+    if normalizar_recomendacion(entrada.get("recomendacion")) != "decide_cumplimiento":
+        rechazos.append(Rechazo(MOTIVO_SOLO_OFICIAL, None))
+    libro = estado.libro
+    if not escalamiento_cubre(libro):
+        causas = causas_vigentes(libro)
+        rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
+    return rechazos
+
+
 def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     """Los motivos por los que se rechaza `registrar_informe`; vacía si se acepta (FR-005, FR-006).
 
@@ -300,14 +331,61 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     return rechazos
 
 
-def evaluar_cierre(estado: EstadoCaso) -> str | None:
-    """El motivo por el que el caso no puede terminar, o `None` si puede (FR-007, R3).
+# Motivos del cierre por el informe (#9, contrato `cierre.md`): textos fijos, sin datos del caso.
+MOTIVO_SIN_INFORME = (
+    "Falta registrar el informe del caso con registrar_informe (habilitar, no_habilitar o "
+    "decide_cumplimiento)."
+)
+MOTIVO_REGISTRO_REINTENTABLE = (
+    "El registro mercantil no respondió: reintenta el registro o registra el informe."
+)
+MOTIVO_INFORME_NO_VIGENTE = (
+    "El informe registrado ya no está vigente: cambió {cambios} después de registrarlo. Registra "
+    "uno nuevo."
+)
+SUFIJO_LUEGO_INFORME = " Luego registra el informe."
 
-    No puede terminar un caso que requiere escalamiento (coincidencia en listas o alto riesgo) sin
-    que `escalar_a_cumplimiento` haya cubierto sus causas vigentes. El motivo usa solo las etiquetas
-    fijas de las causas.
+
+def falta_para_cerrar(estado: EstadoCaso) -> tuple[bool, bool]:
+    """(falta escalar, falta el informe vigente) para que el caso pueda terminar (#9, R8).
+
+    El informe solo se exige si `requiere_informe` (comercio identificado o registro caído).
     """
-    libro = estado.libro
-    if escalamiento_cubre(libro):
-        return None
-    return motivo_de_escalar(causas_vigentes(libro))
+    # Importación diferida: `informe.py` importa este módulo (`causas_vigentes`).
+    from due_diligence import informe
+
+    falta_escalar = not escalamiento_cubre(estado.libro)
+    falta_informe = informe.requiere_informe(estado) and not informe.informe_vigente(estado)
+    return falta_escalar, falta_informe
+
+
+def _motivo_del_informe(estado: EstadoCaso) -> str:
+    from due_diligence import informe
+
+    if estado.informes:
+        cambios = informe.cambios(estado.informes[-1].huella, informe.huella_actual(estado))
+        if cambios:
+            enumerados = (
+                cambios[0] if len(cambios) == 1 else f"{', '.join(cambios[:-1])} y {cambios[-1]}"
+            )
+            return MOTIVO_INFORME_NO_VIGENTE.format(cambios=enumerados)
+    if informe.registro_caido(estado) and informe.registro_reintentable(estado):
+        return MOTIVO_REGISTRO_REINTENTABLE
+    return MOTIVO_SIN_INFORME
+
+
+def evaluar_cierre(estado: EstadoCaso) -> str | None:
+    """El motivo por el que el caso no puede terminar, o `None` si puede (#7 FR-007; #9 R8).
+
+    No puede terminar un caso que requiere escalamiento sin que `escalar_a_cumplimiento` haya
+    cubierto sus causas vigentes (#7), ni un caso que requiere informe sin un informe vigente (#9).
+    Si faltan los dos, primero el escalamiento: el informe se rechazaría hasta escalar (FR-012).
+    Los motivos usan solo textos y etiquetas fijas.
+    """
+    falta_escalar, falta_informe = falta_para_cerrar(estado)
+    if falta_escalar:
+        motivo = motivo_de_escalar(causas_vigentes(estado.libro))
+        return motivo + SUFIJO_LUEGO_INFORME if falta_informe else motivo
+    if falta_informe:
+        return _motivo_del_informe(estado)
+    return None

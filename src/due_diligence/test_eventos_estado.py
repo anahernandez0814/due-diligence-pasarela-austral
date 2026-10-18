@@ -61,6 +61,10 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "frente_reintento",
         "reintento_denegado",
         "cobertura_sustituida",
+        # Eventos del #9 (data-model, «Eventos»).
+        "informe_registrado",
+        "datos_sustituidos",
+        "cierre_sin_informe",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS
 
@@ -365,3 +369,55 @@ def test_derivar_comercio_sin_representante():
 def test_derivar_comercio_sin_comercio_unico_da_el_motivo(resultado, texto):
     comercio, motivo = derivar_comercio(resultado)
     assert comercio is None and texto in motivo
+
+
+# ---------------------------------------------------------------- #9: informe y traza
+
+
+def test_los_tres_eventos_del_9_existen_y_se_registran():
+    from due_diligence.eventos import (
+        TIPO_CIERRE_SIN_INFORME,
+        TIPO_DATOS_SUSTITUIDOS,
+        TIPO_INFORME_REGISTRADO,
+    )
+
+    assert TIPO_INFORME_REGISTRADO == "informe_registrado"
+    assert TIPO_DATOS_SUSTITUIDOS == "datos_sustituidos"
+    assert TIPO_CIERRE_SIN_INFORME == "cierre_sin_informe"
+    eventos = RegistroEventos()
+    for tipo in (TIPO_INFORME_REGISTRADO, TIPO_DATOS_SUSTITUIDOS, TIPO_CIERRE_SIN_INFORME):
+        assert tipo in TIPOS
+        eventos.registrar(tipo, None, "detalle")
+    assert [e.tipo for e in eventos.eventos()] == [
+        TIPO_INFORME_REGISTRADO,
+        TIPO_DATOS_SUSTITUIDOS,
+        TIPO_CIERRE_SIN_INFORME,
+    ]
+
+
+def test_el_evento_lleva_la_accion_intentada_como_ultimo_campo():
+    from dataclasses import fields
+
+    from due_diligence.eventos import Evento
+
+    assert [f.name for f in fields(Evento)][-1] == "accion"
+    eventos = RegistroEventos(reloj=lambda: datetime(2026, 10, 18, tzinfo=UTC))
+    sin = eventos.registrar(TIPO_BLOQUEO_REGLA, None, "motivo", regla="I.2")
+    con = eventos.registrar(
+        TIPO_BLOQUEO_REGLA, None, "motivo", regla="I.2", accion="registrar_informe (habilitar)"
+    )
+    assert sin.accion is None
+    assert con.accion == "registrar_informe (habilitar)"
+    # Las llamadas posicionales del #6 y del #7 siguen valiendo.
+    assert eventos.registrar(TIPO_DELEGACION, Frente.REGISTRO, "d", "I.1").regla == "I.1"
+
+
+def test_el_estado_empieza_sin_informes_ni_comercio_pedido_y_no_los_comparte():
+    a, b = EstadoCaso(), EstadoCaso()
+    assert a.comercio_pedido is None
+    assert a.informes_pendientes == {}
+    assert a.informes == []
+    assert a.cierre_sin_informe is False
+    a.informes_pendientes["x"] = object()
+    a.informes.append(object())
+    assert b.informes_pendientes == {} and b.informes == []

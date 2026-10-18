@@ -20,6 +20,7 @@ from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
 from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
+from due_diligence.conflictos import ConflictosCaso, calcular_conflictos
 from due_diligence.contexto import instrucciones
 from due_diligence.delegacion import Delegador
 from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
@@ -33,6 +34,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.hooks import HooksDelCaso
+from due_diligence.informe import informe_vigente
 from due_diligence.terminacion import (
     Clasificacion,
     Terminacion,
@@ -101,6 +103,24 @@ _REGLA_FALLOS = (
     "partir de lo que devolvieron los frentes."
 )
 
+# Guía del informe con procedencia (#9, R12). No es una regla de negocio I.1 a I.3: está también en
+# el modo de demostración. Lo que no puede fallar lo hace el código: el hook de `registrar_informe`
+# valida la forma y la fuente de cada afirmación y pone el comercio, los conflictos y la cobertura.
+_REGLA_AFIRMACIONES = (
+    "En el informe, escribe los hallazgos de cada frente como una lista de afirmaciones, cada una "
+    "con texto, fuente y fecha; la fuente y la fecha son las de los metadatos del resultado, y "
+    "solo cites fuentes que consultaste para ese frente. Cada frente cubierto lleva al menos una "
+    "afirmación, también si no hubo hallazgos (por ejemplo, sin coincidencias); un frente que no "
+    "quedó cubierto puede ir sin afirmaciones. El comercio, los conflictos entre fuentes y la "
+    "cobertura los pone el "
+    "sistema: no elijas entre valores que se contradicen. Si el registro mercantil no responde, "
+    "reintenta el registro o registra el informe con el comercio que pidió el analista."
+)
+
+# Orden entre escalar e informe: es guía de escalamiento (reglas I.2 e I.3), así que el modo de
+# demostración la quita con `_REGLA_ESCALAR`. La garantía es el hook de `registrar_informe`.
+_REGLA_INFORME_TRAS_ESCALAR = "Si hay que escalar, registra el informe después de escalar."
+
 _REGLA_RESUMEN = (
     "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
     "fecha, y qué frentes no se pudieron cubrir y por qué."
@@ -117,7 +137,14 @@ def instrucciones_coordinador(demo: bool = False) -> str:
     hooks no cambian.
     """
     if demo:
-        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_FALLOS, _REGLA_INFORME, _REGLA_RESUMEN]
+        reglas = [
+            _REGLA_DELEGAR,
+            _REGLA_DATOS,
+            _REGLA_FALLOS,
+            _REGLA_INFORME,
+            _REGLA_AFIRMACIONES,
+            _REGLA_RESUMEN,
+        ]
     else:
         reglas = [
             _REGLA_DELEGAR,
@@ -125,6 +152,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
+            f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))
@@ -175,13 +203,18 @@ class Caso:
         return calcular_cobertura(self.estado)
 
     @property
+    def conflictos(self) -> ConflictosCaso:
+        """Los conflictos entre fuentes que calcula el código (#9, R6, FR-010): los del informe."""
+        return calcular_conflictos(self.estado)
+
+    @property
     def completo(self) -> bool:
         """Si el caso puede presentarse como completo (#7, FR-007; #8, FR-012).
 
         Solo si la cobertura calculada es completa (los cuatro frentes cubiertos, R5), el ciclo
         terminó con normalidad, el `Stop` no tuvo que dejar terminar un caso sin su escalamiento
-        obligatorio y ningún hook falló: un `PostToolUse` que falló pudo dejar sin registrar una
-        coincidencia o una identificación.
+        obligatorio ni sin su informe (#9), ningún hook falló (un `PostToolUse` que falló pudo dejar
+        sin registrar una coincidencia o una identificación) y hay un informe vigente (#9, FR-023).
         """
         estado = self.estado
         return (
@@ -189,7 +222,9 @@ class Caso:
             and estado.terminacion is not None
             and estado.terminacion.terminacion is Terminacion.NORMAL
             and not estado.cierre_sin_escalar
+            and not estado.cierre_sin_informe
             and estado.libro.fallo_de_hook is None
+            and informe_vigente(estado)
         )
 
     def _opciones_subagente(self, frente: Frente) -> ClaudeAgentOptions:

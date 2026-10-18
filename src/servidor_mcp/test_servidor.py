@@ -30,6 +30,7 @@ ALEGACIONES_EN_INGLES = ("field required", "validation error", "input should", "
 def _entorno(tmp_path, monkeypatch):
     monkeypatch.setenv("PASARELA_RESULTADOS_DIR", str(tmp_path / "resultados"))
     monkeypatch.delenv("PASARELA_FALLA_NOTICIAS", raising=False)
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
     datos.limpiar_cache()
     yield
     datos.limpiar_cache()
@@ -59,10 +60,20 @@ def _texto(resultado):
 
 
 def _informe():
+    """Un informe en el formato del #9 (R2): afirmaciones con fuente y fecha, y conflictos."""
     return {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": True,
+        },
         "recomendacion": "No habilitar de forma automática.",
-        "hallazgos": {"registro": {"contenido": "Una coincidencia.", "fuente": "Registro"}},
+        "hallazgos": {
+            "registro": [
+                {"texto": "Una coincidencia.", "fuente": "Registro", "fecha": "2026-09-30"}
+            ]
+        },
+        "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
         "cobertura": "Cubiertos: todos los frentes.",
     }
 
@@ -194,7 +205,14 @@ def test_registrar_informe_sin_campos_da_campos_obligatorios_ausentes():
     cuerpo = _comprobar_error_estructurado(
         _llamar("registrar_informe"), "campos_obligatorios_ausentes"
     )
-    assert cuerpo["campos_faltantes"] == ["comercio", "recomendacion", "hallazgos", "cobertura"]
+    # La lista del #5 más `conflictos` (#9), en el mismo orden.
+    assert cuerpo["campos_faltantes"] == [
+        "comercio",
+        "recomendacion",
+        "hallazgos",
+        "cobertura",
+        "conflictos",
+    ]
 
 
 def test_registrar_informe_con_un_campo_ausente_nombra_ese_campo():
@@ -210,6 +228,30 @@ def test_registrar_informe_con_un_tipo_incorrecto_da_entrada_invalida():
     _comprobar_error_estructurado(
         _llamar("registrar_informe", _informe() | {"comercio": 5}), "entrada_invalida"
     )
+
+
+def test_una_afirmacion_sin_fuente_da_entrada_invalida_con_sus_problemas_por_el_protocolo():
+    # Q7 del #9: la forma de cada afirmación se valida en la pasarela, con su ruta.
+    entrada = _informe()
+    del entrada["hallazgos"]["registro"][0]["fuente"]
+    cuerpo = _comprobar_error_estructurado(
+        _llamar("registrar_informe", entrada), "entrada_invalida"
+    )
+    assert cuerpo["problemas"] == [
+        {"ruta": "hallazgos.registro[0].fuente", "texto": "Debe ser un texto no vacío."}
+    ]
+
+
+def test_la_descripcion_de_registrar_informe_dice_lo_que_pone_el_sistema_y_lo_que_no_hace():
+    # Constitución IV y hallazgo C1 del #9: qué hace y qué no hace.
+    descripcion = _herramientas()["registrar_informe"].description
+    assert "El comercio, los conflictos y la cobertura los pone el sistema" in descripcion
+    assert "con su fuente y su fecha" in descripcion
+    # T060: la regla de US1-6, en positivo, y lo que el servidor no comprueba de ella.
+    assert "Cada frente cubierto lleva al menos una afirmación" in descripcion
+    assert "ni que cada frente cubierto lleve su afirmación" in descripcion
+    assert "tampoco comprueba que cada fuente se haya consultado" in descripcion.lower()
+    assert "ni escala el caso" in descripcion
 
 
 def test_escalar_sin_campos_da_los_cinco_faltantes():
@@ -339,6 +381,7 @@ TIPOS_JSON = {
         "comercio": "object",
         "recomendacion": "string",
         "hallazgos": "object",
+        "conflictos": "object",
         "cobertura": ["string", "array"],
     },
     "escalar_a_cumplimiento": {
@@ -386,6 +429,7 @@ TIPOS_INCORRECTOS = [
     ("registrar_informe", {"recomendacion": 5}),
     ("registrar_informe", {"hallazgos": ["registro"]}),
     ("registrar_informe", {"cobertura": 5}),
+    ("registrar_informe", {"conflictos": "texto"}),
     ("escalar_a_cumplimiento", {"comercio": 5}),
     ("escalar_a_cumplimiento", {"hallazgos": "texto"}),
     ("escalar_a_cumplimiento", {"cobertura": {"a": 1}}),

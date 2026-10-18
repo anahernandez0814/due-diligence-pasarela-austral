@@ -50,6 +50,12 @@ DELEGACIONES_DEL_EJEMPLO = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _sin_caida_del_registro(monkeypatch):
+    """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
+
+
 def _fin(subtype="success", stop_reason="end_turn", is_error=False, terminal="completed"):
     return ResultMessage(
         subtype=subtype,
@@ -571,8 +577,9 @@ def test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop():
     coordinador = _matchers(caso.opciones_coordinador().hooks)
     assert coordinador == {
         "PreToolUse": [DELEGAR, INFORME, ESCALAR],
-        "PostToolUse": [ESCALAR],
-        "PostToolUseFailure": [ESCALAR],
+        # #9: el `PostToolUse` y el `PostToolUseFailure` del informe (huella pendiente, R7).
+        "PostToolUse": [ESCALAR, INFORME],
+        "PostToolUseFailure": [ESCALAR, INFORME],
         "Stop": [None],
     }
 
@@ -677,9 +684,24 @@ def test_el_caso_y_ejecutar_caso_no_aceptan_un_parametro_hooks():
 # ------------------------------------------------------------------ Caso.completo (#7, FR-007)
 
 
+def _con_informe_vigente(caso):
+    """Un informe registrado con la huella de ahora: desde el #9 (FR-023) el caso completo lo exige.
+
+    El coordinador simulado de estos tests no registra informes; los del #9 que sí lo hacen están en
+    `test_casos_informe.py`.
+    """
+    from due_diligence.informe import InformeRegistrado, huella_actual
+
+    caso.estado.informes.append(
+        InformeRegistrado("INF-0001", "decide_cumplimiento", False, huella_actual(caso.estado))
+    )
+
+
 def test_un_caso_con_los_cuatro_frentes_terminados_y_fin_normal_esta_completo():
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.completo is False  # #9: sin informe vigente no está completo
+    _con_informe_vigente(caso)
     assert caso.completo is True
 
 
@@ -698,10 +720,14 @@ def test_un_caso_con_terminacion_anomala_no_esta_completo():
     assert caso.completo is False
 
 
-def test_un_caso_con_cierre_sin_escalar_no_esta_completo():
+@pytest.mark.parametrize("marca", ["cierre_sin_escalar", "cierre_sin_informe"])
+def test_un_caso_con_un_cierre_forzado_no_esta_completo_aunque_lo_demas_se_cumpla(marca):
+    # Con el informe vigente, todo lo demás se cumple: solo la marca del `Stop` lo impide (#9).
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
-    caso.estado.cierre_sin_escalar = True
+    _con_informe_vigente(caso)
+    assert caso.completo is True
+    setattr(caso.estado, marca, True)
     assert caso.completo is False
 
 
@@ -709,6 +735,7 @@ def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
     # Un PostToolUse que falló pudo dejar sin registrar una coincidencia: no es un caso completo.
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    _con_informe_vigente(caso)
     assert caso.completo is True
     caso.estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     assert caso.completo is False
@@ -720,6 +747,7 @@ def test_un_caso_con_un_hook_de_registro_que_fallo_no_esta_completo():
 def test_la_cobertura_del_caso_es_la_calculada_por_el_codigo():
     caso, _, _ = _caso_completo()
     asyncio.run(caso.ejecutar(SOLICITUD))
+    _con_informe_vigente(caso)
     assert caso.cobertura == calcular_cobertura(caso.estado)
     assert caso.cobertura.completa is True and caso.completo is True
 
@@ -755,3 +783,49 @@ def test_sin_mensaje_de_resultado_no_hay_dato_de_turnos():
     assert caso.turnos is None
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.turnos is None
+
+
+# ------------------------------------------------------------------ #9: conflictos del caso (G1)
+
+
+def test_caso_conflictos_es_el_calculo_del_codigo_con_y_sin_conflictos():
+    from due_diligence.conflictos import calcular_conflictos
+    from due_diligence.estado import Consulta
+    from due_diligence.frentes import FRENTES, Frente
+    from servidor_mcp import datos
+    from servidor_mcp.registro import consultar_registro_mercantil
+
+    datos.limpiar_cache()
+    for identificador, esperado in (
+        ("CO-RF-0006", "con_conflictos"),
+        ("CO-TA-0002", "sin_conflictos"),
+    ):
+        caso = Caso()
+        respuesta = consultar_registro_mercantil(identificador=identificador).structured_content
+        caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+        caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+        caso.estado.registrar_identificacion(respuesta)
+        herramienta = FRENTES[Frente.REGISTRO].herramienta_completa
+        caso.estado.agregar_consultas([Consulta(Frente.REGISTRO, herramienta, {}, respuesta, True)])
+        assert caso.conflictos == calcular_conflictos(caso.estado)
+        assert caso.conflictos.estado == esperado
+
+
+def test_las_instrucciones_guian_las_afirmaciones_del_informe():
+    # #9, T039, R12: guía, no garantía (la garantía es el hook de registrar_informe).
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    for fragmento in (
+        "una lista de afirmaciones",
+        "texto, fuente y fecha",
+        "metadatos del resultado",
+        "fuentes que consultaste para ese frente",
+        "Cada frente cubierto lleva al menos una afirmación, también si no hubo hallazgos",
+        "El comercio, los conflictos entre fuentes y la cobertura los pone el sistema",
+        "reintenta el registro o registra el informe",
+    ):
+        assert fragmento in _REGLA_AFIRMACIONES, fragmento
+    assert _REGLA_AFIRMACIONES in INSTRUCCIONES_COORDINADOR
+    assert (
+        "Si hay que escalar, registra el informe después de escalar." in INSTRUCCIONES_COORDINADOR
+    )

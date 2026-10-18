@@ -57,6 +57,17 @@ def test_con_demo_activa_se_quitan_la_regla_3_y_la_instruccion_de_escalar():
     assert "varias coincidencias" not in texto
 
 
+def test_con_demo_activa_las_afirmaciones_no_traen_guia_de_escalamiento():
+    # #9: la guía de las afirmaciones está en los dos modos, pero sin el orden escalar-informe.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    texto = instrucciones_coordinador(demo=True)
+    assert _REGLA_AFIRMACIONES in texto
+    assert "escalar" not in _REGLA_AFIRMACIONES
+    assert "escalar" not in texto.casefold()
+    assert "después de escalar" in INSTRUCCIONES_COORDINADOR
+
+
 def test_con_demo_activa_se_conservan_la_delegacion_el_resumen_y_el_registro_del_informe():
     texto = instrucciones_coordinador(demo=True)
     assert "delegar_frente" in texto and "en la misma respuesta" in texto
@@ -265,3 +276,13 @@ def test_en_demo_terminar_sin_escalar_lo_impide_el_hook_de_fin_de_turno():
     )
     cierre = coordinador.resultados_de("terminar")[0]
     assert cierre.termino is False and "categoría de alto riesgo" in cierre.motivo
+
+
+def test_la_guia_de_las_afirmaciones_esta_en_los_dos_modos_y_no_trae_reglas_de_negocio():
+    # #9, T039: no es una de las reglas I.1 a I.3 que el modo de demostración quita.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES
+
+    for demo in (False, True):
+        assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
+    assert REGLA_3 not in _REGLA_AFIRMACIONES and ESCALAR not in _REGLA_AFIRMACIONES
+    assert CUANDO_ESCALADO not in _REGLA_AFIRMACIONES

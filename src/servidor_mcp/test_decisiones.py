@@ -194,7 +194,7 @@ def test_un_campo_presente_pero_vacio_cuenta_como_faltante(vacio):
     assert cuerpo["campos_faltantes"] == ["cobertura"]
 
 
-def test_un_hallazgo_sin_fuente_es_un_campo_faltante(carpeta):
+def test_un_hallazgo_sin_fuente_es_una_entrada_invalida_con_su_ruta(carpeta):
     # #9: la afirmación sin fuente es un problema de forma con su ruta (`entrada_invalida`).
     hallazgos = _afirmaciones()
     del hallazgos["categoria"][0]["fuente"]
@@ -207,7 +207,7 @@ def test_un_hallazgo_sin_fuente_es_un_campo_faltante(carpeta):
     assert not carpeta.exists()
 
 
-def test_un_hallazgo_sin_contenido_es_un_campo_faltante(carpeta):
+def test_un_hallazgo_sin_texto_es_una_entrada_invalida_con_su_ruta(carpeta):
     hallazgos = _afirmaciones()
     hallazgos["registro"][0]["texto"] = "  "
     cuerpo = _error(registrar_informe(**_informe(hallazgos=hallazgos)))

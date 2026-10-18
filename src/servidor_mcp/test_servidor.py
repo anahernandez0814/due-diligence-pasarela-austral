@@ -30,6 +30,7 @@ ALEGACIONES_EN_INGLES = ("field required", "validation error", "input should", "
 def _entorno(tmp_path, monkeypatch):
     monkeypatch.setenv("PASARELA_RESULTADOS_DIR", str(tmp_path / "resultados"))
     monkeypatch.delenv("PASARELA_FALLA_NOTICIAS", raising=False)
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
     datos.limpiar_cache()
     yield
     datos.limpiar_cache()

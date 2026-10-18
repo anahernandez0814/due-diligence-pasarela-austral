@@ -10,7 +10,9 @@ RUFE = "Registro Único Ficticio de Empresas"
 
 
 @pytest.fixture(autouse=True)
-def _sin_cache():
+def _sin_cache(monkeypatch):
+    # Los tests de la caída la ponen ellos mismos; los demás no dependen de la de la sesión.
+    monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
     datos.limpiar_cache()
     yield
     datos.limpiar_cache()

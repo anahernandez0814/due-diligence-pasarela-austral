@@ -190,10 +190,11 @@ class Delegador:
         self._hecho: dict[Frente, asyncio.Event] = {f: asyncio.Event() for f in Frente}
         self._respuestas: dict[Frente, dict[str, Any]] = {}
         self._contextos: dict[Frente, str] = {}
-        # Historial de la política de reintento (#8, R3): ejecuciones por `(frente, contexto)`.
-        # El contexto lo construye el código desde la entrada, así que «la misma entrada» es
-        # exactamente la misma clave; otra entrada es otra clave con su propio reintento.
+        # Historial de la política de reintento (#8, R3): ejecuciones y último resultado por
+        # `(frente, contexto)`. El contexto lo construye el código desde la entrada, así que «la
+        # misma entrada» es exactamente la misma clave, sea o no la última del frente.
         self._intentos: dict[tuple[Frente, str], int] = {}
+        self._ultimo: dict[tuple[Frente, str], dict[str, Any]] = {}
         self.herramienta: SdkMcpTool[Any] = self._crear_herramienta()
 
     # ------------------------------------------------------------ servidor en proceso
@@ -249,19 +250,32 @@ class Delegador:
                 return _rechazo(frente, motivo)
             return self._rechazar(frente, str(rechazo))
 
-        if frente in self._respuestas and self._contextos.get(frente) == contexto:
-            return await self._misma_entrada(frente, contexto, espero)
+        clave = (frente, contexto)
+        ultimo = self._ultimo.get(clave)
+        actual = frente in self._respuestas and self._contextos.get(frente) == contexto
+        # Un error de esta entrada sigue la política aunque después se delegara otra (A, B, A):
+        # alternar entradas no da más intentos que los del límite.
+        if ultimo is not None and (actual or ultimo.get("error")):
+            return await self._misma_entrada(frente, contexto, ultimo, espero and actual)
+        if ultimo is not None:
+            # Terminó, pero el frente se delegó después con otra entrada: es una delegación nueva,
+            # como en el #6 (un registro A, B, A vuelve a identificar A), y su cuenta empieza de 0.
+            self._intentos[clave] = 0
 
         return await self._ejecutar(frente, contexto, repite=frente in self._respuestas)
 
-    async def _misma_entrada(self, frente: Frente, contexto: str, espero: bool) -> dict[str, Any]:
+    async def _misma_entrada(
+        self, frente: Frente, contexto: str, guardada: dict[str, Any], espero: bool
+    ) -> dict[str, Any]:
         """La política de reintento con la misma entrada (#8, R3, contrato `delegar-frente.md`).
+
+        `guardada` es el último resultado de esta entrada, sea o no la última del frente.
 
         - Terminado, o una llamada que esperó a esa misma ejecución en curso: lo guardado.
         - Error con `reintentable` (la causa lo es y quedan reintentos): se ejecuta de nuevo.
-        - En otro caso: el mismo error con `reintentable: false` y sin reintentos.
+        - En otro caso: el mismo error con `reintentable: false` y sin reintentos, sin ejecutar ni
+          cambiar el estado del caso.
         """
-        guardada = self._respuestas[frente]
         if espero or not guardada.get("error"):
             self.eventos.registrar(
                 TIPO_DELEGACION_REPETIDA,
@@ -361,7 +375,9 @@ class Delegador:
                     Clasificacion(Terminacion.ANOMALA, None, None, detalle, True),
                     detalle,
                 )
-            return self._concluir(frente, resultado, anterior, intento)
+            respuesta = self._concluir(frente, resultado, anterior, intento)
+            self._ultimo[clave] = respuesta
+            return respuesta
         finally:
             if self.estado.situacion(frente) is Situacion.EN_CURSO:  # cancelado: no se pierde
                 self.estado.cambiar_situacion(frente, Situacion.NO_TERMINADO, MOTIVO_CANCELADO)
@@ -378,6 +394,7 @@ class Delegador:
                 # También es lo guardado del frente: con la misma entrada no se vuelve a ejecutar,
                 # una llamada que esperaba recibe este error y un rechazo posterior no lo pisa.
                 self._respuestas[frente] = cancelado
+                self._ultimo[clave] = cancelado
                 self.estado.errores[frente] = cancelado
             self._hecho[frente].set()
 
@@ -494,6 +511,10 @@ class Delegador:
             return
         self.estado.cambiar_situacion(Frente.LISTAS, Situacion.NO_TERMINADO, MOTIVO_COMERCIO_CAMBIO)
         self._contextos.pop(Frente.LISTAS, None)
+        # Y su historial (data-model, «Historial de intentos»): listas empieza de cero aunque el
+        # registro vuelva a un comercio anterior.
+        self._intentos = {c: n for c, n in self._intentos.items() if c[0] is not Frente.LISTAS}
+        self._ultimo = {c: r for c, r in self._ultimo.items() if c[0] is not Frente.LISTAS}
         self.eventos.registrar(TIPO_FRENTE_INVALIDADO, Frente.LISTAS, MOTIVO_COMERCIO_CAMBIO)
         # Solo en el estado y la cobertura: volver a delegar listas es una ejecución nueva (#6).
         self.estado.errores[Frente.LISTAS] = _error_de_frente(
@@ -523,27 +544,22 @@ class Delegador:
                 "resultados": [self._resultado_de(c) for c in resultado.consultas if c.valido],
                 "resumen": resultado.resumen,
             }
-        errores = [c.error for c in resultado.consultas if c.error]
-        reales = [e for e in errores if not es_bloqueo_de_hook(e)]
+        obtenido = {
+            "frente": frente.value,
+            "resultados": [self._resultado_de(c) for c in resultado.consultas if c.valido],
+            "errores": [c.error for c in resultado.consultas if c.error],
+            "terminacion": resultado.detalle_terminacion,
+        }
         # Solo un error de la fuente que la fuente declara reintentable lo es (FR-003): un
         # indicador ausente o que no es exactamente `True` cuenta como no reintentable.
-        reintentable = (
-            causa is Causa.ERROR_DE_FUENTE
-            and bool(reales)
-            and all(e.get("reintentable") is True for e in reales)
-        )
+        reintentable = _fuente_reintentable({"causa": causa, "obtenido": obtenido})
         return _error_de_frente(
             "frente_no_terminado",
             frente,
             causa or Causa.TERMINACION_ANOMALA,
             motivo,
             reintentable,
-            {
-                "frente": frente.value,
-                "resultados": [self._resultado_de(c) for c in resultado.consultas if c.valido],
-                "errores": errores,
-                "terminacion": resultado.detalle_terminacion,
-            },
+            obtenido,
             intento=intento,
             reintentos_restantes=MAX_REINTENTOS_POR_FRENTE - (intento - 1),
         )

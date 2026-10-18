@@ -289,8 +289,15 @@ aplicar el plan B de la analista (`deny` con motivo).
 1. **La respuesta final del coordinador al analista es texto del modelo** y podría contradecir la
    cobertura. Lo autoritativo es lo registrado (informe y escalamiento), los eventos y la línea de
    comandos, todos calculados en código. Mostrarlo en el chat es del #11.
-2. **Alternar entradas** (A, B, A) da a cada entrada su propio reintento. Cada delegación nueva es
-   legítima desde el #6 y cuesta un turno; lo acota `max_turns`.
+2. **Alternar entradas** (A, B, A) no da más intentos a ninguna. El `Delegador` guarda el último
+   resultado de cada clave `(frente, contexto)` y aplica la política con el historial de esa
+   clave, sea o no la última entrada del frente. Si la última ejecución de A fue un error, volver
+   a A la reintenta solo si le queda reintento; si no, la deniega con `reintento_denegado`, sin
+   ejecutarla ni cambiar el estado. Si A había terminado, volver a ella es una delegación nueva,
+   como en el #6: se ejecuta con su cuenta desde cero, y un registro A, B, A vuelve a identificar
+   el comercio A. Al invalidarse listas se olvida su historial, así que empieza de cero aunque el
+   registro vuelva a un comercio anterior. Lo que sigue abierto es el coste: cada delegación nueva
+   cuesta un turno, y lo acota `max_turns` (revisión independiente del #8).
 3. **`updatedInput` depende del SDK 0.2.168** (R1). El sondeo repetible lo vigila.
 4. **Con `PASARELA_FALLA_NOTICIAS=1` el reintento vuelve a fallar siempre**, porque la variable se
    lee en cada llamada. Es lo esperado: prueba el límite y la entrega con cobertura incompleta.

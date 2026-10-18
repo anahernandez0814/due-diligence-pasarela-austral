@@ -1215,7 +1215,8 @@ def test_cuando_el_informe_se_deniega_no_se_registra_cobertura_sustituida(prepar
     if preparar == "sellado":
         estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     elif preparar == "regla":
-        entrada = _informe_de("habilitar")  # alto riesgo y sin escalar: I.3
+        # habilitar sin la categoría determinada ni la consulta de listas: I.3 e I.2
+        entrada = _informe_de("habilitar")
     else:
         entrada = "no es un objeto"  # la rechaza la regla del #7 (MOTIVO_ENTRADA_INFORME)
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))

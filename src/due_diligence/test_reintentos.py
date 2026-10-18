@@ -168,6 +168,112 @@ def test_otra_entrada_es_una_delegacion_nueva_con_su_propio_reintento():
     assert len(_eventos(registro, TIPO_FRENTE_REINTENTO, Frente.CATEGORIA)) == 2
 
 
+# ------------------------------------------------------------------ alternar entradas (A, B, A)
+
+NOTICIAS_POR_NOMBRE = {"frente": "noticias", "nombre": "Tienda Verde SAS"}
+OTRO_REGISTRO = {"frente": "registro", "identificador": "CO-PL-0003"}
+
+
+def _por_entrada(de_a, de_b):
+    """Resultado según la entrada: `de_a` para la del identificador CO-TV-0001, `de_b` para otra."""
+    return lambda contexto: de_a(contexto) if "CO-TV-0001" in contexto else de_b(contexto)
+
+
+def test_volver_a_una_entrada_con_el_reintento_agotado_no_da_un_tercer_intento():
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={
+            Frente.NOTICIAS: _por_entrada(
+                lambda _: _caido(REINTENTABLE), lambda _: _caido(REINTENTABLE)
+            )
+        }
+    )
+    _delegar(delegador, NOTICIAS)
+    _delegar(delegador, NOTICIAS)  # el reintento de A también falla
+    otra = _delegar(delegador, NOTICIAS_POR_NOMBRE)
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 3
+
+    vuelta = _delegar(delegador, NOTICIAS)
+
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 3
+    assert vuelta["intento"] == 2
+    assert vuelta["reintentable"] is False and vuelta["reintentos_restantes"] == 0
+    (denegado,) = _eventos(registro, TIPO_REINTENTO_DENEGADO)
+    assert "se agotaron los reintentos" in denegado.detalle
+    assert len(_eventos(registro, TIPO_FRENTE_REINTENTO)) == 1
+    # Sin ejecutar ni tocar el estado: el frente sigue con lo de la última ejecución (B).
+    assert estado.errores[Frente.NOTICIAS] == otra
+
+
+def test_volver_a_una_entrada_con_un_error_no_reintentable_no_la_ejecuta():
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={
+            Frente.NOTICIAS: _por_entrada(
+                lambda _: _caido(NO_REINTENTABLE), lambda _: resultado_frente(Frente.NOTICIAS)
+            )
+        }
+    )
+    _delegar(delegador, NOTICIAS)
+    assert _delegar(delegador, NOTICIAS_POR_NOMBRE)["situacion"] == "terminado"
+
+    vuelta = _delegar(delegador, NOTICIAS)
+
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 2
+    assert vuelta["causa"] == "error_de_fuente" and vuelta["reintentable"] is False
+    (denegado,) = _eventos(registro, TIPO_REINTENTO_DENEGADO)
+    assert "no es reintentable" in denegado.detalle
+    assert estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO
+    assert Frente.NOTICIAS not in estado.errores
+
+
+def test_un_registro_a_b_a_vuelve_a_identificar_el_comercio_a():
+    otro = comercio_del_registro(
+        "CO-PL-0003",
+        "Pago Latino SAS",
+        {"nombre": "Mario Quispe Vargas", "identificador": "PE-0099"},
+    )
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={
+            Frente.REGISTRO: _por_entrada(
+                lambda _: resultado_registro(), lambda _: resultado_registro([otro])
+            )
+        }
+    )
+    _delegar(delegador, REGISTRO)
+    _delegar(delegador, OTRO_REGISTRO)
+    assert estado.comercio["identificador"] == "CO-PL-0003"
+
+    vuelta = _delegar(delegador, REGISTRO)
+
+    assert len(ejecutor.llamadas_de(Frente.REGISTRO)) == 3
+    assert vuelta["situacion"] == "terminado"
+    assert estado.comercio["identificador"] == "CO-TV-0001"
+    assert _eventos(registro, TIPO_DELEGACION_REPETIDA, Frente.REGISTRO) == []
+
+
+def test_una_entrada_terminada_que_vuelve_y_falla_conserva_su_reintento():
+    de_a = en_secuencia(
+        resultado_frente(Frente.NOTICIAS), _caido(REINTENTABLE), resultado_frente(Frente.NOTICIAS)
+    )
+    delegador, estado, registro, ejecutor = _crear(
+        resultados={
+            Frente.NOTICIAS: _por_entrada(de_a, lambda _: resultado_frente(Frente.NOTICIAS))
+        }
+    )
+    _delegar(delegador, NOTICIAS)
+    _delegar(delegador, NOTICIAS_POR_NOMBRE)
+
+    vuelta = _delegar(delegador, NOTICIAS)
+    assert vuelta["intento"] == 1 and vuelta["reintentos_restantes"] == 1
+    assert vuelta["reintentable"] is True
+
+    reintento = _delegar(delegador, NOTICIAS)
+
+    assert len(ejecutor.llamadas_de(Frente.NOTICIAS)) == 4
+    assert reintento["situacion"] == "terminado"
+    assert len(_eventos(registro, TIPO_FRENTE_REINTENTO)) == 1
+    assert estado.situacion(Frente.NOTICIAS) is Situacion.TERMINADO
+
+
 # ------------------------------------------------------------------ casos límite
 
 

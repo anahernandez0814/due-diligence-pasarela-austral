@@ -163,3 +163,4 @@ La cobertura del caso (qué frentes quedaron cubiertos, cuáles no y por qué) l
 - **Decisión confirmada por la analista**: un frente que se ejecutó y falló solo es reintentable si la fuente lo declara; una terminación anómala o una excepción del subagente no lo son. La excepción es el rechazo de listas antes del registro, que sigue siendo reintentable (FR-003).
 - El límite de reintentos y el mecanismo de FR-011 los fija el plan.
 - Que todo caso terminado quede registrado con `registrar_informe` es del #9; aquí se verifica con un coordinador simulado que sí lo registra.
+- La regla I.4 (fuente y fecha en cada afirmación del informe) se delega al #9.

@@ -346,12 +346,16 @@ def test_un_coordinador_que_insiste_en_terminar_sin_escalar_termina_marcado_y_no
     ultimo = caso.terminar()
     assert ultimo.termino is True  # se agotaron las oportunidades
     assert caso.estado.cierre_sin_escalar is True
+    assert caso.estado.cierre_sin_informe is True  # #9: tampoco registró el informe (T037)
     assert caso.estado.libro.escalamientos == []  # y nunca se escaló
     assert caso.pasarela.escalamientos == []
-    assert caso.informe("habilitar").denegada  # el caso sigue sin poder habilitarse
+    assert caso.pasarela.informes == []
     tipos = [e.tipo for e in caso.eventos.eventos()]
     assert tipos.count(TIPO_CIERRE_IMPEDIDO) == MAX_CIERRES_IMPEDIDOS
-    assert TIPO_CIERRE_SIN_ESCALAR in tipos
+    assert tipos.count(TIPO_CIERRE_SIN_ESCALAR) == 1
+    assert tipos.count(TIPO_CIERRE_SIN_INFORME) == 1
+    assert tipos[-2:] == [TIPO_CIERRE_SIN_ESCALAR, TIPO_CIERRE_SIN_INFORME]
+    assert caso.informe("habilitar").denegada  # el caso sigue sin poder habilitarse
 
 
 def test_el_fin_de_turno_de_un_subagente_no_se_bloquea():

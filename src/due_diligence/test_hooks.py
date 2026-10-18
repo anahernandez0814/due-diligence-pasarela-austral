@@ -2121,10 +2121,20 @@ def test_informe_minimo_tras_escalar_el_stop_permite_cerrar_y_el_caso_no_esta_co
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
     assert eventos.eventos()[antes:] == []
     assert estado.cierre_sin_informe is False and estado.cierre_sin_escalar is False
-    # El caso nunca figura como completo con el sello (`Caso.completo` exige `fallo_de_hook` vacío).
+    # El caso nunca figura como completo con el sello: con todo lo demás que pide `Caso.completo`
+    # cumplido (cobertura completa, fin normal, sin marcas de cierre e informe vigente), el sello
+    # basta para que sea `False`.
+    from due_diligence.coordinador import Caso
     from due_diligence.informe import informe_vigente
+    from due_diligence.terminacion import Clasificacion, Terminacion
 
-    assert informe_vigente(estado) is True and estado.libro.fallo_de_hook
+    _forzar(estado, [Situacion.TERMINADO] * len(Frente))
+    estado.terminacion = Clasificacion(Terminacion.NORMAL, "success", "end_turn", None, False)
+    caso = Caso()
+    caso.estado = estado
+    assert caso.cobertura.completa and informe_vigente(estado) is True
+    assert estado.libro.fallo_de_hook
+    assert caso.completo is False
 
 
 def test_si_falla_el_post_del_informe_se_sella_y_pide_escalar_y_el_minimo(monkeypatch):

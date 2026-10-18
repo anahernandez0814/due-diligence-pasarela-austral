@@ -91,16 +91,21 @@ def test_un_dato_de_una_sola_fuente_no_es_conflicto():
     assert calcular_conflictos(_estado(respuesta)).estado == "sin_conflictos"
 
 
-def test_el_identificador_nunca_se_compara():
+def test_un_hecho_con_otro_identificador_no_se_compara_ni_da_conflictos():
+    # Los hechos se agrupan por el identificador exacto del comercio: uno con otro identificador
+    # (aquí solo cambia a minúsculas) es de otro comercio, así que ni su identificador ni sus demás
+    # datos, aunque difieran, dan un conflicto.
     respuesta = copy.deepcopy(_respuesta("CO-TA-0002"))
     respuesta["hechos"][1]["contenido"]["identificador"] = "co-ta-0002"
+    respuesta["hechos"][1]["contenido"]["fecha_constitucion"] = "2001-01-01"
     respuesta["coincidencias"] = ["CO-TA-0002"]
     estado = EstadoCaso()
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
     estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
     estado.registrar_identificacion(_respuesta("CO-TA-0002"))
     estado.agregar_consultas([Consulta(Frente.REGISTRO, REGISTRO, {}, respuesta, True)])
-    assert all(c.dato != "identificador" for c in calcular_conflictos(estado).lista)
+    conflictos = calcular_conflictos(estado)
+    assert conflictos.estado == "sin_conflictos" and conflictos.lista == ()
 
 
 def test_una_sola_fuente_con_el_comercio_no_tiene_conflictos():

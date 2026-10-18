@@ -35,8 +35,6 @@ RESUMEN_SIN_CONSULTA = (
 RESUMEN_NO_CALCULADOS = (
     "No se pudieron calcular los conflictos; deben tratarse como no verificados."
 )
-# El identificador es la clave con la que se agrupan los hechos del comercio, no un dato.
-_NO_SE_COMPARA = frozenset({"identificador"})
 _RESUMENES_SIN_COMPARAR = {
     "registro_caido": RESUMEN_REGISTRO_CAIDO,
     "sin_comercio": RESUMEN_SIN_COMERCIO,
@@ -99,7 +97,11 @@ def _resumen(cantidad: int) -> str:
 
 
 def _hechos_del_comercio(estado: EstadoCaso, identificador: str) -> list[Mapping[str, Any]] | None:
-    """Los hechos del comercio en la última consulta válida del registro que coincide con él."""
+    """Los hechos del comercio en la última consulta válida del registro que coincide con él.
+
+    Se agrupan por el identificador exacto: un hecho con otro identificador es de otro comercio y
+    no se compara. Por eso el identificador nunca da un conflicto.
+    """
     coinciden = [
         c.resultado
         for c in estado.consultas
@@ -139,7 +141,7 @@ def calcular_conflictos(estado: EstadoCaso) -> ConflictosCaso:
         return sin_comparar("sin_consulta")
     datos: list[str] = []
     for hecho in hechos:
-        datos += [d for d in hecho["contenido"] if d not in _NO_SE_COMPARA and d not in datos]
+        datos += [d for d in hecho["contenido"] if d not in datos]
     lista: list[Conflicto] = []
     for dato in datos:
         valores = tuple(

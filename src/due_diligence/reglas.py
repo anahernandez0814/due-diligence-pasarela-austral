@@ -1,0 +1,77 @@
+"""Reglas de negocio I.1, I.2 e I.3 como funciones puras (data-model, R7 a R10).
+
+Reciben el estado del caso o el libro de reglas y devuelven una decisión: no tocan el SDK, el
+modelo ni el estado de otros módulos. Los hooks (`hooks.py`) solo las adaptan al SDK. La lista de
+categorías de alto riesgo y el conjunto cerrado de recomendaciones son constantes del código, no
+texto de un prompt (FR-008, FR-019).
+"""
+
+from collections.abc import Mapping
+from typing import Any
+
+from servidor_mcp.normalizar import igual, igual_identificador, normalizar
+
+# Categorías de alto riesgo (principio I.3). Se comparan normalizadas con `igual` (R8).
+ALTO_RIESGO = (
+    "apuestas",
+    "criptoactivos",
+    "suplementos dietarios",
+    "venta de medicamentos",
+)
+
+# Conjunto cerrado de recomendaciones del informe (R10). Solo `habilitar` está sujeta a las reglas
+# 1 a 3; cualquier otro valor se rechaza.
+RECOMENDACION_HABILITAR = "habilitar"
+RECOMENDACIONES = (RECOMENDACION_HABILITAR, "no_habilitar", "decide_cumplimiento")
+
+
+def normalizar_recomendacion(texto: Any) -> str | None:
+    """El valor de `RECOMENDACIONES` que corresponde al texto, o `None` si no es uno de los tres.
+
+    Ignora mayúsculas, tildes y signos, y toma espacios y guiones como `_` (`No-Habilitar` →
+    `no_habilitar`). Lo que no es texto, o es otra frase, es `None`.
+    """
+    if not isinstance(texto, str):
+        return None
+    candidato = normalizar(texto).replace(" ", "_")
+    return candidato if candidato in RECOMENDACIONES else None
+
+
+def _texto(valor: Any) -> str | None:
+    """El texto sin espacios de los bordes, o `None` si no es texto o está vacío."""
+    if isinstance(valor, str) and valor.strip():
+        return valor
+    return None
+
+
+def consulta_coincide(consulta: Any, entidad: Any, tipo: str) -> bool:
+    """Si una consulta de listas (`tipo`, `nombre`, `identificador`) es sobre esta entidad (R7).
+
+    El tipo de la consulta debe ser el esperado (`comercio` para el comercio, `persona` para el
+    representante legal). La consulta debe traer al menos una clave y **cada clave que trae debe
+    existir en la entidad del registro y coincidir**: `igual_identificador` para el identificador e
+    `igual` para el nombre completo, de `servidor_mcp.normalizar`, que es lo que usa el servidor.
+    Una clave que la entidad no tiene (por ejemplo, un identificador para un representante que el
+    registro devolvió sin identificador) no coincide: no se puede verificar que sea la misma
+    persona. Una entrada malformada no coincide y no lanza.
+    """
+    if not isinstance(consulta, Mapping) or not isinstance(entidad, Mapping):
+        return False
+    tipo_consulta = consulta.get("tipo")
+    if not isinstance(tipo_consulta, str) or tipo_consulta.strip().casefold() != tipo:
+        return False
+    claves = {
+        clave: valor
+        for clave in ("nombre", "identificador")
+        if (valor := consulta.get(clave)) not in (None, "")
+    }
+    if not claves:
+        return False
+    for clave, valor in claves.items():
+        buscado, existente = _texto(valor), _texto(entidad.get(clave))
+        if buscado is None or existente is None:
+            return False
+        coincide = igual_identificador if clave == "identificador" else igual
+        if not coincide(buscado, existente):
+            return False
+    return True

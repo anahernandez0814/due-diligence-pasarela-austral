@@ -59,12 +59,20 @@ from due_diligence.informe import (
     problemas_de_frentes_cubiertos,
     problemas_de_fuente,
 )
-from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo, Escalamiento
+from due_diligence.libro import (
+    CAUSA_FALLO_DE_HOOK,
+    Coincidencia,
+    ConsultaListas,
+    ConsultaRiesgo,
+    Escalamiento,
+)
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     MOTIVO_CATEGORIA_NO_DEL_ANALISTA,
+    MOTIVO_SIN_COMERCIO_ESCALAMIENTO,
     Rechazo,
     categoria_en_mensajes,
+    causas_del_resumen,
     causas_vigentes,
     espera_del_analista,
     evaluar_cierre,
@@ -78,7 +86,12 @@ from due_diligence.reglas import (
     permite_listas,
     reglas_de,
 )
-from servidor_mcp.informe import Problema, validar_informe
+from servidor_mcp.informe import (
+    COMERCIO_NO_IDENTIFICADO,
+    Problema,
+    validar_informe,
+    validar_resumen,
+)
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
 
@@ -123,11 +136,14 @@ def denegar(motivo: str) -> dict[str, Any]:
     }
 
 
-def denegar_informe(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[str, Any]:
-    """`PreToolUse` de `registrar_informe`: deniega con un error estructurado en JSON (#9, R3).
+def denegar_decision(
+    tipo: str, que: str, final: str, rechazos: list[Rechazo], problemas: list[Problema]
+) -> dict[str, Any]:
+    """`PreToolUse` de un canal de decisión: deniega con un error estructurado en JSON (R3).
 
     Junta en un solo rechazo los motivos de las reglas (con su regla) y los problemas de forma o de
-    fuente (con su ruta). `reintentable: false`: la misma entrada volvería a fallar.
+    fuente (con su ruta). `reintentable: false`: la misma entrada volvería a fallar. Lo comparten
+    el informe (#9, `informe_rechazado`) y el resumen al oficial (#10, `resumen_rechazado`).
     """
     textos = [r.texto for r in rechazos]
     if problemas:
@@ -137,13 +153,31 @@ def denegar_informe(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[
         textos.append(f"Problemas de forma o de fuente: {detalle}.")
     cuerpo = {
         "error": True,
-        "tipo": "informe_rechazado",
-        "mensaje": f"No se registra el informe. {' '.join(textos)} Corrige y vuelve a registrarlo.",
+        "tipo": tipo,
+        "mensaje": f"No se {que}. {' '.join(textos)} {final}",
         "reintentable": False,
         "motivos": [{"regla": r.regla, "texto": r.texto} for r in rechazos],
         "problemas": [p.como_dict() for p in problemas],
     }
     return denegar(json.dumps(cuerpo, ensure_ascii=False))
+
+
+def denegar_informe(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[str, Any]:
+    """`PreToolUse` de `registrar_informe`: deniega con el JSON `informe_rechazado` (#9, R3)."""
+    return denegar_decision(
+        "informe_rechazado",
+        "registra el informe",
+        "Corrige y vuelve a registrarlo.",
+        rechazos,
+        problemas,
+    )
+
+
+def denegar_resumen(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[str, Any]:
+    """`PreToolUse` de `escalar_a_cumplimiento`: deniega con `resumen_rechazado` (#10, R5)."""
+    return denegar_decision(
+        "resumen_rechazado", "escala el caso", "Corrige y vuelve a escalar.", rechazos, problemas
+    )
 
 
 def bloquear_cierre(motivo: str) -> dict[str, Any]:
@@ -169,14 +203,31 @@ def reemplazar_entrada(entrada: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- informe (#9)
 
 
-def _identificador_del_informe(resultado: Any) -> str | None:
-    """El id `INF-…` de una respuesta `informe_registrado` de la pasarela, o `None`."""
-    if not isinstance(resultado, Mapping) or resultado.get("resultado") != "informe_registrado":
+def _resumen_cobertura(cobertura: CoberturaCaso) -> str:
+    """«completa, 4 de 4 frentes» o «incompleta, 2 de 4 frentes», sin datos del comercio."""
+    cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
+    estado = "completa" if cobertura.completa else "incompleta"
+    return f"{estado}, {cubiertos} de {len(cobertura.frentes)} frentes"
+
+
+def _identificador_de(resultado: Any, esperado: str) -> str | None:
+    """El id de una respuesta `esperado` de la pasarela (`INF-…` o `ESC-…`), o `None`."""
+    if not isinstance(resultado, Mapping) or resultado.get("resultado") != esperado:
         return None
     hechos = resultado.get("hechos") or []
     contenido = hechos[0].get("contenido") if hechos and isinstance(hechos[0], Mapping) else None
     identificador = contenido.get("id") if isinstance(contenido, Mapping) else None
     return identificador if isinstance(identificador, str) and identificador else None
+
+
+def _identificador_del_informe(resultado: Any) -> str | None:
+    """El id `INF-…` de una respuesta `informe_registrado` de la pasarela, o `None`."""
+    return _identificador_de(resultado, "informe_registrado")
+
+
+def _identificador_del_escalamiento(resultado: Any) -> str | None:
+    """El id `ESC-…` de una respuesta `caso_escalado` de la pasarela, o `None` (#10, FR-021)."""
+    return _identificador_de(resultado, "caso_escalado")
 
 
 def _resumen_de_huella(huella: Huella) -> str:
@@ -201,6 +252,7 @@ def _resumen_de_huella(huella: Huella) -> str:
 # conjunto cerrado (la recomendación o el tipo de consulta). Nunca nombres ni identificadores.
 ACCION_DELEGAR_LISTAS = "delegar_frente (listas)"
 ACCION_DELEGAR_CATEGORIA = "delegar_frente (categoria)"
+ACCION_ESCALAR = "escalar_a_cumplimiento"
 # La regla del bloqueo de la categoría (#10, FR-020): el nivel de riesgo depende de ella (I.3).
 REGLA_CATEGORIA = "I.3"
 ACCION_DELEGAR_INVALIDA = "delegar_frente (entrada no válida)"
@@ -370,13 +422,48 @@ def fallar_cerrado(
     return envuelto
 
 
-def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEventos) -> Hook:
-    """Envuelve el `PreToolUse` de `escalar_a_cumplimiento`, que **nunca deniega** (#8, R6).
+def _comercio_seguro(estado: EstadoCaso) -> dict[str, Any]:
+    """El comercio del caso o, si no hay o no se puede calcular, `COMERCIO_NO_IDENTIFICADO` (D2)."""
+    try:
+        comercio = comercio_del_informe(estado)
+    except Exception:
+        comercio = None
+    return comercio or dict(COMERCIO_NO_IDENTIFICADO)
 
-    Escalar es la acción segura. Ante una excepción calculando la cobertura, sella el libro (el
-    caso no figura como completo y los `PreToolUse` de las reglas deniegan, #7) y deja pasar el
-    escalamiento con la cobertura fija `COBERTURA_NO_CALCULADA`; si la entrada no es un objeto, la
-    deja pasar sin cambios y la pasarela la rechaza por su cuenta.
+
+def _causa_segura(estado: EstadoCaso) -> list[str]:
+    """Las etiquetas de las causas vigentes o, si no se pueden leer, la del fallo de hook."""
+    try:
+        causas = causas_vigentes(estado.libro)
+    except Exception:
+        causas = frozenset({CAUSA_FALLO_DE_HOOK})
+    return [texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas]
+
+
+def resumen_sellado(estado: EstadoCaso, argumentos: Mapping[str, Any]) -> dict[str, Any]:
+    """La entrada completa de un escalamiento con el caso sellado (#10, R5 paso 1, FR-012).
+
+    El comercio que haya (o `COMERCIO_NO_IDENTIFICADO`), la cobertura y los conflictos como no
+    calculados y la causa con las causas vigentes, entre ellas el sello. Los hallazgos y la acción
+    van tal cual: la forma la valida la pasarela. No calcula nada que pueda fallar sin protección.
+    """
+    return {
+        **argumentos,
+        "comercio": _comercio_seguro(estado),
+        "cobertura": [COBERTURA_NO_CALCULADA],
+        "causa_escalamiento": _causa_segura(estado),
+        "conflictos": no_calculados().como_entrada(),
+    }
+
+
+def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEventos) -> Hook:
+    """Envuelve el `PreToolUse` de `escalar_a_cumplimiento`: una excepción **nunca deniega**.
+
+    Escalar es la acción segura (#8, R6; #10, FR-012). Ante una excepción, sella el libro (el caso
+    no figura como completo y los `PreToolUse` de las reglas deniegan, #7) y deja pasar el
+    escalamiento con los textos fijos de `resumen_sellado`; si la entrada no es un objeto, la deja
+    pasar sin cambios y la pasarela la rechaza por su cuenta. Desde el #10 el hook sí deniega en
+    los casos que comprueba (R5): esos no son excepciones.
     """
 
     async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
@@ -389,12 +476,12 @@ def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEvent
                 estado,
                 eventos,
                 None,
-                "Un hook de PreToolUse falló al calcular la cobertura del escalamiento: el "
-                "escalamiento sale con la cobertura declarada como no calculada.",
+                "Un hook de PreToolUse falló al completar el escalamiento: sale con la "
+                "cobertura y los conflictos declarados como no calculados.",
             )
             argumentos = entrada.get("tool_input")
             if isinstance(argumentos, Mapping):
-                return reemplazar_entrada({**argumentos, "cobertura": [COBERTURA_NO_CALCULADA]})
+                return reemplazar_entrada(resumen_sellado(estado, argumentos))
             return permitir()
 
     return envuelto
@@ -467,10 +554,7 @@ class HooksDelCaso:
             ],
             "PostToolUseFailure": [
                 self._matcher(
-                    HERRAMIENTA_ESCALAR,
-                    self._fallo_de_herramienta(None),
-                    "PostToolUseFailure",
-                    None,
+                    HERRAMIENTA_ESCALAR, self._escalar_fallido, "PostToolUseFailure", None
                 ),
                 self._matcher(
                     HERRAMIENTA_INFORME, self._informe_fallido, "PostToolUseFailure", None
@@ -679,15 +763,38 @@ class HooksDelCaso:
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
         """`PostToolUse` de `escalar_a_cumplimiento`: guarda las causas que cubre."""
+        pendiente = self.estado.escalamientos_pendientes.pop(tool_use_id or "", None)
         resultado, error = leer_respuesta(entrada.get("tool_response"))
         if resultado is None or resultado.get("resultado") != "caso_escalado":
             self._constancia_de_consulta_fallida(None, error)
             return permitir()
-        causas = causas_vigentes(self.estado.libro)
-        self.estado.libro.escalamientos.append(Escalamiento(causas, clave_comercio(self.estado)))
-        cubiertas = ", ".join(texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas)
-        detalle = f"Escalamiento registrado; cubre: {cubiertas or 'ninguna causa vigente'}."
+        identificador = _identificador_del_escalamiento(resultado)
+        nombre = f"Escalamiento {identificador}" if identificador else "Escalamiento"
+        if pendiente is None:
+            # Sin `PreToolUse` que lo aceptara (uno que falló y degradó): el oficial lo recibió
+            # igual, así que cuenta, con las causas y el comercio de ahora.
+            escalamiento = Escalamiento(
+                causas_vigentes(self.estado.libro), clave_comercio(self.estado)
+            )
+            sufijo = ""
+        else:
+            escalamiento, resumen, afirmaciones = pendiente
+            sufijo = f"; cobertura {resumen}; {afirmaciones} afirmaciones"
+        self.estado.libro.escalamientos.append(escalamiento)
+        cubiertas = ", ".join(
+            texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in escalamiento.causas
+        )
+        detalle = f"{nombre} registrado; cubre: {cubiertas or 'ninguna causa vigente'}{sufijo}."
         self.eventos.registrar(TIPO_ESCALAMIENTO_REGISTRADO, None, detalle)
+        return permitir()
+
+    async def _escalar_fallido(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUseFailure` de `escalar_a_cumplimiento`: descarta lo pendiente (R8)."""
+        self.estado.escalamientos_pendientes.pop(tool_use_id or "", None)
+        _, error = leer_respuesta(entrada.get("error"), es_error=True)
+        self._constancia_de_consulta_fallida(None, error)
         return permitir()
 
     async def _informe_previo(
@@ -831,7 +938,12 @@ class HooksDelCaso:
         )
         return denegar_informe(rechazos, problemas)
 
-    def _evento_datos(self, argumentos: Mapping[str, Any], completa: dict[str, Any]) -> None:
+    def _evento_datos(
+        self,
+        argumentos: Mapping[str, Any],
+        completa: dict[str, Any],
+        herramienta: str = "registrar_informe",
+    ) -> None:
         """`datos_sustituidos`: lo que el código puso, sin datos del comercio (#9, R5)."""
         comercio, conflictos = completa["comercio"], completa["conflictos"]
         verificado = "comercio verificado" if comercio["verificado"] else "comercio sin verificar"
@@ -844,22 +956,88 @@ class HooksDelCaso:
         self.eventos.registrar(
             TIPO_DATOS_SUSTITUIDOS,
             None,
-            f"Datos del código puestos en registrar_informe: {verificado}; "
+            f"Datos del código puestos en {herramienta}: {verificado}; "
             f"{conflictos['resumen']} {declarado}",
         )
 
     async def _escalar_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
-        """`PreToolUse` de `escalar_a_cumplimiento`: pone la cobertura del código (#8, R6).
+        """`PreToolUse` de `escalar_a_cumplimiento` (#8 R6; #10 R5, R6, R8).
 
-        No mira el sello del libro y nunca deniega: escalar es la acción segura. Lo envuelve
-        `degradar_escalamiento`, no `fallar_cerrado`.
+        En orden: con el sello, pasa con los textos fijos de `resumen_sellado` (FR-012, también
+        durante la espera del identificador); si no, valida el resumen como el informe (forma,
+        fuente consultada y una afirmación por frente cubierto) y lo rechaza sin comercio (D2).
+        Si acepta, la entrada completa lleva el comercio, la cobertura, la causa y los conflictos
+        del código, y el escalamiento queda pendiente hasta que la pasarela lo acepte (R8). Lo
+        envuelve `degradar_escalamiento`: una excepción nunca deniega.
         """
         argumentos = entrada.get("tool_input")
         if not isinstance(argumentos, Mapping):
             return permitir()  # sin entrada que completar: la pasarela la rechaza
-        return self._sustituir_cobertura("escalar_a_cumplimiento", argumentos)
+        estado = self.estado
+        if estado.libro.fallo_de_hook:
+            completa = resumen_sellado(estado, argumentos)
+            self.eventos.registrar(
+                TIPO_COBERTURA_SUSTITUIDA,
+                None,
+                "Cobertura puesta en escalar_a_cumplimiento: no calculada tras un fallo de hook.",
+            )
+            self._evento_datos(argumentos, completa, "escalar_a_cumplimiento")
+            self._dejar_pendiente(tool_use_id, completa, "no calculada")
+            return reemplazar_entrada(completa)
+        rechazos: list[Rechazo] = []
+        comercio = comercio_del_informe(estado)
+        if comercio is None:
+            rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_ESCALAMIENTO, None))
+        cobertura = calcular_cobertura(estado)
+        completa = {
+            "comercio": comercio or dict(COMERCIO_NO_IDENTIFICADO),
+            "hallazgos": argumentos.get("hallazgos"),
+            "cobertura": cobertura.lineas(),
+            "causa_escalamiento": causas_del_resumen(estado),
+            "accion_recomendada": argumentos.get("accion_recomendada"),
+            "conflictos": calcular_conflictos(estado).como_entrada(),
+        }
+        problemas = validar_resumen(completa)
+        problemas += problemas_de_fuente(estado, completa["hallazgos"])
+        problemas += problemas_de_frentes_cubiertos(cobertura, completa["hallazgos"])
+        if rechazos or problemas:
+            reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
+            if problemas:
+                reglas.add(REGLA_FUENTE)
+            textos = [r.texto for r in rechazos]
+            if problemas:
+                cantidad = len(problemas)
+                plural = "problema" if cantidad == 1 else "problemas"
+                textos.append(f"{cantidad} {plural} de forma o de fuente en el resumen.")
+            self.eventos.registrar(
+                TIPO_BLOQUEO_REGLA,
+                None,
+                " ".join(textos),
+                regla=", ".join(sorted(reglas)) or None,
+                accion=ACCION_ESCALAR,
+            )
+            return denegar_resumen(rechazos, problemas)
+        self._evento_cobertura("escalar_a_cumplimiento", argumentos, cobertura)
+        self._evento_datos(argumentos, completa, "escalar_a_cumplimiento")
+        self._dejar_pendiente(tool_use_id, completa, _resumen_cobertura(cobertura))
+        return reemplazar_entrada(completa)
+
+    def _dejar_pendiente(self, tool_use_id: str | None, completa: dict[str, Any], resumen: str):
+        """El escalamiento aceptado queda pendiente hasta su `PostToolUse` (R8)."""
+        hallazgos = completa.get("hallazgos")
+        afirmaciones = (
+            sum(len(v) for v in hallazgos.values() if isinstance(v, list))
+            if isinstance(hallazgos, Mapping)
+            else 0
+        )
+        escalamiento = Escalamiento(causas_vigentes(self.estado.libro), clave_comercio(self.estado))
+        self.estado.escalamientos_pendientes[tool_use_id or ""] = (
+            escalamiento,
+            resumen,
+            afirmaciones,
+        )
 
     def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):
         """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`."""
@@ -876,14 +1054,10 @@ class HooksDelCaso:
         que quedó registrada.
         """
         lineas = cobertura.lineas()
-        cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
         faltan = [f.value for f, c in cobertura.frentes.items() if not c.cubierto]
-        resumen = (
-            f"completa, {cubiertos} de {len(cobertura.frentes)} frentes"
-            if cobertura.completa
-            else f"incompleta, {cubiertos} de {len(cobertura.frentes)} frentes "
-            f"(falta {', '.join(faltan)})"
-        )
+        resumen = _resumen_cobertura(cobertura)
+        if not cobertura.completa:
+            resumen += f" (falta {', '.join(faltan)})"
         declarada = (
             "La declarada por el coordinador era distinta y se sustituyó por la calculada."
             if argumentos.get("cobertura") != lineas

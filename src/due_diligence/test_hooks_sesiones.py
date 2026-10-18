@@ -35,6 +35,7 @@ from due_diligence.simulacion import (
     comercios_parecidos,
     error_estructurado,
     informe_del_caso,
+    resumen_del_caso,
 )
 
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
@@ -97,7 +98,9 @@ class Caso:
         return asyncio.run(self.coordinador().terminar(mensaje))
 
     def escalar(self):
-        return asyncio.run(self.coordinador().llamar(ESCALAR, {"causa_escalamiento": "x"}))
+        """Un resumen al oficial válido del #10 (R6): las afirmaciones de las consultas del caso."""
+        entrada = resumen_del_caso(self.estado)
+        return asyncio.run(self.coordinador().llamar(ESCALAR, entrada))
 
     def registrar(self, **consulta):
         """El subagente de registro consulta y el frente termina (lo que haría el `Delegador`)."""

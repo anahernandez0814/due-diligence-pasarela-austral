@@ -243,21 +243,21 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 **Prueba independiente**: un resumen al que le falta cada uno de los cinco campos se rechaza nombrando lo que falta; uno completo se guarda con lo del código (SC-002).
 
-- [ ] T030 [P] [US2] Tests en `src/servidor_mcp/test_informe.py` (R6, data-model):
+- [X] T030 [P] [US2] Tests en `src/servidor_mcp/test_informe.py` (R6, data-model):
   - **`validar_resumen`** devuelve **todos** los problemas con su ruta: comercio (como el informe), hallazgos (afirmaciones), cobertura, `causa_escalamiento` (texto o lista de textos no vacíos), `accion_recomendada` (texto no vacío) y conflictos.
   - **Campos que faltan**: con varios a la vez, los nombra todos, en el orden `comercio`, `hallazgos`, `cobertura`, `causa_escalamiento`, `accion_recomendada`, `conflictos`.
   - **El mensaje** de `mensaje_resumen` no repite valores recibidos.
   - **`COMERCIO_NO_IDENTIFICADO`** (`{"identificador": "no identificado", "nombre": "no identificado", "verificado": false}`) **pasa** la validación (D2).
-- [ ] T031 [US2] Implementar T030 en `src/servidor_mcp/informe.py`, reutilizando `_comercio`, `_hallazgos`, `_conflictos` y `_cobertura`. `COMERCIO_NO_IDENTIFICADO` vive aquí y lo importa el hook.
-- [ ] T032 [P] [US2] Tests en `src/servidor_mcp/test_decisiones.py` y `test_servidor.py` (contrato, Q6):
+- [X] T031 [US2] Implementar T030 en `src/servidor_mcp/informe.py`, reutilizando `_comercio`, `_hallazgos`, `_conflictos` y `_cobertura`. `COMERCIO_NO_IDENTIFICADO` vive aquí y lo importa el hook.
+- [X] T032 [P] [US2] Tests en `src/servidor_mcp/test_decisiones.py` y `test_servidor.py` (contrato, Q6):
   - **Sin campos**: `campos_obligatorios_ausentes` con los seis en `campos_faltantes`.
   - **Afirmación mal formada**: `entrada_invalida` con `problemas`.
   - **Forma vieja** `{contenido, fuente}`: `entrada_invalida`.
   - **Completo**: `caso_escalado`, el documento guardado con `conflictos`, `causa_escalamiento` y `registrado_en` en UTC.
   - **Por el protocolo**, los mismos tres casos.
   - **La descripción** de `escalar_a_cumplimiento` dice qué pone el sistema (comercio, cobertura, causa y conflictos) y qué no hace: no comprueba fuentes ni decide si corresponde escalar (constitución IV).
-- [ ] T033 [US2] Implementar T032 en `src/servidor_mcp/decisiones.py` (sin `_validar` ni `_REQUERIDOS_ESCALAMIENTO` viejo) y `src/servidor_mcp/servidor.py`. Actualizar `src/servidor_mcp/CLAUDE.md` si menciona la forma vieja.
-- [ ] T034 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el `PreToolUse` del escalamiento: forma, fuentes y sustitución (R5 pasos 4 y 5, R8, FR-021):
+- [X] T033 [US2] Implementar T032 en `src/servidor_mcp/decisiones.py` (sin `_validar` ni `_REQUERIDOS_ESCALAMIENTO` viejo) y `src/servidor_mcp/servidor.py`. Actualizar `src/servidor_mcp/CLAUDE.md` si menciona la forma vieja.
+- [X] T034 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el `PreToolUse` del escalamiento: forma, fuentes y sustitución (R5 pasos 4 y 5, R8, FR-021):
   - **Un resumen con un problema** de forma, una fuente no consultada o un frente cubierto sin afirmación se deniega con el JSON `resumen_rechazado` (`tipo`, `motivos`, `problemas`). Deja `bloqueo_regla` con la regla `I.4` y la acción `escalar_a_cumplimiento`.
   - **Uno válido** devuelve `reemplazar_entrada` con el comercio, la cobertura (`lineas()`), la causa (`causas_del_resumen`) y los conflictos (`como_entrada()`) del código, y con los hallazgos y la acción recomendada tal cual.
     - Deja `cobertura_sustituida` y `datos_sustituidos`.
@@ -267,21 +267,27 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - **`PostToolUse`**: con `caso_escalado`, añade el `Escalamiento` pendiente a `libro.escalamientos` y deja `escalamiento_registrado` con el id, las causas, el resumen de la cobertura y el número de afirmaciones, sin datos del comercio. Con otra respuesta, lo descarta.
   - **`PostToolUseFailure`**: descarta lo pendiente y deja `consulta_fallida`.
   - **Causas pendientes**: las del `PreToolUse`, no las del momento del `PostToolUse`. Una causa nueva entre los dos hooks queda sin cubrir.
-- [ ] T035 [US2] Implementar T034 en `src/due_diligence/hooks.py` y `src/due_diligence/reglas.py`:
+- [X] T035 [US2] Implementar T034 en `src/due_diligence/hooks.py` y `src/due_diligence/reglas.py`:
   - `_escalar_previo` (pasos 4 y 5 de R5), `_escalar_posterior` y `_escalar_fallido`;
   - `causas_del_resumen` y `MOTIVOS_SIN_CAUSA`;
   - `denegar_decision(tipo, …)`, que también usa el informe, en lugar de `denegar_informe`.
 
   El JSON del informe no cambia; lo comprueban los tests del #9.
-- [ ] T036 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el sello y los fallos (R5 paso 1, FR-012, D2):
+- [X] T036 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el sello y los fallos (R5 paso 1, FR-012, D2):
   - **Con el sello**, el escalamiento pasa sin validar fuentes ni reglas, con la cobertura `COBERTURA_NO_CALCULADA`, los conflictos `no_calculados()` y la causa con «fallo de un hook de verificación»:
     - con el comercio identificado, va ese comercio;
     - sin identificado pero con el pedido, el pedido `verificado: false`;
     - **sin ninguno de los dos, `COMERCIO_NO_IDENTIFICADO`**, y la entrada resultante pasa `validar_resumen` (test del comercio fijo, D2).
   - **Con el sello durante la espera del identificador**, se admite (excepción de FR-016) y después se admite el informe mínimo del #9.
   - **Una excepción** calculando cualquier parte: `degradar_escalamiento` deja pasar con los mismos textos fijos (y `COMERCIO_NO_IDENTIFICADO` si no se pudo calcular el comercio), sella el caso y no deniega. La entrada pasa `validar_resumen`.
-- [ ] T037 [US2] Implementar T036 en `src/due_diligence/hooks.py` (`_escalar_previo` paso 1 y `degradar_escalamiento`).
-- [ ] T038 [US2] Fase 6: ruff, la suite y los tests de T046. Commit «resumen al oficial con esquema y datos del código (#10, US2)».
+- [X] T037 [US2] Implementar T036 en `src/due_diligence/hooks.py` (`_escalar_previo` paso 1 y `degradar_escalamiento`).
+  **Notas de la fase 6**:
+  - **Quinto motivo sin causa** (T035): `comercio_no_identificado` («…el comercio no está identificado de forma unívoca.»). Sin él, un caso sin comercio identificado y sin los otros cuatro motivos daba una causa vacía, que la propia forma rechaza.
+  - **Confirmación sin pendiente** (R8): si el `PostToolUse` no encuentra pendiente (un `PreToolUse` que falló y degradó), registra el escalamiento con las causas y el comercio de ese momento, como hasta el #9: el oficial lo recibió.
+  - **Dónde vive** (data-model): `causas_del_resumen` y `menciones_en_noticias` están en `reglas.py` con importaciones diferidas (como `falta_para_cerrar`), para no crear un ciclo con `cobertura.py`.
+  - **Adelantado de T044**: `resumen_del_caso`, el paso `("escalar"[, accion])` con un resumen válido, `PasarelaSimulada._escalar` que valida con `validar_resumen`, y `afirmaciones_del_caso` que solo cita fuentes que el hook admite (FR-027). Sin eso la fase no cerraba en verde.
+  - Mutaciones: quitar `problemas_de_fuente` del resumen y olvidar lo pendiente en el `PostToolUse` hacen fallar un test cada una.
+- [X] T038 [US2] Fase 6: ruff, la suite y los tests de T046. Commit «resumen al oficial con esquema y datos del código (#10, US2)».
 
 ---
 
@@ -364,6 +370,10 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_casos_reglas.py`: casos b, c (dos) y el límite de devoluciones; `test_casos_cobertura.py`: los tres del caso f; `test_casos_informe.py`: caso g, caso escalado y SC-003 con escalamiento; `test_modo_demo.py`: los tres en demo | FR-020: la categoría delegada tiene que aparecer en un mensaje del analista, y sus solicitudes no la nombraban (por ejemplo, «talleres» o «panaderías» con la solicitud de Tienda Verde). | Cambia solo la **entrada**: cada caso pide el due diligence con la categoría que delega su guion (`SOLICITUD_B`, `SOLICITUD_C`, `SOLICITUD_G`, `SOLICITUD_A` o «Solicitud de <categoría>.» en demo). Ninguna aserción cambia. |
   | `test_hooks.py::test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta` (T024) | FR-015: ya no es una limitación sino lo especificado (US4-1). | Se conserva con otro nombre (`test_con_el_comercio_identificado_una_pregunta_no_es_una_espera_y_exige_el_informe`) y otro comentario; la aserción no cambia. Se añade `test_con_la_categoria_bloqueada_sin_resultado_la_pregunta_es_una_espera`. |
   | `test_hooks.py::test_con_el_informe_no_vigente_el_motivo_nombra_lo_que_cambio` y `test_main.py::_ejecutar_caso_simulado` | FR-027: una consulta de noticias sin argumentos no es del comercio identificado. | Cambia solo la **entrada**: la consulta de noticias lleva `{"identificador": "CO-TV-0001"}`, el dato delegado. Ninguna aserción cambia. |
+  | `servidor_mcp/test_decisiones.py`: la ayuda `_escalamiento`, `…sigue_aceptando_el_formato_de_hallazgos_del_5` (ahora `…rechaza_el_formato…`), `…conserva_los_cinco_campos` y `…nombra_los_cinco_campos` (ahora seis), `…le_falta_un_campo` (más `conflictos`) y `…con_un_hallazgo_sin_fuente_es_un_campo_faltante` (ahora `entrada_invalida` con el problema) | Cambia el contrato de `escalar_a_cumplimiento` (R6): afirmaciones del #9 y `conflictos`. | La ayuda pasa al formato nuevo; cada test conserva su igualdad exacta sobre la forma nueva, y el de la forma vieja se invierte (la forma vieja ahora se rechaza, con las rutas exactas). |
+  | `servidor_mcp/test_servidor.py`: la ayuda `_escalamiento`, `…sin_campos_da_los_cinco_faltantes` (seis), `TIPOS_JSON` (causa texto o lista, y `conflictos`) y `TIPOS_INCORRECTOS` (más `conflictos`) | Lo mismo, por el protocolo. | Igualdades exactas sobre el contrato nuevo. |
+  | `test_hooks.py`: la ayuda `_escalamiento`, `test_el_escalamiento_sustituye_la_cobertura_aunque_el_libro_este_sellado` (parametrizado), `test_una_excepcion_en_el_escalamiento…` y el de las 625 combinaciones | El hook valida el resumen y pone comercio, causa y conflictos (R5); con el sello, la cobertura y los conflictos van como no calculados. | El resumen cita la consulta del caso; las igualdades exactas incluyen ahora todo lo que pone el código (con el sello, `COBERTURA_NO_CALCULADA` en vez de la calculada: cambio a sabiendas de R5) y los eventos `[cobertura_sustituida, datos_sustituidos]`. |
+  | `test_hooks_sesiones.py::Caso.escalar`, `test_casos_cobertura.py` (escalamiento con noticias caído), `test_sesion_simulada.py` (pasarela y `escalar_con`) | La simulación y la pasarela simulada validan el resumen como la real. | Cambia la **entrada** a un resumen válido (`resumen_del_caso` o `_resumen_valido`); el caso f comprueba exactamente las afirmaciones, la acción y la causa que llegan. |
   | (el resto se rellena al implementar) | | |
 
   Se esperan, como mínimo:

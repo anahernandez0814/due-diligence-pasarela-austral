@@ -202,7 +202,6 @@ def _esquema(descripcion: str, esquema: dict[str, Any]) -> Any:
     return Field(description=descripcion, json_schema_extra=esquema)
 
 
-_COMERCIO = _p("Objeto. El comercio: «identificador» y «nombre», ambos texto.", "object")
 _COMERCIO_INFORME = _esquema(
     "Objeto. El comercio: «identificador» y «nombre» (texto o null) y «verificado» (verdadero o "
     "falso). Lo pone el sistema con el comercio identificado en el registro mercantil.",
@@ -219,11 +218,6 @@ _CONFLICTOS = _esquema(
     "«lista», con cada dato y sus valores, uno por fuente con su «fuente» y su «fecha». Lo pone "
     "el sistema; ningún valor prevalece sobre otro.",
     informe.ESQUEMA_CONFLICTOS,
-)
-_HALLAZGOS = _p(
-    "Objeto. Un hallazgo por frente: la clave es el frente (por ejemplo «registro») y el valor es "
-    "un objeto con «contenido» y «fuente», ambos texto. Ningún hallazgo sin fuente.",
-    "object",
 )
 _COBERTURA = _p(
     "Texto o lista. Frentes cubiertos y frentes que quedaron sin cubrir.", ["string", "array"]
@@ -272,22 +266,34 @@ def registrar_informe(
     name="escalar_a_cumplimiento",
     description=(
         "Pasa el caso a un oficial de cumplimiento con un resumen estructurado y autosuficiente: "
-        "el oficial no tiene acceso a la conversación. Es uno de los dos canales de decisión. Se "
+        "el oficial no tiene acceso a la conversación. Es uno de los dos canales de decisión. El "
+        "resumen lleva el comercio, las afirmaciones de cada frente con su fuente y su fecha, la "
+        "cobertura alcanzada, la causa del escalamiento, la acción recomendada y los conflictos "
+        "entre fuentes. El comercio, la cobertura, la causa y los conflictos los pone el sistema a "
+        "partir de lo consultado; las afirmaciones y la acción recomendada, quien escala. Se "
         "escala por coincidencia en listas restrictivas o por categoría de alto riesgo, nunca por "
-        "una mención en noticias. No emite una recomendación de habilitación. Si falta un campo "
-        "obligatorio devuelve un error no reintentable que lo nombra."
+        "una mención en noticias. No comprueba que cada fuente se haya consultado ni decide si "
+        "corresponde escalar (eso lo hace el sistema antes de llamarla), y no emite una "
+        "recomendación de habilitación. Si falta un campo obligatorio o una afirmación no tiene "
+        "la forma esperada, devuelve un error no reintentable que nombra cada problema."
     ),
 )
 def escalar_a_cumplimiento(
-    comercio: Annotated[Any, _COMERCIO] = None,
-    hallazgos: Annotated[Any, _HALLAZGOS] = None,
+    comercio: Annotated[Any, _COMERCIO_INFORME] = None,
+    hallazgos: Annotated[Any, _AFIRMACIONES] = None,
     cobertura: Annotated[Any, _COBERTURA] = None,
     causa_escalamiento: Annotated[
-        Any, _p("Texto. Por qué se escala: coincidencia en listas o categoría de alto riesgo.")
+        Any,
+        _p(
+            "Texto o lista. Por qué se escala: coincidencia en listas o categoría de alto riesgo. "
+            "Lo pone el sistema.",
+            ["string", "array"],
+        ),
     ] = None,
     accion_recomendada: Annotated[
         Any, _p("Texto. La acción que se recomienda al oficial de cumplimiento.")
     ] = None,
+    conflictos: Annotated[Any, _CONFLICTOS] = None,
 ) -> CallToolResult:
     return _protegido(
         lambda: decisiones.escalar_a_cumplimiento(
@@ -296,5 +302,6 @@ def escalar_a_cumplimiento(
             cobertura=cobertura,
             causa_escalamiento=causa_escalamiento,
             accion_recomendada=accion_recomendada,
+            conflictos=conflictos,
         )
     )

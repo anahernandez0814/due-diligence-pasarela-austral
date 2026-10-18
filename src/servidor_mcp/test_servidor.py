@@ -79,12 +79,20 @@ def _informe():
 
 
 def _escalamiento():
+    """El resumen al oficial del #10 (contrato `escalar-a-cumplimiento.md`, R6)."""
     return {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
-        "hallazgos": {"riesgo": {"contenido": "Nivel alto.", "fuente": "Catálogo"}},
-        "cobertura": "Cubiertos: todos los frentes.",
-        "causa_escalamiento": "Categoría de alto riesgo.",
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": True,
+        },
+        "hallazgos": {
+            "categoria": [{"texto": "Nivel alto.", "fuente": "Catálogo", "fecha": "2026-09-30"}]
+        },
+        "cobertura": ["Cobertura completa: 4 de 4 frentes cubiertos."],
+        "causa_escalamiento": ["categoría de alto riesgo"],
         "accion_recomendada": "Decide el oficial de cumplimiento.",
+        "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
     }
 
 
@@ -254,11 +262,38 @@ def test_la_descripcion_de_registrar_informe_dice_lo_que_pone_el_sistema_y_lo_qu
     assert "ni escala el caso" in descripcion
 
 
-def test_escalar_sin_campos_da_los_cinco_faltantes():
+def test_escalar_sin_campos_da_los_seis_faltantes():
     cuerpo = _comprobar_error_estructurado(
         _llamar("escalar_a_cumplimiento"), "campos_obligatorios_ausentes"
     )
-    assert len(cuerpo["campos_faltantes"]) == 5
+    assert len(cuerpo["campos_faltantes"]) == 6
+
+
+def test_escalar_con_una_afirmacion_mal_formada_da_entrada_invalida_con_problemas():
+    entrada = _escalamiento()
+    entrada["hallazgos"]["categoria"][0]["fecha"] = "ayer"
+    cuerpo = _comprobar_error_estructurado(
+        _llamar("escalar_a_cumplimiento", entrada), "entrada_invalida"
+    )
+    assert [p["ruta"] for p in cuerpo["problemas"]] == ["hallazgos.categoria[0].fecha"]
+
+
+def test_un_escalamiento_completo_por_el_protocolo_da_caso_escalado():
+    resultado = _llamar("escalar_a_cumplimiento", _escalamiento())
+    assert resultado.is_error is False
+    assert resultado.structured_content["resultado"] == "caso_escalado"
+
+
+def test_la_descripcion_del_escalamiento_dice_lo_que_pone_el_sistema_y_lo_que_no_hace():
+    descripcion = _herramientas()["escalar_a_cumplimiento"].description
+    for fragmento in (
+        "El comercio, la cobertura, la causa y los conflictos los pone el sistema",
+        "las afirmaciones y la acción recomendada, quien escala",
+        "No comprueba que cada fuente se haya consultado ni decide si corresponde escalar",
+        "nunca por una mención en noticias",
+        "el oficial no tiene acceso a la conversación",
+    ):
+        assert fragmento in descripcion, fragmento
 
 
 def test_escalar_con_un_campo_ausente():
@@ -388,8 +423,9 @@ TIPOS_JSON = {
         "comercio": "object",
         "hallazgos": "object",
         "cobertura": ["string", "array"],
-        "causa_escalamiento": "string",
+        "causa_escalamiento": ["string", "array"],
         "accion_recomendada": "string",
+        "conflictos": "object",
     },
 }
 
@@ -435,6 +471,7 @@ TIPOS_INCORRECTOS = [
     ("escalar_a_cumplimiento", {"cobertura": {"a": 1}}),
     ("escalar_a_cumplimiento", {"causa_escalamiento": 5}),
     ("escalar_a_cumplimiento", {"accion_recomendada": ["x"]}),
+    ("escalar_a_cumplimiento", {"conflictos": "texto"}),
 ]
 
 

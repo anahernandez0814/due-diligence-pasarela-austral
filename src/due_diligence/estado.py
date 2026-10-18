@@ -144,7 +144,11 @@ class EstadoCaso:
     # `PreToolUse` de `delegar_frente`); y los escalamientos que aceptó el `PreToolUse` de
     # `escalar_a_cumplimiento`, por `tool_use_id`, hasta que el `PostToolUse` los confirma (R8).
     categoria_bloqueada: bool = False
-    escalamientos_pendientes: "dict[str, Escalamiento]" = field(default_factory=dict)
+    # Por escalamiento pendiente: el `Escalamiento`, el resumen de la cobertura y el número de
+    # afirmaciones del resumen, para el evento `escalamiento_registrado` (FR-021).
+    escalamientos_pendientes: "dict[str, tuple[Escalamiento, str, int]]" = field(
+        default_factory=dict
+    )
     _situaciones: dict[Frente, Situacion] = field(
         default_factory=lambda: {f: Situacion.SIN_INICIAR for f in Frente}
     )

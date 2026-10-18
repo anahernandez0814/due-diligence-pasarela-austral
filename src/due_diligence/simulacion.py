@@ -20,7 +20,7 @@ from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import Consulta, ResultadoFrente
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.terminacion import Clasificacion, clasificar
-from servidor_mcp.informe import mensaje, validar_informe
+from servidor_mcp.informe import mensaje, mensaje_resumen, validar_informe, validar_resumen
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
 
 FUENTE = "Registro Mercantil Ficticio del Sur"
@@ -564,6 +564,17 @@ class PasarelaSimulada:
         return respuesta_de_decision("informe_registrado", f"INF-{len(self.informes):04d}")
 
     def _escalar(self, entrada: dict[str, Any]) -> dict[str, Any]:
+        """Valida el resumen con la misma función que la pasarela real (#10, R6) al guardarlo."""
+        problemas = validar_resumen(entrada)
+        if problemas:
+            return {
+                "error": True,
+                "tipo": "entrada_invalida",
+                "mensaje": mensaje_resumen(problemas),
+                "reintentable": False,
+                "obtenido": {},
+                "problemas": [p.como_dict() for p in problemas],
+            }
         self.escalamientos.append(dict(entrada))
         return respuesta_de_decision("caso_escalado", f"ESC-{len(self.escalamientos):04d}")
 
@@ -574,6 +585,9 @@ def afirmaciones_del_caso(estado: Any) -> dict[str, list[dict[str, str]]]:
     Es lo que haría un coordinador que cita bien: la fuente es una de las consultadas para el
     frente (FR-004) y la fecha, la del resultado. El texto no repite datos del comercio.
     """
+    # Importación diferida: `informe.py` importa módulos que los tests cargan desde aquí.
+    from due_diligence.informe import fuentes_consultadas
+
     hallazgos: dict[str, list[dict[str, str]]] = {}
     for c in estado.consultas:
         if not c.valido or not isinstance(c.resultado, Mapping):
@@ -581,6 +595,10 @@ def afirmaciones_del_caso(estado: Any) -> dict[str, list[dict[str, str]]]:
         metadatos = c.resultado.get("metadatos") or {}
         fuentes, fecha = metadatos.get("fuentes") or [], metadatos.get("fecha")
         if not fuentes or not isinstance(fecha, str):
+            continue
+        # Solo cita lo que el hook admite (FR-004, y desde el #10 FR-027: con el comercio
+        # identificado, las consultas de noticias y listas de otro comercio no valen).
+        if fuentes[0] not in fuentes_consultadas(estado, c.frente):
             continue
         texto = f"Resultado de la consulta: {c.resultado.get('resultado', 'sin dato')}."
         hallazgos.setdefault(c.frente.value, []).append(
@@ -611,6 +629,21 @@ def informe_del_caso(estado: Any, recomendacion: str) -> dict[str, Any]:
         "hallazgos": afirmaciones_del_caso(estado),
         "conflictos": {"resumen": "Sin conflictos declarados por el coordinador.", "lista": []},
         "cobertura": "completa",
+    }
+
+
+def resumen_del_caso(
+    estado: Any, accion: str = "Revisar el caso antes de decidir."
+) -> dict[str, Any]:
+    """Un resumen al oficial con la forma del #10 (R6, R12), el par de `informe_del_caso`.
+
+    Los hallazgos son las afirmaciones del caso y la acción recomendada, la dada. El comercio, la
+    cobertura, la causa y los conflictos son los «declarados por el modelo»: el hook los sustituye.
+    """
+    return {
+        **{k: v for k, v in informe_del_caso(estado, "-").items() if k != "recomendacion"},
+        "causa_escalamiento": "declarada por el coordinador",
+        "accion_recomendada": accion,
     }
 
 
@@ -711,9 +744,16 @@ class CoordinadorSimulado:
         if tipo == "informe_con":
             return await sesion.llamar("mcp__pasarela__registrar_informe", paso[1])
         if tipo == "escalar":
-            return await sesion.llamar(
-                "mcp__pasarela__escalar_a_cumplimiento", {"causa_escalamiento": "simulada"}
-            )
+            # #10 (R12): un resumen válido con las afirmaciones del caso; `("escalar", accion)`
+            # da otra acción recomendada.
+            caso = self.caso
+            estado = caso.estado if caso is not None else None
+            if estado is None:
+                from due_diligence.estado import EstadoCaso
+
+                estado = EstadoCaso()
+            entrada = resumen_del_caso(estado, *paso[1:2])
+            return await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", entrada)
         if tipo == "escalar_con":
             return await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", paso[1])
         if tipo == "terminar":

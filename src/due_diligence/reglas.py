@@ -452,6 +452,71 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     return rechazos
 
 
+# ------------------------------------------- causa del resumen al oficial (#10, FR-009, R5)
+
+# Sin causas vigentes (FR-003), una línea por cada motivo que se cumpla, en este orden.
+MOTIVOS_SIN_CAUSA = {
+    "cobertura_incompleta": "Sin causa de escalamiento vigente: la cobertura está incompleta.",
+    "categoria_no_determinada": (
+        "Sin causa de escalamiento vigente: la categoría no quedó determinada."
+    ),
+    "mencion_en_noticias": "Sin causa de escalamiento vigente: hay menciones en noticias.",
+    "conflicto_entre_fuentes": (
+        "Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales."
+    ),
+    # Precisión de la implementación (T035): sin él, un caso sin comercio identificado y sin los
+    # otros cuatro motivos daría una causa vacía.
+    "comercio_no_identificado": (
+        "Sin causa de escalamiento vigente: el comercio no está identificado de forma unívoca."
+    ),
+}
+MOTIVO_SIN_COMERCIO_ESCALAMIENTO = (
+    "Delegue primero el registro mercantil: el oficial necesita saber de qué comercio se trata."
+)
+
+
+def menciones_en_noticias(estado: EstadoCaso) -> bool:
+    """Si el último resultado de noticias trae menciones (FR-002, R5).
+
+    Con el comercio identificado solo cuentan sus consultas (FR-027, R7): una mención encontrada
+    con el nombre ambiguo no es de este comercio.
+    """
+    resultado = estado.resultados.get(Frente.NOTICIAS)
+    if resultado is None:
+        return False
+    comercio = estado.comercio
+    return any(
+        c.valido
+        and isinstance(c.resultado, Mapping)
+        and c.resultado.get("resultado") == "coincidencias"
+        and (comercio is None or consulta_del_comercio(c.argumentos, comercio))
+        for c in resultado.consultas
+    )
+
+
+def causas_del_resumen(estado: EstadoCaso) -> list[str]:
+    """Las líneas de la causa que pone el código en el resumen al oficial (FR-009, R5).
+
+    Con causas vigentes, una por causa con su etiqueta fija. Sin causas (FR-003), una por cada
+    motivo de `MOTIVOS_SIN_CAUSA` que se cumpla. Ninguna repite datos del comercio.
+    """
+    # Importación diferida: `cobertura.py` y `conflictos.py` importan este módulo.
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.conflictos import calcular_conflictos
+
+    causas = causas_vigentes(estado.libro)
+    if causas:
+        return [texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas]
+    motivos = {
+        "cobertura_incompleta": not calcular_cobertura(estado).completa,
+        "categoria_no_determinada": not categoria_determinada(estado.libro),
+        "mencion_en_noticias": menciones_en_noticias(estado),
+        "conflicto_entre_fuentes": calcular_conflictos(estado).estado == "con_conflictos",
+        "comercio_no_identificado": estado.comercio is None,
+    }
+    return [MOTIVOS_SIN_CAUSA[clave] for clave, cumple in motivos.items() if cumple]
+
+
 # Motivos del cierre por el informe (#9, contrato `cierre.md`): textos fijos, sin datos del caso.
 MOTIVO_SIN_INFORME = (
     "Falta registrar el informe del caso con registrar_informe (habilitar, no_habilitar o "

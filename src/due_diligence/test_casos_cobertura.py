@@ -108,17 +108,12 @@ def test_sin_la_caida_la_cobertura_es_completa_y_no_hay_reintentos():
 
 
 def test_el_escalamiento_con_noticias_caido_registra_la_cobertura_del_codigo():
-    escalamiento = {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
-        "hallazgos": {},
-        "cobertura": DECLARADA,
-        "causa_escalamiento": "categoría de alto riesgo",
-        "accion_recomendada": "decide un oficial de cumplimiento",
-    }
+    # #10 (R6): el resumen lleva las afirmaciones del caso; lo arma el paso `escalar`.
+    accion = "decide un oficial de cumplimiento"
     guion = [
         _delegaciones("CO-TV-0001", "suplementos dietarios"),
         ("delegar", {"frente": "listas"}),
-        ("escalar_con", escalamiento),
+        ("escalar", accion),
         ("informe", "decide_cumplimiento"),
         ("terminar",),
     ]
@@ -135,9 +130,11 @@ def test_el_escalamiento_con_noticias_caido_registra_la_cobertura_del_codigo():
     (escalado,) = coordinador.pasarela.escalamientos
     assert escalado["cobertura"] == caso.cobertura.lineas()
     assert escalado["cobertura"][0] == "Cobertura incompleta: 3 de 4 frentes cubiertos."
-    # El resto del escalamiento llega intacto.
-    assert {k: v for k, v in escalado.items() if k != "cobertura"} == {
-        k: v for k, v in escalamiento.items() if k != "cobertura"
-    }
+    # Lo que no pone el código llega intacto: las afirmaciones y la acción recomendada.
+    from due_diligence.simulacion import afirmaciones_del_caso
+
+    assert escalado["hallazgos"] == afirmaciones_del_caso(caso.estado)
+    assert escalado["accion_recomendada"] == accion
+    assert escalado["causa_escalamiento"] == ["categoría de alto riesgo"]
     assert coordinador.pasarela.informes[0]["cobertura"] == caso.cobertura.lineas()
     assert caso.completo is False

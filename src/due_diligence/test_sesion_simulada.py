@@ -282,11 +282,29 @@ def test_la_pasarela_simulada_guarda_informes_y_escalamientos():
     # #9: el informe tiene que tener la forma del esquema; la igualdad sigue siendo exacta.
     pasarela = _pasarela()
     informe = _llamar(pasarela, "registrar_informe", _informe_valido())
-    escalamiento = _llamar(pasarela, "escalar_a_cumplimiento", {"causa_escalamiento": "x"})
+    escalamiento = _llamar(pasarela, "escalar_a_cumplimiento", _resumen_valido())
     assert informe["resultado"] == "informe_registrado"
     assert escalamiento["resultado"] == "caso_escalado"
     assert pasarela.informes == [_informe_valido()]
-    assert pasarela.escalamientos == [{"causa_escalamiento": "x"}]
+    assert pasarela.escalamientos == [_resumen_valido()]
+
+
+def test_la_pasarela_simulada_rechaza_un_resumen_mal_formado_como_la_real():
+    # #10, R6: la misma `validar_resumen` que la pasarela; nada se guarda.
+    pasarela = _pasarela()
+    respuesta = _llamar(pasarela, "escalar_a_cumplimiento", {"causa_escalamiento": "x"})
+    assert respuesta["error"] is True and respuesta["tipo"] == "entrada_invalida"
+    assert respuesta["mensaje"].startswith("El resumen al oficial no tiene la forma esperada")
+    assert pasarela.escalamientos == []
+
+
+def _resumen_valido():
+    """Un resumen al oficial con la forma del #10 (contrato `escalar-a-cumplimiento.md`)."""
+    return {
+        **{k: v for k, v in _informe_valido().items() if k != "recomendacion"},
+        "causa_escalamiento": ["categoría de alto riesgo"],
+        "accion_recomendada": "Revisar el caso.",
+    }
 
 
 def test_la_pasarela_simulada_rechaza_un_informe_mal_formado_como_la_real():
@@ -402,7 +420,7 @@ def test_en_secuencia_da_un_resultado_por_ejecucion_y_repite_el_ultimo():
 def test_el_paso_escalar_con_llama_a_escalar_con_esa_entrada():
     from due_diligence.simulacion import CoordinadorSimulado
 
-    entrada = {"causa_escalamiento": "alto riesgo", "cobertura": "completa"}
+    entrada = _resumen_valido()  # #10: la pasarela simulada valida el resumen
     coordinador = CoordinadorSimulado([("escalar_con", entrada)])
 
     async def consumir():

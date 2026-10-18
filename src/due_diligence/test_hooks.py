@@ -1351,13 +1351,26 @@ def _hook_del_escalamiento(hooks):
     return hooks.coordinador()["PreToolUse"][2].hooks[0]
 
 
-def _escalamiento():
+def _escalamiento(hallazgos=None):
+    """El resumen al oficial del #10 (R6). Sus hallazgos citan la consulta del registro de
+    `_caso_con_comercio`; el comercio, la cobertura, la causa y los conflictos los pone el hook."""
     return {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
-        "hallazgos": {},
+        "comercio": dict(COMERCIO_VERIFICADO),
+        "hallazgos": hallazgos
+        if hallazgos is not None
+        else {
+            "registro": [
+                {
+                    "texto": "Una coincidencia en el registro.",
+                    "fuente": FUENTE_REGISTRO,
+                    "fecha": "2026-09-30",
+                }
+            ]
+        },
         "cobertura": "completa",
         "causa_escalamiento": "alto riesgo",
-        "accion_recomendada": "revisar",
+        "accion_recomendada": "Revisar el origen de fondos antes de decidir.",
+        "conflictos": {"resumen": "Sin conflictos declarados.", "lista": []},
     }
 
 
@@ -1441,23 +1454,33 @@ def test_una_excepcion_calculando_la_cobertura_deniega_el_informe(monkeypatch):
     assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())
 
 
-def test_el_escalamiento_sustituye_la_cobertura_aunque_el_libro_este_sellado():
-    for sellado in (False, True):
-        estado, eventos, hooks = _caso_con_comercio()
-        if sellado:
-            estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
-        entrada = _escalamiento()
-        salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
-        assert not _es_denegacion(salida)
-        assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
-        sustituida = _sustituida(salida)
-        assert {k: v for k, v in sustituida.items() if k != "cobertura"} == {
-            k: v for k, v in entrada.items() if k != "cobertura"
-        }
+@pytest.mark.parametrize("sellado", [False, True])
+def test_el_escalamiento_sustituye_la_cobertura_aunque_el_libro_este_sellado(sellado):
+    # #8; desde el #10 (R5) el hook también pone el comercio, la causa y los conflictos, y con el
+    # sello la cobertura y los conflictos van como no calculados (como el informe mínimo del #9).
+    from due_diligence.conflictos import calcular_conflictos, no_calculados
+
+    estado, eventos, hooks = _caso_con_comercio()
+    if sellado:
+        estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = _escalamiento()
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+    assert not _es_denegacion(salida)
+    assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
+    sustituida = _sustituida(salida)
+    assert sustituida["hallazgos"] == entrada["hallazgos"]
+    assert sustituida["accion_recomendada"] == entrada["accion_recomendada"]
+    assert sustituida["comercio"] == COMERCIO_VERIFICADO
+    if sellado:
+        assert sustituida["cobertura"] == [COBERTURA_NO_CALCULADA]
+        assert sustituida["conflictos"] == no_calculados().como_entrada()
+        assert sustituida["causa_escalamiento"] == ["fallo de un hook de verificación"]
+    else:
         assert sustituida["cobertura"] == calcular_cobertura(estado).lineas()
-        (evento,) = eventos.eventos()
-        assert evento.tipo == TIPO_COBERTURA_SUSTITUIDA
-        assert "escalar_a_cumplimiento" in evento.detalle
+        assert sustituida["conflictos"] == calcular_conflictos(estado).como_entrada()
+    tipos = [e.tipo for e in eventos.eventos()]
+    assert tipos == [TIPO_COBERTURA_SUSTITUIDA, TIPO_DATOS_SUSTITUIDOS]
+    assert "escalar_a_cumplimiento" in eventos.eventos()[0].detalle
 
 
 def test_un_escalamiento_que_no_es_un_objeto_pasa_sin_cambios():
@@ -1478,7 +1501,17 @@ def test_una_excepcion_en_el_escalamiento_lo_deja_pasar_con_el_texto_fijo_y_sell
 
     assert not _es_denegacion(salida)
     assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
-    assert _sustituida(salida) == {**entrada, "cobertura": [COBERTURA_NO_CALCULADA]}
+    from due_diligence.conflictos import no_calculados
+    from servidor_mcp.informe import validar_resumen
+
+    assert _sustituida(salida) == {
+        **entrada,
+        "comercio": COMERCIO_VERIFICADO,
+        "cobertura": [COBERTURA_NO_CALCULADA],
+        "causa_escalamiento": ["fallo de un hook de verificación"],
+        "conflictos": no_calculados().como_entrada(),
+    }
+    assert validar_resumen(_sustituida(salida)) == []
     assert modulo_hooks.COBERTURA_NO_CALCULADA == COBERTURA_NO_CALCULADA
     assert estado.libro.fallo_de_hook is not None
     (evento,) = eventos.eventos()
@@ -1527,7 +1560,8 @@ def test_los_dos_canales_ponen_exactamente_la_cobertura_calculada(situaciones):
     esperada = calcular_cobertura(estado).lineas()
     entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
     informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
-    escalamiento = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    resumen = _escalamiento(hallazgos=afirmaciones_del_caso(estado))
+    escalamiento = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, resumen))
     for salida in (informe, escalamiento):
         cobertura = _sustituida(salida)["cobertura"]
         assert cobertura == esperada
@@ -2663,3 +2697,312 @@ def test_d_con_el_sello_la_espera_de_categoria_exige_escalar():
     assert _es_bloqueo(salida)
     assert salida["reason"] == motivo_de_escalar({"fallo_de_hook"})
     assert estado.libro.cierres_impedidos == 1
+
+
+# ------------------------------------- #10: el PreToolUse del escalamiento (T034, R5, R6, R8)
+
+
+def _denegado_por_resumen(salida):
+    assert _es_denegacion(salida)
+    rechazo = json.loads(_motivo(salida))
+    assert rechazo["tipo"] == "resumen_rechazado" and rechazo["reintentable"] is False
+    return rechazo
+
+
+@pytest.mark.parametrize(
+    ("cambio", "ruta"),
+    [
+        ({"hallazgos": {"registro": [{"texto": "x", "fuente": FUENTE_REGISTRO}]}}, "fecha"),
+        (
+            {"hallazgos": {"registro": [{"texto": "x", "fuente": "Otra", "fecha": "2026-09-30"}]}},
+            "fuente",
+        ),
+        ({"hallazgos": {}}, "hallazgos.registro"),  # frente cubierto sin afirmación (US1-6)
+        ({"accion_recomendada": ["x"]}, "accion_recomendada"),
+    ],
+)
+def test_un_resumen_con_un_problema_se_rechaza_con_i4_y_lo_nombra(cambio, ruta):
+    estado, eventos, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, {**_escalamiento(), **cambio}))
+    rechazo = _denegado_por_resumen(salida)
+    assert any(p["ruta"].endswith(ruta) for p in rechazo["problemas"]), rechazo["problemas"]
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.4"
+    assert evento.accion == "escalar_a_cumplimiento"
+    assert estado.escalamientos_pendientes == {}
+
+
+def test_un_resumen_valido_sustituye_lo_del_codigo_y_deja_pendiente_el_escalamiento():
+    from due_diligence.conflictos import calcular_conflictos
+    from due_diligence.reglas import causas_del_resumen
+
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    declarado = {**_escalamiento(), "causa_escalamiento": "otra causa", "cobertura": "completa"}
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, declarado))
+    sustituida = _sustituida(salida)
+    assert sustituida == {
+        "comercio": COMERCIO_VERIFICADO,
+        "hallazgos": declarado["hallazgos"],
+        "cobertura": calcular_cobertura(estado).lineas(),
+        "causa_escalamiento": ["coincidencia del representante legal en listas restrictivas"],
+        "accion_recomendada": declarado["accion_recomendada"],
+        "conflictos": calcular_conflictos(estado).como_entrada(),
+    }
+    assert sustituida["causa_escalamiento"] == causas_del_resumen(estado)
+    assert [e.tipo for e in eventos.eventos()] == [
+        TIPO_COBERTURA_SUSTITUIDA,
+        TIPO_DATOS_SUSTITUIDOS,
+    ]
+    (pendiente,) = estado.escalamientos_pendientes.values()
+    assert pendiente[0] == Escalamiento(
+        frozenset({"coincidencia_representante"}), ("CO-TV-0001", "Tienda Verde SAS", True)
+    )
+
+
+@pytest.mark.parametrize(
+    ("preparar", "esperadas"),
+    [
+        ("cobertura", ["Sin causa de escalamiento vigente: la cobertura está incompleta."]),
+        ("categoria", ["Sin causa de escalamiento vigente: la categoría no quedó determinada."]),
+        ("noticias", ["Sin causa de escalamiento vigente: hay menciones en noticias."]),
+        (
+            "conflicto",
+            ["Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales."],
+        ),
+        (
+            "comercio",
+            [
+                "Sin causa de escalamiento vigente: el comercio no está identificado de forma "
+                "unívoca."
+            ],
+        ),
+        (
+            "dos",
+            [
+                "Sin causa de escalamiento vigente: la cobertura está incompleta.",
+                "Sin causa de escalamiento vigente: la categoría no quedó determinada.",
+            ],
+        ),
+    ],
+)
+def test_sin_causas_la_causa_lleva_una_linea_por_motivo(preparar, esperadas):
+    # U1 del análisis: cada motivo solo, y dos a la vez, en su orden; ninguno repite datos.
+    from due_diligence.reglas import causas_del_resumen
+
+    estado = _estado_sin_causas(preparar)
+    lineas = causas_del_resumen(estado)
+    assert lineas == esperadas
+    assert all("Tienda Verde" not in linea and "CO-TV" not in linea for linea in lineas)
+
+
+def _estado_sin_causas(motivo):
+    """Un caso sin causas donde se cumple exactamente `motivo` (o los dos primeros con «dos»)."""
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.simulacion import respuesta_del_contrato, terminacion_normal
+
+    estado, _, _ = _caso_con_comercio()
+    frentes = list(Frente) if motivo != "cobertura" and motivo != "dos" else [Frente.REGISTRO]
+    for frente in frentes:
+        if frente is not Frente.REGISTRO:
+            estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+            estado.cambiar_situacion(frente, Situacion.TERMINADO)
+    noticias = respuesta_del_contrato("sin_coincidencias", fuente="Noticias Ficticias")
+    if motivo == "noticias":
+        noticias = respuesta_del_contrato(
+            "coincidencias", [{"titular": "Una noticia ficticia"}], fuente="Noticias Ficticias"
+        )
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [consulta(Frente.NOTICIAS, {"identificador": "CO-TV-0001"}, noticias)],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+    if motivo not in ("categoria", "dos"):
+        estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    if motivo == "conflicto":
+        otra = {**comercio_alto_riesgo(), "fecha_constitucion": "2001-01-01"}
+        estado.reiniciar_identificacion()
+        estado.registrar_identificacion(
+            {
+                "resultado": "coincidencias",
+                "hechos": [
+                    {
+                        "contenido": comercio_alto_riesgo(),
+                        "metadatos": {"fuente": FUENTE_REGISTRO, "fecha": "2026-09-30"},
+                    },
+                    {
+                        "contenido": otra,
+                        "metadatos": {"fuente": "Otro Registro Ficticio", "fecha": "2026-09-28"},
+                    },
+                ],
+                "coincidencias": ["CO-TV-0001"],
+            }
+        )
+        estado.agregar_consultas(
+            [
+                consulta(
+                    Frente.REGISTRO,
+                    {"identificador": "CO-TV-0001"},
+                    {
+                        "resultado": "coincidencias",
+                        "hechos": [
+                            {
+                                "contenido": comercio_alto_riesgo(),
+                                "metadatos": {"fuente": FUENTE_REGISTRO, "fecha": "2026-09-30"},
+                            },
+                            {
+                                "contenido": otra,
+                                "metadatos": {
+                                    "fuente": "Otro Registro Ficticio",
+                                    "fecha": "2026-09-28",
+                                },
+                            },
+                        ],
+                        "coincidencias": ["CO-TV-0001"],
+                        "metadatos": {"fuentes": [FUENTE_REGISTRO], "fecha": "2026-09-30"},
+                    },
+                )
+            ]
+        )
+    if motivo == "comercio":
+        estado.reiniciar_identificacion()
+        estado.registrar_identificacion({"hola": 1})  # registro terminado, sin comercio
+    return estado
+
+
+def test_sin_comercio_identificado_ni_pedido_el_escalamiento_se_rechaza_pidiendo_el_registro():
+    # D2 del plan: el oficial no puede recibir un caso sin comercio.
+    from due_diligence.reglas import MOTIVO_SIN_COMERCIO_ESCALAMIENTO
+
+    estado, eventos, hooks = _caso()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    rechazo = _denegado_por_resumen(salida)
+    assert {"regla": None, "texto": MOTIVO_SIN_COMERCIO_ESCALAMIENTO} in rechazo["motivos"]
+    assert MOTIVO_SIN_COMERCIO_ESCALAMIENTO == (
+        "Delegue primero el registro mercantil: el oficial necesita saber de qué comercio se trata."
+    )
+
+
+def _post_escalado(hooks, identificador="ESC-0001", tool_use_id="t1"):
+    escalado = respuesta_de_decision("caso_escalado", identificador)
+    entrada = _post_de(ESCALAR, escalado, {})
+    entrada["tool_use_id"] = tool_use_id
+    return _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), entrada)
+
+
+def test_el_post_confirma_las_causas_del_pre_y_no_las_del_momento():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    # Una causa nueva entre los dos hooks: no la cubre este escalamiento.
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    _post_escalado(hooks)
+    assert estado.libro.escalamientos == [
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    ]
+    assert estado.escalamientos_pendientes == {}
+    evento = eventos.eventos()[-1]
+    assert evento.tipo == TIPO_ESCALAMIENTO_REGISTRADO
+    assert evento.detalle == (
+        "Escalamiento ESC-0001 registrado; cubre: categoría de alto riesgo; cobertura "
+        "incompleta, 1 de 4 frentes; 1 afirmaciones."
+    )
+    from due_diligence.reglas import escalamiento_cubre
+
+    assert escalamiento_cubre(estado.libro) is False  # la coincidencia nueva sigue sin cubrir
+
+
+def test_el_post_con_otra_respuesta_y_el_fallo_descartan_lo_pendiente():
+    estado, eventos, hooks = _caso_con_comercio()
+    _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    otro = respuesta_de_decision("informe_registrado", "INF-0001")
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, otro, {}))
+    assert estado.escalamientos_pendientes == {} and estado.libro.escalamientos == []
+    _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    error = error_estructurado("entrada_invalida", False)
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUseFailure"), _fallo(error, nombre=ESCALAR))
+    assert estado.escalamientos_pendientes == {} and estado.libro.escalamientos == []
+    assert eventos.eventos()[-1].tipo == TIPO_CONSULTA_FALLIDA
+
+
+def test_un_segundo_escalamiento_sin_causa_nueva_deja_el_mismo_evento():
+    # U2 del análisis (R8): no hay un tipo de evento distinto.
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    for numero in (1, 2):
+        _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+        _post_escalado(hooks, f"ESC-000{numero}")
+    registrados = [e for e in eventos.eventos() if e.tipo == TIPO_ESCALAMIENTO_REGISTRADO]
+    assert [e.detalle.split(" registrado")[0] for e in registrados] == [
+        "Escalamiento ESC-0001",
+        "Escalamiento ESC-0002",
+    ]
+    assert len(estado.libro.escalamientos) == 2
+
+
+# ------------------------------------------- #10: el sello y los fallos (T036, R5, FR-012, D2)
+
+
+@pytest.mark.parametrize("comercio", ["identificado", "pedido", "ninguno"])
+def test_con_el_sello_el_escalamiento_pasa_con_textos_fijos_y_el_comercio_que_haya(comercio):
+    from due_diligence.conflictos import no_calculados
+    from servidor_mcp.informe import COMERCIO_NO_IDENTIFICADO, validar_resumen
+
+    if comercio == "identificado":
+        estado, eventos, hooks = _caso_con_comercio()
+        esperado = COMERCIO_VERIFICADO
+    else:
+        estado, eventos, hooks = _caso()
+        esperado = COMERCIO_NO_IDENTIFICADO
+        if comercio == "pedido":
+            estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
+            esperado = {"identificador": "CO-TV-0001", "nombre": None, "verificado": False}
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = _escalamiento(hallazgos={"registro": [{"texto": "x"}]})  # ni se validan las fuentes
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+    assert not _es_denegacion(salida)
+    sustituida = _sustituida(salida)
+    assert sustituida["comercio"] == esperado
+    assert sustituida["cobertura"] == [COBERTURA_NO_CALCULADA]
+    assert sustituida["conflictos"] == no_calculados().como_entrada()
+    assert sustituida["causa_escalamiento"] == ["fallo de un hook de verificación"]
+    if comercio == "ninguno":
+        # D2: el comercio fijo pasa la forma; la afirmación sin fuente y fecha la rechazaría la
+        # pasarela, que es la que valida la forma con el sello.
+        assert validar_resumen({**sustituida, "hallazgos": {}}) == []
+
+
+def test_con_el_sello_durante_la_espera_del_identificador_se_escala_y_despues_el_informe_minimo():
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    assert not _es_denegacion(salida)
+    _post_escalado(hooks)
+    informe = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    assert not _es_denegacion(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, informe)))
+
+
+def test_una_excepcion_sin_comercio_calculable_deja_pasar_el_comercio_fijo(monkeypatch):
+    from servidor_mcp.informe import COMERCIO_NO_IDENTIFICADO, validar_resumen
+
+    estado, eventos, hooks = _caso_con_comercio()
+
+    def roto(estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(modulo_hooks, "calcular_cobertura", roto)
+    monkeypatch.setattr(modulo_hooks, "comercio_del_informe", roto)
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
+    assert not _es_denegacion(salida)
+    sustituida = _sustituida(salida)
+    assert sustituida["comercio"] == COMERCIO_NO_IDENTIFICADO
+    assert validar_resumen(sustituida) == []
+    assert estado.libro.fallo_de_hook is not None
+    assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())

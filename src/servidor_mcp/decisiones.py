@@ -33,12 +33,15 @@ _REQUERIDOS_INFORME: dict[str, type | tuple[type, ...]] = {
     "cobertura": (str, list),
     "conflictos": dict,
 }
+# Primer nivel del resumen al oficial (#10, R6): los seis se nombran todos si faltan; la forma de
+# cada parte la valida `informe.validar_resumen`.
 _REQUERIDOS_ESCALAMIENTO: dict[str, type | tuple[type, ...]] = {
     "comercio": dict,
     "hallazgos": dict,
     "cobertura": (str, list),
-    "causa_escalamiento": str,
+    "causa_escalamiento": (str, list),
     "accion_recomendada": str,
+    "conflictos": dict,
 }
 
 
@@ -58,53 +61,6 @@ def carpeta_resultados() -> Path:
     if configurada:
         return Path(configurada)
     return Path(__file__).resolve().parents[2] / "resultados"
-
-
-def _anidados(
-    prefijo: str, objeto: Any, requeridos: dict[str, type | tuple[type, ...]]
-) -> tuple[list[str], str | None]:
-    """Campos faltantes (con prefijo) y, si lo hay, el motivo de un tipo incorrecto."""
-    err = campos_obligatorios(objeto, requeridos)
-    if err is None:
-        return [], None
-    cuerpo = err.structured_content
-    if cuerpo["tipo"] == "campos_obligatorios_ausentes":
-        return [f"{prefijo}.{nombre}" for nombre in cuerpo["campos_faltantes"]], None
-    return [], f"{prefijo}: {cuerpo['mensaje']}"
-
-
-def _validar(entrada: dict[str, Any], requeridos: dict[str, Any]) -> CallToolResult | None:
-    """Campos de primer nivel y, dentro de ellos, el comercio y la fuente de cada hallazgo."""
-    err = campos_obligatorios(entrada, requeridos)
-    if err is not None:
-        return err
-    faltantes: list[str] = []
-    incorrectos: list[str] = []
-    partes = [("comercio", entrada["comercio"], {"identificador": str, "nombre": str})]
-    partes += [
-        (f"hallazgos.{frente}", valor, {"contenido": str, "fuente": str})
-        for frente, valor in entrada["hallazgos"].items()
-    ]
-    for prefijo, objeto, requeridos_anidados in partes:
-        faltan, mal = _anidados(prefijo, objeto, requeridos_anidados)
-        faltantes += faltan
-        if mal:
-            incorrectos.append(mal)
-    if faltantes:
-        lista = ", ".join(f"«{nombre}»" for nombre in faltantes)
-        return error(
-            "campos_obligatorios_ausentes",
-            f"Faltan campos obligatorios: {lista}.",
-            False,
-            campos_faltantes=faltantes,
-        )
-    if incorrectos:
-        return error(
-            "entrada_invalida",
-            "Campos con un tipo incorrecto: " + "; ".join(incorrectos) + ".",
-            False,
-        )
-    return None
 
 
 def _guardar(subcarpeta: str, prefijo: str, documento: dict[str, Any]) -> str | None:
@@ -185,16 +141,33 @@ def escalar_a_cumplimiento(
     cobertura: Any = None,
     causa_escalamiento: Any = None,
     accion_recomendada: Any = None,
+    conflictos: Any = None,
 ) -> CallToolResult:
-    """Escala el caso con el resumen autosuficiente que necesita el oficial de cumplimiento."""
+    """Escala el caso con el resumen autosuficiente que necesita el oficial (#10, R6).
+
+    Como el informe del #9: primero los campos de primer nivel (`campos_obligatorios_ausentes`
+    nombra **todos** los que faltan, o `entrada_invalida` por un tipo); después la forma de cada
+    parte con `informe.validar_resumen`, que da `entrada_invalida` con todos los `problemas`. Un
+    resumen inválido nunca se guarda, ni en parte. No comprueba si corresponde escalar ni las
+    fuentes: eso lo hace el hook del coordinador, que conoce el caso.
+    """
     entrada = {
         "comercio": comercio,
         "hallazgos": hallazgos,
         "cobertura": cobertura,
         "causa_escalamiento": causa_escalamiento,
         "accion_recomendada": accion_recomendada,
+        "conflictos": conflictos,
     }
-    err = _validar(entrada, _REQUERIDOS_ESCALAMIENTO)
+    err = campos_obligatorios(entrada, _REQUERIDOS_ESCALAMIENTO, admite_vacio=("hallazgos",))
     if err is not None:
         return err
+    problemas = informe.validar_resumen(entrada)
+    if problemas:
+        return error(
+            "entrada_invalida",
+            informe.mensaje_resumen(problemas),
+            False,
+            problemas=[p.como_dict() for p in problemas],
+        )
     return _resultado("caso_escalado", FUENTE_ESCALAMIENTOS, "escalamientos", "ESC", entrada)

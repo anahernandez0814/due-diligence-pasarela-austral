@@ -90,12 +90,18 @@ def _informe(**cambios):
 
 
 def _escalamiento(**cambios):
+    """El resumen al oficial en el formato del #10 (contrato `escalar-a-cumplimiento.md`, R6)."""
     base = {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
-        "hallazgos": _hallazgos(),
-        "cobertura": "Cubiertos: registro, listas, noticias y riesgo. Sin cubrir: ninguno.",
-        "causa_escalamiento": "Categoría de alto riesgo: suplementos dietarios.",
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": True,
+        },
+        "hallazgos": _afirmaciones(),
+        "cobertura": ["Cobertura completa: 4 de 4 frentes cubiertos."],
+        "causa_escalamiento": ["categoría de alto riesgo"],
         "accion_recomendada": "Decisión del oficial de cumplimiento; no habilitar automáticamente.",
+        "conflictos": _conflictos(),
     }
     return base | cambios
 
@@ -256,9 +262,12 @@ def test_varios_problemas_de_forma_se_nombran_todos_en_un_solo_error(carpeta):
     assert not carpeta.exists()  # FR-005: nada guardado, ni en parte
 
 
-def test_escalar_sigue_aceptando_el_formato_de_hallazgos_del_5(carpeta):
-    # El formato de `escalar_a_cumplimiento` no cambia en el #9: lo decide el #10.
-    assert escalar_a_cumplimiento(**_escalamiento()).is_error is False
+def test_escalar_rechaza_el_formato_de_hallazgos_del_5(carpeta):
+    # El #10 (R6) cambia el formato: los hallazgos son las afirmaciones del #9.
+    cuerpo = _error(escalar_a_cumplimiento(**_escalamiento(hallazgos=_hallazgos())))
+    assert cuerpo["tipo"] == "entrada_invalida" and cuerpo["reintentable"] is False
+    assert [p["ruta"] for p in cuerpo["problemas"]] == ["hallazgos", "hallazgos.registro"]
+    assert not carpeta.exists()
 
 
 @pytest.mark.parametrize(
@@ -299,7 +308,7 @@ def test_un_escalamiento_completo_se_guarda_y_devuelve_un_hecho_con_el_id(carpet
     assert [a.name for a in _archivos(carpeta, "escalamientos")] == [f"{identificador}.json"]
 
 
-def test_el_archivo_del_escalamiento_conserva_los_cinco_campos(carpeta):
+def test_el_archivo_del_escalamiento_conserva_los_seis_campos(carpeta):
     resultado = escalar_a_cumplimiento(**_escalamiento())
     identificador = resultado.structured_content["hechos"][0]["contenido"]["id"]
     guardado = json.loads((carpeta / "escalamientos" / f"{identificador}.json").read_text("utf-8"))
@@ -310,14 +319,23 @@ def test_el_archivo_del_escalamiento_conserva_los_cinco_campos(carpeta):
         "cobertura",
         "causa_escalamiento",
         "accion_recomendada",
+        "conflictos",
     ):
         assert guardado[campo] == entrada[campo]
     assert guardado["id"] == identificador
+    assert guardado["registrado_en"].endswith("+00:00")  # UTC, como el informe (#9, R10)
 
 
 @pytest.mark.parametrize(
     "campo",
-    ["comercio", "hallazgos", "cobertura", "causa_escalamiento", "accion_recomendada"],
+    [
+        "comercio",
+        "hallazgos",
+        "cobertura",
+        "causa_escalamiento",
+        "accion_recomendada",
+        "conflictos",
+    ],
 )
 def test_a_escalar_le_falta_un_campo(carpeta, campo):
     entrada = _escalamiento()
@@ -329,7 +347,7 @@ def test_a_escalar_le_falta_un_campo(carpeta, campo):
     assert not carpeta.exists()
 
 
-def test_escalar_nombra_los_cinco_campos_cuando_faltan_todos():
+def test_escalar_nombra_los_seis_campos_cuando_faltan_todos():
     cuerpo = _error(escalar_a_cumplimiento())
     assert cuerpo["campos_faltantes"] == [
         "comercio",
@@ -337,14 +355,20 @@ def test_escalar_nombra_los_cinco_campos_cuando_faltan_todos():
         "cobertura",
         "causa_escalamiento",
         "accion_recomendada",
+        "conflictos",
     ]
 
 
-def test_escalar_con_un_hallazgo_sin_fuente_es_un_campo_faltante():
-    hallazgos = _hallazgos()
-    del hallazgos["registro"]["fuente"]
+def test_escalar_con_una_afirmacion_sin_fuente_da_entrada_invalida_con_el_problema():
+    hallazgos = _afirmaciones()
+    del hallazgos["registro"][0]["fuente"]
     cuerpo = _error(escalar_a_cumplimiento(**_escalamiento(hallazgos=hallazgos)))
-    assert cuerpo["campos_faltantes"] == ["hallazgos.registro.fuente"]
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert cuerpo["problemas"] == [
+        {"ruta": "hallazgos.registro[0].fuente", "texto": "Debe ser un texto no vacío."}
+    ]
+    assert "hallazgos.registro[0].fuente" in cuerpo["mensaje"]
+    assert cuerpo["mensaje"].startswith("El resumen al oficial no tiene la forma esperada")
 
 
 def test_escalar_con_tipo_incorrecto_da_entrada_invalida():

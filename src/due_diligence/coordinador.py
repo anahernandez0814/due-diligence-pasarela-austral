@@ -91,6 +91,16 @@ _REGLA_CUANDO_USAR_CADA_RECOMENDACION = (
     "categoría quedó determinada."
 )
 
+# Guía del reintento y de la cobertura (#8, R7, FR-008). No es una regla de negocio I.1 a I.3: está
+# también en el modo de demostración. Lo que no puede fallar lo hace el código: el `Delegador`
+# solo vuelve a ejecutar lo reintentable, y los hooks registran la cobertura calculada.
+_REGLA_FALLOS = (
+    "Si un frente devuelve un error con reintentable true, puedes volver a delegarlo una vez con "
+    "la misma entrada; si devuelve reintentable false, no lo repitas: sigue con los demás "
+    "frentes y registra el informe igualmente. La cobertura del informe la calcula el sistema a "
+    "partir de lo que devolvieron los frentes."
+)
+
 _REGLA_RESUMEN = (
     "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
     "fecha, y qué frentes no se pudieron cubrir y por qué."
@@ -107,11 +117,12 @@ def instrucciones_coordinador(demo: bool = False) -> str:
     hooks no cambian.
     """
     if demo:
-        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_INFORME, _REGLA_RESUMEN]
+        reglas = [_REGLA_DELEGAR, _REGLA_DATOS, _REGLA_FALLOS, _REGLA_INFORME, _REGLA_RESUMEN]
     else:
         reglas = [
             _REGLA_DELEGAR,
             _REGLA_DATOS,
+            _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             _REGLA_RESUMEN,

@@ -5,6 +5,7 @@ Los hooks se prueban llamando a sus callbacks directamente con entradas con la f
 """
 
 import asyncio
+import itertools
 import json
 import typing
 
@@ -13,11 +14,13 @@ from claude_agent_sdk import types as sdk
 
 from due_diligence import configuracion
 from due_diligence import hooks as modulo_hooks
+from due_diligence.cobertura import calcular_cobertura
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_COBERTURA_SUSTITUIDA,
     TIPO_CONSULTA_FALLIDA,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
@@ -31,6 +34,7 @@ from due_diligence.hooks import (
     fallar_cerrado,
     leer_respuesta,
     permitir,
+    reemplazar_entrada,
 )
 from due_diligence.libro import Coincidencia, ConsultaRiesgo
 from due_diligence.reglas import (
@@ -603,7 +607,7 @@ def test_el_subagente_de_listas_tiene_pre_post_y_failure_con_su_herramienta():
 def test_el_coordinador_tiene_los_hooks_de_delegar_informe_y_escalar():
     _, _, hooks = _caso()
     coordinador = hooks.coordinador()
-    assert [m.matcher for m in coordinador["PreToolUse"]] == [DELEGAR, INFORME]
+    assert [m.matcher for m in coordinador["PreToolUse"]] == [DELEGAR, INFORME, ESCALAR]
     assert [m.matcher for m in coordinador["PostToolUse"]] == [ESCALAR]
     assert [m.matcher for m in coordinador["PostToolUseFailure"]] == [ESCALAR]
 
@@ -772,7 +776,7 @@ def test_un_resultado_de_listas_que_no_es_del_contrato_no_cuenta_y_deja_consulta
 
 
 def test_con_coincidencias_sin_hechos_se_rechaza_habilitar_y_se_exige_escalar():
-    estado, _, hooks = _caso_con_comercio()
+    estado, eventos, hooks = _caso_con_comercio()
     listas = _hook(hooks.subagente(Frente.LISTAS), "PostToolUse")
     _ejecutar(
         listas,
@@ -795,7 +799,10 @@ def test_con_coincidencias_sin_hechos_se_rechaza_habilitar_y_se_exige_escalar():
     escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
     _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, {}))
     informe = _pre(INFORME, _informe_de("decide_cumplimiento"))
-    assert _ejecutar(_hook_del_informe(hooks), informe) == permitir()
+    antes = len(eventos.eventos())  # el mismo test registró antes un bloqueo legítimo
+    salida = _ejecutar(_hook_del_informe(hooks), informe)
+    _comprobar_informe_aceptado(salida, informe["tool_input"], estado)
+    assert [e.tipo for e in eventos.eventos()[antes:]] == [TIPO_COBERTURA_SUSTITUIDA]
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
 
 
@@ -845,6 +852,22 @@ def _hook_del_informe(hooks):
     return hooks.coordinador()["PreToolUse"][1].hooks[0]
 
 
+def _comprobar_informe_aceptado(salida, entrada, estado):
+    """Lo mínimo que comprueba un informe aceptado desde el #8 (I1 del análisis, T021).
+
+    No es denegación; `permissionDecision` es `allow`; la recomendación y los demás campos llegan
+    intactos en `updatedInput`, y la cobertura es exactamente la calculada por el código.
+    """
+    assert not _es_denegacion(salida)
+    especifica = salida["hookSpecificOutput"]
+    assert especifica["permissionDecision"] == "allow"
+    sustituida = especifica["updatedInput"]
+    sin_cobertura = {k: v for k, v in entrada.items() if k != "cobertura"}
+    assert {k: v for k, v in sustituida.items() if k != "cobertura"} == sin_cobertura
+    assert sustituida["recomendacion"] == entrada["recomendacion"]
+    assert sustituida["cobertura"] == calcular_cobertura(estado).lineas()
+
+
 def test_el_hook_del_informe_deniega_habilitar_con_coincidencia_con_la_regla_i2():
     estado, eventos, hooks = _caso_con_comercio()
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
@@ -862,9 +885,12 @@ def test_el_hook_del_informe_permite_no_habilitar_si_el_caso_esta_escalado():
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
     estado.libro.escalamientos.append(frozenset({"coincidencia_representante"}))
     for recomendacion in ("no_habilitar", "decide_cumplimiento"):
-        salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de(recomendacion)))
-        assert salida == permitir()
-    assert eventos.eventos() == []
+        entrada = _informe_de(recomendacion)
+        antes = len(eventos.eventos())
+        salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+        _comprobar_informe_aceptado(salida, entrada, estado)
+        assert [e.tipo for e in eventos.eventos()[antes:]] == [TIPO_COBERTURA_SUSTITUIDA]
+    assert not any(e.tipo == TIPO_BLOQUEO_REGLA for e in eventos.eventos())
 
 
 def test_el_hook_del_informe_deniega_una_recomendacion_fuera_del_conjunto():
@@ -1111,3 +1137,188 @@ def test_el_motivo_del_cierre_no_repite_nada_consultado():
     texto = salida["reason"] + eventos.eventos()[-1].detalle
     for dato in ("CO-TV-0001", "Tienda Verde", "PE-0001", "Lucía"):
         assert dato not in texto
+
+
+# ------------------------------------------------- cobertura registrada (#8, R1, R6, FR-011)
+
+TEXTO_INTERNO = "TEXTO-INTERNO-FICTICIO"
+COBERTURA_NO_CALCULADA = "No se pudo calcular la cobertura; debe tratarse como incompleta."
+COMBINACIONES = list(itertools.product(list(Situacion), repeat=len(Frente)))
+
+
+def _hook_del_escalamiento(hooks):
+    return hooks.coordinador()["PreToolUse"][2].hooks[0]
+
+
+def _escalamiento():
+    return {
+        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+        "hallazgos": {},
+        "cobertura": "completa",
+        "causa_escalamiento": "alto riesgo",
+        "accion_recomendada": "revisar",
+    }
+
+
+def _forzar(estado, situaciones):
+    for frente, situacion in zip(Frente, situaciones, strict=True):
+        estado._situaciones[frente] = situacion
+
+
+def _sustituida(salida):
+    return salida["hookSpecificOutput"]["updatedInput"]
+
+
+def test_reemplazar_entrada_tiene_la_forma_medida_en_r1():
+    entrada = {"a": 1}
+    assert reemplazar_entrada(entrada) == {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "updatedInput": entrada,
+        }
+    }
+    salida = typing.cast(sdk.SyncHookJSONOutput, reemplazar_entrada(entrada))
+    assert salida["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+
+
+def test_el_informe_aceptado_sustituye_la_cobertura_y_lo_dice_sin_decir_registrada():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    entrada = _informe_de("no_habilitar")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    _comprobar_informe_aceptado(salida, entrada, estado)
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_COBERTURA_SUSTITUIDA and evento.frente is None
+    assert "registrar_informe" in evento.detalle
+    assert "distinta" in evento.detalle  # el modelo declaró «completa»
+    assert "registrad" not in evento.detalle  # se emite antes de que la pasarela acepte
+    for dato in ("CO-TV-0001", "Tienda Verde"):
+        assert dato not in evento.detalle
+
+
+def test_si_la_cobertura_declarada_coincide_el_evento_no_dice_que_era_distinta():
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = {**_informe_de("no_habilitar"), "cobertura": calcular_cobertura(estado).lineas()}
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_COBERTURA_SUSTITUIDA and "distinta" not in evento.detalle
+
+
+@pytest.mark.parametrize(
+    "preparar",
+    ["sellado", "regla", "malformada"],
+)
+def test_cuando_el_informe_se_deniega_no_se_registra_cobertura_sustituida(preparar):
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = _informe_de("no_habilitar")
+    if preparar == "sellado":
+        estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    elif preparar == "regla":
+        entrada = _informe_de("habilitar")  # alto riesgo y sin escalar: I.3
+    else:
+        entrada = "no es un objeto"  # la rechaza la regla del #7 (MOTIVO_ENTRADA_INFORME)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _es_denegacion(salida)
+    assert not any(e.tipo == TIPO_COBERTURA_SUSTITUIDA for e in eventos.eventos())
+
+
+def test_una_excepcion_calculando_la_cobertura_deniega_el_informe(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+
+    def roto(estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(modulo_hooks, "calcular_cobertura", roto)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
+    assert _es_denegacion(salida) and _motivo(salida) == modulo_hooks.MOTIVO_FALLO_DE_HOOK
+    assert estado.libro.fallo_de_hook is not None
+    assert not any(e.tipo == TIPO_COBERTURA_SUSTITUIDA for e in eventos.eventos())
+    assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())
+
+
+def test_el_escalamiento_sustituye_la_cobertura_aunque_el_libro_este_sellado():
+    for sellado in (False, True):
+        estado, eventos, hooks = _caso_con_comercio()
+        if sellado:
+            estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+        entrada = _escalamiento()
+        salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+        assert not _es_denegacion(salida)
+        assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
+        sustituida = _sustituida(salida)
+        assert {k: v for k, v in sustituida.items() if k != "cobertura"} == {
+            k: v for k, v in entrada.items() if k != "cobertura"
+        }
+        assert sustituida["cobertura"] == calcular_cobertura(estado).lineas()
+        (evento,) = eventos.eventos()
+        assert evento.tipo == TIPO_COBERTURA_SUSTITUIDA
+        assert "escalar_a_cumplimiento" in evento.detalle
+
+
+def test_un_escalamiento_que_no_es_un_objeto_pasa_sin_cambios():
+    _, eventos, hooks = _caso_con_comercio()
+    assert _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, "texto")) == permitir()
+    assert eventos.eventos() == []
+
+
+def test_una_excepcion_en_el_escalamiento_lo_deja_pasar_con_el_texto_fijo_y_sella(monkeypatch):
+    estado, eventos, hooks = _caso_con_comercio()
+
+    def roto(estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(modulo_hooks, "calcular_cobertura", roto)
+    entrada = _escalamiento()
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+
+    assert not _es_denegacion(salida)
+    assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert _sustituida(salida) == {**entrada, "cobertura": [COBERTURA_NO_CALCULADA]}
+    assert modulo_hooks.COBERTURA_NO_CALCULADA == COBERTURA_NO_CALCULADA
+    assert estado.libro.fallo_de_hook is not None
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_FALLO_DE_HOOK and TEXTO_INTERNO not in evento.detalle
+    # Con el sello, el informe ya no se acepta (riesgo residual 6, lo resuelve el #9).
+    informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
+    assert _es_denegacion(informe) and _motivo(informe) == SELLADO
+
+
+def test_ningun_caso_probado_del_escalamiento_deniega(monkeypatch):
+    salidas = []
+    for entrada in (_escalamiento(), "texto", None, 3):
+        _, _, hooks = _caso_con_comercio()
+        salidas.append(_ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada)))
+
+    def roto(estado):
+        raise RuntimeError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(modulo_hooks, "calcular_cobertura", roto)
+    for entrada in (_escalamiento(), "texto"):
+        _, _, hooks = _caso_con_comercio()
+        salidas.append(_ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada)))
+    assert not any(_es_denegacion(s) for s in salidas)
+
+
+def test_el_coordinador_registra_seis_hooks():
+    _, _, hooks = _caso()
+    coordinador = hooks.coordinador()
+    assert sum(len(m.hooks) for lista in coordinador.values() for m in lista) == 6
+
+
+@pytest.mark.parametrize("situaciones", COMBINACIONES)
+def test_los_dos_canales_ponen_exactamente_la_cobertura_calculada(situaciones):
+    # G1 del análisis (SC-003): en las 625 combinaciones, lo que llega a la pasarela es la
+    # cobertura del código y ninguna línea declara cubierto un frente que no terminó.
+    estado, _, hooks = _caso()
+    _forzar(estado, situaciones)
+    esperada = calcular_cobertura(estado).lineas()
+    informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("decide_cumplimiento")))
+    escalamiento = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    for salida in (informe, escalamiento):
+        cobertura = _sustituida(salida)["cobertura"]
+        assert cobertura == esperada
+        for frente, situacion in zip(Frente, situaciones, strict=True):
+            linea = cobertura[1 + list(Frente).index(frente)]
+            if situacion is not Situacion.TERMINADO:
+                assert linea.startswith(f"{frente.value}: no cubierto")

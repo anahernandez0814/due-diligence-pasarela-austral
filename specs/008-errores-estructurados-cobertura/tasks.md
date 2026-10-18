@@ -344,7 +344,7 @@ completa solo con los cuatro `terminado`.
 **Independent Test**: `test_casos_cobertura.py` con el coordinador simulado: el informe guardado
 por la pasarela simulada trae la cobertura del código y `caso.completo` es falso.
 
-- [ ] T021 [US1] Tests en `src/due_diligence/test_hooks.py` (FR-011, R6,
+- [X] T021 [US1] Tests en `src/due_diligence/test_hooks.py` (FR-011, R6,
   [contracts/cobertura.md](contracts/cobertura.md)).
   
   **Tests de los tickets #6 y #7 que cambian (I1 del análisis).** Son exactamente cinco: cuatro del
@@ -405,7 +405,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
     y libro sin causas), devuelve `updatedInput["cobertura"] == calcular_cobertura(estado).lineas()`;
   - `_escalar_previo` también, exactamente;
   - ninguna línea declara «cubierto» un frente que no está `terminado`.
-- [ ] T022 [US1] Tests de extremo a extremo en `src/due_diligence/test_casos_cobertura.py`, un
+- [X] T022 [US1] Tests de extremo a extremo en `src/due_diligence/test_casos_cobertura.py`, un
   archivo nuevo (US1-1 a US1-5, FR-013, SC-001). Se construye como `test_casos_reglas.py` del #7:
   `Caso` con `EjecutorSimulado`, `CoordinadorSimulado` y `PasarelaSimulada`.
   - **Caso (f)**: `CO-TA-0002`, categoría de riesgo bajo, noticias con
@@ -428,7 +428,7 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
     "cobertura": "completa" ...})` → `pasarela.escalamientos[0]["cobertura"]` es la del código.
   - **Comprobación de mutación**, a mano y sin commitear: con `_informe_previo` devolviendo
     `permitir()` tras las reglas, el caso (f) falla. Anotarlo en T031.
-- [ ] T023 [US1] Implementar lo de T021 y T022 en `src/due_diligence/hooks.py`:
+- [X] T023 [US1] Implementar lo de T021 y T022 en `src/due_diligence/hooks.py`:
   - `reemplazar_entrada(entrada)` y `COBERTURA_NO_CALCULADA`;
   - en `_informe_previo`, tras las reglas: comprobación de objeto, `calcular_cobertura`, evento y
     `reemplazar_entrada`;
@@ -441,14 +441,14 @@ por la pasarela simulada trae la cobertura del código y `caso.completo` es fals
     `fallar_cerrado`.
   
   Cambiar T007 para usar `reemplazar_entrada`. Hace pasar T021 y T022.
-- [ ] T024 [US1] Instrucciones del coordinador (R7, FR-008; sirve también a US3):
+- [X] T024 [US1] Instrucciones del coordinador (R7, FR-008; sirve también a US3):
   - tests en `src/due_diligence/test_coordinador.py` y `src/due_diligence/test_modo_demo.py`:
     - `_REGLA_FALLOS` está en `instrucciones_coordinador(demo=False)` y en
       `instrucciones_coordinador(demo=True)`;
     - nombra «reintentable», «una vez» y que la cobertura la calcula el sistema;
     - las reglas que el #7 quita en el modo de demostración siguen sin aparecer en él;
   - implementación en `src/due_diligence/coordinador.py`.
-- [ ] T025 [US1] Fase 6 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
+- [X] T025 [US1] Fase 6 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`
   en verde. Los tests del #7 (`test_hooks.py`, `test_casos_reglas.py`, `test_hooks_sesiones.py`,
   `test_modo_demo.py`) pasan, y `git diff main -- src/due_diligence/test_hooks.py
   src/due_diligence/test_coordinador.py src/due_diligence/test_eventos_estado.py` muestra que de los

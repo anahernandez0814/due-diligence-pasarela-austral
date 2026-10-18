@@ -13,6 +13,7 @@ import pytest
 from due_diligence import configuracion
 from due_diligence.contexto import instrucciones
 from due_diligence.coordinador import (
+    _REGLA_FALLOS,
     INSTRUCCIONES_COORDINADOR,
     Caso,
     instrucciones_coordinador,
@@ -76,6 +77,16 @@ def test_la_numeracion_de_las_reglas_sigue_siendo_contigua_en_los_dos_modos():
         ]
         numeros = [int(linea.split(".", 1)[0]) for linea in lineas]
         assert numeros == list(range(1, len(numeros) + 1))
+
+
+def test_la_regla_de_fallos_esta_en_los_dos_modos_y_no_trae_reglas_de_negocio():
+    # #8, R7: no es una de las reglas I.1 a I.3 que el modo de demostración quita.
+    for demo in (False, True):
+        texto = instrucciones_coordinador(demo=demo)
+        assert _REGLA_FALLOS in texto
+        assert REGLA_3 not in _REGLA_FALLOS and ESCALAR not in _REGLA_FALLOS
+    demo = instrucciones_coordinador(demo=True)
+    assert REGLA_3 not in demo and ESCALAR not in demo and CUANDO_ESCALADO not in demo
 
 
 # ------------------------------------------------------------------ el caso y el evento

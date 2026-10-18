@@ -12,7 +12,7 @@ import json
 
 from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
 
-from due_diligence.hooks import bloquear_cierre, denegar, permitir
+from due_diligence.hooks import bloquear_cierre, denegar, permitir, reemplazar_entrada
 from due_diligence.simulacion import SesionSimulada
 
 HERRAMIENTA = "mcp__pasarela__consultar_registro_mercantil"
@@ -281,15 +281,8 @@ ENTRADA_DEL_MODELO = {
 
 
 def _sustituye(entrada):
-    # Forma de `hooks.reemplazar_entrada` (contrato `cobertura.md`). Se construye a mano hasta que
-    # exista la función (T023 del #8); entonces este ayudante pasa a llamarla.
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "updatedInput": entrada,
-        }
-    }
+    # La salida que usa producción (contrato `cobertura.md`, R1).
+    return reemplazar_entrada(entrada)
 
 
 def _sesion_con_pre(salidas_pre, recibido):

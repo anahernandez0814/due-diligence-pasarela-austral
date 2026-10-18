@@ -13,6 +13,7 @@ from claude_agent_sdk._errors import ResultError
 from due_diligence import configuracion
 from due_diligence.cobertura import calcular_cobertura
 from due_diligence.coordinador import (
+    _REGLA_FALLOS,
     INSTRUCCIONES_COORDINADOR,
     Caso,
     ejecutar_caso,
@@ -569,7 +570,7 @@ def test_el_coordinador_tiene_los_hooks_de_delegar_informe_escalar_y_el_stop():
     caso, _, _ = _caso([])
     coordinador = _matchers(caso.opciones_coordinador().hooks)
     assert coordinador == {
-        "PreToolUse": [DELEGAR, INFORME],
+        "PreToolUse": [DELEGAR, INFORME, ESCALAR],
         "PostToolUse": [ESCALAR],
         "PostToolUseFailure": [ESCALAR],
         "Stop": [None],
@@ -736,6 +737,14 @@ def test_los_turnos_del_coordinador_salen_del_mensaje_de_resultado():
     caso, _, _ = _caso([], fin=mensaje_de_resultado(num_turns=7))
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.turnos == 7
+
+
+def test_las_instrucciones_explican_el_reintento_y_que_la_cobertura_la_calcula_el_sistema():
+    # #8, R7, FR-008: el reintento lo pide el modelo; el código lo guarda.
+    assert "reintentable true" in _REGLA_FALLOS and "una vez" in _REGLA_FALLOS
+    assert "reintentable false" in _REGLA_FALLOS
+    assert "la calcula el sistema" in _REGLA_FALLOS
+    assert _REGLA_FALLOS in INSTRUCCIONES_COORDINADOR
 
 
 def test_sin_mensaje_de_resultado_no_hay_dato_de_turnos():

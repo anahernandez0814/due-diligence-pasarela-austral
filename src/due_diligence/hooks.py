@@ -20,6 +20,7 @@ from typing import Any
 
 from claude_agent_sdk import HookMatcher
 
+from due_diligence.cobertura import calcular_cobertura
 from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
@@ -27,6 +28,7 @@ from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
+    TIPO_COBERTURA_SUSTITUIDA,
     TIPO_CONSULTA_FALLIDA,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
@@ -57,6 +59,8 @@ MOTIVO_LIBRO_SELLADO = "No se pudo registrar un hecho de la regla; se bloquea po
 MOTIVO_ENTRADA_MALFORMADA = (
     "La entrada de la herramienta no tiene la forma esperada; se bloquea por precaución."
 )
+# Cobertura con la que sale un escalamiento si falla su cálculo (#8, R6): escalar nunca se deniega.
+COBERTURA_NO_CALCULADA = "No se pudo calcular la cobertura; debe tratarse como incompleta."
 REGLA_LISTAS = "I.1"
 NIVELES_DE_RIESGO = ("alto", "medio", "bajo")
 HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
@@ -85,6 +89,21 @@ def denegar(motivo: str) -> dict[str, Any]:
 def bloquear_cierre(motivo: str) -> dict[str, Any]:
     """`Stop`: el coordinador no termina y el motivo llega al modelo."""
     return {"decision": "block", "reason": motivo}
+
+
+def reemplazar_entrada(entrada: dict[str, Any]) -> dict[str, Any]:
+    """`PreToolUse`: la herramienta se ejecuta con `entrada` en lugar de la del modelo (#8, R1).
+
+    Medido con el SDK 0.2.168: `updatedInput` **sustituye la entrada entera**, no se fusiona, así
+    que `entrada` debe ir completa.
+    """
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "updatedInput": entrada,
+        }
+    }
 
 
 # --------------------------------------------------------------------------- lectura
@@ -144,14 +163,20 @@ def _coincidencias_de(resultado: Mapping[str, Any], tipo: str) -> list[Coinciden
 
 
 def _registrar_fallo(
-    tipo: str, error: Exception, estado: EstadoCaso, eventos: RegistroEventos, frente: Frente | None
+    tipo: str,
+    error: Exception,
+    estado: EstadoCaso,
+    eventos: RegistroEventos,
+    frente: Frente | None,
+    detalle: str | None = None,
 ) -> None:
     """Deja el sello y el evento; el texto de la excepción no sale al modelo ni al evento."""
     estado.libro.fallo_de_hook = f"{tipo}: {type(error).__name__}"
     eventos.registrar(
         TIPO_FALLO_DE_HOOK,
         frente,
-        f"Un hook de {tipo} falló: la regla no se pudo verificar y se bloquea por precaución.",
+        detalle
+        or f"Un hook de {tipo} falló: la regla no se pudo verificar y se bloquea por precaución.",
     )
 
 
@@ -186,6 +211,36 @@ def fallar_cerrado(
                     return permitir()
                 estado.libro.cierres_impedidos += 1
                 return bloquear_cierre(MOTIVO_FALLO_DE_HOOK)
+            return permitir()
+
+    return envuelto
+
+
+def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEventos) -> Hook:
+    """Envuelve el `PreToolUse` de `escalar_a_cumplimiento`, que **nunca deniega** (#8, R6).
+
+    Escalar es la acción segura. Ante una excepción calculando la cobertura, sella el libro (el
+    caso no figura como completo y los `PreToolUse` de las reglas deniegan, #7) y deja pasar el
+    escalamiento con la cobertura fija `COBERTURA_NO_CALCULADA`; si la entrada no es un objeto, la
+    deja pasar sin cambios y la pasarela la rechaza por su cuenta.
+    """
+
+    async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        try:
+            return await hook(entrada, tool_use_id, contexto)
+        except Exception as error:
+            _registrar_fallo(
+                "PreToolUse",
+                error,
+                estado,
+                eventos,
+                None,
+                "Un hook de PreToolUse falló al calcular la cobertura del escalamiento: el "
+                "escalamiento sale con la cobertura declarada como no calculada.",
+            )
+            argumentos = entrada.get("tool_input")
+            if isinstance(argumentos, Mapping):
+                return reemplazar_entrada({**argumentos, "cobertura": [COBERTURA_NO_CALCULADA]})
             return permitir()
 
     return envuelto
@@ -245,6 +300,11 @@ class HooksDelCaso:
                     HERRAMIENTA_DELEGAR_COMPLETA, self._delegar_previo, "PreToolUse", Frente.LISTAS
                 ),
                 self._matcher(HERRAMIENTA_INFORME, self._informe_previo, "PreToolUse", None),
+                # Sin `fallar_cerrado`: el escalamiento nunca se deniega (#8, R6).
+                HookMatcher(
+                    matcher=HERRAMIENTA_ESCALAR,
+                    hooks=[degradar_escalamiento(self._escalar_previo, self.estado, self.eventos)],
+                ),
             ],
             "PostToolUse": [
                 self._matcher(HERRAMIENTA_ESCALAR, self._escalar_posterior, "PostToolUse", None)
@@ -441,12 +501,57 @@ class HooksDelCaso:
         sellado = self._sellado(None, None)
         if sellado is not None:
             return sellado
-        rechazos = evaluar_informe(self.estado, entrada.get("tool_input"))
-        if not rechazos:
-            return permitir()
-        reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
-        regla = ", ".join(sorted(reglas)) or None
-        return self._denegar_por_regla(None, regla, " ".join(r.texto for r in rechazos))
+        argumentos = entrada.get("tool_input")
+        rechazos = evaluar_informe(self.estado, argumentos)
+        if rechazos:
+            reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
+            regla = ", ".join(sorted(reglas)) or None
+            return self._denegar_por_regla(None, regla, " ".join(r.texto for r in rechazos))
+        if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan; por si acaso
+            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
+        # Aceptado por las reglas: se registra con la cobertura del código (#8, FR-011, R6).
+        return self._sustituir_cobertura("registrar_informe", argumentos)
+
+    async def _escalar_previo(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PreToolUse` de `escalar_a_cumplimiento`: pone la cobertura del código (#8, R6).
+
+        No mira el sello del libro y nunca deniega: escalar es la acción segura. Lo envuelve
+        `degradar_escalamiento`, no `fallar_cerrado`.
+        """
+        argumentos = entrada.get("tool_input")
+        if not isinstance(argumentos, Mapping):
+            return permitir()  # sin entrada que completar: la pasarela la rechaza
+        return self._sustituir_cobertura("escalar_a_cumplimiento", argumentos)
+
+    def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):
+        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`.
+
+        El evento se emite antes de que la pasarela acepte la llamada: dice qué cobertura se puso
+        en ella y si la que declaró el coordinador era distinta, nunca que quedó registrada.
+        """
+        cobertura = calcular_cobertura(self.estado)
+        lineas = cobertura.lineas()
+        cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
+        faltan = [f.value for f, c in cobertura.frentes.items() if not c.cubierto]
+        resumen = (
+            f"completa, {cubiertos} de {len(cobertura.frentes)} frentes"
+            if cobertura.completa
+            else f"incompleta, {cubiertos} de {len(cobertura.frentes)} frentes "
+            f"(falta {', '.join(faltan)})"
+        )
+        declarada = (
+            "La declarada por el coordinador era distinta y se sustituyó por la calculada."
+            if argumentos.get("cobertura") != lineas
+            else "Coincide con la declarada por el coordinador."
+        )
+        self.eventos.registrar(
+            TIPO_COBERTURA_SUSTITUIDA,
+            None,
+            f"Cobertura puesta en {herramienta}: {resumen}. {declarada}",
+        )
+        return reemplazar_entrada({**argumentos, "cobertura": lineas})
 
     # -------------------------------------------------------------- errores de herramienta
 

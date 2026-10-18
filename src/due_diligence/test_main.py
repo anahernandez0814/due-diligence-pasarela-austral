@@ -99,11 +99,23 @@ def test_con_solicitud_carga_el_entorno_una_vez_antes_de_ejecutar_y_lo_imprime_t
         "coste total: 0.5100 USD",
         "duración de registro:",
         "duración total del caso:",
-        # Cobertura y turnos (#8, FR-014, R2): registro y noticias, sin listas ni categoría.
+    ):
+        assert esperado in salida
+
+
+def test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador(monkeypatch, capsys):
+    # #8, FR-014, R2: el caso simulado delega registro y noticias, sin listas ni categoría.
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _ejecutar_caso_simulado(_fin(), []))
+    assert principal.main(["solicitud"]) == 0
+    salida = capsys.readouterr().out
+    for esperado in (
         "Cobertura:",
         "Cobertura incompleta: 2 de 4 frentes cubiertos.",
+        "registro: cubierto.",
         "listas: no cubierto; no se delegó.",
         "turnos del coordinador: 1 de 30",
+        "Caso completo: no",
     ):
         assert esperado in salida
 

@@ -14,6 +14,7 @@ from due_diligence.frentes import Frente
 from due_diligence.libro import LibroReglas
 
 if TYPE_CHECKING:
+    from due_diligence.informe import Huella, InformeRegistrado
     from due_diligence.terminacion import Clasificacion
 
 
@@ -115,6 +116,16 @@ class EstadoCaso:
     # Último error estructurado de cada frente no cubierto (#8, data-model `ErrorFrente`). Lo
     # escribe la delegación; un frente que termina con normalidad borra su entrada.
     errores: dict[Frente, dict[str, Any]] = field(default_factory=dict)
+    # Informe (#9, data-model). `comercio_pedido`: el `identificador` y el `nombre` de la última
+    # delegación de registro con contexto válido; lo escribe el `Delegador` y es el comercio del
+    # informe con el registro caído (R8). `informes_pendientes`: la huella que calculó el
+    # `PreToolUse` de `registrar_informe`, por `tool_use_id`, con la recomendación y si es el
+    # mínimo; el `PostToolUse` la confirma en `informes` (R7). `cierre_sin_informe`: el `Stop`
+    # agotó las devoluciones con el informe pendiente.
+    comercio_pedido: dict[str, Any] | None = None
+    informes_pendientes: "dict[str, tuple[Huella, str, bool]]" = field(default_factory=dict)
+    informes: "list[InformeRegistrado]" = field(default_factory=list)
+    cierre_sin_informe: bool = False
     _situaciones: dict[Frente, Situacion] = field(
         default_factory=lambda: {f: Situacion.SIN_INICIAR for f in Frente}
     )

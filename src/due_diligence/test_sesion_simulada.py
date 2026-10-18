@@ -259,14 +259,49 @@ def test_la_pasarela_simulada_clasifica_el_riesgo_por_categoria():
     assert desconocida["resultado"] == "categoria_desconocida"
 
 
+def _informe_valido(**cambios):
+    """Un informe con la forma del #9 (R2), con datos ficticios."""
+    return {
+        "comercio": {
+            "identificador": "CO-TA-0002",
+            "nombre": "Taller Aurora SAS",
+            "verificado": True,
+        },
+        "recomendacion": "habilitar",
+        "hallazgos": {
+            "registro": [
+                {"texto": "Figura activo.", "fuente": "Registro Ficticio", "fecha": "2026-09-30"}
+            ]
+        },
+        "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
+        "cobertura": "completa",
+    } | cambios
+
+
 def test_la_pasarela_simulada_guarda_informes_y_escalamientos():
+    # #9: el informe tiene que tener la forma del esquema; la igualdad sigue siendo exacta.
     pasarela = _pasarela()
-    informe = _llamar(pasarela, "registrar_informe", {"recomendacion": "habilitar"})
+    informe = _llamar(pasarela, "registrar_informe", _informe_valido())
     escalamiento = _llamar(pasarela, "escalar_a_cumplimiento", {"causa_escalamiento": "x"})
     assert informe["resultado"] == "informe_registrado"
     assert escalamiento["resultado"] == "caso_escalado"
-    assert pasarela.informes == [{"recomendacion": "habilitar"}]
+    assert pasarela.informes == [_informe_valido()]
     assert pasarela.escalamientos == [{"causa_escalamiento": "x"}]
+
+
+def test_la_pasarela_simulada_rechaza_un_informe_mal_formado_como_la_real():
+    # #9, R12: la misma `validar_informe` que la pasarela; nada se guarda.
+    pasarela = _pasarela()
+    entrada = _informe_valido()
+    del entrada["hallazgos"]["registro"][0]["fuente"]
+    respuesta = _llamar(pasarela, "registrar_informe", entrada)
+    assert respuesta["error"] is True
+    assert respuesta["tipo"] == "entrada_invalida"
+    assert respuesta["reintentable"] is False
+    assert respuesta["problemas"] == [
+        {"ruta": "hallazgos.registro[0].fuente", "texto": "Debe ser un texto no vacío."}
+    ]
+    assert pasarela.informes == []
 
 
 # ------------------------------------------------------------------ updatedInput (#8, R1, R8)
@@ -377,3 +412,118 @@ def test_el_paso_escalar_con_llama_a_escalar_con_esa_entrada():
     assert coordinador.pasarela.escalamientos == [entrada]
     ((tipo, resultado),) = coordinador.pasos
     assert tipo == "escalar_con" and resultado.ejecutada
+
+
+# ------------------------------------------------------------- #9: informe y mismo mensaje (R12)
+
+
+def test_el_paso_informe_arma_un_informe_valido_con_las_consultas_del_caso():
+    from due_diligence.estado import EstadoCaso
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import consulta, informe_del_caso, respuesta_riesgo
+    from servidor_mcp.informe import validar_informe
+
+    estado = EstadoCaso()
+    estado.agregar_consultas(
+        [
+            consulta(Frente.REGISTRO),
+            consulta(
+                Frente.CATEGORIA, {"categoria": "talleres"}, respuesta_riesgo("talleres", "bajo")
+            ),
+            consulta(Frente.NOTICIAS, error={"error": True, "tipo": "servicio_no_disponible"}),
+        ]
+    )
+    informe = informe_del_caso(estado, "no_habilitar")
+    assert validar_informe(informe) == []
+    assert informe["hallazgos"] == {
+        "registro": [
+            {
+                "texto": "Resultado de la consulta: sin_coincidencias.",
+                "fuente": "Registro Mercantil Ficticio del Sur",
+                "fecha": "2026-09-30",
+            }
+        ],
+        "categoria": [
+            {
+                "texto": "Resultado de la consulta: categoria_conocida.",
+                "fuente": "Catálogo Ficticio de Categorías",
+                "fecha": "2026-09-30",
+            }
+        ],
+    }
+    # Sin comercio identificado, declara un comercio sin verificar (lo sustituye el hook).
+    assert informe["comercio"] == {
+        "identificador": None,
+        "nombre": "sin identificar",
+        "verificado": False,
+    }
+
+
+def _consumir(coordinador):
+    async def consumir():
+        return [m async for m in coordinador(prompt="p", options=_opciones(None))]
+
+    return asyncio.run(consumir())
+
+
+def test_el_paso_informe_con_envia_la_entrada_tal_cual():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    entrada = _informe_valido(recomendacion="decide_cumplimiento")
+    coordinador = CoordinadorSimulado([("informe_con", entrada)])
+    _consumir(coordinador)
+    assert coordinador.pasarela.informes == [entrada]
+
+
+def test_el_paso_mismo_mensaje_ejecuta_sus_pasos_a_la_vez():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(
+        [("mismo_mensaje", [("escalar_con", {"causa_escalamiento": "a"}), ("informe_con", {})])]
+    )
+    orden = []
+    escalar = coordinador.pasarela.herramientas["mcp__pasarela__escalar_a_cumplimiento"]
+    soltar = asyncio.Event()
+
+    async def escalar_lento(entrada):
+        orden.append("escalar empieza")
+        await soltar.wait()  # solo avanza si el otro paso corre mientras tanto
+        orden.append("escalar termina")
+        return escalar(entrada)
+
+    def informe(entrada):
+        orden.append("informe")
+        soltar.set()
+        return {"error": True, "tipo": "entrada_invalida", "mensaje": "m", "reintentable": False}
+
+    coordinador.pasarela.herramientas["mcp__pasarela__escalar_a_cumplimiento"] = escalar_lento
+    coordinador.pasarela.herramientas["mcp__pasarela__registrar_informe"] = informe
+    _consumir(coordinador)
+    assert orden == ["escalar empieza", "informe", "escalar termina"]
+    ((tipo, resultados),) = coordinador.pasos
+    assert tipo == "mismo_mensaje" and len(resultados) == 2
+
+
+def test_pre_y_post_reciben_el_mismo_tool_use_id_y_cada_llamada_el_suyo():
+    traza = _Traza()
+    opciones = _opciones(
+        {
+            "PreToolUse": [HookMatcher(matcher=HERRAMIENTA, hooks=[traza.hook("pre")])],
+            "PostToolUse": [HookMatcher(matcher=HERRAMIENTA, hooks=[traza.hook("post")])],
+        }
+    )
+    sesion = SesionSimulada(opciones, {HERRAMIENTA: lambda e: OK})
+
+    async def dos_a_la_vez():
+        await asyncio.gather(
+            sesion.llamar(HERRAMIENTA, {"a": 1}), sesion.llamar(HERRAMIENTA, {"a": 2})
+        )
+
+    asyncio.run(dos_a_la_vez())
+    ids = {
+        (nombre, entrada["tool_input"]["a"]): tool_use_id
+        for nombre, entrada, tool_use_id in traza.entradas
+    }
+    assert ids[("pre", 1)] == ids[("post", 1)]
+    assert ids[("pre", 2)] == ids[("post", 2)]
+    assert ids[("pre", 1)] != ids[("pre", 2)]

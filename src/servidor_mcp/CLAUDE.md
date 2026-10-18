@@ -26,7 +26,8 @@ constitución (principios I.4, IV y VII); no las repiten.
 - **Datos**: solo ficticios, en `datos/*.json`, cada uno con `ficticio: true`, `aviso` y
   `fecha_corte`. Sin secuencias de 6 o más dígitos, sin dominios reales (`.example`). La fecha de
   las respuestas es la `fecha_corte` de la fuente, no el reloj.
-- **Variables**: `PASARELA_FALLA_NOTICIAS` (se lee en cada llamada, no al arrancar) y
+- **Variables**: `PASARELA_FALLA_NOTICIAS` y `PASARELA_FALLA_REGISTRO` (#9; las dos se leen en cada
+  llamada, no al arrancar, y simulan `servicio_no_disponible` reintentable) y
   `PASARELA_RESULTADOS_DIR` (carpeta de informes y escalamientos; por defecto `resultados/`, fuera
   de `.claude/` y en `.gitignore`). Los tests usan `monkeypatch` y `tmp_path`.
 - **Tests**: `test_*.py` junto a cada módulo; `test_servidor.py` llama por el protocolo.

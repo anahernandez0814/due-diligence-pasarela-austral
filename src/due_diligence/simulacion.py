@@ -20,6 +20,7 @@ from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import Consulta, ResultadoFrente
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.terminacion import Clasificacion, clasificar
+from servidor_mcp.informe import mensaje, validar_informe
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
 
 FUENTE = "Registro Mercantil Ficticio del Sur"
@@ -538,12 +539,69 @@ class PasarelaSimulada:
         return respuesta_riesgo(categoria, None)
 
     def _informe(self, entrada: dict[str, Any]) -> dict[str, Any]:
+        """Valida la forma con la misma función que la pasarela real (#9, R12) antes de guardar."""
+        problemas = validar_informe(entrada)
+        if problemas:
+            return {
+                "error": True,
+                "tipo": "entrada_invalida",
+                "mensaje": mensaje(problemas),
+                "reintentable": False,
+                "obtenido": {},
+                "problemas": [p.como_dict() for p in problemas],
+            }
         self.informes.append(dict(entrada))
         return respuesta_de_decision("informe_registrado", f"INF-{len(self.informes):04d}")
 
     def _escalar(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.escalamientos.append(dict(entrada))
         return respuesta_de_decision("caso_escalado", f"ESC-{len(self.escalamientos):04d}")
+
+
+def afirmaciones_del_caso(estado: Any) -> dict[str, list[dict[str, str]]]:
+    """Una afirmación por consulta válida del caso, con la fuente y la fecha de sus metadatos (#9).
+
+    Es lo que haría un coordinador que cita bien: la fuente es una de las consultadas para el
+    frente (FR-004) y la fecha, la del resultado. El texto no repite datos del comercio.
+    """
+    hallazgos: dict[str, list[dict[str, str]]] = {}
+    for c in estado.consultas:
+        if not c.valido or not isinstance(c.resultado, Mapping):
+            continue
+        metadatos = c.resultado.get("metadatos") or {}
+        fuentes, fecha = metadatos.get("fuentes") or [], metadatos.get("fecha")
+        if not fuentes or not isinstance(fecha, str):
+            continue
+        texto = f"Resultado de la consulta: {c.resultado.get('resultado', 'sin dato')}."
+        hallazgos.setdefault(c.frente.value, []).append(
+            {"texto": texto, "fuente": fuentes[0], "fecha": fecha}
+        )
+    return hallazgos
+
+
+def informe_del_caso(estado: Any, recomendacion: str) -> dict[str, Any]:
+    """Un informe con la forma del #9 que declara lo que un coordinador declararía (R12).
+
+    El comercio, los conflictos y la cobertura son los «declarados por el modelo»: los hooks del
+    coordinador los sustituyen por los del código. La cobertura declarada es siempre «completa».
+    """
+    comercio = estado.comercio
+    declarado = (
+        {
+            "identificador": comercio["identificador"],
+            "nombre": comercio["nombre"],
+            "verificado": True,
+        }
+        if comercio
+        else {"identificador": None, "nombre": "sin identificar", "verificado": False}
+    )
+    return {
+        "comercio": declarado,
+        "recomendacion": recomendacion,
+        "hallazgos": afirmaciones_del_caso(estado),
+        "conflictos": {"resumen": "Sin conflictos declarados por el coordinador.", "lista": []},
+        "cobertura": "completa",
+    }
 
 
 # ------------------------------------------------------------------ coordinador simulado (G1, T041)
@@ -579,8 +637,13 @@ class CoordinadorSimulado:
 
     Pasos del guion: `("delegar", entrada)`, `("delegar_paralelo", [entradas])`,
     `("informe", recomendacion)`, `("escalar",)`, `("escalar_con", entrada)` (escala con esa
-    entrada completa, #8) y `("terminar",)`. El resultado de cada uno queda en `pasos`, como
-    `(tipo, resultado)`.
+    entrada completa, #8) y `("terminar",)`. Del #9:
+    - `("informe", recomendacion)` arma un informe válido con `informe_del_caso`;
+    - `("informe_con", entrada)` envía esa entrada tal cual, para probar rechazos;
+    - `("mismo_mensaje", [pasos])` ejecuta varios pasos con `asyncio.gather`, como el SDK ejecuta
+      las llamadas de un mismo mensaje; su resultado es la lista de resultados, en orden.
+
+    El resultado de cada paso queda en `pasos`, como `(tipo, resultado)`.
     """
 
     def __init__(
@@ -600,16 +663,38 @@ class CoordinadorSimulado:
         return [resultado for paso, resultado in self.pasos if paso == tipo]
 
     def _informe(self, recomendacion: str) -> dict[str, Any]:
-        comercio = (self.caso.estado.comercio if self.caso is not None else None) or {}
-        return {
-            "comercio": {
-                "identificador": comercio.get("identificador", "sin identificar"),
-                "nombre": comercio.get("nombre", "sin identificar"),
-            },
-            "recomendacion": recomendacion,
-            "hallazgos": {},
-            "cobertura": "completa",
-        }
+        if self.caso is None:
+            from due_diligence.estado import EstadoCaso
+
+            return informe_del_caso(EstadoCaso(), recomendacion)
+        return informe_del_caso(self.caso.estado, recomendacion)
+
+    async def _paso(self, sesion: "SesionSimulada", paso: tuple[Any, ...]) -> Any:
+        tipo = paso[0]
+        if tipo == "delegar":
+            return await sesion.llamar("mcp__delegacion__delegar_frente", paso[1], en_proceso=True)
+        if tipo == "delegar_paralelo":
+            return await asyncio.gather(
+                *(
+                    sesion.llamar("mcp__delegacion__delegar_frente", entrada, en_proceso=True)
+                    for entrada in paso[1]
+                )
+            )
+        if tipo == "mismo_mensaje":
+            return await asyncio.gather(*(self._paso(sesion, subpaso) for subpaso in paso[1]))
+        if tipo == "informe":
+            return await sesion.llamar("mcp__pasarela__registrar_informe", self._informe(paso[1]))
+        if tipo == "informe_con":
+            return await sesion.llamar("mcp__pasarela__registrar_informe", paso[1])
+        if tipo == "escalar":
+            return await sesion.llamar(
+                "mcp__pasarela__escalar_a_cumplimiento", {"causa_escalamiento": "simulada"}
+            )
+        if tipo == "escalar_con":
+            return await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", paso[1])
+        if tipo == "terminar":
+            return await sesion.terminar(self.texto)
+        raise ValueError(f"Paso de guion desconocido: {tipo!r}")
 
     async def __call__(self, *, prompt: str, options: Any = None):
         herramientas = {
@@ -619,32 +704,6 @@ class CoordinadorSimulado:
         sesion = SesionSimulada(options, herramientas)
         self.sesion = sesion
         for paso in self.guion:
-            tipo = paso[0]
-            if tipo == "delegar":
-                resultado = await sesion.llamar(
-                    "mcp__delegacion__delegar_frente", paso[1], en_proceso=True
-                )
-            elif tipo == "delegar_paralelo":
-                resultado = await asyncio.gather(
-                    *(
-                        sesion.llamar("mcp__delegacion__delegar_frente", entrada, en_proceso=True)
-                        for entrada in paso[1]
-                    )
-                )
-            elif tipo == "informe":
-                resultado = await sesion.llamar(
-                    "mcp__pasarela__registrar_informe", self._informe(paso[1])
-                )
-            elif tipo == "escalar":
-                resultado = await sesion.llamar(
-                    "mcp__pasarela__escalar_a_cumplimiento", {"causa_escalamiento": "simulada"}
-                )
-            elif tipo == "escalar_con":
-                resultado = await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", paso[1])
-            elif tipo == "terminar":
-                resultado = await sesion.terminar(self.texto)
-            else:
-                raise ValueError(f"Paso de guion desconocido: {tipo!r}")
-            self.pasos.append((tipo, resultado))
+            self.pasos.append((paso[0], await self._paso(sesion, paso)))
         yield AssistantMessage(content=[TextBlock(self.texto)], model="simulado")
         yield mensaje_de_resultado()

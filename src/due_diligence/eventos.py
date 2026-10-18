@@ -34,6 +34,13 @@ TIPO_CONSULTA_FALLIDA = "consulta_fallida"
 TIPO_FRENTE_REINTENTO = "frente_reintento"
 TIPO_REINTENTO_DENEGADO = "reintento_denegado"
 TIPO_COBERTURA_SUSTITUIDA = "cobertura_sustituida"
+# Informe con procedencia, conflictos y registro (#9, data-model «Eventos»). `informe_registrado` se
+# emite en el `PostToolUse` cuando la pasarela acepta; `datos_sustituidos`, en el `PreToolUse` que
+# pone el comercio y los conflictos del código; `cierre_sin_informe`, cuando el `Stop` agota las
+# devoluciones con el informe pendiente.
+TIPO_INFORME_REGISTRADO = "informe_registrado"
+TIPO_DATOS_SUSTITUIDOS = "datos_sustituidos"
+TIPO_CIERRE_SIN_INFORME = "cierre_sin_informe"
 
 TIPOS = frozenset(
     {
@@ -55,6 +62,9 @@ TIPOS = frozenset(
         TIPO_FRENTE_REINTENTO,
         TIPO_REINTENTO_DENEGADO,
         TIPO_COBERTURA_SUSTITUIDA,
+        TIPO_INFORME_REGISTRADO,
+        TIPO_DATOS_SUSTITUIDOS,
+        TIPO_CIERRE_SIN_INFORME,
     }
 )
 
@@ -73,6 +83,9 @@ class Evento:
     # La regla de negocio que causó el evento ("I.1", "I.2", "I.3" o varias separadas por coma);
     # `None` en los eventos que no son de una regla. Al final para no romper llamadas posicionales.
     regla: str | None = None
+    # La acción que un bloqueo impidió, sin datos del comercio (#9, FR-017): por ejemplo
+    # «registrar_informe (habilitar)». Último campo, por la misma razón que `regla`.
+    accion: str | None = None
 
 
 def _ahora() -> datetime:
@@ -91,11 +104,14 @@ class RegistroEventos:
         frente: Frente | None = None,
         detalle: str = "",
         regla: str | None = None,
+        accion: str | None = None,
     ) -> Evento:
         if tipo not in TIPOS:
             raise TipoDeEventoInvalido(f"Tipo de evento desconocido: {tipo!r}.")
         with self._candado:
-            evento = Evento(len(self._eventos) + 1, self._reloj(), tipo, frente, detalle, regla)
+            evento = Evento(
+                len(self._eventos) + 1, self._reloj(), tipo, frente, detalle, regla, accion
+            )
             self._eventos.append(evento)
         return evento
 

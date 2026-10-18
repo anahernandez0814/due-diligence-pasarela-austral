@@ -10,12 +10,13 @@ hook del SDK (ticket #7), no el servidor.
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from mcp.types import CallToolResult
 
+from servidor_mcp import informe
 from servidor_mcp.entradas import campos_obligatorios
 from servidor_mcp.respuestas import error, hecho, respuesta
 
@@ -23,11 +24,14 @@ VARIABLE_CARPETA = "PASARELA_RESULTADOS_DIR"
 FUENTE_INFORMES = "Registro local de informes (ficticio)"
 FUENTE_ESCALAMIENTOS = "Registro local de escalamientos (ficticio)"
 
+# Primer nivel del informe (#9): los que faltan se nombran todos con el error del #5; la forma de
+# cada parte la valida `informe.validar_informe` (R2).
 _REQUERIDOS_INFORME: dict[str, type | tuple[type, ...]] = {
     "comercio": dict,
     "recomendacion": str,
     "hallazgos": dict,
     "cobertura": (str, list),
+    "conflictos": dict,
 }
 _REQUERIDOS_ESCALAMIENTO: dict[str, type | tuple[type, ...]] = {
     "comercio": dict,
@@ -39,7 +43,8 @@ _REQUERIDOS_ESCALAMIENTO: dict[str, type | tuple[type, ...]] = {
 
 
 def _ahora() -> datetime:
-    return datetime.now().astimezone()
+    """La hora del registro, en UTC como los eventos del caso (#9, R10)."""
+    return datetime.now(UTC)
 
 
 def carpeta_resultados() -> Path:
@@ -127,7 +132,7 @@ def _guardar(subcarpeta: str, prefijo: str, documento: dict[str, Any]) -> str | 
 def _resultado(
     estado: str, fuente: str, subcarpeta: str, prefijo: str, documento: dict[str, Any]
 ) -> CallToolResult:
-    ahora = _ahora()
+    ahora = _ahora().astimezone(UTC)
     identificador = _guardar(subcarpeta, prefijo, {"registrado_en": ahora.isoformat()} | documento)
     if identificador is None:
         return error(
@@ -143,30 +148,35 @@ def registrar_informe(
     comercio: Any = None,
     recomendacion: Any = None,
     hallazgos: Any = None,
+    conflictos: Any = None,
     cobertura: Any = None,
 ) -> CallToolResult:
-    """Registra el informe: comercio, recomendación, hallazgos con su fuente y cobertura."""
+    """Registra el informe: comercio, recomendación, afirmaciones, conflictos y cobertura (#9).
+
+    Primero los campos de primer nivel (`campos_obligatorios_ausentes` o `entrada_invalida`, como
+    en el #5); después la forma de cada parte con `informe.validar_informe`, que da
+    `entrada_invalida` con **todos** los `problemas`. Un informe inválido nunca se guarda, ni en
+    parte (FR-005).
+    """
     entrada = {
         "comercio": comercio,
         "recomendacion": recomendacion,
         "hallazgos": hallazgos,
+        "conflictos": conflictos,
         "cobertura": cobertura,
     }
-    err = _validar(entrada, _REQUERIDOS_INFORME)
+    err = campos_obligatorios(entrada, _REQUERIDOS_INFORME, admite_vacio=("hallazgos",))
     if err is not None:
         return err
-    return _resultado(
-        "informe_registrado",
-        FUENTE_INFORMES,
-        "informes",
-        "INF",
-        {
-            "comercio": comercio,
-            "recomendacion": recomendacion,
-            "hallazgos": hallazgos,
-            "cobertura": cobertura,
-        },
-    )
+    problemas = informe.validar_informe(entrada)
+    if problemas:
+        return error(
+            "entrada_invalida",
+            informe.mensaje(problemas),
+            False,
+            problemas=[p.como_dict() for p in problemas],
+        )
+    return _resultado("informe_registrado", FUENTE_INFORMES, "informes", "INF", entrada)
 
 
 def escalar_a_cumplimiento(

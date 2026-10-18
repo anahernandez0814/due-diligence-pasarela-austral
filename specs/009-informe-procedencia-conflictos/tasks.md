@@ -82,8 +82,8 @@ cierre del #9 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 - [ ] T001 Confirmar que la rama es `009-informe-procedencia-conflictos` y commitear este
   `tasks.md`. Mensaje convencional en español.
-- [ ] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
-  aquí el número de tests que pasan (referencia para T040): **____**.
+- [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
+  aquí el número de tests que pasan (referencia para T040): **3928** (ruff limpio).
 
 ---
 
@@ -94,7 +94,7 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
 
 ### Pasarela: esquema del informe (R2, R3)
 
-- [ ] T003 [P] Tests en `src/servidor_mcp/test_informe.py` para `validar_informe(entrada) ->
+- [X] T003 [P] Tests en `src/servidor_mcp/test_informe.py` para `validar_informe(entrada) ->
   list[Problema]` (data-model, «Afirmación» e «Informe»; contrato `registrar-informe.md`):
   - un informe válido, como el del contrato con `CO-RF-0006`, da `[]`;
   - **afirmación**: «`texto` no vacío tras quitar espacios», «`fuente` no vacía» y «`fecha`
@@ -112,7 +112,7 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
   - **cobertura**: texto o lista de textos; **recomendación**: texto (el conjunto cerrado lo valida
     el #7, no esta función);
   - los textos de los problemas están en español y ningún problema repite el valor recibido.
-- [ ] T004 Implementar lo de T003 en `src/servidor_mcp/informe.py` (nuevo):
+- [X] T004 Implementar lo de T003 en `src/servidor_mcp/informe.py` (nuevo):
   - `Problema` (frozen, `ruta`, `texto`) y `validar_informe`, puro y sin E/S;
   - `FRENTES_INFORME = ("registro", "listas", "noticias", "categoria")`, con un test que lo compara
     con `due_diligence.frentes.Frente` desde `src/due_diligence/test_informe.py` (T016), sin
@@ -121,7 +121,7 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
     `json_schema_extra` en `servidor.py`.
 
   Validación escrita a mano, sin pydantic (R2). Hace pasar T003.
-- [ ] T005 Tests en `src/servidor_mcp/test_decisiones.py` y `src/servidor_mcp/test_servidor.py`:
+- [X] T005 Tests en `src/servidor_mcp/test_decisiones.py` y `src/servidor_mcp/test_servidor.py`:
   - `registrar_informe` con un informe válido se guarda con `conflictos` y `comercio.verificado`;
   - con problemas de forma devuelve `entrada_invalida`, no reintentable, con `problemas: [{ruta,
     texto}]`, y **no escribe ningún archivo** (FR-005);
@@ -136,7 +136,7 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
     los pone el sistema, y cada afirmación lleva su fuente y su fecha. También dice **qué no hace**
     (constitución IV, hallazgo C1): no comprueba que la fuente se haya consultado (lo hace el
     sistema antes de llamarla), no decide la habilitación y no escala el caso.
-- [ ] T006 Implementar lo de T005:
+- [X] T006 Implementar lo de T005:
   - en `src/servidor_mcp/respuestas.py`, `error(..., problemas=None)`, que añade `problemas` al
     cuerpo si se pasa;
   - en `src/servidor_mcp/decisiones.py`, `registrar_informe(comercio, recomendacion, hallazgos,
@@ -146,40 +146,40 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
     descripción nueva.
 
   Hace pasar T005 una vez adaptados los tests de T037 que fallen.
-- [ ] T007 [P] Tests en `src/servidor_mcp/test_registro.py` (R11): con
+- [X] T007 [P] Tests en `src/servidor_mcp/test_registro.py` (R11): con
   `PASARELA_FALLA_REGISTRO=1`, puesto con `monkeypatch`, devuelve `servicio_no_disponible` con
   `reintentable: true` y el mensaje de R11. La variable se lee en cada llamada: cambiarla entre dos
   llamadas cambia el resultado. Una entrada inválida se rechaza antes que la caída, como en
   noticias. Sin la variable, el resultado no cambia.
-- [ ] T008 Implementar lo de T007 en `src/servidor_mcp/registro.py`, copiando el patrón de
+- [X] T008 Implementar lo de T007 en `src/servidor_mcp/registro.py`, copiando el patrón de
   `src/servidor_mcp/noticias.py:19-29` (`VARIABLE_FALLA = "PASARELA_FALLA_REGISTRO"`), y anotar la
   variable en `src/servidor_mcp/CLAUDE.md`. Hace pasar T007.
 
 ### Estado, eventos y presupuesto
 
-- [ ] T009 [P] Tests en `src/due_diligence/test_eventos_estado.py` (data-model):
+- [X] T009 [P] Tests en `src/due_diligence/test_eventos_estado.py` (data-model):
   - `informe_registrado`, `datos_sustituidos` y `cierre_sin_informe` están en `eventos.TIPOS`;
   - `Evento` tiene `accion: str | None = None` como **último** campo, y
     `registrar(..., accion=...)` lo guarda;
   - `EstadoCaso()` tiene `comercio_pedido is None`, `informes_pendientes == {}`, `informes == []` y
     `cierre_sin_informe is False`, y dos estados no comparten esas colecciones.
-- [ ] T010 Implementar lo de T009 en `src/due_diligence/eventos.py` y `src/due_diligence/estado.py`.
+- [X] T010 Implementar lo de T009 en `src/due_diligence/eventos.py` y `src/due_diligence/estado.py`.
   `InformeRegistrado` y `Huella` se definen en `src/due_diligence/informe.py` (T026); `estado.py`
   los importa solo con `TYPE_CHECKING`, para no crear ciclos. Hace pasar T009.
-- [ ] T011 [P] Tests en `src/due_diligence/test_configuracion.py` (R8):
+- [X] T011 [P] Tests en `src/due_diligence/test_configuracion.py` (R8):
   - `presupuesto_turnos_peor_caso(max_reintentos, max_cierres)` devuelve `PASOS_FIJOS_PEOR_CASO +
     2 * len(Frente) * max_reintentos + max_cierres`; con `(3, 5)` da 37;
   - **`PRESUPUESTO_TURNOS_PEOR_CASO == 19`** y `<= MAX_TURNOS_SEGURIDAD`;
   - sigue sin ser un literal (comprobación con `ast` del #8).
 
   Es la adaptación de los tests del #8 de las líneas 284 y 291 (T037).
-- [ ] T012 Implementar lo de T011 en `src/due_diligence/configuracion.py`. El comentario explica el
+- [X] T012 Implementar lo de T011 en `src/due_diligence/configuracion.py`. El comentario explica el
   término nuevo: un informe nuevo por cada reintento posible, porque un reintento con éxito
   invalida el informe (R8). Hace pasar T011.
 
 ### Simulación (R12)
 
-- [ ] T013 [P] Tests en `src/due_diligence/test_sesion_simulada.py`:
+- [X] T013 [P] Tests en `src/due_diligence/test_sesion_simulada.py`:
   - `PasarelaSimulada` rechaza un informe mal formado con `entrada_invalida` y `problemas`, usando
     `validar_informe`, y guarda el válido con `conflictos`;
   - el paso `("informe", recomendacion)` del `CoordinadorSimulado` arma un informe **válido**: una
@@ -190,9 +190,9 @@ nuevos del estado, los eventos, el presupuesto de turnos y los pasos nuevos de l
     y el `PostToolUse` de un `registrar_informe` del mismo mensaje;
   - `SesionSimulada.llamar` pasa a los hooks el mismo `tool_use_id` en `PreToolUse` y en
     `PostToolUse` o `PostToolUseFailure` de una llamada, y distinto entre llamadas.
-- [ ] T014 Implementar lo de T013 en `src/due_diligence/simulacion.py`, documentando los pasos
+- [X] T014 Implementar lo de T013 en `src/due_diligence/simulacion.py`, documentando los pasos
   nuevos en el docstring de `CoordinadorSimulado`. Hace pasar T013.
-- [ ] T015 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
+- [X] T015 Fase 2 completa: `uv run ruff format .`, `uv run ruff check .` y `uv run pytest` en
   verde. Los tests adaptados se anotan en T037. Commit «fundamentos del ticket #9».
 
 ---
@@ -485,6 +485,16 @@ hora con UTC, los conflictos y los informes.
   | `src/due_diligence/test_sondeo_hooks.py` | `ENTRADA_INFORME` nuevo (T041) | Igualdad exacta: `validar_informe(ENTRADA_INFORME) == []`. Las demás aserciones del #8 sobre la entrada y sus campos no se tocan. |
   | `src/due_diligence/test_main.py` y `src/due_diligence/test_eventos_estado.py` | Hora con UTC y campo `accion` | Las líneas esperadas de la salida se reescriben **completas**, como hoy, con la hora y su «UTC», en lugar de comprobar que contengan «UTC». Las comparaciones de `Evento` siguen siendo de igualdad, ahora con `accion` (`None` donde no aplica). |
   | `src/due_diligence/test_coordinador.py`: `test_la_instruccion_minima_pide_escalar_y_registrar_el_informe_con_los_tres_valores` y `src/due_diligence/test_modo_demo.py` | Instrucciones nuevas (T039) | Siguen exigiendo los tres valores; se añade la guía de las afirmaciones. |
+
+  **Añadidos durante la implementación** (fase 2), con la misma regla:
+
+  | Test | Por qué cambia | Cómo se adapta |
+  |------|----------------|----------------|
+  | `src/due_diligence/test_eventos_estado.py`: `test_los_tipos_de_evento_son_los_del_modelo` | Tres tipos nuevos (T010) | La igualdad exacta del conjunto se conserva, con los tres tipos del #9 añadidos. |
+  | `src/servidor_mcp/test_decisiones.py`: `test_la_hora_por_defecto_es_la_local_con_su_desfase` → `test_la_hora_por_defecto_es_utc_con_su_desfase`, y `test_la_fecha_de_registro_es_la_de_la_hora_local_y_no_la_utc` → `test_la_fecha_de_registro_es_la_utc_y_no_la_local` | Contrato cambiado a UTC (R10, aceptado) | Se renombran porque su nombre afirmaba lo contrario. Las igualdades siguen siendo exactas: desfase `timedelta(0)`, fecha `"2026-10-18"` y `registrado_en == "2026-10-18T04:30:00+00:00"` para las 23:30 en UTC−5. |
+  | `test_decisiones.py`: `test_el_comercio_necesita_identificador_y_nombre` | El comercio lleva `verificado` (R2) | `problemas ==` exactamente un problema en `comercio.identificador` y otro en `comercio.nombre`, con `verificado: true`. |
+  | `src/servidor_mcp/test_servidor.py`: `TIPOS_JSON` y `TIPOS_INCORRECTOS` | Parámetro `conflictos` | El diccionario exacto de tipos gana `"conflictos": "object"`; se añade el caso de tipo incorrecto `{"conflictos": "texto"}`. |
+  | `src/due_diligence/test_sesion_simulada.py`: `test_la_pasarela_simulada_guarda_informes_y_escalamientos` | La `PasarelaSimulada` valida como la real (R12) | El informe de la prueba es válido y la igualdad `pasarela.informes == [informe]` sigue siendo exacta; el rechazo va en un test nuevo. |
 
   Ninguno se borra. Si un test no está en la tabla y falla, se añade con su justificación antes de
   cambiarlo.

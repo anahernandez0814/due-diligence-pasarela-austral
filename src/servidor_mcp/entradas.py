@@ -84,17 +84,24 @@ def objeto_obligatorio(valor: Any, parametro: str) -> tuple[dict | None, CallToo
 
 
 def campos_obligatorios(
-    entrada: dict[str, Any], requeridos: dict[str, type | tuple[type, ...]]
+    entrada: dict[str, Any],
+    requeridos: dict[str, type | tuple[type, ...]],
+    admite_vacio: tuple[str, ...] = (),
 ) -> CallToolResult | None:
     """Comprueba todos los campos obligatorios de una vez.
 
     `requeridos` asocia cada nombre con el tipo esperado. Primero se informan **todos** los que
     faltan (`campos_obligatorios_ausentes`, con `campos_faltantes`); si no falta ninguno, todos los
-    de tipo incorrecto (`entrada_invalida`). Devuelve `None` si todo está bien.
+    de tipo incorrecto (`entrada_invalida`). Devuelve `None` si todo está bien. Los campos de
+    `admite_vacio` solo faltan si son `None`: un contenedor vacío cuenta como dado (#9).
     """
     if not isinstance(entrada, dict):
         return error("entrada_invalida", "La entrada debe ser un objeto.", False)
-    faltantes = [nombre for nombre in requeridos if _vacio(entrada.get(nombre))]
+    faltantes = [
+        nombre
+        for nombre in requeridos
+        if (entrada.get(nombre) is None if nombre in admite_vacio else _vacio(entrada.get(nombre)))
+    ]
     if faltantes:
         lista = ", ".join(f"«{nombre}»" for nombre in faltantes)
         return error(

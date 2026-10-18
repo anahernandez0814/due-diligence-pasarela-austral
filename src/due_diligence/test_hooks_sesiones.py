@@ -10,7 +10,7 @@ import json
 
 from due_diligence import configuracion
 from due_diligence.coordinador import Caso as CasoReal
-from due_diligence.estado import EstadoCaso, Situacion
+from due_diligence.estado import Consulta, EstadoCaso, Situacion
 from due_diligence.eventos import (
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
@@ -29,6 +29,7 @@ from due_diligence.simulacion import (
     comercio_con_representante_en_listas,
     comercios_parecidos,
     error_estructurado,
+    informe_del_caso,
 )
 
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
@@ -71,13 +72,21 @@ class Caso:
         return self._coordinador
 
     def informe(self, recomendacion):
-        entrada = {
-            "comercio": {"identificador": "CO-PL-0003", "nombre": "Panadería Luna Nueva SAS"},
-            "recomendacion": recomendacion,
-            "hallazgos": {},
-            "cobertura": "completa",
-        }
+        """Un informe válido del #9: una afirmación por consulta del caso (R12, hallazgo U1)."""
+        entrada = informe_del_caso(self.estado, recomendacion)
         return asyncio.run(self.coordinador().llamar(INFORME, entrada))
+
+    def _guardar_consulta(self, frente, herramienta, argumentos, llamada):
+        """Lo que hace el `Delegador` en producción: la consulta válida queda en `estado.consultas`.
+
+        FR-004 y los conflictos (#9) leen de ahí; sin esto, los hooks no verían ninguna fuente.
+        """
+        if llamada.ejecutada and not llamada.es_error:
+            resultado = json.loads(llamada.texto)
+            self.estado.agregar_consultas(
+                [Consulta(frente, herramienta, dict(argumentos), resultado, True)]
+            )
+        return llamada
 
     def terminar(self, mensaje="listo"):
         return asyncio.run(self.coordinador().terminar(mensaje))
@@ -88,12 +97,14 @@ class Caso:
     def registrar(self, **consulta):
         """El subagente de registro consulta y el frente termina (lo que haría el `Delegador`)."""
         sesion = self.sesion(Frente.REGISTRO)
-        asyncio.run(sesion.llamar(REGISTRO, consulta, en_proceso=False))
+        llamada = asyncio.run(sesion.llamar(REGISTRO, consulta, en_proceso=False))
+        self._guardar_consulta(Frente.REGISTRO, REGISTRO, consulta, llamada)
         self.estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
         self.estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
 
     def listas(self, **consulta):
-        return asyncio.run(self.sesion(Frente.LISTAS).llamar(LISTAS, consulta))
+        llamada = asyncio.run(self.sesion(Frente.LISTAS).llamar(LISTAS, consulta))
+        return self._guardar_consulta(Frente.LISTAS, LISTAS, consulta, llamada)
 
     def delegar_listas(self):
         sesion = self.sesion_del_coordinador()
@@ -101,7 +112,9 @@ class Caso:
 
     def riesgo(self, categoria):
         sesion = self.sesion(Frente.CATEGORIA)
-        return asyncio.run(sesion.llamar(RIESGO, {"categoria": categoria}))
+        argumentos = {"categoria": categoria}
+        llamada = asyncio.run(sesion.llamar(RIESGO, argumentos))
+        return self._guardar_consulta(Frente.CATEGORIA, RIESGO, argumentos, llamada)
 
     def consultas_de_listas(self):
         return [e for fuente, e in self.pasarela.consultas_a_fuentes if fuente == "listas"]

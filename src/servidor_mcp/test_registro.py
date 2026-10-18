@@ -218,3 +218,44 @@ def test_el_mensaje_de_nombre_demasiado_corto_explica_como_se_cuenta_el_minimo(c
     # El texto es fijo: no repite lo que escribió quien consulta.
     otro = consultar_registro_mercantil(nombre="xy").structured_content["mensaje"]
     assert mensaje == otro
+
+
+# --- caída simulada del registro (#9, R11) ---------------------------------------------------
+
+VARIABLE_FALLA = "PASARELA_FALLA_REGISTRO"
+
+
+def test_con_la_variable_el_registro_no_esta_disponible_y_es_reintentable(monkeypatch):
+    monkeypatch.setenv(VARIABLE_FALLA, "1")
+    resultado = consultar_registro_mercantil(identificador="CO-TA-0002")
+    assert resultado.is_error is True
+    cuerpo = resultado.structured_content
+    assert cuerpo["tipo"] == "servicio_no_disponible"
+    assert cuerpo["reintentable"] is True
+    assert cuerpo["mensaje"] == (
+        "El registro mercantil no está disponible. Se puede reintentar; mientras tanto, el "
+        "comercio no queda identificado."
+    )
+
+
+def test_la_variable_del_registro_se_lee_en_cada_llamada(monkeypatch):
+    monkeypatch.setenv(VARIABLE_FALLA, "1")
+    assert consultar_registro_mercantil(identificador="CO-TA-0002").is_error is True
+    monkeypatch.setenv(VARIABLE_FALLA, "0")
+    assert consultar_registro_mercantil(identificador="CO-TA-0002").is_error is False
+    monkeypatch.setenv(VARIABLE_FALLA, "1")
+    assert consultar_registro_mercantil(identificador="CO-TA-0002").is_error is True
+
+
+def test_una_entrada_invalida_se_rechaza_antes_que_la_caida(monkeypatch):
+    monkeypatch.setenv(VARIABLE_FALLA, "1")
+    cuerpo = consultar_registro_mercantil().structured_content
+    assert cuerpo["tipo"] == "entrada_invalida"
+    cuerpo = consultar_registro_mercantil(nombre="SAS").structured_content
+    assert cuerpo["tipo"] == "entrada_invalida"
+
+
+def test_sin_la_variable_el_registro_responde_igual(monkeypatch):
+    monkeypatch.delenv(VARIABLE_FALLA, raising=False)
+    cuerpo = _cuerpo(consultar_registro_mercantil(identificador="CO-RF-0006"))
+    assert cuerpo["coincidencias"] == ["CO-RF-0006"]

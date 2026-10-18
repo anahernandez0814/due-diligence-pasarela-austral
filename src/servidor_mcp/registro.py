@@ -4,8 +4,12 @@ Devuelve **todas** las coincidencias y nunca elige una. Cada comercio produce un
 fuente en la que figura; si las fuentes difieren, ambos valores se devuelven con su fuente.
 Las coincidencias se cuentan en `coincidencias`, no en `hechos`. No consulta listas ni noticias
 y no devuelve la categoría de negocio.
+
+Con `PASARELA_FALLA_REGISTRO=1` el servicio simula una caída reintentable (#9, R11), con el mismo
+patrón que noticias: la variable se lee **en cada llamada**, después de validar la entrada.
 """
 
+import os
 from typing import Any
 
 from mcp.types import CallToolResult
@@ -13,7 +17,9 @@ from mcp.types import CallToolResult
 from servidor_mcp import datos
 from servidor_mcp.entradas import exactamente_uno
 from servidor_mcp.normalizar import contiene_en_registro, cumple_minimo, igual_identificador
-from servidor_mcp.respuestas import error, hecho, respuesta
+from servidor_mcp.respuestas import SERVICIO_NO_DISPONIBLE, error, hecho, respuesta
+
+VARIABLE_FALLA = "PASARELA_FALLA_REGISTRO"
 
 
 def _contenido(comercio: dict[str, Any]) -> dict[str, Any]:
@@ -41,6 +47,14 @@ def consultar_registro_mercantil(nombre: Any = None, identificador: Any = None) 
                 "«SAS» solo no basta."
             ),
             False,
+        )
+
+    if os.environ.get(VARIABLE_FALLA) == "1":
+        return error(
+            SERVICIO_NO_DISPONIBLE,
+            "El registro mercantil no está disponible. Se puede reintentar; mientras tanto, el "
+            "comercio no queda identificado.",
+            True,
         )
 
     try:

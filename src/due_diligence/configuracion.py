@@ -67,8 +67,16 @@ PASOS_FIJOS_PEOR_CASO = 8
 
 
 def presupuesto_turnos_peor_caso(max_reintentos: int, max_cierres: int) -> int:
-    """Turnos del peor caso: pasos fijos, un reintento por frente y las devoluciones del `Stop`."""
-    return PASOS_FIJOS_PEOR_CASO + len(Frente) * max_reintentos + max_cierres
+    """Turnos del peor caso: pasos fijos, reintentos, informes nuevos y devoluciones del `Stop`.
+
+    El #9 (R8) suma un informe nuevo por cada reintento posible: un reintento con éxito cambia la
+    cobertura, invalida el informe vigente (FR-023) y pide otro, que no estaba en ningún término.
+    No cuenta un cambio de comercio, una coincidencia nueva ni un informe enviado en el mismo
+    mensaje que una primera delegación: los cubre el margen hasta `MAX_TURNOS_SEGURIDAD`.
+    """
+    reintentos = len(Frente) * max_reintentos
+    informes_nuevos = len(Frente) * max_reintentos
+    return PASOS_FIJOS_PEOR_CASO + reintentos + informes_nuevos + max_cierres
 
 
 # Se calcula, no se escribe a mano: si suben los reintentos o las devoluciones, sube con ellos y el

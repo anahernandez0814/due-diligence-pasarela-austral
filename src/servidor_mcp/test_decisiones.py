@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from servidor_mcp import decisiones
+from servidor_mcp import decisiones, informe
 from servidor_mcp.decisiones import (
     carpeta_resultados,
     escalar_a_cumplimiento,
@@ -50,11 +50,40 @@ def _hallazgos():
     }
 
 
+def _afirmaciones():
+    """Hallazgos del informe en el formato del #9: una lista de afirmaciones por frente (R2)."""
+    return {
+        "registro": [
+            {
+                "texto": "Una coincidencia: Tienda Verde SAS.",
+                "fuente": "Registro Mercantil Ficticio del Sur",
+                "fecha": "2026-09-30",
+            }
+        ],
+        "categoria": [
+            {
+                "texto": "Categoría suplementos dietarios: nivel alto.",
+                "fuente": "Catálogo Ficticio de Categorías de Riesgo",
+                "fecha": "2026-09-01",
+            }
+        ],
+    }
+
+
+def _conflictos():
+    return {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []}
+
+
 def _informe(**cambios):
     base = {
-        "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": True,
+        },
         "recomendacion": "No habilitar de forma automática: decide un oficial de cumplimiento.",
-        "hallazgos": _hallazgos(),
+        "hallazgos": _afirmaciones(),
+        "conflictos": _conflictos(),
         "cobertura": "Cubiertos: registro, listas, noticias y riesgo. Sin cubrir: ninguno.",
     }
     return base | cambios
@@ -109,6 +138,7 @@ def test_el_archivo_del_informe_conserva_lo_recibido(carpeta):
     assert guardado["comercio"] == entrada["comercio"]
     assert guardado["recomendacion"] == entrada["recomendacion"]
     assert guardado["hallazgos"] == entrada["hallazgos"]
+    assert guardado["conflictos"] == entrada["conflictos"]
     assert guardado["cobertura"] == entrada["cobertura"]
 
 
@@ -131,7 +161,9 @@ def test_no_valida_reglas_de_negocio(carpeta):
     assert resultado.is_error is False
 
 
-@pytest.mark.parametrize("campo", ["comercio", "recomendacion", "hallazgos", "cobertura"])
+@pytest.mark.parametrize(
+    "campo", ["comercio", "recomendacion", "hallazgos", "cobertura", "conflictos"]
+)
 def test_a_registrar_informe_le_falta_un_campo(carpeta, campo):
     entrada = _informe()
     del entrada[campo]
@@ -146,7 +178,14 @@ def test_a_registrar_informe_le_falta_un_campo(carpeta, campo):
 def test_registrar_informe_nombra_todos_los_campos_que_faltan():
     cuerpo = _error(registrar_informe())
     assert cuerpo["tipo"] == "campos_obligatorios_ausentes"
-    assert cuerpo["campos_faltantes"] == ["comercio", "recomendacion", "hallazgos", "cobertura"]
+    # La lista del #5 más `conflictos` (#9), en el mismo orden.
+    assert cuerpo["campos_faltantes"] == [
+        "comercio",
+        "recomendacion",
+        "hallazgos",
+        "cobertura",
+        "conflictos",
+    ]
 
 
 @pytest.mark.parametrize("vacio", ["", "   ", {}, [], None])
@@ -155,26 +194,71 @@ def test_un_campo_presente_pero_vacio_cuenta_como_faltante(vacio):
     assert cuerpo["campos_faltantes"] == ["cobertura"]
 
 
-def test_un_hallazgo_sin_fuente_es_un_campo_faltante():
-    hallazgos = _hallazgos()
-    del hallazgos["riesgo"]["fuente"]
+def test_un_hallazgo_sin_fuente_es_un_campo_faltante(carpeta):
+    # #9: la afirmación sin fuente es un problema de forma con su ruta (`entrada_invalida`).
+    hallazgos = _afirmaciones()
+    del hallazgos["categoria"][0]["fuente"]
     cuerpo = _error(registrar_informe(**_informe(hallazgos=hallazgos)))
-    assert cuerpo["tipo"] == "campos_obligatorios_ausentes"
-    assert cuerpo["campos_faltantes"] == ["hallazgos.riesgo.fuente"]
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert cuerpo["reintentable"] is False
+    assert cuerpo["problemas"] == [
+        {"ruta": "hallazgos.categoria[0].fuente", "texto": informe.DEBE_SER_TEXTO}
+    ]
+    assert not carpeta.exists()
 
 
-def test_un_hallazgo_sin_contenido_es_un_campo_faltante():
-    hallazgos = _hallazgos()
-    hallazgos["registro"]["contenido"] = "  "
+def test_un_hallazgo_sin_contenido_es_un_campo_faltante(carpeta):
+    hallazgos = _afirmaciones()
+    hallazgos["registro"][0]["texto"] = "  "
     cuerpo = _error(registrar_informe(**_informe(hallazgos=hallazgos)))
-    assert cuerpo["campos_faltantes"] == ["hallazgos.registro.contenido"]
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert cuerpo["problemas"] == [
+        {"ruta": "hallazgos.registro[0].texto", "texto": informe.DEBE_SER_TEXTO}
+    ]
+    assert not carpeta.exists()
 
 
 def test_el_comercio_necesita_identificador_y_nombre():
-    cuerpo = _error(registrar_informe(**_informe(comercio={"nombre": "Tienda Verde SAS"})))
-    assert cuerpo["campos_faltantes"] == ["comercio.identificador"]
-    cuerpo = _error(registrar_informe(**_informe(comercio={"identificador": "CO-TV-0001"})))
-    assert cuerpo["campos_faltantes"] == ["comercio.nombre"]
+    # #9: con `verificado: true` hacen falta los dos (R2).
+    sin_identificador = {"nombre": "Tienda Verde SAS", "identificador": None, "verificado": True}
+    cuerpo = _error(registrar_informe(**_informe(comercio=sin_identificador)))
+    assert cuerpo["problemas"] == [
+        {"ruta": "comercio.identificador", "texto": informe.COMERCIO_VERIFICADO}
+    ]
+    sin_nombre = {"identificador": "CO-TV-0001", "nombre": None, "verificado": True}
+    cuerpo = _error(registrar_informe(**_informe(comercio=sin_nombre)))
+    assert cuerpo["problemas"] == [
+        {"ruta": "comercio.nombre", "texto": informe.COMERCIO_VERIFICADO}
+    ]
+
+
+def test_un_comercio_sin_verificar_con_solo_el_nombre_se_guarda(carpeta):
+    comercio = {"identificador": None, "nombre": "Taller Aurora SAS", "verificado": False}
+    resultado = registrar_informe(**_informe(comercio=comercio))
+    assert resultado.is_error is False
+    identificador = resultado.structured_content["hechos"][0]["contenido"]["id"]
+    guardado = json.loads((carpeta / "informes" / f"{identificador}.json").read_text("utf-8"))
+    assert guardado["comercio"] == comercio
+
+
+def test_varios_problemas_de_forma_se_nombran_todos_en_un_solo_error(carpeta):
+    hallazgos = _afirmaciones()
+    del hallazgos["registro"][0]["fuente"]
+    hallazgos["categoria"][0]["fecha"] = "2026-02-30"
+    cuerpo = _error(registrar_informe(**_informe(hallazgos=hallazgos)))
+    assert cuerpo["tipo"] == "entrada_invalida"
+    assert [p["ruta"] for p in cuerpo["problemas"]] == [
+        "hallazgos.registro[0].fuente",
+        "hallazgos.categoria[0].fecha",
+    ]
+    assert "hallazgos.registro[0].fuente" in cuerpo["mensaje"]
+    assert "hallazgos.categoria[0].fecha" in cuerpo["mensaje"]
+    assert not carpeta.exists()  # FR-005: nada guardado, ni en parte
+
+
+def test_escalar_sigue_aceptando_el_formato_de_hallazgos_del_5(carpeta):
+    # El formato de `escalar_a_cumplimiento` no cambia en el #9: lo decide el #10.
+    assert escalar_a_cumplimiento(**_escalamiento()).is_error is False
 
 
 @pytest.mark.parametrize(
@@ -186,6 +270,8 @@ def test_el_comercio_necesita_identificador_y_nombre():
         {"hallazgos": ["registro"]},
         {"cobertura": 5},
         {"hallazgos": {"registro": "texto"}},
+        {"conflictos": 5},
+        {"conflictos": {"resumen": "x", "lista": "y"}},
     ],
 )
 def test_un_tipo_incorrecto_da_entrada_invalida(carpeta, cambio):
@@ -329,27 +415,29 @@ def test_si_falla_el_reemplazo_no_queda_un_archivo_a_medias(carpeta, monkeypatch
 # --- fecha de registro en hora local -------------------------------------------------------
 
 
-def test_la_hora_por_defecto_es_la_local_con_su_desfase(monkeypatch):
+def test_la_hora_por_defecto_es_utc_con_su_desfase(monkeypatch):
+    # #9, R10 (aceptada por la analista): la hora del registro es UTC, como la de los eventos.
     monkeypatch.undo()  # quita el reloj fijo del fixture
-    antes = datetime.now().astimezone()
+    antes = datetime.now(UTC)
     ahora = decisiones._ahora()
-    despues = datetime.now().astimezone()
-    assert ahora.tzinfo is not None
-    assert ahora.utcoffset() == antes.utcoffset() == despues.utcoffset()
+    despues = datetime.now(UTC)
+    assert ahora.utcoffset() == timedelta(0)
     assert antes <= ahora <= despues
 
 
-def test_la_fecha_de_registro_es_la_de_la_hora_local_y_no_la_utc(monkeypatch):
-    # 23:30 en UTC-5 ya es el día siguiente en UTC; la fecha de registro es la local.
+def test_la_fecha_de_registro_es_la_utc_y_no_la_local(monkeypatch):
+    # Contrato invertido en el #9 (R10): 23:30 en UTC-5 ya es el día siguiente en UTC, y la fecha
+    # de registro es la UTC. `_ahora` devuelve UTC; aquí se le pasa una hora con otro desfase para
+    # comprobar que la pasarela la convierte en vez de guardarla tal cual.
     local = datetime(2026, 10, 17, 23, 30, tzinfo=timezone(timedelta(hours=-5)))
     monkeypatch.setattr(decisiones, "_ahora", lambda: local)
     cuerpo = registrar_informe(**_informe()).structured_content
-    assert cuerpo["hechos"][0]["metadatos"]["fecha"] == "2026-10-17"
-    assert cuerpo["metadatos"]["fecha"] == "2026-10-17"
+    assert cuerpo["hechos"][0]["metadatos"]["fecha"] == "2026-10-18"
+    assert cuerpo["metadatos"]["fecha"] == "2026-10-18"
     identificador = cuerpo["hechos"][0]["contenido"]["id"]
     carpeta = decisiones.carpeta_resultados()
     guardado = json.loads((carpeta / "informes" / f"{identificador}.json").read_text("utf-8"))
-    assert guardado["registrado_en"] == "2026-10-17T23:30:00-05:00"
+    assert guardado["registrado_en"] == "2026-10-18T04:30:00+00:00"
 
 
 # --- resultados/ está ignorado por git -----------------------------------------------------------
@@ -371,3 +459,16 @@ def test_resultados_esta_ignorado_por_git():
     assert _git_ignora(raiz, "resultados/escalamientos/ESC-00000000.json") == 0
     # Control: una ruta cualquiera del código no está ignorada.
     assert _git_ignora(raiz, "src/servidor_mcp/registro.py") == 1
+
+
+def test_un_informe_sin_ninguna_afirmacion_se_guarda(carpeta):
+    # #9, I.5: con todos los frentes sin cubrir el informe se entrega igual; `{}` no es «falta».
+    resultado = registrar_informe(**_informe(hallazgos={}))
+    assert resultado.is_error is False
+    assert len(_archivos(carpeta, "informes")) == 1
+
+
+def test_sin_hallazgos_sigue_siendo_un_campo_faltante():
+    entrada = _informe()
+    del entrada["hallazgos"]
+    assert _error(registrar_informe(**entrada))["campos_faltantes"] == ["hallazgos"]

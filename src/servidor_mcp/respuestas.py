@@ -66,6 +66,7 @@ def error(
     reintentable: bool,
     obtenido: dict[str, Any] | None = None,
     campos_faltantes: list[str] | None = None,
+    problemas: list[dict[str, str]] | None = None,
 ) -> CallToolResult:
     """Error estructurado. Solo `servicio_no_disponible` es reintentable."""
     if tipo not in TIPOS_ERROR:
@@ -81,4 +82,7 @@ def error(
     }
     if campos_faltantes is not None:
         cuerpo["campos_faltantes"] = list(campos_faltantes)
+    if problemas is not None:
+        # Problemas de forma con su ruta (#9, R3): `{ruta, texto}`, sin el valor recibido.
+        cuerpo["problemas"] = [dict(p) for p in problemas]
     return _resultado(cuerpo, es_error=True)

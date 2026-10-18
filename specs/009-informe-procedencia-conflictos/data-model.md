@@ -39,7 +39,8 @@ ConflictosCaso
   como_entrada() -> {resumen, lista}
 ```
 
-- `no_comparables`: el registro está caído y no hay datos que comparar.
+- `no_comparables`: el registro está caído, o hay comercio identificado sin una consulta válida
+  del registro que coincida en `estado.consultas` (R6, hallazgo U1). No hay datos que comparar.
 - `no_calculados`: solo se construye en el modo de informe mínimo (R9); `calcular_conflictos`
   nunca lo devuelve.
 - El orden de `valores` es el de la respuesta de la pasarela. No indica precedencia.
@@ -62,6 +63,9 @@ InformeRegistrado (frozen)
 
 - `huella_actual(estado) -> Huella` es pura. La calcula el `PreToolUse` de `registrar_informe`
   con los mismos datos que pone en la entrada (R7); el `PostToolUse` no la recalcula.
+- **Caso sellado** (`libro.fallo_de_hook`): `cobertura` y `conflictos` valen el marcador fijo
+  `NO_CALCULADOS`, sin llamar a `calcular_cobertura` ni a `calcular_conflictos`, en el `PreToolUse`
+  y en el `Stop` (R7, hallazgo I1). `causas` y `comercio` se calculan igual.
 - `informe_vigente(estado) -> bool`: hay informes y `estado.informes[-1].huella ==
   huella_actual(estado)`.
 - `cambios(huella_a, huella_b) -> list[str]`: los nombres de los componentes que difieren, para el

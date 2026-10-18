@@ -45,7 +45,17 @@ detalle está en [contracts/registrar-informe.md](contracts/registrar-informe.md
   valida el #7.
 
 Validación escrita a mano, no con pydantic: la convención del servidor exige mensajes en español
-y nombrar todos los campos que faltan (`src/servidor_mcp/CLAUDE.md`). El esquema JSON de cada
+y nombrar todos los campos que faltan (`src/servidor_mcp/CLAUDE.md`).
+
+**Por qué la afirmación junta texto, fuente y fecha en un objeto** (hallazgo T3 del análisis,
+decisión de la analista: se justifica y no cambia el formato). La convención `{contenido,
+metadatos}` del proyecto es para los **resultados** de la pasarela: lo que devuelve una fuente y
+lo que el principio III pide separar. La afirmación es lo contrario, la **cita** que el
+coordinador escribe a partir de esos resultados. Su fuente y su fecha son la referencia que I.4
+exige junto a cada frase, no metadatos de la herramienta que la recibe. Un objeto plano de tres
+campos obligatorios es más difícil de enviar incompleto que uno anidado y deja rutas cortas en
+los problemas (`hallazgos.listas[1].fuente`). `ValorFuente` sigue el mismo criterio: es una cita
+de cada fuente en conflicto. El esquema JSON de cada
 parámetro se publica en `tools/list` con `json_schema_extra`, como el resto de herramientas.
 
 `escalar_a_cumplimiento` **no cambia de formato** en este ticket (spec, supuestos): su validación
@@ -114,7 +124,14 @@ pusieron y si lo declarado por el coordinador era distinto. No lleva datos del c
 `calcular_conflictos(estado) -> ConflictosCaso`:
 
 - Toma la última consulta **válida** del registro cuyas `coincidencias` son exactamente el comercio
-  identificado, y sus hechos con ese identificador (uno por fuente).
+  identificado, y sus hechos con ese identificador (uno por fuente). Si no hay ninguna consulta que
+  cumpla eso (comercio identificado, pero sin una consulta del registro que coincida en
+  `estado.consultas`), el resultado es `no_comparables`, con el mismo resumen que el registro
+  caído. Nunca es `sin_conflictos`, que afirmaría algo que no se comparó (hallazgo U1).
+- `estado.consultas` solo lo escribe el `Delegador` (`delegacion.py:483`). Los helpers de los tests
+  a nivel de hook (`Caso` de `test_hooks_sesiones.py` y `_caso_con_comercio` de `test_hooks.py`)
+  **la llenan** con las mismas consultas que simulan, para que FR-004 y los conflictos se prueben
+  como en producción.
 - Compara cada dato del contenido salvo `identificador`. Si dos o más fuentes traen valores
   distintos, eso es un conflicto con un valor por fuente (`valor`, `fuente`, `fecha`), en el orden
   de la respuesta de la pasarela, que **no indica precedencia**. Un dato que trae una sola fuente
@@ -162,6 +179,18 @@ Por tanto:
   listas o un fallo de hook **sí** lo invalidan.
 
 Es el patrón de `escalamiento_cubre`, que compara con las instantáneas de cada escalamiento.
+
+**Caso sellado** (hallazgo I1). Con `libro.fallo_de_hook`, los componentes de **cobertura** y de
+**conflictos** de la huella valen el marcador fijo «no calculados», sin llamar a
+`calcular_cobertura` ni a `calcular_conflictos`. Pasa igual en el `PreToolUse` y en el `Stop`,
+porque los dos usan `huella_actual`.
+- **Por qué**: el informe mínimo registra los textos fijos en esas dos partes. Si la huella
+  guardada tuviera «no calculados» y la del `Stop` calculara los valores reales, o fallara al
+  calcularlos, nunca coincidirían: el cierre se devolvería hasta `cierre_sin_informe` con el informe
+  registrado.
+- Las **causas** (con `fallo_de_hook`) y el **comercio** se siguen calculando.
+- Un informe registrado antes del sello deja de estar vigente, porque cambian las causas y los dos
+  componentes. Lo correcto es pedir el informe mínimo.
 
 El motivo del `Stop` dice qué componente cambió («cambió la cobertura después de registrarlo»),
 sin datos del comercio.
@@ -225,6 +254,17 @@ se rechazaría hasta escalar (FR-012).
   La fórmula sigue siendo calculada, y el test del #8 que la compara con `MAX_TURNOS_SEGURIDAD`
   cambia el valor esperado de 15 a 19, sin debilitarse. Las devoluciones siguen compartiendo el
   contador, como pide FR-011. FR-011 y el supuesto de la spec se actualizan con el 19.
+
+  **Exclusiones del peor caso razonable** (hallazgo A1). La fórmula no cuenta tres situaciones que
+  también invalidan el informe y piden uno nuevo:
+  - un cambio de comercio, que el #8 ya excluía de su peor caso;
+  - una coincidencia nueva tras volver a consultar listas;
+  - un informe registrado en el mismo mensaje que una primera delegación, que T029 demuestra
+    posible.
+
+  Las tres dependen de que el coordinador haga algo que sus instrucciones no le piden. Quedan
+  cubiertas por el **margen de 11 turnos** (30 − 19) y, en último término, por `max_turns`, que
+  termina el caso como `error_max_turns`, nunca como completo.
 - **Limitación conocida, que resuelve el #10**: el `Stop` no distingue una pregunta al analista de
   un cierre definitivo, así que exige el informe en cualquier fin de turno con comercio
   identificado o registro caído. Un test lo fija.
@@ -261,6 +301,13 @@ caso aparte.
 
 **Doble fallo** (también falla el cálculo de FR-004 con el caso sellado): `fallar_cerrado`
 deniega. El riesgo residual 6 del #8 solo se repite si fallan dos hooks (riesgo residual 6).
+
+**Fallo del `PostToolUse` del informe** (hallazgo U2). Si `_informe_posterior` lanza una excepción,
+`fallar_cerrado` sella el libro. El informe ya quedó guardado en la pasarela, pero su huella no se
+confirma: la pendiente no pasa a `estado.informes`. Con el sello, el caso exige escalar y después el
+informe mínimo, así que puede quedar un segundo informe guardado en `resultados/informes/`. Se
+acepta: los dos documentos quedan, y la traza (`fallo_de_hook` seguido del `informe_registrado` del
+informe mínimo) explica por qué. Lo fija un test de T032.
 
 **Cambio respecto al #7**: un caso sellado sin coincidencias ni alto riesgo ya no puede cerrarse
 sin escalar. Los tests del #7 que fijan el cierre con sello se adaptan sin debilitarse: lo que

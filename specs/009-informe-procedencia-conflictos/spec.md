@@ -77,14 +77,15 @@ Si un hook falló durante el caso (sello `fallo_de_hook`), hoy el informe se den
 
 **Why this priority**: resuelve el riesgo residual 6 heredado del #8 y hace que el tercer criterio de aceptación se cumpla también en ese caso. Es P2 porque solo ocurre cuando falla un hook.
 
-**Independent Test**: sin llamar al modelo, se fuerza el sello de fallo de hook; un informe con `habilitar` o `no_habilitar` se rechaza, uno con `decide_cumplimiento` se registra con el texto fijo de cobertura, y el caso no figura como completo.
+**Independent Test**: sin llamar al modelo, se fuerza el sello de fallo de hook; sin escalamiento, cualquier informe se rechaza; tras escalar, un informe con `habilitar` o `no_habilitar` se rechaza, uno con `decide_cumplimiento` se registra con el texto fijo de cobertura, el cierre se permite y el caso no figura como completo.
 
 **Acceptance Scenarios**:
 
-1. **Given** el caso sellado por un fallo de hook, **When** el coordinador registra el informe con `decide_cumplimiento`, **Then** se registra con la cobertura sustituida por el texto fijo y el evento lo dice.
+1. **Given** el caso sellado por un fallo de hook y ya escalado, **When** el coordinador registra el informe con `decide_cumplimiento`, **Then** se registra con la cobertura sustituida por el texto fijo y el evento lo dice.
 2. **Given** el caso sellado, **When** el coordinador intenta registrar el informe con `habilitar` o `no_habilitar`, **Then** se rechaza con un motivo que dice que, tras un fallo de hook, solo decide el oficial.
 3. **Given** el caso sellado, **When** se revisa el estado al terminar, **Then** el caso no figura como completo aunque el informe se haya registrado.
 4. **Given** el caso sellado, **When** el informe mínimo trae afirmaciones, **Then** cada una sigue necesitando su fuente y su fecha (US1).
+5. **Given** el caso sellado por un fallo de hook y sin escalamiento, **When** el coordinador intenta registrar el informe mínimo con `decide_cumplimiento`, **Then** se rechaza con el motivo de escalar primero: el sello es una causa de escalamiento (plan, R9).
 
 ---
 
@@ -151,7 +152,7 @@ El analista, o quien revise el caso después, ve en los eventos cuándo se regis
   Con varias coincidencias o ninguna, no se exige informe. La exigencia DEBE hacerla cumplir el código, en el mismo punto que hoy exige el escalamiento. Las devoluciones por falta de informe DEBEN usar el mismo contador `MAX_CIERRES_IMPEDIDOS` que las del escalamiento, no uno propio. El presupuesto calculado de turnos del #8 suma un informe nuevo por cada reintento posible, porque un reintento con éxito invalida el informe (FR-023), y pasa de 15 a 19 de 30 (plan, R8).
 - **FR-012**: El escalamiento NO DEBE sustituir al informe: un caso que exige escalamiento solo puede cerrarse con el escalamiento y el informe, en ese orden, el que ya fija el #7. Mientras el escalamiento no cubra las causas vigentes, `evaluar_informe` rechaza el informe con cualquier recomendación; este ticket mantiene esa regla.
 - **FR-013**: Si se agotan las devoluciones del cierre sin informe, el caso DEBE quedar marcado como terminado sin informe, con un evento, y NUNCA figurar como completo.
-- **FR-023**: Para el cierre solo DEBE valer un informe **vigente**: registrado después del último cambio en los resultados de los frentes y para el comercio del caso en ese momento (el identificado o, con el registro caído, el pedido), igual que `escalamiento_cubre` compara con las instantáneas de cada escalamiento. Si después se vuelve a delegar y cambia algo (un reintento que sale bien, un cambio de comercio, una coincidencia nueva), el informe anterior deja de valer y hace falta uno nuevo. El mecanismo lo decide el plan.
+- **FR-023**: Para el cierre solo DEBE valer un informe **vigente**: registrado después del último cambio en los resultados de los frentes y para el comercio del caso en ese momento (el identificado o, con el registro caído, el pedido), igual que `escalamiento_cubre` compara con las instantáneas de cada escalamiento. Si después se vuelve a delegar y cambia algo (un reintento que sale bien, un cambio de comercio, una coincidencia nueva), el informe anterior deja de valer y hace falta uno nuevo. El mecanismo lo decide el plan. Qué cuenta como cambio lo fija el plan (R7), por decisión de la analista: solo un cambio en la cobertura (cubierto o no por frente), los conflictos, las causas de escalamiento o el comercio. Una nueva delegación que no cambia ninguno de los cuatro deja vigente el informe aunque sus afirmaciones de ese frente queden viejas (riesgo residual 1 del plan).
 - **FR-014**: Con el caso sellado por un fallo de hook, el informe DEBE admitirse solo con la recomendación `decide_cumplimiento` y con la cobertura y los conflictos sustituidos por textos fijos del código que declaran que no se pudieron calcular. Cualquier otra recomendación se rechaza con el motivo. El caso sigue sin figurar como completo.
 - **FR-015**: Las reglas del #7 sobre el informe (I.2, I.3, recomendación del conjunto cerrado) y la cobertura del #8 DEBEN seguir cumpliéndose igual; este ticket añade validaciones, no quita ninguna.
 
@@ -170,7 +171,7 @@ El analista, o quien revise el caso después, ve en los eventos cuándo se regis
 
 ### Key Entities *(include if feature involves data)*
 
-- **Afirmación**: una frase del informe sobre un frente. Atributos: texto, fuente y fecha (la fecha de corte de la fuente, no la del reloj).
+- **Afirmación**: una frase del informe sobre un frente. Atributos: texto, fuente y fecha (la fecha de los metadatos del resultado citado, no la del reloj). Se valida que la fecha sea válida, no que coincida con la del resultado (riesgo residual 3 del plan).
 - **Hallazgos de un frente**: la lista de afirmaciones de ese frente; puede estar vacía si el frente no quedó cubierto.
 - **Conflicto**: un dato del comercio con valores distintos según la fuente. Atributos: el dato y, por cada fuente, el valor, la fuente y la fecha. Lo calcula el código; no se guarda aparte del resultado del registro.
 - **Informe**: comercio, hallazgos por frente, conflictos, cobertura (#8) y recomendación. Es lo que se guarda con `registrar_informe`.
@@ -184,7 +185,7 @@ El analista, o quien revise el caso después, ve en los eventos cuándo se regis
 - **SC-001**: El 100 % de los informes de prueba con al menos una afirmación sin fuente, sin fecha o con una fuente no consultada se rechaza, y el motivo nombra todas las afirmaciones incompletas.
 - **SC-002**: En el 100 % de las ejecuciones simuladas del caso (g), el informe registrado muestra las dos fechas de constitución, cada una con su fuente y su fecha, declare lo que declare el coordinador.
 - **SC-003**: 0 casos simulados con comercio identificado o con el registro caído terminan con normalidad sin un informe vigente, incluidos los escalados. Recorriendo las combinaciones de escalamiento (sí o no) e informe (ninguno, vigente o anterior a un cambio), el cierre se permite solo cuando están todos los requisitos.
-- **SC-004**: Con el sello de fallo de hook, el 100 % de los informes con `habilitar` o `no_habilitar` se rechaza y el informe con `decide_cumplimiento` se registra; el caso nunca figura como completo.
+- **SC-004**: Con el sello de fallo de hook, el 100 % de los informes sin escalamiento previo y de los informes con `habilitar` o `no_habilitar` se rechaza; tras escalar, el informe con `decide_cumplimiento` se registra y el cierre se permite; el caso nunca figura como completo.
 - **SC-005**: Leyendo solo los eventos de un caso, la analista identifica cuándo se registró el informe, con qué recomendación y qué acción bloqueó cada hook, sin abrir el código.
 - **SC-006**: Ningún test llama al modelo; la suite completa y ruff pasan, y los casos de los tickets #5 a #8 siguen en verde (los que cambian por el nuevo esquema se adaptan sin debilitarse).
 

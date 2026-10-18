@@ -79,10 +79,10 @@ cierre de #7 la hace el paso 0 del siguiente `/siguiente-ticket`.
 
 ## Fase 1: Setup
 
-- [ ] T001 Confirmar que la rama es `007-hooks-sdk-reglas` y commitear este `tasks.md` (la spec y el
+- [X] T001 Confirmar que la rama es `007-hooks-sdk-reglas` y commitear este `tasks.md` (la spec y el
   plan ya están en `0990797` y `b36b305`). Sin eso, la guarda de #3 bloquea escribir en
   `src/due_diligence/`. Mensaje convencional en español.
-- [ ] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
+- [X] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar
   aquí el número de tests que pasan (referencia para T052 y T053): ______.
 
 ---
@@ -95,16 +95,16 @@ sin modelo. Tests primero.
 
 ### Eventos, libro y configuración
 
-- [ ] T003 Ampliar `src/due_diligence/test_eventos_estado.py` (R12, data-model): los seis tipos nuevos
+- [X] T003 Ampliar `src/due_diligence/test_eventos_estado.py` (R12, data-model): los seis tipos nuevos
   (`bloqueo_regla`, `cierre_impedido`, `cierre_sin_escalar`, `fallo_de_hook`,
   `escalamiento_registrado`, `modo_demostracion`) son válidos y uno desconocido sigue rechazándose;
   `Evento` tiene `regla` (`None` por defecto, así los eventos del #6 no cambian) y
   `registrar(tipo, frente=None, detalle="", regla=None)` lo guarda; un evento con `regla="I.1"` lo
   conserva en `eventos()`.
-- [ ] T004 [P] Editar `src/due_diligence/eventos.py`: añadir los seis tipos como constantes y a
+- [X] T004 [P] Editar `src/due_diligence/eventos.py`: añadir los seis tipos como constantes y a
   `TIPOS`, el campo `regla: str | None = None` a `Evento` (dataclass congelada, al final para no
   romper llamadas posicionales) y el parámetro `regla` a `RegistroEventos.registrar`. Hace pasar T003.
-- [ ] T005 Escribir `src/due_diligence/test_libro.py` (data-model, FR-011): un `LibroReglas` nuevo
+- [X] T005 Escribir `src/due_diligence/test_libro.py` (data-model, FR-011): un `LibroReglas` nuevo
   empieza vacío (`consultas_listas`, `coincidencias`, `consultas_riesgo`, `escalamientos` son listas
   vacías, `cierres_impedidos == 0`, `fallo_de_hook is None`); dos libros **no comparten** listas
   (modificar uno no cambia el otro); `ConsultaListas` guarda `tipo` (`comercio` o `persona`),
@@ -113,10 +113,10 @@ sin modelo. Tests primero.
   normalizado>`), `tipo`, `lista`, `fuente` y `fecha`; `ConsultaRiesgo` guarda `categoria` y `nivel`
   (`alto`, `medio`, `bajo` o `None` si la categoría fue desconocida); la copia profunda del libro es
   independiente.
-- [ ] T006 [P] Crear `src/due_diligence/libro.py` con `LibroReglas`, `ConsultaListas`, `Coincidencia`
+- [X] T006 [P] Crear `src/due_diligence/libro.py` con `LibroReglas`, `ConsultaListas`, `Coincidencia`
   y `ConsultaRiesgo` tal como los define `data-model.md`, sin estado de módulo (FR-011). Hace pasar
   T005.
-- [ ] T007 Configuración (FR-007, FR-014, R3, R11): primero ampliar
+- [X] T007 Configuración (FR-007, FR-014, R3, R11): primero ampliar
   `src/due_diligence/test_configuracion.py` con: `MAX_CIERRES_IMPEDIDOS == 3` y es **menor** que
   `MAX_TURNOS_SEGURIDAD`; `modo_demostracion(entorno)` es `True` solo con el valor exacto `"1"` (con
   `"0"`, `"true"`, vacío o ausente es `False`) y con un `entorno` dado lo lee de ahí y con `entorno=None` lee `os.environ` (el patrón de `_modelo`, que necesita Q5);

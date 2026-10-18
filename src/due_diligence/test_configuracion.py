@@ -245,3 +245,39 @@ def test_todas_las_opciones_usan_el_filtro_de_stderr():
         modelo="m", system_prompt="s", permitidas=[], prohibidas=[], mcp_servers={}
     )
     assert opciones.stderr is configuracion.filtrar_stderr
+
+
+# ------------------------------------------------ límite de devoluciones y demo (#7, R3, R11)
+
+
+def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos():
+    assert configuracion.MAX_CIERRES_IMPEDIDOS == 3
+    assert configuracion.MAX_CIERRES_IMPEDIDOS < configuracion.MAX_TURNOS_SEGURIDAD
+
+
+@pytest.mark.parametrize("valor", ["0", "true", "", " ", "11", "si", "yes"])
+def test_el_modo_demostracion_solo_se_activa_con_el_valor_exacto_uno(valor):
+    entorno = {configuracion.VARIABLE_MODO_DEMO: valor}
+    assert configuracion.modo_demostracion(entorno) is False
+
+
+def test_el_modo_demostracion_con_uno_se_activa_y_sin_variable_no():
+    assert configuracion.modo_demostracion({configuracion.VARIABLE_MODO_DEMO: "1"}) is True
+    assert configuracion.modo_demostracion({}) is False
+
+
+def test_el_modo_demostracion_lee_el_entorno_dado_y_con_none_lee_os_environ(monkeypatch):
+    # Con un entorno dado no mira `os.environ`; con `None` sí (el patrón de `_modelo`, R11).
+    monkeypatch.setenv(configuracion.VARIABLE_MODO_DEMO, "1")
+    assert configuracion.modo_demostracion({}) is False
+    assert configuracion.modo_demostracion(None) is True
+    assert configuracion.modo_demostracion() is True
+    monkeypatch.delenv(configuracion.VARIABLE_MODO_DEMO)
+    assert configuracion.modo_demostracion(None) is False
+
+
+def test_la_variable_de_demostracion_no_se_reenvia_al_servidor():
+    assert configuracion.VARIABLE_MODO_DEMO == "PASARELA_MODO_DEMO_HOOKS"
+    assert configuracion.VARIABLE_MODO_DEMO not in configuracion.VARIABLES_PASARELA
+    entorno = {configuracion.VARIABLE_MODO_DEMO: "1"}
+    assert "env" not in configuracion.servidor_pasarela(entorno)

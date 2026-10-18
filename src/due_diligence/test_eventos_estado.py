@@ -14,10 +14,16 @@ from due_diligence.estado import (
     derivar_comercio,
 )
 from due_diligence.eventos import (
+    TIPO_BLOQUEO_REGLA,
     TIPO_CASO_INICIADO,
+    TIPO_CIERRE_IMPEDIDO,
+    TIPO_CIERRE_SIN_ESCALAR,
     TIPO_DELEGACION,
+    TIPO_ESCALAMIENTO_REGISTRADO,
+    TIPO_FALLO_DE_HOOK,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_MODO_DEMOSTRACION,
     TIPO_TERMINACION,
     TIPOS,
     RegistroEventos,
@@ -39,8 +45,40 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "frente_rechazado",
         "frente_invalidado",
         "terminacion",
+        "bloqueo_regla",
+        "cierre_impedido",
+        "cierre_sin_escalar",
+        "fallo_de_hook",
+        "escalamiento_registrado",
+        "modo_demostracion",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS
+
+
+def test_los_tipos_nuevos_de_los_hooks_son_validos():
+    registro = RegistroEventos()
+    for tipo in (
+        TIPO_BLOQUEO_REGLA,
+        TIPO_CIERRE_IMPEDIDO,
+        TIPO_CIERRE_SIN_ESCALAR,
+        TIPO_FALLO_DE_HOOK,
+        TIPO_ESCALAMIENTO_REGISTRADO,
+        TIPO_MODO_DEMOSTRACION,
+    ):
+        assert registro.registrar(tipo).tipo == tipo
+    with pytest.raises(TipoDeEventoInvalido):
+        registro.registrar("bloqueo_inventado")
+
+
+def test_el_evento_lleva_la_regla_y_por_defecto_ninguna():
+    registro = RegistroEventos()
+    sin_regla = registro.registrar(TIPO_DELEGACION, Frente.REGISTRO, "delegado")
+    con_regla = registro.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "motivo", regla="I.1")
+    assert sin_regla.regla is None
+    assert con_regla.regla == "I.1"
+    assert [e.regla for e in registro.eventos()] == [None, "I.1"]
+    # Las llamadas posicionales del #6 siguen valiendo: (secuencia, marca, tipo, frente, detalle).
+    assert sin_regla.detalle == "delegado"
 
 
 def test_la_secuencia_crece_desde_uno():

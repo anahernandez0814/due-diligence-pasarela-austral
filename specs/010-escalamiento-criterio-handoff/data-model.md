@@ -23,7 +23,7 @@ ClaseIdentificacion = unica | varias | ninguna | contradictoria | invalida
 Identificacion(comercio, motivo, con_coincidencias, clase)   # `clase` es nuevo
 ```
 
-`derivar_comercio` devuelve también la clase:
+La clase la da una función hermana pura, `clase_de(resultado) -> ClaseIdentificacion`, en `estado.py` junto a `derivar_comercio`, que sigue devolviendo `(comercio, motivo)` sin cambiar a sus llamadores. `registrar_identificacion` guarda las dos cosas:
 
 | Clase | Cuándo |
 |-------|--------|
@@ -65,6 +65,10 @@ Espera(clase: "identificador" | "nombre" | "categoria", motivo: str)
 | `nombre` | registro `terminado` y clase `ninguna` | «El registro no encontró el comercio: el caso espera que el analista revise el nombre.» |
 | `categoria` | `categoria_bloqueada` y sin `consultas_riesgo` | «La categoría no aparece en los mensajes del analista: el caso espera la categoría.» |
 
+La espera `categoria` vale con cualquier estado del registro, también el caído: el registro caído, por sí solo, no es una espera. Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
+
+Motivos del informe rechazado durante la espera `identificador` o `nombre` (FR-016): `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` y `MOTIVO_INFORME_ESPERA_NOMBRE` (textos en research R3), con la regla `V`.
+
 ## `Causa` del #8 (`estado.py`)
 
 Se añade `OTRO_COMERCIO`, con el motivo de cobertura «se consultó con un nombre o identificador que no es el del comercio identificado» (R7). No es reintentable: hace falta otra entrada.
@@ -79,7 +83,8 @@ Se añade `OTRO_COMERCIO`, con el motivo de cobertura «se consultó con un nomb
 | `escalamiento_cubre(libro, comercio)` | `reglas.py` | ahora filtra por comercio (R8) |
 | `categoria_en_mensajes(categoria, mensajes)` | `reglas.py` | FR-020, R9 |
 | `consulta_del_comercio(argumentos, comercio)` | `reglas.py` | FR-027, R7 |
-| `causas_del_resumen(estado)` | `reglas.py` | FR-009: líneas de la causa |
+| `causas_del_resumen(estado)` | `reglas.py` | FR-009: una línea por causa vigente o, sin causas, una por cada motivo de `MOTIVOS_SIN_CAUSA` que se cumpla (research R5) |
+| `clase_de(resultado)` | `estado.py` | la clase de la identificación (R3) |
 | `evaluar_escalamiento(estado, entrada)` | `reglas.py` | motivos de rechazo de R5 (espera y bajo riesgo) |
 | `evaluar_informe` | `reglas.py` | añade `MOTIVO_DECIDE_SIN_ESCALAR` |
 | `fuentes_consultadas` | `informe.py` | noticias y listas, solo las consultas del comercio (R7) |

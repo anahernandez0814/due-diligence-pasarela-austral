@@ -1,0 +1,483 @@
+---
+
+description: "Lista de tareas del ticket #10, escalamiento con criterio, handoff y ambigüedad"
+---
+
+# Tasks: Escalamiento con criterio, handoff y ambigüedad
+
+**Input**: documentos de diseño en `specs/010-escalamiento-criterio-handoff/`: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/escalar-a-cumplimiento.md](contracts/escalar-a-cumplimiento.md), [contracts/continuacion-y-cierre.md](contracts/continuacion-y-cierre.md) y [quickstart.md](quickstart.md).
+
+**Prerequisites**: plan.md y spec.md (obligatorios); research.md, data-model.md, contracts/ y quickstart.md. Spec en `d49aed0` y plan en `6b4d80e`.
+
+**Tests**: obligatorios (constitución X y FR-023).
+- Van junto a cada módulo (`src/…/test_*.py`) y se escriben antes que el código: deben fallar primero.
+- Ninguno llama al modelo ni a la red (SC-006).
+- Usan `EjecutorSimulado`, `SesionSimulada`, `CoordinadorSimulado` y `PasarelaSimulada` de `simulacion.py`.
+
+**Organization**: dos bloques, cada uno con una parada de revisión de la analista al final (indicación de la analista):
+- **Bloque A, la base**: fundamentos (fases 1 y 2) y, por historias, US3 (esperas y continuación), US4 (qué no es una espera) y US5 (categoría), con FR-027 en la cobertura. Termina en la **parada de revisión A**.
+- **Bloque B, el escalamiento**: US1 (criterio), US2 (resumen al oficial), los casos de extremo a extremo y la línea de comandos. Termina en la **parada de revisión B**.
+- Después, documentación y validación.
+
+Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la espera del identificador es un motivo de rechazo del escalamiento, y FR-027 cambia las fuentes del resumen.
+
+**Alcance de este archivo**: solo tareas que se completan **antes del merge**. La verificación del cierre del #10 la hace el paso 0 del siguiente `/siguiente-ticket`.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: puede ejecutarse en paralelo (archivos distintos, sin dependencias pendientes).
+- **[Story]**: historia de usuario de la spec (US1 a US5).
+- **[MANUAL]**: la hace la analista, en una sesión nueva de Claude Code abierta en la raíz y con el modelo real. Claude se detiene y espera su confirmación.
+- Cada tarea cita su origen: FR-### o SC-### de la spec, R# de [research.md](research.md), D# del [plan](plan.md) o Q# del [quickstart](quickstart.md).
+- Rutas relativas a la raíz del repositorio.
+
+## Reglas para todas las tareas
+
+- **Ningún valor con forma real** (tarjeta, NIT, cédula o credencial) en tareas, tests, código ni documentación.
+  - Solo los datos ficticios del #5: `CO-TV-0001` (caso a), `CO-TA-0002` (caso b), `CO-AM-0004` y `CO-AM-0005` (caso d), N-0001, `CO-PL-0003` y `PE-0003`.
+  - Sin secuencias de 6 o más dígitos seguidos (principio VII).
+- **Todo en español** (FR-022). Los motivos, los eventos, la causa y la cobertura no repiten nombres ni identificadores del comercio ni de personas. Los tests lo comprueban con un nombre ficticio que no debe aparecer en la salida. Solo el resumen guardado lleva los datos del comercio, que son su contenido.
+- **Un solo esquema** (R6): `servidor_mcp.informe.validar_resumen` para el resumen y `validar_informe` para el informe. Comparten los validadores de comercio, afirmaciones, conflictos y cobertura. Los llaman la pasarela, el hook y la `PasarelaSimulada`; ninguno revalida la forma por su cuenta.
+- **Un solo cálculo** de cada cosa: `calcular_cobertura`, `calcular_conflictos`, `huella_actual`, `espera_del_analista` y `bajo_riesgo_sin_hallazgos`.
+- **El escalamiento se confirma en el `PostToolUse`** con lo que dejó pendiente el `PreToolUse` (R8). Nunca se recalculan las causas en el `PostToolUse`.
+- **API de `claude-agent-sdk` 0.2.168**:
+  - `updatedInput` sustituye la entrada entera y se construye solo con `reemplazar_entrada(entrada_completa)`;
+  - las demás salidas, solo con `permitir()`, `denegar(motivo)` y `bloquear_cierre(motivo)`;
+  - la continuación usa `ClaudeAgentOptions.resume` (R1, medido).
+- **Tests del #5 al #9 que cambian** (T046): se adaptan **sin debilitarse**. Cada uno se cambia solo si falla por el diseño del #10, y se anota en la tabla de T046 con su justificación, que va en el PR. Ninguno se borra.
+- **El código no controla el ciclo** (FR-010 del #6): `test_sin_control_propio.py` sigue en verde. Sin `while` en los módulos del ciclo; la pregunta de la línea de comandos tampoco usa `while` (recursión o `for` sobre la entrada, como en `_esperar_si_en_curso`).
+- **No se escribe en el código el nombre del archivo de variables de entorno** (R8 del #6). Ningún test ni comando de estas tareas lo lee.
+- **Commits** por partes lógicas en la rama `010-escalamiento-criterio-handoff`, nunca en `main`, sin `git commit --amend`. **Ningún commit va después de la revisión** de `/abrir-pr`.
+- **Formato**: cada fase de código termina con `uv run ruff format .` y `uv run ruff check .`.
+- **Tests**: la suite completa (`uv run pytest`) en verde al cerrar cada fase.
+- `DECISIONES.md` no se recorta: solo se amplía. **`docs/bitacora-decisiones.md` no se edita en este ticket.**
+
+---
+
+# Bloque A: la base
+
+## Fase 1: Setup
+
+- [ ] T001 Confirmar que la rama es `010-escalamiento-criterio-handoff` y commitear este `tasks.md`. Mensaje convencional en español.
+- [ ] T002 Línea base: `uv run pytest` y `uv run ruff check .` en verde antes de tocar nada. Anotar aquí el número de tests que pasan (referencia para T045): **____**.
+
+---
+
+## Fase 2: Fundamentos (bloquean todas las historias)
+
+**Objetivo**: los datos nuevos del estado, el libro y los eventos, y el `resume` de las opciones, sin cambiar todavía ningún comportamiento.
+
+- [ ] T003 [P] Tests en `src/due_diligence/test_eventos_estado.py` (R2, R3, data-model):
+  - **`EstadoCaso.mensajes`** empieza vacía; `solicitud` es una propiedad: `mensajes[0]`, o `""` sin mensajes. Asignar `estado.solicitud = "x"` sigue funcionando (compatibilidad del #6 al #9) y deja `mensajes == ["x"]`.
+  - **`categoria_bloqueada`** empieza en `False` y `escalamientos_pendientes` vacío.
+  - **`Identificacion.clase`** y **`derivar_comercio`** devuelven la clase, uno por caso: `invalida` (respuesta sin la forma), `ninguna`, `varias`, `contradictoria` (fuentes que difieren en el nombre o el representante) y `unica`.
+  - **`EstadoCaso.clase_identificacion`**: `None` con el registro sin terminar; la clase consolidada igual que `comercio`; `unica` exactamente cuando `comercio` no es `None`.
+  - **`Causa.OTRO_COMERCIO`** existe y su valor es `otro_comercio`.
+  - **Eventos**: existen `TIPO_MENSAJE_ANALISTA` (`mensaje_analista`) y `TIPO_ESPERA_ANALISTA` (`espera_analista`).
+- [ ] T004 Implementar T003:
+  - en `src/due_diligence/estado.py`: `mensajes`, `solicitud` como propiedad con *setter*, `categoria_bloqueada`, `escalamientos_pendientes`, `ClaseIdentificacion`, `Identificacion.clase`, la función hermana pura `clase_de(resultado)`, `clase_identificacion` y `Causa.OTRO_COMERCIO`;
+  - en `src/due_diligence/eventos.py`: los dos tipos.
+
+  `derivar_comercio` sigue devolviendo `(comercio, motivo)` sin cambiar a sus llamadores; `registrar_identificacion` guarda además `clase_de(respuesta)` (data-model).
+- [ ] T005 [P] Tests en `src/due_diligence/test_libro.py` (R8, data-model):
+  - `Escalamiento(causas, comercio)` es inmutable;
+  - `LibroReglas.escalamientos` es `list[Escalamiento]`;
+  - `comercio` es la tupla `(identificador, nombre, verificado)` o `None`.
+- [ ] T006 Implementar T005 en `src/due_diligence/libro.py`. Adaptar a `Escalamiento` los usos de `libro.escalamientos` en `reglas.py` y `hooks.py`, sin cambiar todavía su lógica: `escalamiento_cubre` compara `causas <= e.causas` para todos. Los tests del #7 al #9 que construyen `frozenset` directamente se adaptan en T046.
+- [ ] T007 [P] Tests en `src/due_diligence/test_configuracion.py` (R1):
+  - `opciones_base(..., resume="s-1")` deja `options.resume == "s-1"`;
+  - sin `resume`, es `None`;
+  - `opciones_coordinador` lo acepta y lo pasa;
+  - `opciones_subagente` **no** lo acepta: los subagentes no reanudan.
+- [ ] T008 Implementar T007 en `src/due_diligence/configuracion.py`.
+- [ ] T009 Fase 2: ruff, la suite completa y los tests de T046 adaptados. Commit «fundamentos del #10: mensajes, clase de la identificación, escalamientos con comercio y resume».
+
+---
+
+## Fase 3: US3, esperas del analista y continuación del caso (P1)
+
+**Objetivo**: con varias coincidencias o ninguna, el turno termina sin escalar ni informar; el caso continúa con otro mensaje en el mismo estado, y la nueva consulta del registro identifica al comercio.
+
+**Prueba independiente**:
+- **Turno 1**: con los dos comercios de nombre casi idéntico, el `Stop` deja terminar con `espera_analista`, sin consultas de listas, escalamiento ni informe.
+- **Turno 2**: `Caso.continuar` con el identificador consulta el registro, identifica, delega listas y termina con el cierre de siempre.
+
+- [ ] T010 [P] [US3] Tests en `src/due_diligence/test_reglas.py` (R3, data-model `Espera`):
+  - **`espera_del_analista`**:
+    - registro `terminado` y clase `varias` → `Espera("identificador", <motivo fijo>)`;
+    - clase `ninguna` → `Espera("nombre", …)`;
+    - clase `contradictoria`, `unica` o `invalida` → `None` (decisión de la analista, D3 del #9 no es espera);
+    - registro sin delegar, en curso, rechazado o caído → `None`.
+  - **Espera de categoría** (la condición se prueba aquí, el bloqueo en T020): `categoria_bloqueada = True` y `libro.consultas_riesgo` vacía → `Espera("categoria", …)`, también con el comercio identificado **y con el registro caído** (el registro caído, por sí solo, no es espera). Con una `ConsultaRiesgo` registrada (conocida o desconocida) → `None`.
+  - **Prioridad**: con `varias` y la categoría bloqueada a la vez, la espera es `identificador`.
+  - **Textos fijos**: los motivos no contienen ningún identificador de las coincidencias (`CO-AM-0004`, `CO-AM-0005`).
+  - **`_motivo_sin_comercio`** lee la clase, no subcadenas del motivo: con un motivo cuyo texto se cambió y la clase `varias`, sigue devolviendo `MOTIVO_VARIAS_COINCIDENCIAS`.
+- [ ] T011 [US3] Implementar T010 en `src/due_diligence/reglas.py`: `Espera`, los tres motivos fijos de data-model, `espera_del_analista` y `_motivo_sin_comercio` por clase.
+- [ ] T012 [P] [US3] Tests en `src/due_diligence/test_hooks.py`, para el `Stop` con esperas (R3, contrato `continuacion-y-cierre.md`):
+  - **Espera del identificador**: con el registro en `varias`, una categoría de alto riesgo y sin escalar, `_cierre` devuelve `permitir()`, deja un evento `espera_analista` con el motivo, **no** incrementa `cierres_impedidos` y no marca `cierre_sin_escalar` ni `cierre_sin_informe`.
+  - **Espera del nombre**: lo mismo con `ninguna`.
+  - **D3 del #9 no es espera**: con la clase `contradictoria` y alto riesgo, el `Stop` exige el escalamiento como en el #9.
+  - **Con el sello**: la espera se sigue admitiendo.
+  - **Un fallo del propio cálculo de la espera** (parchear `espera_del_analista` para que lance): `fallar_cerrado` bloquea como en el #9; no deja pasar.
+  - **El informe durante la espera** (FR-016, R3; movido aquí desde T041 por el hallazgo I1):
+    - con la espera `identificador`, `_informe_previo` deniega con `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` dentro de `informe_rechazado`, con la regla `V`, aunque el comercio pedido exista y el informe sea válido en forma;
+    - con la espera `nombre`, lo mismo con `MOTIVO_INFORME_ESPERA_NOMBRE`;
+    - con la espera `categoria`, el informe sigue las reglas de siempre (se acepta `no_habilitar`);
+    - con el sello y la espera `identificador`, el informe mínimo sigue exigiendo escalar antes, como en el #9.
+
+    Es un cambio de comportamiento respecto al #9, que va a la tabla de T046.
+- [ ] T013 [US3] Implementar T012 en `src/due_diligence/hooks.py` (`_cierre` mira `espera_del_analista` antes que `evaluar_cierre`; `_informe_previo` añade el rechazo de la espera) y en `src/due_diligence/reglas.py` (`MOTIVO_INFORME_ESPERA_IDENTIFICADOR` y `MOTIVO_INFORME_ESPERA_NOMBRE`, con los textos de research R3).
+- [ ] T018 [P] [US3] Simulación por turnos en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py` (R12):
+  - `CoordinadorSimulado(guiones=[[…], […]])` consume un guion por llamada; `guion=[…]` sigue valiendo como un solo turno;
+  - lee `options.resume` y lo deja en `self.reanudaciones`;
+  - su `ResultMessage` lleva un `session_id` estable (`mensaje_de_resultado(session_id=…)`).
+- [ ] T014 [P] [US3] Tests en `src/due_diligence/test_coordinador.py` (R1, R2, R4, contrato):
+  - **`ejecutar` y `continuar`**: `ejecutar(solicitud)` añade el mensaje y deja `mensaje_analista` («Mensaje 1 del analista.», sin repetir el texto). `continuar(mensaje)` lanza la consulta con `options.resume` igual al `session_id` del último `ResultMessage`, con el **mismo** `HooksDelCaso`, el mismo `Delegador` y el mismo `EstadoCaso`.
+  - **Sin sesión**: sin `session_id` previo, `continuar` lanza `CasoSinSesion` con un mensaje en español, sin llamar a la consulta.
+  - **Clasificación por turno**: `turnos_del_caso` tiene una `Clasificacion` por turno y `terminacion` es la del último.
+  - **`caso.espera`** es la espera del último fin de turno, y `Caso.completo` es falso con espera (FR-018).
+  - **Cierre por turno** (R4): al empezar cada turno, `cierres_impedidos` vale 0, y `cierre_sin_escalar` y `cierre_sin_informe` valen `False`.
+  - **Test R4 (a)**: el turno 1 agota las devoluciones sin informe (`cierre_sin_informe`). El turno 2 registra el informe vigente. Resultado: `completo` es verdadero y no queda ninguna marca.
+  - **Test R4 (b)**: el turno 1 agota las devoluciones. El turno 2 termina sin hacer nada. Resultado: la marca vuelve a quedar puesta y `completo` es falso.
+
+  Los dos tests de R4 usan el `CoordinadorSimulado` de T018.
+- [ ] T015 [US3] Implementar T014 en `src/due_diligence/coordinador.py`:
+  - `Caso.continuar`, `CasoSinSesion`, `session_id` del último `ResultMessage`;
+  - `turnos_del_caso`, `espera`, el reinicio por turno y `completo` con la espera.
+
+  `ejecutar` y `continuar` comparten un método privado que lanza el turno; no se duplica el bucle de mensajes.
+- [ ] T016 [P] [US3] Tests en `src/due_diligence/test_delegacion.py` y `test_hooks_sesiones.py` (FR-017):
+  - el registro delegado primero con «Almacén Mirador SAS» (dos coincidencias) y después con `CO-AM-0005` deja `estado.comercio` igual a `CO-AM-0005`;
+  - `clase_identificacion` es `unica` y la delegación de listas se permite;
+  - la identificación ambigua anterior no impide la nueva: la reinicia `_ejecutar` del registro, como desde el #7. El test lo fija con una `SesionSimulada` que ejecuta el hook del registro.
+- [ ] T017 [US3] Si T016 falla, corregir en `src/due_diligence/delegacion.py` o `estado.py` la consolidación, sin tocar I.1. Si pasa sin cambios, anotarlo aquí.
+- [ ] T019 [US3] Fase 3: ruff, la suite completa y los tests de T046 adaptados. Commit «esperas del analista y continuación del caso (#10, US3)».
+
+---
+
+## Fase 4: US5, la categoría de los mensajes del analista (P2)
+
+**Objetivo**: la categoría delegada tiene que aparecer en un mensaje del analista; si no, se bloquea con I.3 y el caso puede esperar al analista.
+
+**Prueba independiente**: con la solicitud del ejemplo, «suplementos dietarios» se permite y «ropa y accesorios» se bloquea. Con la categoría en un segundo mensaje, se permite (US5).
+
+- [ ] T020 [P] [US5] Tests en `src/due_diligence/test_reglas.py` y `test_hooks.py` (R9, FR-020):
+  - **`categoria_en_mensajes`**:
+    - «suplementos dietarios» está en la solicitud del ejemplo del enunciado;
+    - «Suplementos  Dietarios» (mayúsculas y doble espacio) cuenta como la misma;
+    - «ropa» no está en «tropa» (límites de palabra);
+    - «suplementos dietarios» no está en un mensaje con «suplemento dietario»: riesgo declarado, US5-5;
+    - sin mensajes → `False`.
+  - **`_delegar_previo` con el frente de categoría**:
+    - una categoría que no aparece se deniega con `MOTIVO_CATEGORIA_NO_DEL_ANALISTA`, la regla `I.3` y la acción `delegar_frente categoria`, y marca `categoria_bloqueada`;
+    - una que aparece se permite y deja `categoria_bloqueada = False`;
+    - una entrada sin categoría se deja pasar (la rechaza el `Delegador`);
+    - con el sello, se sigue evaluando por la categoría, no por el sello.
+  - **El motivo** no repite la categoría pedida ni datos del comercio.
+  - **Espera de categoría de extremo a extremo** (US4-4): el comercio identificado, la categoría bloqueada sin resultado y el `Stop` → espera `categoria`. Si en el turno siguiente el analista da la categoría y se consulta, el `Stop` exige el cierre de siempre.
+- [ ] T021 [US5] Implementar T020 en `src/due_diligence/reglas.py` (`categoria_en_mensajes`, el motivo) y en `src/due_diligence/hooks.py` (`_delegar_previo`). En `src/due_diligence/delegacion.py`, la descripción de `delegar_frente` añade que la categoría tiene que ser la que dio el analista. El test de la descripción lo comprueba.
+- [ ] T022 [US5] Fase 4: ruff, la suite y los tests de T046. Commit «categoría de los mensajes del analista (#10, US5)».
+
+---
+
+## Fase 5: US4, qué no es una espera, y FR-027 en la cobertura (P2)
+
+**Objetivo**: con el comercio identificado, una pregunta no es una espera. Además, noticias consultado con otro nombre deja de contar como cubierto, y sus fuentes dejan de valer.
+
+**Prueba independiente**:
+- El recorrido de SC-004 da espera exactamente en tres situaciones.
+- En el caso (d), elegir `CO-AM-0005` deja noticias no cubierto; elegir `CO-AM-0004` lo conserva.
+
+- [ ] T023 [P] [US4] Test del recorrido de SC-004 en `src/due_diligence/test_reglas.py`:
+  - parametrizado con los 6 estados del registro (sin delegar, en curso, varias, ninguna, identificado y caído), por los 3 de la categoría (con resultado, sin delegar, bloqueada sin resultado), con y sin causas de escalamiento (36 casos);
+  - `espera_del_analista` no es `None` exactamente cuando el registro está en `varias` o `ninguna`, o la categoría está bloqueada sin resultado.
+  - Entre los 36, **el registro caído con la categoría bloqueada sin resultado** da la espera `categoria`, y el registro caído con la categoría con resultado o sin delegar da `None` (hallazgo A1).
+
+  Un test aparte, con la clase `contradictoria`, da `None`; con `contradictoria` y la categoría bloqueada, da `categoria`.
+- [ ] T024 [US4] **Cambiar a sabiendas** el test del #9 `test_limitacion_conocida_el_stop_exige_el_informe_aunque_el_turno_sea_una_pregunta` en `src/due_diligence/test_hooks.py` (FR-015). No se borra:
+  - **se conserva con otro nombre y otro comentario** (US4-1): con el comercio identificado y sin una categoría bloqueada, una pregunta sigue bloqueándose con `MOTIVO_SIN_INFORME`. Ya no es una limitación sino lo especificado, y la aserción no cambia;
+  - **se añade** el test de la espera de categoría: con la categoría bloqueada sin resultado, el `Stop` admite la espera (US4-4).
+
+  Anotarlo en la tabla de T046.
+- [ ] T025 [P] [US4] Tests en `src/due_diligence/test_reglas.py`, `test_cobertura.py` y `test_informe.py` (R7, FR-027):
+  - **`consulta_del_comercio`**: coincide por `identificador` (`igual_identificador`) o por `nombre` (`igual`); no coincide con otro nombre ni con una entrada malformada.
+  - **Cobertura de noticias**, con noticias `terminado` y consultado con «Almacén Mirador SAS»:
+    - con el comercio identificado como `CO-AM-0005` (nombre «Almacén Mirador Norte SAS"), noticias **no** está cubierto, con la causa `otro_comercio` y el motivo fijo de data-model;
+    - con `CO-AM-0004` («Almacén Mirador SAS»), **sí** está cubierto;
+    - sin comercio identificado, sí está cubierto.
+  - **La huella cambia** al pasar de un caso a otro: el informe anterior deja de estar vigente.
+  - **`fuentes_consultadas`**:
+    - con el comercio `CO-AM-0005`, la fuente de noticias de la consulta con el otro nombre **no** cuenta;
+    - una afirmación de noticias que la cita da `FUENTE_NO_CONSULTADA`;
+    - en listas, una consulta del representante sí cuenta;
+    - una del comercio anterior, no;
+    - categoría y registro no cambian.
+- [ ] T026 [US4] Implementar T025:
+  - `consulta_del_comercio` en `src/due_diligence/reglas.py`;
+  - noticias de otro comercio en `src/due_diligence/cobertura.py` (`_MOTIVOS[Causa.OTRO_COMERCIO]`);
+  - las fuentes por comercio en `src/due_diligence/informe.py`.
+
+  La cobertura sigue siendo pura.
+- [ ] T027 [P] [US4] Instrucciones (R11, FR-028) en `src/due_diligence/test_coordinador.py` y `test_modo_demo.py`:
+  - **`_REGLA_TRAS_IDENTIFICAR`** está en las instrucciones normales **y** en las del modo de demostración. Dice que el rechazo de listas por falta de identificación deja de valer cuando el comercio queda identificado, aunque dijera `reintentable false`, y que noticias se vuelve a delegar si se consultó con otro nombre.
+  - **`_REGLA_VARIAS_COINCIDENCIAS` ampliada** («termina tu turno sin escalar ni registrar el informe; cuando responda, sigue en el mismo caso»): solo en el modo normal.
+- [ ] T028 [US4] Implementar T027 en `src/due_diligence/coordinador.py`.
+- [ ] T029 [US4] Fase 5: ruff, la suite y los tests de T046. Commit «FR-027 en la cobertura y esperas que no lo son (#10, US4)». **PARADA DE REVISIÓN A**:
+  - Claude se detiene y resume a la analista lo hecho en el bloque A (esperas, `Caso.continuar`, cierre por turno, FR-027 y la categoría), con los tests de R4 y del recorrido de SC-004;
+  - no sigue con el bloque B hasta su visto bueno.
+
+---
+
+# Bloque B: el escalamiento
+
+## Fase 6: US2, el resumen al oficial (P1)
+
+**Objetivo**: `escalar_a_cumplimiento` con el esquema de afirmaciones, validado en la pasarela y en el hook, y con el comercio, la cobertura, la causa y los conflictos del código.
+
+**Prueba independiente**: un resumen al que le falta cada uno de los cinco campos se rechaza nombrando lo que falta; uno completo se guarda con lo del código (SC-002).
+
+- [ ] T030 [P] [US2] Tests en `src/servidor_mcp/test_informe.py` (R6, data-model):
+  - **`validar_resumen`** devuelve **todos** los problemas con su ruta: comercio (como el informe), hallazgos (afirmaciones), cobertura, `causa_escalamiento` (texto o lista de textos no vacíos), `accion_recomendada` (texto no vacío) y conflictos.
+  - **Campos que faltan**: con varios a la vez, los nombra todos, en el orden `comercio`, `hallazgos`, `cobertura`, `causa_escalamiento`, `accion_recomendada`, `conflictos`.
+  - **El mensaje** de `mensaje_resumen` no repite valores recibidos.
+  - **`COMERCIO_NO_IDENTIFICADO`** (`{"identificador": "no identificado", "nombre": "no identificado", "verificado": false}`) **pasa** la validación (D2).
+- [ ] T031 [US2] Implementar T030 en `src/servidor_mcp/informe.py`, reutilizando `_comercio`, `_hallazgos`, `_conflictos` y `_cobertura`. `COMERCIO_NO_IDENTIFICADO` vive aquí y lo importa el hook.
+- [ ] T032 [P] [US2] Tests en `src/servidor_mcp/test_decisiones.py` y `test_servidor.py` (contrato, Q6):
+  - **Sin campos**: `campos_obligatorios_ausentes` con los seis en `campos_faltantes`.
+  - **Afirmación mal formada**: `entrada_invalida` con `problemas`.
+  - **Forma vieja** `{contenido, fuente}`: `entrada_invalida`.
+  - **Completo**: `caso_escalado`, el documento guardado con `conflictos`, `causa_escalamiento` y `registrado_en` en UTC.
+  - **Por el protocolo**, los mismos tres casos.
+  - **La descripción** de `escalar_a_cumplimiento` dice qué pone el sistema (comercio, cobertura, causa y conflictos) y qué no hace: no comprueba fuentes ni decide si corresponde escalar (constitución IV).
+- [ ] T033 [US2] Implementar T032 en `src/servidor_mcp/decisiones.py` (sin `_validar` ni `_REQUERIDOS_ESCALAMIENTO` viejo) y `src/servidor_mcp/servidor.py`. Actualizar `src/servidor_mcp/CLAUDE.md` si menciona la forma vieja.
+- [ ] T034 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el `PreToolUse` del escalamiento: forma, fuentes y sustitución (R5 pasos 4 y 5, R8, FR-021):
+  - **Un resumen con un problema** de forma, una fuente no consultada o un frente cubierto sin afirmación se deniega con el JSON `resumen_rechazado` (`tipo`, `motivos`, `problemas`). Deja `bloqueo_regla` con la regla `I.4` y la acción `escalar_a_cumplimiento`.
+  - **Uno válido** devuelve `reemplazar_entrada` con el comercio, la cobertura (`lineas()`), la causa (`causas_del_resumen`) y los conflictos (`como_entrada()`) del código, y con los hallazgos y la acción recomendada tal cual.
+    - Deja `cobertura_sustituida` y `datos_sustituidos`.
+    - Deja un `Escalamiento` pendiente por `tool_use_id`.
+  - **Sin causas** (FR-003, hallazgo U1): la causa lleva una línea fija por cada motivo de `MOTIVOS_SIN_CAUSA` que se cumple, en su orden (research R5). Un test parametrizado prueba cada motivo solo: cobertura incompleta, categoría no determinada, mención en noticias y conflicto entre fuentes. Otro prueba dos a la vez, con las dos líneas en orden. Ninguna línea repite datos del comercio.
+  - **D2**: sin comercio identificado ni pedido, deniega con `MOTIVO_SIN_COMERCIO_ESCALAMIENTO`, que pide delegar el registro.
+  - **`PostToolUse`**: con `caso_escalado`, añade el `Escalamiento` pendiente a `libro.escalamientos` y deja `escalamiento_registrado` con el id, las causas, el resumen de la cobertura y el número de afirmaciones, sin datos del comercio. Con otra respuesta, lo descarta.
+  - **`PostToolUseFailure`**: descarta lo pendiente y deja `consulta_fallida`.
+  - **Causas pendientes**: las del `PreToolUse`, no las del momento del `PostToolUse`. Una causa nueva entre los dos hooks queda sin cubrir.
+- [ ] T035 [US2] Implementar T034 en `src/due_diligence/hooks.py` y `src/due_diligence/reglas.py`:
+  - `_escalar_previo` (pasos 4 y 5 de R5), `_escalar_posterior` y `_escalar_fallido`;
+  - `causas_del_resumen` y `MOTIVOS_SIN_CAUSA`;
+  - `denegar_decision(tipo, …)`, que también usa el informe, en lugar de `denegar_informe`.
+
+  El JSON del informe no cambia; lo comprueban los tests del #9.
+- [ ] T036 [P] [US2] Tests en `src/due_diligence/test_hooks.py` para el sello y los fallos (R5 paso 1, FR-012, D2):
+  - **Con el sello**, el escalamiento pasa sin validar fuentes ni reglas, con la cobertura `COBERTURA_NO_CALCULADA`, los conflictos `no_calculados()` y la causa con «fallo de un hook de verificación»:
+    - con el comercio identificado, va ese comercio;
+    - sin identificado pero con el pedido, el pedido `verificado: false`;
+    - **sin ninguno de los dos, `COMERCIO_NO_IDENTIFICADO`**, y la entrada resultante pasa `validar_resumen` (test del comercio fijo, D2).
+  - **Con el sello durante la espera del identificador**, se admite (excepción de FR-016) y después se admite el informe mínimo del #9.
+  - **Una excepción** calculando cualquier parte: `degradar_escalamiento` deja pasar con los mismos textos fijos (y `COMERCIO_NO_IDENTIFICADO` si no se pudo calcular el comercio), sella el caso y no deniega. La entrada pasa `validar_resumen`.
+- [ ] T037 [US2] Implementar T036 en `src/due_diligence/hooks.py` (`_escalar_previo` paso 1 y `degradar_escalamiento`).
+- [ ] T038 [US2] Fase 6: ruff, la suite y los tests de T046. Commit «resumen al oficial con esquema y datos del código (#10, US2)».
+
+---
+
+## Fase 7: US1, escalamiento con criterio (P1)
+
+**Objetivo**: el escalamiento se deniega con un bajo riesgo sin hallazgos comprobado y durante la espera del identificador o del nombre; `decide_cumplimiento` exige un escalamiento vigente para el comercio actual.
+
+**Prueba independiente**: el caso (b) no se puede escalar y termina con `habilitar`. El (a) termina escalado con `decide_cumplimiento`. `decide_cumplimiento` sin escalar se rechaza (SC-001).
+
+- [ ] T039 [P] [US1] Tests en `src/due_diligence/test_reglas.py` (R5 paso 3, R8, FR-001 a FR-005):
+  - **`bajo_riesgo_sin_hallazgos`** es cierto solo con todo esto a la vez:
+    - la cobertura completa (con FR-027);
+    - sin coincidencias;
+    - la categoría determinada y no alta;
+    - la consulta de noticias del comercio con `sin_coincidencias`;
+    - los conflictos `sin_conflictos`;
+    - sin sello.
+  - **Cada condición por separado** lo hace falso, en un test parametrizado: una mención en noticias (US1-7), un conflicto (US1-8), noticias caído, la categoría desconocida, el registro caído, una coincidencia, el alto riesgo y el sello.
+  - **`escalamiento_cubre`** solo cuenta los escalamientos del comercio actual: uno de `CO-AM-0004` no cubre a `CO-AM-0005` aunque las causas coincidan.
+  - **`escalado_para_el_comercio`** es cierto con un escalamiento del comercio actual, aunque no haya causas.
+  - **`evaluar_informe`**:
+    - con `decide_cumplimiento` y sin escalamiento del comercio actual, rechaza con `MOTIVO_DECIDE_SIN_ESCALAR` (US1-6);
+    - con un escalamiento del comercio anterior, también rechaza;
+    - con uno del actual, acepta;
+    - `habilitar` y `no_habilitar` no cambian.
+  - **`evaluar_escalamiento`** devuelve los rechazos:
+    - en la espera del identificador o del nombre, `MOTIVO_ESPERA_IDENTIFICADOR` o `MOTIVO_ESPERA_NOMBRE` con la regla `V`;
+    - con `bajo_riesgo_sin_hallazgos`, `MOTIVO_SIN_CAUSA` con la regla `V`;
+    - en la espera de la categoría, ninguno.
+- [ ] T040 [US1] Implementar T039 en `src/due_diligence/reglas.py`. Con el sello, `evaluar_informe_minimo` no cambia: el sello ya es causa.
+- [ ] T041 [P] [US1] Tests en `src/due_diligence/test_hooks.py` (R5 pasos 2 y 3, FR-016):
+  - **`_escalar_previo`** deniega con los motivos de `evaluar_escalamiento` y deja `bloqueo_regla` con la regla `V` y la acción `escalar_a_cumplimiento`;
+  - **el orden de R5**: el sello va antes que la espera, la espera antes que el bajo riesgo y el bajo riesgo antes que la forma;
+  - **D3**: con alto riesgo y la espera del identificador o del nombre, el escalamiento se rechaza (sin sello) y se admite (con sello).
+
+  El rechazo del informe durante la espera ya está en T012 y T013 (hallazgo I1).
+- [ ] T042 [US1] Implementar T041 en `src/due_diligence/hooks.py` (`_escalar_previo` pasos 2 y 3).
+- [ ] T043 [US1] Instrucciones (R11) en `src/due_diligence/coordinador.py`, con sus tests en `test_coordinador.py` y `test_modo_demo.py`:
+  - **`_REGLA_ESCALAR`** añade «No escales un comercio de bajo riesgo sin ningún hallazgo»; la quita el modo de demostración;
+  - **`_REGLA_RESUMEN_OFICIAL`** va en los dos modos: hallazgos como afirmaciones, acción recomendada para el oficial, y lo que pone el sistema.
+
+---
+
+## Fase 8: casos de extremo a extremo, línea de comandos y presupuesto
+
+**Objetivo**: los casos (a), (b) y (d) de extremo a extremo, la línea de comandos con la continuación y el presupuesto de turnos.
+
+- [ ] T044 [P] Simulación (R12) en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py`:
+  - `resumen_del_caso(estado, accion)`, el par de `informe_del_caso`: una afirmación por consulta válida **del comercio** (R7);
+  - `("escalar",)` arma un resumen válido y `("escalar_con", entrada)` envía la entrada tal cual;
+  - `PasarelaSimulada._escalar` valida con `validar_resumen`;
+  - `_noticias` devuelve N-0001 (con su fuente y fecha ficticias) para `CO-AM-0005` o «Almacén Mirador Norte SAS» y `sin_coincidencias` para lo demás.
+- [ ] T045 Casos de extremo a extremo en `src/due_diligence/test_casos_escalamiento.py` (nuevo; FR-023, SC-001, SC-003), con el `CoordinadorSimulado` y la `PasarelaSimulada`:
+  - **(a)** `CO-TV-0001` con «suplementos dietarios»: escalado con la causa «categoría de alto riesgo», informe `decide_cumplimiento` vigente y `escalamiento_registrado` antes de `informe_registrado`.
+  - **(b)** `CO-TA-0002` con «tecnología y software»:
+    - el guion intenta escalar, y se rechaza con `MOTIVO_SIN_CAUSA`;
+    - después registra `habilitar`;
+    - 0 escalamientos en la pasarela y `completo` verdadero.
+  - **(d) en dos turnos** («Almacén Mirador SAS», «ropa y accesorios»):
+    - **turno 1**: registro, noticias y categoría juntos; el guion intenta listas (bloqueado) y termina con `espera_analista`; 0 consultas de listas, 0 escalamientos y 0 informes;
+    - **turno 2**, `continuar("CO-AM-0005")`: registro con el identificador, noticias de nuevo (aparece N-0001), listas del comercio y del representante e informe vigente;
+    - `reanudaciones` con el `session_id` del turno 1.
+  - **(d) con alto riesgo** («suplementos dietarios»): el turno 1 termina igual, sin escalar; en el turno 2 el `Stop` exige el escalamiento y el guion lo hace antes del informe.
+  - **(d) eligiendo `CO-AM-0004`**: noticias se conserva cubierto sin volver a delegar.
+  - **FR-027 de extremo a extremo**: en el turno 2, con `CO-AM-0005`, un informe que cita la consulta de noticias del turno 1 se rechaza por I.4.
+  - **Ninguna salida** (eventos, motivos y cobertura) contiene «Almacén Mirador Norte SAS» ni `PE-0005`.
+- [ ] T046 **Tests del #5 al #9 que cambian**, una tarea continua desde la fase 2 que se cierra aquí. Tabla con cada test, por qué cambia y cómo se adapta sin debilitarse (igualdades exactas):
+
+  | Test | Por qué cambia | Cómo se adapta |
+  |------|----------------|----------------|
+  | **Cambio de comportamiento respecto al #9** (FR-016, hallazgo I1): antes se aceptaba el informe con el comercio pedido (`verificado: false`) ante varias coincidencias; ahora se rechaza. Los tests del #9 que lo fijaran se adaptan con el motivo nuevo (T012). | FR-016 | Igualdad exacta con `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` o `MOTIVO_INFORME_ESPERA_NOMBRE` en `motivos`. |
+  | (el resto se rellena al implementar) | | |
+
+  Se esperan, como mínimo:
+  - los de `escalar_a_cumplimiento` con la forma vieja: `test_decisiones.py`, `test_servidor.py`, `test_hooks.py`, `test_casos_reglas.py`, `test_casos_cobertura.py`, `test_casos_informe.py` y `test_sesion_simulada.py`;
+  - los que construyen `libro.escalamientos` con `frozenset`: `test_reglas.py`, `test_libro.py` y `test_hooks*.py`;
+  - los de `decide_cumplimiento` sin escalar;
+  - el presupuesto de 19 a 21 en `test_configuracion.py`;
+  - la limitación del #9 (T024);
+  - las instrucciones en `test_coordinador.py` y `test_modo_demo.py`.
+- [ ] T047 Presupuesto (R10) en `src/due_diligence/configuracion.py`: `PASOS_FIJOS_PEOR_CASO = 10`, con el comentario de las dos filas nuevas (escalamiento rechazado y corregido, y noticias de nuevo). El test parametrizado de `test_configuracion.py` pasa a `(1, 3, 21), (0, 0, 10), (3, 5, 39), (2, 3, 29)`, y el del valor actual, a `== 21  # 19 hasta el #9`. El comentario dice que el presupuesto es por turno (R1, medido).
+- [ ] T048 [P] Línea de comandos (R12, FR-019, contrato) en `src/due_diligence/__main__.py`, con sus tests en `test_main.py`:
+  - imprime «Esperando al analista: <motivo>» o «Sin espera del analista», y los escalamientos registrados con su id y sus causas (etiquetas fijas);
+  - con espera y sin `--sin-continuar`, pregunta por la entrada estándar; con un texto, llama a `caso.continuar` y vuelve a imprimir; con una línea vacía o fin de entrada, termina;
+  - con `--sin-continuar`, no pregunta;
+  - los tests inyectan la entrada (función `leer`) y no usan la consola real.
+- [ ] T049 [P] Sondeo repetible en `src/due_diligence/sondeo_hooks.py`, con sus tests en `test_sondeo_hooks.py`:
+  - g5 (`ENTRADA_ESCALAMIENTO`) pasa al formato nuevo (afirmaciones, `accion_recomendada` y `conflictos`);
+  - se añade g6, `resume`: dos `query()` con Haiku. La segunda reanuda la primera, ejecuta su `Stop` y `num_turns` es del turno. Es la medición de R1, repetible.
+- [ ] T050 Fase 8: ruff, la suite completa y la tabla de T046 cerrada. Commit «casos (a), (b) y (d), línea de comandos y presupuesto (#10)». **PARADA DE REVISIÓN B**:
+  - Claude se detiene y resume a la analista el bloque B (escalamiento con criterio, resumen al oficial, casos de extremo a extremo y línea de comandos), con la tabla de T046;
+  - no sigue hasta su visto bueno.
+
+---
+
+## Fase 9: documentación
+
+- [ ] T051 [P] `DECISIONES.md`, que solo se amplía (decisión 13 del plan):
+  - el escalamiento que se puede denegar, como cambio respecto al #8;
+  - `decide_cumplimiento` con escalamiento;
+  - las tres esperas y D3 del #9 fuera de ellas;
+  - la categoría de los mensajes, con sus riesgos;
+  - FR-027;
+  - el cierre por turno;
+  - D1, D2 y D3;
+  - el rechazo del informe durante la espera (cambio respecto al #9).
+  - D1 y D2.
+- [ ] T052 [P] `README.md`: la continuación del caso en la línea de comandos (`--sin-continuar`) y el resumen al oficial.
+- [ ] T053 Fase 9: commit «documentación del #10».
+
+---
+
+## Fase 10: validación
+
+- [ ] T054 Q1 y Q2 del quickstart: ruff, la suite completa y `test_casos_escalamiento.py` en verde. Anotar aquí el número de tests (frente al de T002): **____**.
+- [ ] T055 [MANUAL] Q3, caso (a) con el modelo real (Opus 5.5, ≈ 0,15 a 0,30 USD). Anotar:
+  - `escalamiento_registrado` y su causa;
+  - el informe `decide_cumplimiento` vigente;
+  - si hubo `resumen_rechazado` y si el coordinador lo corrigió;
+  - el archivo `ESC-….json`;
+  - turnos, coste y duración.
+
+  **SC-005**: la analista lee solo ese archivo y responde las cinco preguntas de US2-6.
+- [ ] T056 [MANUAL] Q4, caso (b) con el modelo real. Anotar:
+  - 0 escalamientos;
+  - `habilitar` vigente;
+  - «Caso completo: sí»;
+  - si el modelo intentó escalar (`bloqueo_regla [V]`).
+- [ ] T057 [MANUAL] Q5, caso (d) en dos turnos con el modelo real. Anotar (FR-024):
+  - turno 1: que se pidió el identificador, la espera y 0 consultas de listas;
+  - turno 2 (`CO-AM-0005`): que **se consultaron listas**, que se volvió a delegar noticias (N-0001) y el informe vigente;
+  - turnos de cada consulta frente al presupuesto de 21, y coste.
+- [ ] T058 [MANUAL] Sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`, con g5 en el formato nuevo y g6 (`resume`).
+- [ ] T059 Commitear las anotaciones de T054 a T058 en este archivo. **Ningún commit después de la revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de T046 y las desviaciones D1, D2 y D3 del plan.
+
+---
+
+## Dependencias y orden de ejecución
+
+- **Fase 1** (T001, T002) → **Fase 2**: T003 → T004; T005 → T006; T007 → T008, independientes entre sí; T009 al final.
+- **US3 (fase 3)**: T010 → T011; T012 → T013 (necesita T011); T018 antes de T014 → T015; T016 → T017; T019. Necesita la fase 2.
+- **US5 (fase 4)**: T020 → T021 → T022. Necesita T011 (la espera de categoría) y T015 (los mensajes del caso).
+- **US4 (fase 5)**: T023 y T024 (necesitan T013 y T021); T025 → T026; T027 → T028; T029. **Parada A.**
+- **US2 (fase 6)**: T030 → T031 → T032 → T033 (la pasarela, en serie); T034 → T035; T036 → T037; T038. Necesita la parada A (fuentes de R7 y esperas).
+- **US1 (fase 7)**: T039 → T040 → T041 → T042; T043. Necesita T035 (`_escalar_previo`).
+- **T046**: continua, de la fase 2 a la 8; se cierra en T050.
+- **Fase 8**: T044 → T045; T047, T048 y T049 en paralelo; T050. **Parada B.**
+- **Fase 9**: T051 y T052 en paralelo → T053.
+- **Fase 10**: T054 → T055 a T058 (manuales, pueden ir juntas) → T059.
+
+## Oportunidades de paralelismo
+
+- **Fase 2**: T003, T005 y T007 tocan archivos distintos.
+- **Fase 3**: T010 (`test_reglas.py`), T014 (`test_coordinador.py`), T016 (`test_delegacion.py`) y T018 (`simulacion.py`).
+- **Fase 6**: T030 y T034 (pasarela y hook, archivos distintos).
+- **Fase 8**: T047, T048 y T049.
+- **Fase 9**: T051 y T052.
+- **En serie**: todo lo que toca `src/due_diligence/hooks.py` (T013, T021, T035, T037, T042) y todo lo que toca `reglas.py` (T011, T021, T026, T035, T040).
+
+## Estrategia de implementación
+
+1. **Bloque A**: las esperas, la continuación y el cierre por turno cierran el pendiente 2 del #7 y el riesgo residual 5 del #9. Con FR-027, el caso (d) se vuelve correcto en dos turnos.
+2. **Bloque B**: el criterio y el resumen cumplen los criterios de aceptación (a), (b) y el resumen validado. El caso (d) de extremo a extremo cierra el tercero.
+3. **No se ejecuta un caso con el modelo real antes de T043**: hasta entonces el coordinador no tiene la guía del resumen, y los escalamientos se rechazarían por la forma.
+4. **Las paradas A y B** son puntos de revisión de la analista, no de commit.
+
+## Trazabilidad
+
+| Requisito | Tareas |
+|-----------|--------|
+| FR-001 | T039, T045 |
+| FR-002 | T039, T041, T045 |
+| FR-003 | T034, T039 |
+| FR-004 | T005, T006, T034, T039 |
+| FR-005 | T045 |
+| FR-006, FR-007 | T030 a T033 |
+| FR-008 | T025, T030, T034 |
+| FR-009 | T034, T035 |
+| FR-010 | T030, T034 |
+| FR-011 | T030, T043 |
+| FR-012 | T036, T037 (D2: comercio fijo) |
+| FR-013 | T014, T015, T045 |
+| FR-014 | T010 a T013, T020, T023 |
+| FR-015 | T024 |
+| FR-016 | T012, T013 (informe), T036, T039, T041, T042 (escalamiento) |
+| FR-017 | T016, T017 |
+| FR-018 | T014, T015 |
+| FR-019 | T048 |
+| FR-020 | T020, T021 |
+| FR-021 | T034 |
+| FR-022 | reglas para todas las tareas, T010, T020, T034, T045 |
+| FR-023 | T045 |
+| FR-024 | T055, T056, T057 |
+| FR-025 | reglas para todas las tareas |
+| FR-026 | alcance: ninguna tarea toca la interfaz de chat (#11) ni la suite de los siete casos (#12) |
+| FR-027 | T025, T026, T045 |
+| FR-028 | T027, T028, T057 |
+| SC-001 | T045, T055, T056 |
+| SC-002 | T030, T032, T034 |
+| SC-003 | T045, T057 |
+| SC-004 | T023 |
+| SC-005 | T055 |
+| SC-006 | T009, T019, T022, T029, T038, T050, T054 |
+| R4 (tests a y b) | T014 |
+| D2 (comercio fijo con el sello) | T030, T036 |
+| D3 (alto riesgo en la espera) | T041 |

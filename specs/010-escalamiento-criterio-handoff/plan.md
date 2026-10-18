@@ -7,7 +7,11 @@
 ## Summary
 
 **El escalamiento pasa a decidirse y completarse en el hook**, como el informe del #9. El `PreToolUse` de `escalar_a_cumplimiento`:
-- **Deniega** en dos casos: un caso de bajo riesgo sin hallazgos comprobado (FR-002, con los cuatro frentes cubiertos, sin menciones y sin conflictos) y una espera del identificador.
+- **Deniega** por cuatro motivos:
+  - un caso de bajo riesgo sin hallazgos comprobado (FR-002, con los cuatro frentes cubiertos, sin menciones y sin conflictos);
+  - la espera del identificador o del nombre;
+  - un resumen con problemas de forma o de fuente;
+  - un caso sin comercio (D2).
 - **Valida el resumen al oficial** con el esquema de afirmaciones del #9 (`validar_resumen`, compartido con la pasarela), y comprueba la fuente consultada y la afirmación por frente cubierto.
 - **Sustituye** comercio, cobertura, causa y conflictos por los del código.
 - **Nunca deniega ante una excepción** ni con el caso sellado.
@@ -64,7 +68,7 @@ El presupuesto de turnos pasa a 21 de 30 por turno.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 y D2** de la sección siguiente.
+Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1, D2 y D3** de la sección siguiente.
 
 | Principio | Estado | Cómo |
 |-----------|--------|------|
@@ -76,7 +80,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 | **II** Garantizado vs. sugerido | Cumple | Se hacen cumplir en código: el escalamiento con criterio, el resumen, las esperas, la categoría, `decide_cumplimiento` con escalamiento y la cobertura de FR-027. El prompt solo guía tres cosas: cuándo pedir el identificador, volver a delegar listas y noticias (FR-028) y cómo redactar la acción recomendada (R11). |
 | **III** Arquitectura de agentes | Cumple | Cada turno es una `query()` que termina por su `stop_reason`; no hay iteraciones fijas ni búsqueda de palabras. La espera la decide el estado, no el texto. Los subagentes no cambian. |
 | **IV** Herramientas y MCP | Cumple | Cambia el contrato de `escalar_a_cumplimiento`, con una descripción que dice qué pone el sistema y qué no hace. Los rechazos son errores estructurados: el JSON `resumen_rechazado` del hook y `campos_obligatorios_ausentes` o `entrada_invalida` de la pasarela. |
-| **V** Escalamiento con criterio | **Cumple, garantizado en código**, con D1 y D2 | Se escala si, y solo si, hay causa (FR-001). Escalar un bajo riesgo sin hallazgos comprobado se deniega (FR-002). Se pide el identificador en vez de elegir (esperas, R3). El resumen es autosuficiente y está validado (R6). Casos (a), (b) y (d). |
+| **V** Escalamiento con criterio | **Cumple, garantizado en código**, con D1, D2 y D3 | Se escala si, y solo si, hay causa (FR-001). Escalar un bajo riesgo sin hallazgos comprobado se deniega (FR-002). Se pide el identificador en vez de elegir (esperas, R3). El resumen es autosuficiente y está validado (R6). Casos (a), (b) y (d). |
 | **VI** Transparencia | Cumple | `mensaje_analista`, `espera_analista`, `escalamiento_registrado` con causas y afirmaciones, y la acción en los bloqueos. La línea de comandos muestra la espera y los escalamientos. |
 | **VII** Datos ficticios | Cumple | Datos del #5: `CO-TV-0001`, `CO-TA-0002`, `CO-AM-0004`, `CO-AM-0005` y N-0001; sin datos nuevos. |
 | **VIII** Sin credenciales | Cumple | Los tests y el sondeo de R1 no leen `.env`. |
@@ -93,7 +97,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
   - la limitación del `Stop` del #9.
 - **I.5 aplica**: la cobertura cambia por FR-027.
 
-**Re-evaluación tras el diseño (Fase 1)**: se mantiene. Los riesgos residuales están en R13 de [research.md](research.md). Los que contradicen un requisito de la spec son D1 y D2; el resto se explica bajo la tabla.
+**Re-evaluación tras el diseño (Fase 1)**: se mantiene. Los riesgos residuales están en R13 de [research.md](research.md). Los que contradicen un requisito de la spec o un principio son D1, D2 y D3; el resto se explica bajo la tabla.
 
 ## Desviaciones justificadas
 
@@ -101,6 +105,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 |---|------------|------------|--------|--------------------------------|
 | D1 | **Las coincidencias de un comercio anterior siguen siendo causas** si el analista cambia de comercio en un turno posterior: el libro no las borra (comportamiento desde el #7, R13.2). Además, el resumen del comercio nuevo muestra la causa «coincidencia del comercio» **sin una afirmación que la respalde**: R7 no deja citar la consulta del otro comercio. | FR-001 («si, y solo si, tiene una causa vigente»), V (escalar de más satura al oficial) y el resumen autosuficiente de V. | Borrar o filtrar coincidencias del libro toca la garantía de I.2 de los tickets #7 al #9. Un error ahí habilita de menos riesgo, que es peor que escalar de más. El caso del cambio de comercio no está entre los obligatorios. | Escala de más, nunca habilita de más. El escalamiento anterior no cubre al comercio nuevo (R8), así que el oficial recibe el caso con la causa nombrada. Aceptada por la analista; queda para un ticket posterior si lo pide. |
 | D2 | **Sin comercio identificado ni pedido, el escalamiento se rechaza** (R5, paso 4). Ocurre, por ejemplo, con el alto riesgo detectado antes de delegar el registro. | FR-003 (en un caso sin comercio comprobado, escalar se admite) y FR-001 (el alto riesgo exige escalar). | El oficial no puede recibir un caso sin comercio: el resumen no sería autosuficiente (V). Basta con delegar primero el registro, que deja el comercio pedido. | El motivo del rechazo pide delegar el registro (`MOTIVO_SIN_COMERCIO_ESCALAMIENTO`). Con el sello no se rechaza: va `COMERCIO_NO_IDENTIFICADO` (R5, paso 1) para que FR-012 se cumpla. |
+| D3 | **Con alto riesgo y el caso esperando el identificador o el nombre** (varias coincidencias o ninguna), **el escalamiento se rechaza** hasta identificar al comercio (FR-016, R5 paso 2). | Principio V («Se escala por… categoría de alto riesgo») y FR-001. | Escalar un comercio sin identificar llevaría al oficial un caso que no sabe a qué comercio corresponde. V también pide pedir el identificador en vez de elegir. | No se habilita y no figura como completo. La espera tiene salida: el analista da el identificador o corrige el nombre, y el escalamiento se exige en el turno siguiente. Con el sello se escala igual (excepción de FR-016). |
 
 **Riesgos de R13 que no son desviaciones**:
 - **1, plurales y varias categorías en FR-020**: los declara la spec (US5-5, Supuestos).
@@ -119,7 +124,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 
    Se descartaron `ClaudeSDKClient` abierto y reenviar la conversación.
 2. **Mensajes del analista (R2)**: `estado.mensajes`, con `solicitud` como propiedad y el evento `mensaje_analista`.
-3. **Esperas (R3)**: `espera_del_analista(estado)`, pura, con tres clases. La identificación gana una `clase`, para no decidir por subcadenas del motivo. D3 (`contradictoria`) no es espera. El `Stop` mira la espera antes que el cierre y no gasta devoluciones.
+3. **Esperas (R3)**: `espera_del_analista(estado)`, pura, con tres clases. La identificación gana una `clase`, para no decidir por subcadenas del motivo. D3 del #9 (`contradictoria`) no es espera. El `Stop` mira la espera antes que el cierre y no gasta devoluciones.
 4. **Cierre por turno (R4)**: el contador y las marcas del cierre se reinician al empezar cada turno. `completo` sí lee las marcas; la garantía se mantiene porque el `Stop` vuelve a evaluar al final de cada turno e `informe_vigente` depende de las causas. Dos tests lo fijan: el turno 2 que informa deja el caso completo, y el que no hace nada vuelve a poner la marca.
 5. **Escalamiento (R5)**: el `PreToolUse`, en orden:
    - con el sello, pasa con textos fijos (sin comercio, `COMERCIO_NO_IDENTIFICADO`);
@@ -150,12 +155,13 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 13. **DECISIONES.md**: se escribe en la implementación. Recoge:
     - el escalamiento que se puede denegar (cambio respecto al #8);
     - `decide_cumplimiento` con escalamiento;
-    - las tres esperas y D3 fuera de ellas;
+    - las tres esperas y D3 del #9 fuera de ellas;
     - la categoría de los mensajes y sus riesgos;
     - FR-027;
     - el cierre por turno;
     - el presupuesto de 21;
-    - D1 de este plan.
+    - D1, D2 y D3 de este plan;
+    - el rechazo del informe durante la espera del identificador o del nombre (cambio respecto al #9).
 
 ## Project Structure
 
@@ -223,4 +229,4 @@ src/due_diligence/
 
 ## Complexity Tracking
 
-Sin violaciones de la constitución que justificar. Las desviaciones de requisitos de la spec son D1 y D2, con su motivo y su mitigación arriba.
+Sin violaciones de la constitución que justificar. Las desviaciones de requisitos de la spec y del principio V son D1, D2 y D3, con su motivo y su mitigación arriba.

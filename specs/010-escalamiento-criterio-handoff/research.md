@@ -43,7 +43,17 @@ Lo marcado *(medido)* se comprobó con `claude-agent-sdk` 0.2.168, Haiku 5.5 y u
 | `categoria` | `estado.categoria_bloqueada` (la última delegación de categoría la bloqueó FR-020) y `libro.consultas_riesgo` está vacía. |
 
 - Para no decidir por subcadenas del motivo (sugerencia de la revisión del #7), `Identificacion` gana un campo `clase` (`unica`, `varias`, `ninguna`, `contradictoria` o `invalida`), que fija `derivar_comercio`. `EstadoCaso.clase_identificacion` lo consolida igual que `comercio`. `_motivo_sin_comercio` pasa a leer la clase.
-- `contradictoria` (D3) **no** es una espera (decisión de la analista).
+- La clase sale de una función hermana pura, `clase_de(resultado)`, junto a `derivar_comercio`, que sigue devolviendo `(comercio, motivo)` para no tocar a sus llamadores.
+- `contradictoria` (D3 del #9) **no** es una espera (decisión de la analista).
+- **El registro caído, por sí solo, no es una espera**. La espera `categoria` vale con cualquier estado del registro, también el caído, porque solo mira `categoria_bloqueada` y `consultas_riesgo`. Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
+- **Durante la espera `identificador` o `nombre`** (FR-016):
+  - el `PreToolUse` de `registrar_informe` rechaza el informe con su motivo fijo: `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` («El registro devolvió varias coincidencias: pida el identificador al analista antes de registrar el informe.») o `MOTIVO_INFORME_ESPERA_NOMBRE` («El registro no encontró el comercio: pida al analista que revise el nombre antes de registrar el informe.»);
+  - la regla del evento es `V`;
+  - el rechazo va en `informe_rechazado` junto a los demás motivos;
+  - con el sello, no cambia: el informe mínimo exige escalar antes, y el escalamiento se admite (R5).
+
+  **Cambio respecto al #9**: el #9 aceptaba el informe con el comercio pedido (`verificado: false`) ante varias coincidencias; FR-016 lo rechaza.
+- **Durante la espera `categoria`** el informe sigue las reglas de siempre (sin categoría determinada no se puede `habilitar`).
 - En el `Stop`, la espera se comprueba **antes** que `evaluar_cierre`. Si la hay, el `Stop` permite terminar sin tocar `cierres_impedidos` y deja el evento `espera_analista` con el motivo.
 - Con el sello, la espera no cambia: el `Stop` la admite igual, y escalar se admite (R5).
 
@@ -96,7 +106,13 @@ Dos tests lo fijan:
 **La causa** (FR-009) es una lista de textos:
 
 - con causas vigentes, una línea por causa con `ETIQUETAS_CAUSA`;
-- sin causas (FR-003), una línea fija, `CAUSA_SIN_CAUSA_VIGENTE`: «Sin causa de escalamiento vigente: el código no pudo comprobar el bajo riesgo sin hallazgos (cobertura incompleta, categoría no determinada, mención en noticias o conflicto entre fuentes).»
+- sin causas (FR-003), una línea por cada motivo que se cumpla, con etiquetas fijas de `MOTIVOS_SIN_CAUSA`, en este orden:
+  - `cobertura_incompleta`: «Sin causa de escalamiento vigente: la cobertura está incompleta.»
+  - `categoria_no_determinada`: «Sin causa de escalamiento vigente: la categoría no quedó determinada.»
+  - `mencion_en_noticias`: «Sin causa de escalamiento vigente: hay menciones en noticias.»
+  - `conflicto_entre_fuentes`: «Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales.»
+
+  Lo calcula `causas_del_resumen(estado)` con las mismas lecturas que `bajo_riesgo_sin_hallazgos`. Si no se cumple ninguno, el caso es de bajo riesgo comprobado y el escalamiento ya se rechazó (paso 3).
 
 **Rationale**: es el mismo patrón que el informe del #9 (validar, sustituir y confirmar en el `PostToolUse`). El escalamiento solo se deniega cuando el código puede afirmar que no corresponde (FR-002) o que falta el identificador (FR-016). En cualquier duda, o ante una excepción, sale.
 
@@ -148,6 +164,8 @@ Dos tests lo fijan:
 - `evaluar_informe` rechaza `decide_cumplimiento` sin un escalamiento para el comercio actual, con `MOTIVO_DECIDE_SIN_ESCALAR`. Con el sello ya lo exige `evaluar_informe_minimo`, porque el sello es causa.
 - El `PostToolUse` confirma el escalamiento pendiente (R5) solo si la pasarela devuelve `caso_escalado`. El `PostToolUseFailure` lo descarta. Es el mismo patrón que la huella del informe (R7 del #9). Ahora el `PostToolUse` lee las causas de lo pendiente: las del momento en que se aceptó, no las del momento en que llegó la respuesta.
 
+- **Un segundo escalamiento sin causa nueva** (caso límite de la spec) se admite y deja el mismo evento, `escalamiento_registrado`, con su id y las causas que cubre. No hay un tipo de evento distinto: para el cierre no cambia nada, y el evento ya dice qué cubre.
+
 **Rationale**: un escalamiento del comercio anterior no cubre al nuevo, ni para el cierre ni para admitir `decide_cumplimiento` (caso límite de la spec).
 
 ## R9. Categoría de los mensajes del analista (FR-020)
@@ -179,6 +197,8 @@ Dos tests lo fijan:
 
 Una espera no gasta devoluciones: termina el turno.
 
+**El turno 2 del caso (d)** tiene menos pasos que el peor caso del turno 1: registro con el identificador y noticias de nuevo (juntos), listas, escalar (con un rechazo de forma), el informe (con un rechazo) y la respuesta. No vuelve a delegar la categoría, que se conserva.
+
 ## R11. Instrucciones del coordinador (FR-028, FR-011)
 
 **Decision**: tres guías nuevas en `coordinador.py`, con sus tests de texto:
@@ -201,6 +221,7 @@ Además, `_REGLA_ESCALAR` dice «No escales un comercio de bajo riesgo sin ning�
 1. **Plurales y varias categorías en FR-020** (R9).
 2. **Coincidencias de un comercio anterior**: siguen siendo causas si el analista cambia de comercio, porque el libro no las borra (comportamiento desde el #7). El caso nuevo tendría que escalarse de nuevo, y su resumen mostraría la causa «coincidencia del comercio» sin una afirmación que la respalde: R7 no deja citar la consulta del otro comercio. Es conservador: escala de más, nunca habilita de más (D1 del plan).
 8. **Sin comercio no se escala** (D2 del plan): un alto riesgo detectado antes de delegar el registro no se puede escalar hasta que el registro dé un comercio pedido o identificado.
+9. **Alto riesgo en la espera del identificador o del nombre** (D3 del plan): el escalamiento se rechaza hasta identificar al comercio.
 3. **`resume` depende de la persistencia de sesiones del SDK** en el disco del usuario. Si se pierde la sesión, `continuar` falla con un error claro y el estado del caso sigue en memoria.
 4. **D1 y D7 del #9** aplican también al resumen (Supuestos de la spec).
 5. **Riesgo residual 1 del #9** (informe vigente con afirmaciones viejas): decisión aceptada, sin cambio.

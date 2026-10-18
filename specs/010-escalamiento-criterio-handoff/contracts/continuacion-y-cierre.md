@@ -29,14 +29,14 @@ En este orden:
 
 | Registro | Categoría | ¿Espera? |
 |----------|-----------|----------|
-| sin delegar, en curso o caído | cualquiera | no |
+| sin delegar, en curso o caído | con resultado o sin delegar | no (el registro caído, por sí solo, no es una espera) |
 | varias coincidencias | cualquiera | sí (`identificador`) |
 | ninguna coincidencia | cualquiera | sí (`nombre`) |
-| fuentes que difieren en nombre o representante (D3) | cualquiera | no |
+| fuentes que difieren en nombre o representante (D3 del #9) | con resultado o sin delegar | no |
 | identificado | con resultado o sin delegar | no |
-| identificado | última delegación bloqueada por I.3 y sin resultado | sí (`categoria`) |
+| cualquier otro estado (sin delegar, en curso, caído, D3 o identificado) | última delegación bloqueada por I.3 y sin resultado | sí (`categoria`) |
 
-La espera `categoria` también vale con el registro sin identificar. La tabla muestra la prioridad del motivo, no un orden de evaluación: con el registro en varias coincidencias, el motivo es el del identificador.
+La espera `categoria` vale con cualquier estado del registro, también el caído. La tabla muestra la prioridad del motivo, no un orden de evaluación: con el registro en varias coincidencias, el motivo es el del identificador.
 
 ## Durante una espera
 
@@ -44,7 +44,7 @@ La espera `categoria` también vale con el registro sin identificar. La tabla mu
 |--------|-----------------------------------|--------------------|
 | consultar o delegar listas | bloqueado por I.1 (#7) | según I.1 |
 | escalar | rechazado (FR-016); admitido con el sello | reglas de siempre |
-| registrar el informe | rechazado (FR-016) | reglas de siempre (sin `habilitar`) |
+| registrar el informe | rechazado (FR-016) con `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` o `MOTIVO_INFORME_ESPERA_NOMBRE`; antes, en el #9, se aceptaba con el comercio pedido | reglas de siempre (sin `habilitar`) |
 | delegar registro con el identificador | permitido; identifica aunque la consulta anterior fuera ambigua (FR-017) | permitido |
 
 ## Línea de comandos
@@ -59,6 +59,6 @@ Tras imprimir el caso, si hay espera, se pregunta en la entrada estándar:
 - con una línea vacía o fin de entrada, termina.
 
 La salida muestra:
-- «Esperando al analista: <motivo>», o «sin espera»;
+- «Esperando al analista: <motivo>», o «Sin espera del analista»;
 - los escalamientos registrados, con su id y sus causas;
 - los informes, como en el #9.

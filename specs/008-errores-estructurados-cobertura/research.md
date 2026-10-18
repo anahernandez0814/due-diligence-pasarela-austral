@@ -299,4 +299,5 @@ aplicar el plan B de la analista (`deny` con motivo).
 6. **Escalamiento con la cobertura no calculada** (R6): si falla el cálculo, el escalamiento sale
    con el texto fijo «No se pudo calcular la cobertura; debe tratarse como incompleta.», el caso
    queda sellado y el informe ya no se puede registrar. Se prefiere escalar a bloquear el canal
-   seguro.
+   seguro. **Lo resolverá el #9**, dueño de «todo caso terminado queda registrado»: este ticket no
+   cambia el diseño (C1 del análisis, decisión de la analista).

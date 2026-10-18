@@ -89,7 +89,9 @@ Se anota en la validación:
 2. El bloque «Cobertura:» de la salida: noticias no cubierto y la primera línea «incompleta».
 3. El evento `cobertura_sustituida` y si la cobertura declarada por el modelo se sustituyó.
 4. «Caso completo: no».
-5. «Turnos del coordinador: N de 30», que debe ser N ≤ 15 (R2).
+5. «Turnos del coordinador: N de 30». Se anota N. El 15 de R2 es la estimación del peor caso, no
+   un límite: si N pasa de 15, se anota qué turnos sobraron. Solo es fallo si el caso termina en
+   `error_max_turns`.
 6. Si la respuesta final al analista dice qué frente quedó sin cubrir y por qué (SC-005). La
    analista lo valora leyendo solo la respuesta y los eventos.
 

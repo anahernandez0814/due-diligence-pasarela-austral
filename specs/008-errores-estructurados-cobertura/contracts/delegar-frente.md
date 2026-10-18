@@ -31,8 +31,11 @@ aquí no cambia. Modelo de datos en [data-model.md](../data-model.md); decisione
 }
 ```
 
-- `tipo` conserva los valores del #6 (`frente_no_terminado`, `frente_rechazado`, `entrada_invalida`).
-- `causa` es uno de los valores cerrados de `data-model.md`.
+- **El «tipo de error» de FR-002 es el campo `causa`**, uno de los valores cerrados de
+  `data-model.md`. El tipo concreto que dio la pasarela (por ejemplo, `servicio_no_disponible`)
+  sigue en `obtenido.errores[].tipo`.
+- `tipo` conserva los valores del #6 (`frente_no_terminado`, `frente_rechazado`, `entrada_invalida`)
+  **por compatibilidad con el #6**: sus tests y su contrato lo leen. No distingue causas.
 - `reintentable` es `true` solo si la causa es reintentable **y** `reintentos_restantes > 0`.
 - `mensaje` y `obtenido.terminacion` nunca contienen el texto interno de una excepción: solo
   `excepción <Tipo>`.

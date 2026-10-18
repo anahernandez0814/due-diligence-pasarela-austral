@@ -31,9 +31,9 @@ guarda el último por frente en `EstadoCaso.errores`.
 | Campo | Tipo | Regla |
 |-------|------|-------|
 | `error` | `True` | siempre |
-| `tipo` | `frente_no_terminado` \| `frente_rechazado` \| `entrada_invalida` | sin cambios respecto del #6 |
+| `tipo` | `frente_no_terminado` \| `frente_rechazado` \| `entrada_invalida` | sin cambios respecto del #6; **se conserva por compatibilidad con el #6** y no es el «tipo de error» de FR-002 |
 | `frente` | texto | el frente; ausente solo en `entrada_invalida` (no hay frente válido) |
-| `causa` | `Causa` | tabla anterior |
+| `causa` | `Causa` | tabla anterior. **Es el «tipo de error» de FR-001 y FR-002.** El tipo que dio la pasarela sigue en `obtenido.errores[].tipo` |
 | `mensaje` | texto en español | sin el texto interno de una excepción, sin nombres ni identificadores del comercio |
 | `reintentable` | bool | `causa` reintentable **y** `reintentos_restantes > 0` (R3) |
 | `intento` | entero ≥ 1 | ejecuciones con esta entrada, incluida esta; 0 en un rechazo sin ejecución |

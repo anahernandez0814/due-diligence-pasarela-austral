@@ -109,7 +109,12 @@ la entrada **completa** (#8, R1). Tiene `hallazgos` y `recomendacion` del coordi
 partes del código:
 
 - `comercio`: el identificado (`estado.comercio`, con `verificado: true`) o, con el registro caído,
-  el pedido (`estado.comercio_pedido`, con `verificado: false`, sin inventar el dato que falte);
+  el pedido (`estado.comercio_pedido`, con `verificado: false`, sin inventar el dato que falte).
+  **Ajuste de la implementación** (fase 3): el pedido sin verificar se usa siempre que no hay
+  comercio identificado, no solo con el registro caído. Si el coordinador registra un informe que
+  no se le exige, por ejemplo con varias coincidencias, el comercio queda declarado como no
+  verificado en lugar de rechazarse. Sin comercio identificado ni pedido, el hook deniega con
+  `MOTIVO_SIN_COMERCIO_INFORME`;
 - `conflictos`: `calcular_conflictos(estado)` (R6);
 - `cobertura`: `calcular_cobertura(estado).lineas()`, como en el #8.
 

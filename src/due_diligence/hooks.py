@@ -17,13 +17,15 @@ Lo medido con el SDK 0.2.168 (research R1 a R3) condiciona el diseño:
   que va envuelto con `degradar_escalamiento`, que nunca deniega (#8, R6).
 """
 
+import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
 from claude_agent_sdk import HookMatcher
 
-from due_diligence.cobertura import calcular_cobertura
+from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
 from due_diligence.configuracion import MAX_CIERRES_IMPEDIDOS
+from due_diligence.conflictos import calcular_conflictos
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
@@ -32,6 +34,7 @@ from due_diligence.eventos import (
     TIPO_CIERRE_SIN_ESCALAR,
     TIPO_COBERTURA_SUSTITUIDA,
     TIPO_CONSULTA_FALLIDA,
+    TIPO_DATOS_SUSTITUIDOS,
     TIPO_ESCALAMIENTO_REGISTRADO,
     TIPO_FALLO_DE_HOOK,
     RegistroEventos,
@@ -43,9 +46,11 @@ from due_diligence.frentes import (
     Frente,
     nombre_completo,
 )
+from due_diligence.informe import comercio_del_informe, problemas_de_fuente
 from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
+    Rechazo,
     causas_vigentes,
     evaluar_cierre,
     evaluar_informe,
@@ -53,6 +58,7 @@ from due_diligence.reglas import (
     permite_listas,
     reglas_de,
 )
+from servidor_mcp.informe import Problema, validar_informe
 
 Hook = Callable[[dict[str, Any], str | None, Any], Awaitable[dict[str, Any]]]
 
@@ -64,6 +70,15 @@ MOTIVO_ENTRADA_MALFORMADA = (
 # Cobertura con la que sale un escalamiento si falla su cálculo (#8, R6): escalar nunca se deniega.
 COBERTURA_NO_CALCULADA = "No se pudo calcular la cobertura; debe tratarse como incompleta."
 REGLA_LISTAS = "I.1"
+# Fuente y forma de cada afirmación del informe (#9, FR-001 a FR-004).
+REGLA_FUENTE = "I.4"
+MOTIVO_SIN_COMERCIO_INFORME = (
+    "No hay comercio para el informe: el registro no identificó uno único y no hay un comercio "
+    "pedido por el analista."
+)
+# Solo para validar la forma del resto del informe cuando falta el comercio o la recomendación:
+# esas dos ausencias ya son motivos propios y `validar_informe` se detendría en ellas.
+_COMERCIO_PARA_VALIDAR = {"identificador": None, "nombre": "-", "verificado": False}
 NIVELES_DE_RIESGO = ("alto", "medio", "bajo")
 HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
 HERRAMIENTA_INFORME = nombre_completo("registrar_informe")
@@ -86,6 +101,29 @@ def denegar(motivo: str) -> dict[str, Any]:
             "permissionDecisionReason": motivo,
         }
     }
+
+
+def denegar_informe(rechazos: list[Rechazo], problemas: list[Problema]) -> dict[str, Any]:
+    """`PreToolUse` de `registrar_informe`: deniega con un error estructurado en JSON (#9, R3).
+
+    Junta en un solo rechazo los motivos de las reglas (con su regla) y los problemas de forma o de
+    fuente (con su ruta). `reintentable: false`: la misma entrada volvería a fallar.
+    """
+    textos = [r.texto for r in rechazos]
+    if problemas:
+        detalle = "; ".join(
+            f"{p.ruta}: {p.texto[0].lower()}{p.texto[1:].rstrip('.')}" for p in problemas
+        )
+        textos.append(f"Problemas de forma o de fuente: {detalle}.")
+    cuerpo = {
+        "error": True,
+        "tipo": "informe_rechazado",
+        "mensaje": f"No se registra el informe. {' '.join(textos)} Corrige y vuelve a registrarlo.",
+        "reintentable": False,
+        "motivos": [{"regla": r.regla, "texto": r.texto} for r in rechazos],
+        "problemas": [p.como_dict() for p in problemas],
+    }
+    return denegar(json.dumps(cuerpo, ensure_ascii=False))
 
 
 def bloquear_cierre(motivo: str) -> dict[str, Any]:
@@ -499,20 +537,83 @@ class HooksDelCaso:
     async def _informe_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
     ) -> dict[str, Any]:
-        """`PreToolUse` de `registrar_informe`: rechaza lo que las reglas no permiten (FR-005)."""
+        """`PreToolUse` de `registrar_informe` (#7 FR-005; #8 R6; #9 R1, R3, R5).
+
+        Junta en un solo rechazo estructurado las reglas del #7 (`evaluar_informe`), la forma del
+        informe (`validar_informe`, la misma de la pasarela) y la fuente consultada de cada
+        afirmación (FR-004). Si acepta, la entrada completa lleva el comercio, los conflictos y la
+        cobertura del código, y `hallazgos` y `recomendacion` tal como los envió el coordinador.
+        """
         sellado = self._sellado(None, None)
         if sellado is not None:
             return sellado
         argumentos = entrada.get("tool_input")
-        rechazos = evaluar_informe(self.estado, argumentos)
-        if rechazos:
-            reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
-            regla = ", ".join(sorted(reglas)) or None
-            return self._denegar_por_regla(None, regla, " ".join(r.texto for r in rechazos))
-        if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan; por si acaso
-            return self._denegar_por_regla(None, None, MOTIVO_ENTRADA_MALFORMADA)
-        # Aceptado por las reglas: se registra con la cobertura del código (#8, FR-011, R6).
-        return self._sustituir_cobertura("registrar_informe", argumentos)
+        rechazos = list(evaluar_informe(self.estado, argumentos))
+        if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
+            return self._denegar_informe(rechazos or [Rechazo(MOTIVO_ENTRADA_MALFORMADA, None)], [])
+        comercio = comercio_del_informe(self.estado)
+        if comercio is None:
+            rechazos.append(Rechazo(MOTIVO_SIN_COMERCIO_INFORME, None))
+        cobertura = calcular_cobertura(self.estado)
+        conflictos = calcular_conflictos(self.estado).como_entrada()
+        completa = {
+            "comercio": comercio,
+            "recomendacion": argumentos.get("recomendacion"),
+            "hallazgos": argumentos.get("hallazgos"),
+            "conflictos": conflictos,
+            "cobertura": cobertura.lineas(),
+        }
+        problemas = self._problemas_del_informe(completa)
+        if rechazos or problemas:
+            return self._denegar_informe(rechazos, problemas)
+        self._evento_cobertura("registrar_informe", argumentos, cobertura)
+        self._evento_datos(argumentos, completa)
+        return reemplazar_entrada(completa)
+
+    def _problemas_del_informe(self, completa: dict[str, Any]) -> list[Problema]:
+        """La forma (sin comercio ni recomendación, que son motivos propios) y las fuentes."""
+        recomendacion = completa["recomendacion"]
+        para_validar = {
+            **completa,
+            "comercio": completa["comercio"] or _COMERCIO_PARA_VALIDAR,
+            "recomendacion": recomendacion
+            if isinstance(recomendacion, str) and recomendacion.strip()
+            else "-",
+        }
+        problemas = validar_informe(para_validar)
+        return problemas + problemas_de_fuente(self.estado, completa["hallazgos"])
+
+    def _denegar_informe(self, rechazos: list[Rechazo], problemas: list[Problema]):
+        """Deniega el informe con el JSON de R3 y deja `bloqueo_regla` (I.4 si hay problemas)."""
+        reglas = {parte for r in rechazos if r.regla for parte in r.regla.split(", ")}
+        if problemas:
+            reglas.add(REGLA_FUENTE)
+        textos = [r.texto for r in rechazos]
+        if problemas:
+            cantidad = len(problemas)
+            plural = "problema" if cantidad == 1 else "problemas"
+            textos.append(f"{cantidad} {plural} de forma o de fuente en el informe.")
+        self.eventos.registrar(
+            TIPO_BLOQUEO_REGLA, None, " ".join(textos), regla=", ".join(sorted(reglas)) or None
+        )
+        return denegar_informe(rechazos, problemas)
+
+    def _evento_datos(self, argumentos: Mapping[str, Any], completa: dict[str, Any]) -> None:
+        """`datos_sustituidos`: lo que el código puso, sin datos del comercio (#9, R5)."""
+        comercio, conflictos = completa["comercio"], completa["conflictos"]
+        verificado = "comercio verificado" if comercio["verificado"] else "comercio sin verificar"
+        distintos = [p for p in ("comercio", "conflictos") if argumentos.get(p) != completa[p]]
+        declarado = (
+            f"Lo declarado por el coordinador era distinto en: {', '.join(distintos)}."
+            if distintos
+            else "Coincide con lo declarado por el coordinador."
+        )
+        self.eventos.registrar(
+            TIPO_DATOS_SUSTITUIDOS,
+            None,
+            f"Datos del código puestos en registrar_informe: {verificado}; "
+            f"{conflictos['resumen']} {declarado}",
+        )
 
     async def _escalar_previo(
         self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
@@ -528,12 +629,19 @@ class HooksDelCaso:
         return self._sustituir_cobertura("escalar_a_cumplimiento", argumentos)
 
     def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):
-        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`.
-
-        El evento se emite antes de que la pasarela acepte la llamada: dice qué cobertura se puso
-        en ella y si la que declaró el coordinador era distinta, nunca que quedó registrada.
-        """
+        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`."""
         cobertura = calcular_cobertura(self.estado)
+        self._evento_cobertura(herramienta, argumentos, cobertura)
+        return reemplazar_entrada({**argumentos, "cobertura": cobertura.lineas()})
+
+    def _evento_cobertura(
+        self, herramienta: str, argumentos: Mapping[str, Any], cobertura: CoberturaCaso
+    ) -> None:
+        """`cobertura_sustituida` (#8): se emite antes de que la pasarela acepte la llamada.
+
+        Dice qué cobertura se puso en ella y si la que declaró el coordinador era distinta, nunca
+        que quedó registrada.
+        """
         lineas = cobertura.lineas()
         cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
         faltan = [f.value for f, c in cobertura.frentes.items() if not c.cubierto]
@@ -553,7 +661,6 @@ class HooksDelCaso:
             None,
             f"Cobertura puesta en {herramienta}: {resumen}. {declarada}",
         )
-        return reemplazar_entrada({**argumentos, "cobertura": lineas})
 
     # -------------------------------------------------------------- errores de herramienta
 

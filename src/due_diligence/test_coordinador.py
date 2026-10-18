@@ -755,3 +755,29 @@ def test_sin_mensaje_de_resultado_no_hay_dato_de_turnos():
     assert caso.turnos is None
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.turnos is None
+
+
+# ------------------------------------------------------------------ #9: conflictos del caso (G1)
+
+
+def test_caso_conflictos_es_el_calculo_del_codigo_con_y_sin_conflictos():
+    from due_diligence.conflictos import calcular_conflictos
+    from due_diligence.estado import Consulta
+    from due_diligence.frentes import FRENTES, Frente
+    from servidor_mcp import datos
+    from servidor_mcp.registro import consultar_registro_mercantil
+
+    datos.limpiar_cache()
+    for identificador, esperado in (
+        ("CO-RF-0006", "con_conflictos"),
+        ("CO-TA-0002", "sin_conflictos"),
+    ):
+        caso = Caso()
+        respuesta = consultar_registro_mercantil(identificador=identificador).structured_content
+        caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+        caso.estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+        caso.estado.registrar_identificacion(respuesta)
+        herramienta = FRENTES[Frente.REGISTRO].herramienta_completa
+        caso.estado.agregar_consultas([Consulta(Frente.REGISTRO, herramienta, {}, respuesta, True)])
+        assert caso.conflictos == calcular_conflictos(caso.estado)
+        assert caso.conflictos.estado == esperado

@@ -20,6 +20,7 @@ from claude_agent_sdk._errors import ResultError
 
 from due_diligence import configuracion
 from due_diligence.cobertura import CoberturaCaso, calcular_cobertura
+from due_diligence.conflictos import ConflictosCaso, calcular_conflictos
 from due_diligence.contexto import instrucciones
 from due_diligence.delegacion import Delegador
 from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
@@ -173,6 +174,11 @@ class Caso:
     def cobertura(self) -> CoberturaCaso:
         """La cobertura calculada por el código (#8, R5): la misma que se registra."""
         return calcular_cobertura(self.estado)
+
+    @property
+    def conflictos(self) -> ConflictosCaso:
+        """Los conflictos entre fuentes que calcula el código (#9, R6, FR-010): los del informe."""
+        return calcular_conflictos(self.estado)
 
     @property
     def completo(self) -> bool:

@@ -205,7 +205,7 @@ texto, sin fuente, sin fecha válida o con una fuente no consultada, y pone el c
 **Prueba independiente**: sin modelo, tres informes (sin fuente, sin fecha y con una fuente no
 consultada) se rechazan nombrando las rutas, y uno completo se registra (SC-001).
 
-- [ ] T016 [P] [US1] Tests en `src/due_diligence/test_informe.py` para `fuentes_consultadas(estado,
+- [X] T016 [P] [US1] Tests en `src/due_diligence/test_informe.py` para `fuentes_consultadas(estado,
   frente)` y `problemas_de_fuente(estado, hallazgos)` (R4):
   - las fuentes de los metadatos de los hechos y las de `metadatos.fuentes`: una respuesta
     `sin_coincidencias` de listas da sus fuentes sin tener hechos;
@@ -217,7 +217,7 @@ consultada) se rechazan nombrando las rutas, y uno completo se registra (SC-001)
     `nombre`), o `None` sin comercio ni registro caído;
   - `servidor_mcp.informe.FRENTES_INFORME` coincide con los valores de `Frente` (T004; hallazgo T2:
     va aquí y no en T020).
-- [ ] T017 [US1] Tests en `src/due_diligence/test_hooks.py` para el `PreToolUse` de
+- [X] T017 [US1] Tests en `src/due_diligence/test_hooks.py` para el `PreToolUse` de
   `registrar_informe` en modo normal (R1, R3, R5; contrato `registrar-informe.md`):
   - el motivo del deny es JSON que se puede leer con `json.loads`, con `error: true`, `tipo:
     "informe_rechazado"`, `reintentable: false`, `motivos` (regla y texto) y `problemas` (ruta y
@@ -231,7 +231,7 @@ consultada) se rechazan nombrando las rutas, y uno completo se registra (SC-001)
     se sustituye (FR-006);
   - eventos `cobertura_sustituida` (sin cambios) y `datos_sustituidos`, que dice si lo declarado
     era distinto y nunca el nombre ni el identificador.
-- [ ] T018 [US1] Implementar `fuentes_consultadas`, `problemas_de_fuente` y `comercio_del_informe`
+- [X] T018 [US1] Implementar `fuentes_consultadas`, `problemas_de_fuente` y `comercio_del_informe`
   en `src/due_diligence/informe.py` (nuevo, puro). En `src/due_diligence/hooks.py`, reescribir
   `_informe_previo` para el modo normal:
   - acumula `evaluar_informe`, `validar_informe` y `problemas_de_fuente`;
@@ -241,7 +241,7 @@ consultada) se rechazan nombrando las rutas, y uno completo se registra (SC-001)
 
   Los conflictos se ponen con un marcador provisional `{"resumen": "", "lista": []}` hasta T023.
   Hace pasar T016 y T017.
-- [ ] T019 [US1] Fase 3: ruff, la suite completa y los tests de T037 adaptados. Commit «esquema y
+- [X] T019 [US1] Fase 3: ruff, la suite completa y los tests de T037 adaptados. Commit «esquema y
   fuentes del informe (#9, US1)».
 
 ---
@@ -254,7 +254,7 @@ conflicto con sus dos valores y sus fuentes, declare lo que declare el coordinad
 **Prueba independiente**: con `CO-RF-0006`, el informe registrado por un coordinador simulado que
 no declara conflictos contiene el de `fecha_constitucion` con 2016-03-14 y 2017-09-02 (SC-002).
 
-- [ ] T020 [P] [US2] Tests en `src/due_diligence/test_conflictos.py` para
+- [X] T020 [P] [US2] Tests en `src/due_diligence/test_conflictos.py` para
   `calcular_conflictos(estado) -> ConflictosCaso` (R6, data-model):
   - `CO-RF-0006` da un conflicto `fecha_constitucion` con dos `ValorFuente`, el del Registro
     Mercantil Ficticio del Sur y el del Registro Único Ficticio de Empresas, en el orden de la
@@ -270,20 +270,20 @@ no declara conflictos contiene el de `fecha_constitucion` con 2016-03-14 y 2017-
     `sin_conflictos` (R6, hallazgo U1);
   - es puro: no escribe en el estado ni registra eventos;
   - el resumen no repite datos del comercio.
-- [ ] T021 [US2] Implementar `src/due_diligence/conflictos.py` (nuevo): `ValorFuente`, `Conflicto`,
+- [X] T021 [US2] Implementar `src/due_diligence/conflictos.py` (nuevo): `ValorFuente`, `Conflicto`,
   `ConflictosCaso` con `como_entrada()`, y las constantes de los cuatro resúmenes fijos, incluido el
   de `no_calculados` para la fase 6. Hace pasar T020.
-- [ ] T022 [US2] Tests en `src/due_diligence/test_hooks.py`: el informe aceptado lleva en
+- [X] T022 [US2] Tests en `src/due_diligence/test_hooks.py`: el informe aceptado lleva en
   `updatedInput` los conflictos de `calcular_conflictos`. Un conflicto declarado por el coordinador
   que el código no detecta no queda, y uno omitido aparece (FR-009). Si `calcular_conflictos` lanza
   una excepción, el informe se deniega con el motivo genérico y se sella el libro (`fallar_cerrado`,
   R9). En `src/due_diligence/test_coordinador.py`, **`Caso.conflictos`** devuelve lo mismo que
   `calcular_conflictos(caso.estado)` para un caso con `CO-RF-0006` y para uno sin conflictos (FR-010,
   hallazgo G1).
-- [ ] T023 [US2] Quitar el marcador de T018 y poner `calcular_conflictos(estado).como_entrada()` en
+- [X] T023 [US2] Quitar el marcador de T018 y poner `calcular_conflictos(estado).como_entrada()` en
   `_informe_previo`. En `src/due_diligence/coordinador.py`, la propiedad `Caso.conflictos`, al lado de
   `Caso.cobertura` y con el mismo estilo: un solo cálculo, sin estado propio. Hace pasar T022.
-- [ ] T024 [US2] Fase 4: ruff, la suite completa y commit «conflictos del informe (#9, US2)».
+- [X] T024 [US2] Fase 4: ruff, la suite completa y commit «conflictos del informe (#9, US2)».
 
 ---
 
@@ -494,6 +494,8 @@ hora con UTC, los conflictos y los informes.
   | `src/servidor_mcp/test_decisiones.py`: `test_la_hora_por_defecto_es_la_local_con_su_desfase` → `test_la_hora_por_defecto_es_utc_con_su_desfase`, y `test_la_fecha_de_registro_es_la_de_la_hora_local_y_no_la_utc` → `test_la_fecha_de_registro_es_la_utc_y_no_la_local` | Contrato cambiado a UTC (R10, aceptado) | Se renombran porque su nombre afirmaba lo contrario. Las igualdades siguen siendo exactas: desfase `timedelta(0)`, fecha `"2026-10-18"` y `registrado_en == "2026-10-18T04:30:00+00:00"` para las 23:30 en UTC−5. |
   | `test_decisiones.py`: `test_el_comercio_necesita_identificador_y_nombre` | El comercio lleva `verificado` (R2) | `problemas ==` exactamente un problema en `comercio.identificador` y otro en `comercio.nombre`, con `verificado: true`. |
   | `src/servidor_mcp/test_servidor.py`: `TIPOS_JSON` y `TIPOS_INCORRECTOS` | Parámetro `conflictos` | El diccionario exacto de tipos gana `"conflictos": "object"`; se añade el caso de tipo incorrecto `{"conflictos": "texto"}`. |
+  | `src/due_diligence/test_hooks.py`: `test_con_coincidencias_sin_hechos_se_rechaza_habilitar_y_…` (fase 3) | El informe aceptado emite también `datos_sustituidos` | La lista exacta de tipos pasa de `[cobertura_sustituida]` a `[cobertura_sustituida, datos_sustituidos]`. |
+  | `test_hooks.py`: `_caso_con_comercio` y el test de las 625 combinaciones (fase 3) | FR-004 y el comercio leen `estado.consultas` y el comercio pedido | El helper llena `estado.consultas` con la consulta del registro (U1); en las 625 combinaciones se fija un comercio pedido y una consulta del registro. Las aserciones sobre la cobertura no cambian. |
   | `src/due_diligence/test_sesion_simulada.py`: `test_la_pasarela_simulada_guarda_informes_y_escalamientos` | La `PasarelaSimulada` valida como la real (R12) | El informe de la prueba es válido y la igualdad `pasarela.informes == [informe]` sigue siendo exacta; el rechazo va en un test nuevo. |
 
   Ninguno se borra. Si un test no está en la tabla y falla, se añade con su justificación antes de

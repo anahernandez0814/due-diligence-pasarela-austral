@@ -29,7 +29,7 @@ from due_diligence.hooks import (
     leer_respuesta,
     permitir,
 )
-from due_diligence.libro import Coincidencia
+from due_diligence.libro import Coincidencia, ConsultaRiesgo
 from due_diligence.reglas import (
     MOTIVO_CONSULTA_AJENA,
     MOTIVO_REGISTRO_PRIMERO,
@@ -44,6 +44,7 @@ from due_diligence.simulacion import (
     respuesta_del_contrato,
     respuesta_listas,
     respuesta_registro,
+    respuesta_riesgo,
 )
 
 REGISTRO = "mcp__pasarela__consultar_registro_mercantil"
@@ -706,6 +707,7 @@ def _hook_del_informe(hooks):
 def test_el_hook_del_informe_deniega_habilitar_con_coincidencia_con_la_regla_i2():
     estado, eventos, hooks = _caso_con_comercio()
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))  # solo I.2
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
     assert _es_denegacion(salida)
     assert "no se puede recomendar habilitar" in _motivo(salida)
@@ -756,3 +758,93 @@ def test_el_hook_del_informe_si_evaluar_informe_lanza_una_excepcion_deniega(monk
     monkeypatch.setattr(modulo_hooks, "evaluar_informe", roto)
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("no_habilitar")))
     assert _es_denegacion(salida) and estado.libro.fallo_de_hook
+
+
+# ------------------------------------------------------------------ regla I.3: riesgo de categoría
+
+RIESGO = "mcp__pasarela__consultar_riesgo_categoria"
+
+
+def test_el_subagente_de_categoria_tiene_post_y_failure_con_su_herramienta():
+    _, _, hooks = _caso()
+    categoria = hooks.subagente(Frente.CATEGORIA)
+    assert set(categoria) == {"PostToolUse", "PostToolUseFailure"}
+    for evento in categoria:
+        assert [m.matcher for m in categoria[evento]] == [RIESGO]
+
+
+def test_el_subagente_de_noticias_no_tiene_hooks():
+    # Una mención en noticias no es una coincidencia en listas (principio IV): no vigila nada.
+    _, _, hooks = _caso()
+    assert hooks.subagente(Frente.NOTICIAS) == {}
+
+
+@pytest.mark.parametrize(
+    ("categoria", "nivel"),
+    [("suplementos dietarios", "alto"), ("talleres", "bajo"), ("comercio de calzado", "medio")],
+)
+def test_una_categoria_conocida_guarda_su_nivel(categoria, nivel):
+    estado, eventos, hooks = _caso()
+    entrada = {"categoria": categoria}
+    _ejecutar(
+        _hook(hooks.subagente(Frente.CATEGORIA), "PostToolUse"),
+        _post_de(RIESGO, respuesta_riesgo(categoria, nivel), entrada),
+    )
+    assert [(c.categoria, c.nivel) for c in estado.libro.consultas_riesgo] == [(categoria, nivel)]
+    assert eventos.eventos() == []
+
+
+def test_una_categoria_desconocida_entra_sin_nivel_y_con_la_categoria_pedida():
+    estado, _, hooks = _caso()
+    _ejecutar(
+        _hook(hooks.subagente(Frente.CATEGORIA), "PostToolUse"),
+        _post_de(RIESGO, respuesta_riesgo("algo raro", None), {"categoria": "algo raro"}),
+    )
+    assert [(c.categoria, c.nivel) for c in estado.libro.consultas_riesgo] == [("algo raro", None)]
+
+
+def test_un_nivel_que_no_es_del_catalogo_cuenta_como_sin_nivel():
+    estado, _, hooks = _caso()
+    respuesta = respuesta_riesgo("talleres", "intermedio")
+    _ejecutar(
+        _hook(hooks.subagente(Frente.CATEGORIA), "PostToolUse"),
+        _post_de(RIESGO, respuesta, {"categoria": "talleres"}),
+    )
+    assert [(c.categoria, c.nivel) for c in estado.libro.consultas_riesgo] == [("talleres", None)]
+
+
+def test_una_consulta_de_riesgo_con_error_no_entra_al_libro_y_deja_constancia():
+    estado, eventos, hooks = _caso()
+    error = error_estructurado("datos_no_disponibles", False)
+    _ejecutar(
+        _hook(hooks.subagente(Frente.CATEGORIA), "PostToolUseFailure"), _fallo(error, nombre=RIESGO)
+    )
+    assert estado.libro.consultas_riesgo == []
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_CONSULTA_FALLIDA and evento.frente is Frente.CATEGORIA
+
+
+def test_una_respuesta_ilegible_de_riesgo_no_entra_al_libro_y_deja_constancia():
+    estado, eventos, hooks = _caso()
+    _ejecutar(
+        _hook(hooks.subagente(Frente.CATEGORIA), "PostToolUse"),
+        _post_de(RIESGO, "no es json", {"categoria": "talleres"}),
+    )
+    assert estado.libro.consultas_riesgo == []
+    assert eventos.eventos()[0].tipo == TIPO_CONSULTA_FALLIDA
+
+
+def test_el_hook_del_informe_deniega_habilitar_en_alto_riesgo_con_la_regla_i3():
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert _es_denegacion(salida)
+    assert "decisión es de un oficial de cumplimiento" in _motivo(salida)
+    assert eventos.eventos()[-1].regla in {"I.3", "I.2, I.3"}
+
+
+def test_el_hook_del_informe_deniega_habilitar_sin_categoria_determinada():
+    estado, eventos, hooks = _caso_con_comercio()
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert "La categoría del caso no quedó determinada." in _motivo(salida)
+    assert eventos.eventos()[-1].regla in {"I.3", "I.2, I.3"}

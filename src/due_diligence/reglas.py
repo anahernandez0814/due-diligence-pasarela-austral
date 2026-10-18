@@ -176,15 +176,46 @@ MOTIVO_RECOMENDACION = (
     "La recomendación debe ser exactamente habilitar, no_habilitar o decide_cumplimiento."
 )
 MOTIVO_ENTRADA_INFORME = "El informe no tiene la forma esperada; se bloquea por precaución."
+MOTIVO_HABILITAR_ALTO_RIESGO = (
+    "La categoría es de alto riesgo: la decisión es de un oficial de cumplimiento."
+)
+MOTIVO_CATEGORIA_NO_DETERMINADA = "La categoría del caso no quedó determinada."
+MOTIVO_FALTA_LISTAS = (
+    "Falta la consulta de listas restrictivas del comercio y de su representante legal."
+)
 MOTIVO_HABILITAR_CON_COINCIDENCIA = (
     "Hay una coincidencia en listas restrictivas: no se puede recomendar habilitar. "
     "Escale el caso a cumplimiento."
 )
 
 
+def es_alto_riesgo(libro: LibroReglas) -> bool:
+    """Si el caso es de alto riesgo: alguna consulta de riesgo dio una categoría de la constante
+    (comparada con `igual`) o el nivel «alto». Es persistente: otra categoría consultada después
+    no lo baja (R8, FR-008)."""
+    return any(
+        consulta.nivel == "alto" or any(igual(consulta.categoria, c) for c in ALTO_RIESGO)
+        for consulta in libro.consultas_riesgo
+    )
+
+
+def categoria_determinada(libro: LibroReglas) -> bool:
+    """Si la categoría del caso quedó determinada (R8).
+
+    Lo está si el caso es de alto riesgo o si la **última** consulta de riesgo registrada fue
+    conocida (con nivel). Sin consultas, o con la última desconocida, no lo está.
+    """
+    if es_alto_riesgo(libro):
+        return True
+    return bool(libro.consultas_riesgo) and libro.consultas_riesgo[-1].nivel is not None
+
+
 def causas_vigentes(libro: LibroReglas) -> frozenset[str]:
     """Las causas de escalamiento del caso: claves fijas, sin nombres ni identificadores (R9)."""
-    return frozenset(coincidencia.causa for coincidencia in libro.coincidencias)
+    causas = {coincidencia.causa for coincidencia in libro.coincidencias}
+    if es_alto_riesgo(libro):
+        causas.add(CAUSA_ALTO_RIESGO)
+    return frozenset(causas)
 
 
 def requiere_escalamiento(libro: LibroReglas) -> bool:
@@ -219,6 +250,27 @@ def motivo_de_escalar(causas: Iterable[str]) -> str:
     return f"El caso requiere escalamiento a cumplimiento y aún no se ha escalado por: {etiquetas}."
 
 
+def _listas_consultadas(estado: EstadoCaso) -> bool:
+    """Si hay una consulta válida de listas del comercio y, si el registro lo devolvió, de su
+    representante. Se compara con el comercio **vigente**: las consultas de otro no cuentan (R7)."""
+    comercio = estado.comercio
+    if comercio is None:
+        return False
+
+    def hay(tipo: str, entidad: Mapping[str, Any]) -> bool:
+        return any(
+            consulta_coincide(
+                {"tipo": c.tipo, "nombre": c.nombre, "identificador": c.identificador},
+                entidad,
+                tipo,
+            )
+            for c in estado.libro.consultas_listas
+        )
+
+    representante = comercio.get("representante_legal")
+    return hay("comercio", comercio) and (not representante or hay("persona", representante))
+
+
 def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     """Los motivos por los que se rechaza `registrar_informe`; vacía si se acepta (FR-005, FR-006).
 
@@ -236,6 +288,13 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     causas = causas_vigentes(libro)
     if not escalamiento_cubre(libro):
         rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
-    if recomendacion == RECOMENDACION_HABILITAR and libro.coincidencias:
-        rechazos.append(Rechazo(MOTIVO_HABILITAR_CON_COINCIDENCIA, "I.2"))
+    if recomendacion == RECOMENDACION_HABILITAR:
+        if libro.coincidencias:
+            rechazos.append(Rechazo(MOTIVO_HABILITAR_CON_COINCIDENCIA, "I.2"))
+        if es_alto_riesgo(libro):
+            rechazos.append(Rechazo(MOTIVO_HABILITAR_ALTO_RIESGO, "I.3"))
+        elif not categoria_determinada(libro):
+            rechazos.append(Rechazo(MOTIVO_CATEGORIA_NO_DETERMINADA, "I.3"))
+        if not _listas_consultadas(estado):
+            rechazos.append(Rechazo(MOTIVO_FALTA_LISTAS, "I.2"))
     return rechazos

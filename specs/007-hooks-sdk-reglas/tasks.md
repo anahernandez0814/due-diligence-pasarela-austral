@@ -338,7 +338,7 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
 **Meta**: `habilitar` se rechaza para alto riesgo, categoría no determinada o sin consulta de listas válida.
 **Prueba independiente**: categoría «suplementos dietarios» (caso a) y bajo riesgo sin hallazgos (caso b).
 
-- [ ] T028 [US3] Ampliar `src/due_diligence/test_reglas.py` (R8, FR-005, FR-008, FR-009):
+- [X] T028 [US3] Ampliar `src/due_diligence/test_reglas.py` (R8, FR-005, FR-008, FR-009):
   `es_alto_riesgo`: categoría en `ALTO_RIESGO` → `True` aunque el nivel diga «medio»; con otras
   mayúsculas o sin tildes («Suplementos Dietarios») → `True` (US3-7, `igual`); `nivel == "alto"` para una
   categoría fuera de la constante → `True` (US3-9); **persistente**: una consulta de riesgo alto y otra
@@ -354,19 +354,19 @@ de forma unívoca. **Prueba independiente**: con la sesión simulada se prueba c
   cuenta (US3-10); bajo riesgo, categoría determinada, listas consultadas para comercio y representante y sin
   coincidencias → se acepta `habilitar` y no requiere escalamiento (US3-6, caso b); alto riesgo sin escalar:
   `no_habilitar` también se rechaza (US3-3); escalado: `decide_cumplimiento` se acepta (US3-2).
-- [ ] T029 [US3] Ampliar `src/due_diligence/reglas.py`: `es_alto_riesgo`, `categoria_determinada`,
+- [X] T029 [US3] Ampliar `src/due_diligence/reglas.py`: `es_alto_riesgo`, `categoria_determinada`,
   `causas_vigentes` con `alto_riesgo` y las condiciones de `habilitar` de `evaluar_informe` (R8, orden y
   acumulación de `data-model.md`). Las consultas de listas se comparan con `consulta_coincide` contra
   `estado.comercio` vigente. Hace pasar T028.
-- [ ] T030 [US3] Ampliar `src/due_diligence/test_hooks.py`: `PostToolUse` de
+- [X] T030 [US3] Ampliar `src/due_diligence/test_hooks.py`: `PostToolUse` de
   `mcp__pasarela__consultar_riesgo_categoria` (subagente de categoría) guarda una `ConsultaRiesgo` con
   `categoria` y `nivel` para `categoria_conocida` y con `nivel=None` para `categoria_desconocida`; una
   respuesta con error llega por `PostToolUseFailure`, deja evento y no entra; el hook del subagente de
   noticias no existe (`.subagente(Frente.NOTICIAS) == {}`, una mención en noticias no es una coincidencia
   en listas).
-- [ ] T031 [US3] Añadir a `src/due_diligence/hooks.py` los hooks `PostToolUse` y `PostToolUseFailure` de
+- [X] T031 [US3] Añadir a `src/due_diligence/hooks.py` los hooks `PostToolUse` y `PostToolUseFailure` de
   riesgo en `.subagente(Frente.CATEGORIA)`. Hace pasar T030.
-- [ ] T032 [US3] Ampliar `src/due_diligence/test_hooks_sesiones.py` con los casos (a) y (b) a nivel de hooks:
+- [X] T032 [US3] Ampliar `src/due_diligence/test_hooks_sesiones.py` con los casos (a) y (b) a nivel de hooks:
   (a) registro de `CO-TV-0001`, riesgo «suplementos dietarios» alto y listas sin coincidencias:
   `habilitar` rechazado; `no_habilitar` rechazado sin escalar; tras escalar, `decide_cumplimiento`
   aceptado; (b) `CO-TA-0002` de bajo riesgo, sin hallazgos y con listas del comercio y del representante:

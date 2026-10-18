@@ -13,13 +13,17 @@ from due_diligence.libro import (
     CAUSA_COINCIDENCIA_COMERCIO,
     CAUSA_COINCIDENCIA_REPRESENTANTE,
     Coincidencia,
+    ConsultaListas,
+    ConsultaRiesgo,
     LibroReglas,
 )
 from due_diligence.reglas import (
     ALTO_RIESGO,
     RECOMENDACIONES,
+    categoria_determinada,
     causas_vigentes,
     consulta_coincide,
+    es_alto_riesgo,
     escalamiento_cubre,
     evaluar_informe,
     normalizar_recomendacion,
@@ -28,7 +32,12 @@ from due_diligence.reglas import (
     reglas_de,
     requiere_escalamiento,
 )
-from due_diligence.simulacion import comercio_alto_riesgo, comercios_parecidos, respuesta_registro
+from due_diligence.simulacion import (
+    comercio_alto_riesgo,
+    comercio_del_registro,
+    comercios_parecidos,
+    respuesta_registro,
+)
 
 COMERCIO = {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"}
 REPRESENTANTE = {"identificador": "PE-0001", "nombre": "Lucía Ferrer Montalvo"}
@@ -452,3 +461,202 @@ def test_el_rechazo_acumula_todos_los_motivos_que_apliquen():
 def test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar():
     assert evaluar_informe(_estado_de_informe(), _informe("no_habilitar")) == []
     assert evaluar_informe(_estado_de_informe(), _informe("decide_cumplimiento")) == []
+
+
+# --------------------------------------------------------------- regla I.3: categoría y alto riesgo
+
+
+def _libro_de_riesgo(*consultas):
+    libro = LibroReglas()
+    libro.consultas_riesgo = [ConsultaRiesgo(c, n) for c, n in consultas]
+    return libro
+
+
+@pytest.mark.parametrize(
+    ("consultas", "esperado"),
+    [
+        ([("suplementos dietarios", "alto")], True),
+        (
+            [("suplementos dietarios", "medio")],
+            True,
+        ),  # la constante manda aunque el nivel diga medio
+        ([("Suplementos Dietarios", "bajo")], True),  # otras mayúsculas
+        (
+            [("suplementos dietarios", None)],
+            True,
+        ),  # desconocida para la herramienta, pero en la constante
+        ([("SUPLEMENTOS  DIETARIOS", "medio")], True),
+        ([("apuestas", "alto")], True),
+        ([("criptoactivos", "medio")], True),
+        ([("venta de medicamentos", "bajo")], True),
+        ([("talleres", "alto")], True),  # nivel «alto» para una categoría fuera de la constante
+        ([("suplementos dietarios", "alto"), ("talleres", "bajo")], True),  # persistente
+        ([("talleres", "bajo"), ("suplementos dietarios", "alto")], True),
+        ([("talleres", "bajo")], False),
+        ([("talleres", "medio"), ("panaderías", "bajo")], False),
+        ([("algo raro", None)], False),
+        ([], False),
+    ],
+)
+def test_es_alto_riesgo(consultas, esperado):
+    assert es_alto_riesgo(_libro_de_riesgo(*consultas)) is esperado
+
+
+@pytest.mark.parametrize(
+    ("consultas", "esperado"),
+    [
+        ([], False),  # sin consultas
+        ([("talleres", "bajo")], True),
+        ([("talleres", "medio")], True),
+        ([("algo raro", None)], False),  # la última desconocida
+        ([("talleres", "bajo"), ("algo raro", None)], False),  # conocida y luego desconocida
+        ([("algo raro", None), ("talleres", "bajo")], True),  # desconocida y luego conocida
+        ([("suplementos dietarios", "alto")], True),
+        ([("suplementos dietarios", "alto"), ("algo raro", None)], True),  # alto riesgo determina
+    ],
+)
+def test_categoria_determinada(consultas, esperado):
+    assert categoria_determinada(_libro_de_riesgo(*consultas)) is esperado
+
+
+def test_el_alto_riesgo_es_una_causa_de_escalamiento_solo_si_aplica():
+    assert causas_vigentes(_libro_de_riesgo(("talleres", "bajo"))) == frozenset()
+    alto = _libro_de_riesgo(("suplementos dietarios", "alto"))
+    assert causas_vigentes(alto) == {CAUSA_ALTO_RIESGO}
+    assert requiere_escalamiento(alto) is True
+    alto.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    assert causas_vigentes(alto) == {CAUSA_ALTO_RIESGO, CAUSA_COINCIDENCIA_REPRESENTANTE}
+
+
+def test_una_causa_de_alto_riesgo_posterior_al_escalamiento_exige_escalar_de_nuevo():
+    libro = _libro_con("persona", escalamientos=[{CAUSA_COINCIDENCIA_REPRESENTANTE}])
+    libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
+    assert escalamiento_cubre(libro) is False
+
+
+# ------------------------------------------------------------------ evaluar_informe (regla I.3)
+
+
+def _libro_del_caso_b(**cambios):
+    """Bajo riesgo, categoría determinada y listas consultadas para comercio y representante."""
+    libro = LibroReglas()
+    libro.consultas_listas = [
+        ConsultaListas("comercio", None, "CO-TV-0001", "sin_coincidencias"),
+        ConsultaListas("persona", None, "PE-0001", "sin_coincidencias"),
+    ]
+    libro.consultas_riesgo = [ConsultaRiesgo("talleres", "bajo")]
+    for campo, valor in cambios.items():
+        setattr(libro, campo, valor)
+    return libro
+
+
+def test_el_caso_b_bajo_riesgo_sin_hallazgos_acepta_habilitar_sin_escalar():
+    estado = _estado_de_informe(_libro_del_caso_b())
+    assert evaluar_informe(estado, _informe("habilitar")) == []
+    assert requiere_escalamiento(estado.libro) is False
+
+
+def test_habilitar_a_un_comercio_de_alto_riesgo_se_rechaza_con_la_regla_i3():
+    libro = _libro_del_caso_b(consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")])
+    rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+    assert (
+        "La categoría es de alto riesgo: la decisión es de un oficial de cumplimiento."
+        in _textos(rechazos)
+    )
+    assert any(r.regla == "I.3" for r in rechazos)
+
+
+def test_habilitar_con_la_categoria_no_determinada_se_rechaza():
+    for consultas in ([], [ConsultaRiesgo("algo raro", None)]):
+        libro = _libro_del_caso_b(consultas_riesgo=consultas)
+        rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+        assert "La categoría del caso no quedó determinada." in _textos(rechazos)
+        assert any(r.regla == "I.3" for r in rechazos)
+
+
+def test_habilitar_sin_consulta_de_listas_se_rechaza():
+    libro = _libro_del_caso_b(consultas_listas=[])
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe("habilitar")))
+    assert (
+        "Falta la consulta de listas restrictivas del comercio y de su representante legal."
+        in texto
+    )
+
+
+def test_habilitar_sin_la_consulta_del_representante_se_rechaza_si_el_registro_lo_devolvio():
+    libro = _libro_del_caso_b(
+        consultas_listas=[ConsultaListas("comercio", None, "CO-TV-0001", "sin_coincidencias")]
+    )
+    assert evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+
+
+def test_sin_representante_en_el_registro_basta_la_consulta_del_comercio():
+    estado = _estado_con_registro(
+        Situacion.TERMINADO, {**comercio_alto_riesgo(), "representante_legal": None}
+    )
+    estado.libro = _libro_del_caso_b(
+        consultas_listas=[ConsultaListas("comercio", "Tienda Verde SAS", None, "sin_coincidencias")]
+    )
+    assert evaluar_informe(estado, _informe("habilitar")) == []
+
+
+@pytest.mark.parametrize(
+    "consulta",
+    [
+        ConsultaListas("persona", None, "CO-TV-0001", "sin_coincidencias"),  # tipo incorrecto
+        ConsultaListas("comercio", None, "CO-TA-0002", "sin_coincidencias"),  # otro comercio
+        ConsultaListas("comercio", "Almacén Mirador SAS", None, "sin_coincidencias"),
+    ],
+)
+def test_una_consulta_de_tipo_incorrecto_o_de_otro_comercio_no_cuenta(consulta):
+    libro = _libro_del_caso_b(
+        consultas_listas=[consulta, ConsultaListas("persona", None, "PE-0001", "sin_coincidencias")]
+    )
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe("habilitar")))
+    assert "Falta la consulta de listas restrictivas" in texto
+
+
+def test_las_consultas_del_comercio_anterior_no_cuentan_si_el_registro_cambia_de_comercio():
+    estado = _estado_de_informe(_libro_del_caso_b())
+    assert evaluar_informe(estado, _informe("habilitar")) == []
+    estado.reiniciar_identificacion()
+    estado.registrar_identificacion(
+        respuesta_registro(comercio_del_registro("CO-TA-0002", "Taller Aurora SAS"))
+    )
+    texto = _textos(evaluar_informe(estado, _informe("habilitar")))
+    assert "Falta la consulta de listas restrictivas" in texto
+
+
+def test_habilitar_sin_comercio_identificado_se_rechaza():
+    estado = _estado_con_registro(Situacion.TERMINADO, *comercios_parecidos())
+    estado.libro = _libro_del_caso_b()
+    assert "Falta la consulta de listas restrictivas" in _textos(
+        evaluar_informe(estado, _informe("habilitar"))
+    )
+
+
+def test_alto_riesgo_sin_escalar_rechaza_tambien_no_habilitar():
+    libro = _libro_del_caso_b(consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")])
+    texto = _textos(evaluar_informe(_estado_de_informe(libro), _informe("no_habilitar")))
+    assert "aún no se ha escalado por: categoría de alto riesgo" in texto
+
+
+def test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar():
+    libro = _libro_del_caso_b(
+        consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")],
+        escalamientos=[frozenset({CAUSA_ALTO_RIESGO})],
+    )
+    estado = _estado_de_informe(libro)
+    assert evaluar_informe(estado, _informe("decide_cumplimiento")) == []
+    assert evaluar_informe(estado, _informe("no_habilitar")) == []
+    assert evaluar_informe(estado, _informe("habilitar"))  # escalar no habilita
+
+
+def test_la_regla_de_un_rechazo_por_alto_riesgo_y_coincidencia_es_i2_i3():
+    libro = _libro_del_caso_b(
+        consultas_riesgo=[ConsultaRiesgo("suplementos dietarios", "alto")],
+        coincidencias=[Coincidencia("persona", "L", "F", "2026-09-30")],
+    )
+    rechazos = evaluar_informe(_estado_de_informe(libro), _informe("habilitar"))
+    reglas = {r.regla for r in rechazos}
+    assert "I.2, I.3" in reglas  # el de falta de escalamiento lleva las dos reglas

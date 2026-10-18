@@ -36,7 +36,7 @@ from due_diligence.frentes import (
     Frente,
     nombre_completo,
 )
-from due_diligence.libro import Coincidencia, ConsultaListas
+from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     causas_vigentes,
@@ -53,6 +53,7 @@ MOTIVO_ENTRADA_MALFORMADA = (
     "La entrada de la herramienta no tiene la forma esperada; se bloquea por precaución."
 )
 REGLA_LISTAS = "I.1"
+NIVELES_DE_RIESGO = ("alto", "medio", "bajo")
 HERRAMIENTA_DELEGAR_COMPLETA = nombre_completo(HERRAMIENTA_DELEGAR, SERVIDOR_DELEGACION)
 HERRAMIENTA_INFORME = nombre_completo("registrar_informe")
 HERRAMIENTA_ESCALAR = nombre_completo("escalar_a_cumplimiento")
@@ -173,6 +174,7 @@ class HooksDelCaso:
         posterior = {
             Frente.REGISTRO: self._registro_posterior,
             Frente.LISTAS: self._listas_posterior,
+            Frente.CATEGORIA: self._categoria_posterior,
         }.get(frente)
         hooks: dict[str, list[HookMatcher]] = {}
         if frente is Frente.LISTAS:
@@ -269,6 +271,28 @@ class HooksDelCaso:
             self.estado.registrar_identificacion(resultado)
         else:
             self._constancia_de_consulta_fallida(Frente.REGISTRO, error)
+        return permitir()
+
+    # -------------------------------------------------------------- regla I.3: riesgo de categoría
+
+    async def _categoria_posterior(
+        self, entrada: dict[str, Any], tool_use_id: str | None, contexto: Any
+    ) -> dict[str, Any]:
+        """`PostToolUse` del riesgo de categoría: guarda la categoría y su nivel (R8)."""
+        resultado, error = leer_respuesta(entrada.get("tool_response"))
+        if resultado is None:
+            self._constancia_de_consulta_fallida(Frente.CATEGORIA, error)
+            return permitir()
+        argumentos = entrada.get("tool_input")
+        pedida = argumentos.get("categoria") if isinstance(argumentos, Mapping) else None
+        hechos = resultado.get("hechos") or [{}]
+        contenido = hechos[0].get("contenido", {}) if isinstance(hechos[0], Mapping) else {}
+        categoria = contenido.get("categoria") if isinstance(contenido, Mapping) else None
+        categoria = categoria if isinstance(categoria, str) else str(pedida or "")
+        nivel = contenido.get("nivel") if isinstance(contenido, Mapping) else None
+        conocida = resultado.get("resultado") == "categoria_conocida"
+        nivel = nivel if conocida and nivel in NIVELES_DE_RIESGO else None
+        self.estado.libro.consultas_riesgo.append(ConsultaRiesgo(categoria, nivel))
         return permitir()
 
     # -------------------------------------------------------------- regla I.2: coincidencias

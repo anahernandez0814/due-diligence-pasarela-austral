@@ -17,6 +17,7 @@ from due_diligence.simulacion import (
     PasarelaSimulada,
     SesionSimulada,
     comercio_alto_riesgo,
+    comercio_bajo_riesgo,
     comercio_con_representante_en_listas,
     comercios_parecidos,
     error_estructurado,
@@ -26,6 +27,7 @@ REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
 LISTAS = FRENTES[Frente.LISTAS].herramienta_completa
 DELEGAR = "mcp__delegacion__delegar_frente"
 INFORME = "mcp__pasarela__registrar_informe"
+RIESGO = FRENTES[Frente.CATEGORIA].herramienta_completa
 ESCALAR = "mcp__pasarela__escalar_a_cumplimiento"
 
 
@@ -84,6 +86,10 @@ class Caso:
     def delegar_listas(self):
         sesion = self.sesion_del_coordinador()
         return asyncio.run(sesion.llamar(DELEGAR, {"frente": "listas"}, en_proceso=True))
+
+    def riesgo(self, categoria):
+        sesion = self.sesion(Frente.CATEGORIA)
+        return asyncio.run(sesion.llamar(RIESGO, {"categoria": categoria}))
 
     def consultas_de_listas(self):
         return [e for fuente, e in self.pasarela.consultas_a_fuentes if fuente == "listas"]
@@ -175,6 +181,7 @@ def test_caso_c_habilitar_se_rechaza_y_solo_se_acepta_el_informe_tras_escalar():
 
 def test_caso_c_los_rechazos_llevan_la_regla_i2_en_el_evento_y_sin_datos_consultados():
     caso = _caso_c()
+    caso.riesgo("panaderías")  # bajo riesgo y determinada: el único motivo es la coincidencia
     caso.informe("habilitar")
     (evento,) = [e for e in caso.eventos.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
     assert evento.regla == "I.2"
@@ -194,3 +201,64 @@ def test_un_escalamiento_con_error_no_cubre_el_caso():
     assert caso.escalar().es_error
     assert caso.estado.libro.escalamientos == []
     assert caso.informe("decide_cumplimiento").denegada
+
+
+# --------------------------------------- US3: alto riesgo y bajo riesgo de extremo a extremo (a, b)
+
+
+def test_caso_a_alto_riesgo_no_se_habilita_y_exige_escalar_antes_de_cualquier_informe():
+    caso = Caso(registro=[comercio_alto_riesgo()])
+    caso.registrar(identificador="CO-TV-0001")
+    assert caso.listas(tipo="comercio", identificador="CO-TV-0001").ejecutada
+    assert caso.listas(tipo="persona", identificador="PE-0001").ejecutada
+    assert caso.riesgo("suplementos dietarios").ejecutada
+    assert [c.categoria for c in caso.estado.libro.consultas_riesgo] == ["suplementos dietarios"]
+
+    habilitar = caso.informe("habilitar")
+    assert habilitar.denegada and "decisión es de un oficial de cumplimiento" in habilitar.motivo
+    assert caso.informe("no_habilitar").denegada  # sin escalar tampoco se acepta
+    assert caso.pasarela.informes == []
+
+    assert caso.escalar().ejecutada
+    assert caso.estado.libro.escalamientos == [frozenset({"alto_riesgo"})]
+    assert caso.informe("habilitar").denegada  # escalar no habilita
+    assert caso.informe("decide_cumplimiento").ejecutada
+    assert len(caso.pasarela.informes) == 1
+    rechazos = [e for e in caso.eventos.eventos() if e.tipo == TIPO_BLOQUEO_REGLA]
+    assert {e.regla for e in rechazos} == {"I.3"}
+
+
+def test_caso_a_sin_categoria_determinada_no_se_puede_habilitar():
+    caso = Caso(registro=[comercio_alto_riesgo()])
+    caso.registrar(identificador="CO-TV-0001")
+    caso.listas(tipo="comercio", identificador="CO-TV-0001")
+    caso.listas(tipo="persona", identificador="PE-0001")
+    sin_consultar = caso.informe("habilitar")
+    assert (
+        sin_consultar.denegada
+        and "La categoría del caso no quedó determinada" in sin_consultar.motivo
+    )
+    caso.riesgo("algo raro")  # desconocida: sigue sin determinarse
+    assert caso.informe("habilitar").denegada
+
+
+def test_caso_b_bajo_riesgo_sin_hallazgos_se_habilita_sin_escalar():
+    caso = Caso(registro=[comercio_bajo_riesgo()])
+    caso.registrar(identificador="CO-TA-0002")
+    assert caso.listas(tipo="comercio", identificador="CO-TA-0002").ejecutada
+    assert caso.listas(tipo="persona", identificador="PE-0002").ejecutada
+    assert caso.riesgo("talleres").ejecutada
+
+    aceptado = caso.informe("habilitar")
+    assert aceptado.ejecutada and not aceptado.denegada
+    assert len(caso.pasarela.informes) == 1
+    assert caso.estado.libro.escalamientos == [] and caso.estado.libro.coincidencias == []
+    assert [e for e in caso.eventos.eventos() if e.tipo == TIPO_BLOQUEO_REGLA] == []
+
+
+def test_habilitar_sin_haber_consultado_listas_se_rechaza_aunque_el_riesgo_sea_bajo():
+    caso = Caso(registro=[comercio_bajo_riesgo()])
+    caso.registrar(identificador="CO-TA-0002")
+    caso.riesgo("talleres")
+    rechazado = caso.informe("habilitar")
+    assert rechazado.denegada and "Falta la consulta de listas restrictivas" in rechazado.motivo

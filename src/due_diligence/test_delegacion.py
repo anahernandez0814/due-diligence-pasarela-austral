@@ -43,7 +43,7 @@ ERROR_NOTICIAS = {
 }
 
 
-def _crear(**kwargs):
+def _crear(listas_vigilada=True, **kwargs):
     estado, registro, ejecutor = (
         EstadoCaso("solicitud"),
         RegistroEventos(),
@@ -57,7 +57,13 @@ def _crear(**kwargs):
         registro,
         ejecutor,
         lambda frente: configuracion.opciones_subagente(
-            frente, "instrucciones", hooks=hooks.subagente(frente)
+            frente,
+            "instrucciones",
+            # `listas_vigilada=False` prueba la defensa propia del Delegador (`_falta_en_listas`)
+            # sin que el hook de la consulta de listas (I.1) la bloquee antes.
+            hooks=None
+            if frente is Frente.LISTAS and not listas_vigilada
+            else hooks.subagente(frente),
         ),
     )
     return delegador, estado, registro, ejecutor
@@ -487,12 +493,14 @@ COMERCIO_ESPERADO = {
 }
 
 
-def _registro_y_listas(consultas_de_listas=None, registro=None, retardo=0.0):
+def _registro_y_listas(consultas_de_listas=None, registro=None, retardo=0.0, vigilada=True):
     """El registro y `listas` en el mismo turno; devuelve la respuesta de `listas`."""
     resultados = {Frente.REGISTRO: registro or resultado_registro()}
     if consultas_de_listas is not None:
         resultados[Frente.LISTAS] = resultado_listas(consultas_de_listas)
-    delegador, estado, _, ejecutor = _crear(resultados=resultados, retardo=retardo)
+    delegador, estado, _, ejecutor = _crear(
+        listas_vigilada=vigilada, resultados=resultados, retardo=retardo
+    )
     _, listas = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
     return listas, estado, ejecutor
 
@@ -557,7 +565,7 @@ def test_el_nombre_del_comercio_sin_su_forma_juridica_no_cuenta():
         consulta_listas("comercio", nombre="Tienda Verde"),
         consulta_listas("persona", identificador="PE-0001"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
 
 
@@ -566,7 +574,7 @@ def test_un_nombre_parcial_del_representante_no_cuenta():
         consulta_listas("comercio", identificador="CO-TV-0001"),
         consulta_listas("persona", nombre="Lucía Ferrer"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado"
     assert "consulta del representante" in listas["mensaje"]
 
@@ -576,7 +584,7 @@ def test_una_consulta_con_el_tipo_cambiado_no_cuenta():
         consulta_listas("comercio", identificador="CO-TV-0001"),
         consulta_listas("comercio", nombre="Lucía Ferrer Montalvo"),  # tipo equivocado
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado"
     assert "consulta del representante" in listas["mensaje"]
 
@@ -586,7 +594,7 @@ def test_el_nombre_del_comercio_con_el_tipo_persona_no_cuenta_como_consulta_del_
         consulta_listas("persona", nombre="Tienda Verde SAS"),  # tipo equivocado
         consulta_listas("persona", identificador="PE-0001"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["tipo"] == "frente_no_terminado" and "consulta del comercio" in listas["mensaje"]
 
 
@@ -596,7 +604,7 @@ def test_las_consultas_de_mas_no_estorban():
         consulta_listas("persona", identificador="PE-0001"),
         consulta_listas("persona", nombre="Otra Persona Ficticia"),
     ]
-    listas, _, _ = _registro_y_listas(consultas)
+    listas, _, _ = _registro_y_listas(consultas, vigilada=False)
     assert listas["situacion"] == "terminado"
 
 
@@ -845,3 +853,19 @@ def test_el_comercio_anterior_se_conserva_para_decidir_la_invalidacion_de_listas
     assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
     invalidaciones = [e for e in registro.eventos() if e.tipo == TIPO_FRENTE_INVALIDADO]
     assert len(invalidaciones) == 1
+
+
+def test_con_el_hook_de_listas_una_consulta_de_mas_se_bloquea_y_el_frente_no_termina():
+    # Con el hook activo (I.1) una consulta que no es del comercio ni de su representante no llega
+    # a la fuente: queda como un error de herramienta y el frente no figura como terminado.
+    consultas = [
+        consulta_listas("comercio", identificador="CO-TV-0001"),
+        consulta_listas("persona", identificador="PE-0001"),
+        consulta_listas("persona", nombre="Otra Persona Ficticia"),
+    ]
+    listas, estado, _ = _registro_y_listas(consultas)
+    assert listas["tipo"] == "frente_no_terminado"
+    assert estado.situacion(Frente.LISTAS) is Situacion.NO_TERMINADO
+    errores = listas["obtenido"]["errores"]
+    assert [e["tipo"] for e in errores] == ["error_de_herramienta"]
+    assert "Otra Persona" not in json.dumps(errores)  # el motivo no repite lo consultado

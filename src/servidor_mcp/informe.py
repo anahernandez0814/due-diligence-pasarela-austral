@@ -187,7 +187,8 @@ def validar_informe(entrada: Any) -> list[Problema]:
     if not isinstance(entrada, Mapping):
         return [Problema("", "La entrada debe ser un objeto.")]
     # `hallazgos: {}` vale: un informe sin afirmaciones se entrega igual si no se cubrió nada
-    # (I.5). Ausente sigue siendo «falta».
+    # (I.5). Ausente sigue siendo «falta». Qué frentes quedaron cubiertos depende del caso: que
+    # cada uno lleve su afirmación (US1-6) lo comprueba el hook, no la pasarela.
     faltan = [
         Problema(parte, FALTA)
         for parte in PARTES_INFORME

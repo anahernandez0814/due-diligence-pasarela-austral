@@ -5,7 +5,7 @@ entorno real (`cargar_entorno` se parchea).
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
@@ -279,6 +279,13 @@ def test_la_salida_muestra_la_hora_en_utc_y_la_accion_del_bloqueo():
     assert lineas[1] == (
         "  1  15:04:05.678 UTC  bloqueo_regla            -          Motivo. [I.2] "
         "(acción: registrar_informe (habilitar))"
+    )
+
+
+def test_la_hora_de_otra_zona_se_convierte_a_utc_antes_de_mostrarla():
+    bogota = timezone(timedelta(hours=-5))
+    assert principal._hora(datetime(2026, 10, 18, 10, 4, 5, 678000, tzinfo=bogota)) == (
+        "15:04:05.678 UTC"
     )
 
 

@@ -119,7 +119,7 @@ def _hechos_del_comercio(estado: EstadoCaso, identificador: str) -> list[Mapping
     ]
 
 
-def _clave(valor: Any) -> str:
+def clave_de_valor(valor: Any) -> str:
     """Para comparar valores de cualquier forma (un representante es un objeto) sin elegir uno."""
     return json.dumps(valor, ensure_ascii=False, sort_keys=True)
 
@@ -151,7 +151,7 @@ def calcular_conflictos(estado: EstadoCaso) -> ConflictosCaso:
             for h in hechos
             if dato in h["contenido"]
         )
-        if len(valores) >= 2 and len({_clave(v.valor) for v in valores}) > 1:
+        if len(valores) >= 2 and len({clave_de_valor(v.valor) for v in valores}) > 1:
             lista.append(Conflicto(dato, valores))
     if not lista:
         return ConflictosCaso("sin_conflictos", (), RESUMEN_SIN_CONFLICTOS)

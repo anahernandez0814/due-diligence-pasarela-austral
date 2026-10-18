@@ -109,8 +109,10 @@ _REGLA_FALLOS = (
 _REGLA_AFIRMACIONES = (
     "En el informe, escribe los hallazgos de cada frente como una lista de afirmaciones, cada una "
     "con texto, fuente y fecha; la fuente y la fecha son las de los metadatos del resultado, y "
-    "solo cites fuentes que consultaste para ese frente. Si nada quedó cubierto, el informe va "
-    "sin afirmaciones. El comercio, los conflictos entre fuentes y la cobertura los pone el "
+    "solo cites fuentes que consultaste para ese frente. Cada frente cubierto lleva al menos una "
+    "afirmación, también si no hubo hallazgos (por ejemplo, sin coincidencias); un frente que no "
+    "quedó cubierto puede ir sin afirmaciones. El comercio, los conflictos entre fuentes y la "
+    "cobertura los pone el "
     "sistema: no elijas entre valores que se contradicen. Si hay que escalar, registra el informe "
     "después de escalar. Si el registro mercantil no responde, reintenta el registro o registra "
     "el informe con el comercio que pidió el analista."

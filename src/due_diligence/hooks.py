@@ -54,6 +54,7 @@ from due_diligence.informe import (
     InformeRegistrado,
     comercio_del_informe,
     huella_con,
+    problemas_de_frentes_cubiertos,
     problemas_de_fuente,
 )
 from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo
@@ -625,10 +626,11 @@ class HooksDelCaso:
         """`PreToolUse` de `registrar_informe` (#7 FR-005; #8 R6; #9 R1, R3, R5).
 
         Junta en un solo rechazo estructurado las reglas del #7 (`evaluar_informe`), la forma del
-        informe (`validar_informe`, la misma de la pasarela) y la fuente consultada de cada
-        afirmación (FR-004). Si acepta, la entrada completa lleva el comercio, los conflictos y la
-        cobertura del código, `hallazgos` tal como los envió el coordinador y `recomendacion` en su
-        forma canónica (FR-011: `No-Habilitar` llega como `no_habilitar` a la pasarela, al informe
+        informe (`validar_informe`, la misma de la pasarela), la fuente consultada de cada
+        afirmación (FR-004) y al menos una afirmación por frente cubierto (US1-6; no con el
+        sello). Si acepta, la entrada completa lleva el comercio, los conflictos y la cobertura del
+        código, `hallazgos` tal como los envió el coordinador y `recomendacion` en su forma
+        canónica (FR-011: `No-Habilitar` llega como `no_habilitar` a la pasarela, al informe
         registrado y al evento).
         """
         # Con el sello (#9, R9, FR-014): solo el informe mínimo, `decide_cumplimiento` tras
@@ -655,7 +657,7 @@ class HooksDelCaso:
             "conflictos": (conflictos or no_calculados()).como_entrada(),
             "cobertura": cobertura.lineas() if cobertura else [COBERTURA_NO_CALCULADA],
         }
-        problemas = self._problemas_del_informe(completa)
+        problemas = self._problemas_del_informe(completa, cobertura)
         if rechazos or problemas:
             return self._denegar_informe(rechazos, problemas, argumentos)
         if cobertura is None:
@@ -713,8 +715,14 @@ class HooksDelCaso:
         self._constancia_de_consulta_fallida(None, error)
         return permitir()
 
-    def _problemas_del_informe(self, completa: dict[str, Any]) -> list[Problema]:
-        """La forma (sin comercio ni recomendación, que son motivos propios) y las fuentes."""
+    def _problemas_del_informe(
+        self, completa: dict[str, Any], cobertura: CoberturaCaso | None
+    ) -> list[Problema]:
+        """La forma, las fuentes y los frentes cubiertos sin afirmación (US1-6).
+
+        El comercio y la recomendación no son problemas de forma: son motivos propios. Sin
+        cobertura (el informe mínimo, R9) no se exige afirmación a ningún frente.
+        """
         recomendacion = completa["recomendacion"]
         para_validar = {
             **completa,
@@ -724,7 +732,10 @@ class HooksDelCaso:
             else "-",
         }
         problemas = validar_informe(para_validar)
-        return problemas + problemas_de_fuente(self.estado, completa["hallazgos"])
+        problemas += problemas_de_fuente(self.estado, completa["hallazgos"])
+        if cobertura is not None:
+            problemas += problemas_de_frentes_cubiertos(cobertura, completa["hallazgos"])
+        return problemas
 
     def _denegar_informe(self, rechazos: list[Rechazo], problemas: list[Problema], argumentos: Any):
         """Deniega el informe con el JSON de R3 y deja `bloqueo_regla` (I.4 si hay problemas)."""

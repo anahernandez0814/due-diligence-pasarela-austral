@@ -14,6 +14,7 @@ from claude_agent_sdk import types as sdk
 
 from due_diligence import configuracion
 from due_diligence import hooks as modulo_hooks
+from due_diligence import informe as modulo_informe
 from due_diligence.cobertura import calcular_cobertura
 from due_diligence.estado import EstadoCaso, Situacion
 from due_diligence.eventos import (
@@ -55,6 +56,7 @@ from due_diligence.reglas import (
     motivo_de_escalar,
 )
 from due_diligence.simulacion import (
+    afirmaciones_del_caso,
     comercio_alto_riesgo,
     comercio_del_registro,
     comercios_parecidos,
@@ -1430,11 +1432,13 @@ def test_los_dos_canales_ponen_exactamente_la_cobertura_calculada(situaciones):
     # cobertura del código y ninguna línea declara cubierto un frente que no terminó.
     estado, _, hooks = _caso()
     _forzar(estado, situaciones)
-    # #9: el informe necesita un comercio (aquí, el pedido) y una fuente consultada (FR-004).
+    # #9: el informe necesita un comercio (aquí, el pedido), una fuente consultada (FR-004) y una
+    # afirmación por frente cubierto (US1-6): cada frente con su consulta y su afirmación.
     estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
-    estado.agregar_consultas([consulta(Frente.REGISTRO)])
+    estado.agregar_consultas([consulta(frente) for frente in Frente])
     esperada = calcular_cobertura(estado).lineas()
-    informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("decide_cumplimiento")))
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
+    informe = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     escalamiento = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
     for salida in (informe, escalamiento):
         cobertura = _sustituida(salida)["cobertura"]
@@ -1524,10 +1528,67 @@ def test_una_afirmacion_con_una_fuente_no_consultada_se_rechaza_con_la_regla_i4(
     assert not any(e.tipo == TIPO_COBERTURA_SUSTITUIDA for e in eventos.eventos())
 
 
-def test_un_informe_valido_sin_ninguna_afirmacion_se_acepta():
-    # I.5: si nada quedó cubierto, el informe se entrega igual.
-    estado, _, hooks = _caso_con_comercio()
+def test_un_informe_sin_ninguna_afirmacion_se_acepta_si_ningun_frente_quedo_cubierto():
+    # I.5: si nada quedó cubierto, el informe se entrega igual. El comercio es el pedido, porque
+    # sin el registro terminado no hay comercio identificado.
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
+    assert not any(c.cubierto for c in calcular_cobertura(estado).frentes.values())
     entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {}}
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    comercio = {"identificador": "CO-TV-0001", "nombre": None, "verificado": False}
+    conflictos = {
+        "resumen": "No se compararon las fuentes registrales: no hay comercio identificado.",
+        "lista": [],
+    }
+    _comprobar_informe_aceptado(salida, entrada, estado, comercio=comercio, conflictos=conflictos)
+
+
+FRENTE_CUBIERTO_SIN_AFIRMACION = (
+    "El frente {frente} quedó cubierto: su resultado, aunque sea sin hallazgos, debe ir como "
+    "afirmación con fuente y fecha."
+)
+
+
+@pytest.mark.parametrize("hallazgos", [{}, {"registro": []}])
+def test_un_frente_cubierto_sin_afirmaciones_se_rechaza_con_la_regla_i4(hallazgos):
+    # US1-6: «sin hallazgos» también es una afirmación con su fuente y su fecha.
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": hallazgos}
+    rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
+    assert rechazo["motivos"] == []
+    assert rechazo["problemas"] == [
+        {
+            "ruta": "hallazgos.registro",
+            "texto": FRENTE_CUBIERTO_SIN_AFIRMACION.format(frente="registro"),
+        }
+    ]
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.4"
+    assert modulo_informe.FRENTE_CUBIERTO_SIN_AFIRMACION == FRENTE_CUBIERTO_SIN_AFIRMACION
+
+
+def test_cada_frente_cubierto_sin_afirmaciones_se_nombra_y_los_no_cubiertos_no():
+    estado, _, hooks = _caso_con_comercio()
+    for frente in (Frente.NOTICIAS, Frente.CATEGORIA):
+        estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+        estado.cambiar_situacion(frente, Situacion.TERMINADO)
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {"categoria": []}}
+    rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada)))
+    assert [p["ruta"] for p in rechazo["problemas"]] == [
+        "hallazgos.registro",
+        "hallazgos.noticias",
+        "hallazgos.categoria",
+    ]
+
+
+@pytest.mark.parametrize("hallazgos_de_listas", [None, []])
+def test_un_frente_no_cubierto_puede_ir_sin_afirmaciones(hallazgos_de_listas):
+    # I.5: listas no se delegó; puede faltar o ir vacía mientras el registro, cubierto, se cita.
+    estado, _, hooks = _caso_con_comercio()
+    entrada = _informe_de("decide_cumplimiento")
+    if hallazgos_de_listas is not None:
+        entrada["hallazgos"]["listas"] = hallazgos_de_listas
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     _comprobar_informe_aceptado(salida, entrada, estado)
 
@@ -1614,7 +1675,8 @@ def test_sin_comercio_identificado_la_cobertura_y_los_conflictos_no_se_contradic
     estado, _, hooks = _caso()
     estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
     preparar(estado)
-    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {}}
+    # Con varias coincidencias el registro quedó cubierto y se cita (US1-6); si no, va vacío.
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": afirmaciones_del_caso(estado)}
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
     comercio = {"identificador": None, "nombre": "Almacén Mirador", "verificado": False}
     conflictos = {"resumen": resumen, "lista": []}
@@ -1686,10 +1748,13 @@ def test_si_calcular_conflictos_lanza_el_informe_se_deniega_y_se_sella(monkeypat
 
 
 def _aceptar_informe(
-    hooks, recomendacion="no_habilitar", tool_use_id="t1", identificador="INF-0001"
+    hooks, recomendacion="no_habilitar", tool_use_id="t1", identificador="INF-0001", hallazgos=None
 ):
     """El `PreToolUse` acepta y la pasarela registra: el `PostToolUse` confirma la huella."""
-    entrada = {**_pre(INFORME, _informe_de(recomendacion)), "tool_use_id": tool_use_id}
+    informe = _informe_de(recomendacion)
+    if hallazgos is not None:
+        informe["hallazgos"] = hallazgos
+    entrada = {**_pre(INFORME, informe), "tool_use_id": tool_use_id}
     salida = _ejecutar(_hook_del_informe(hooks), entrada)
     respuesta = respuesta_de_decision("informe_registrado", identificador)
     post = {**_post_de(INFORME, respuesta, _sustituida(salida)), "tool_use_id": tool_use_id}
@@ -1790,7 +1855,11 @@ def test_con_el_informe_no_vigente_el_motivo_nombra_lo_que_cambio():
         "El informe registrado ya no está vigente: cambió la cobertura después de registrarlo. "
         "Registra uno nuevo."
     )
-    _aceptar_informe(hooks, tool_use_id="t2", identificador="INF-0002")
+    # Las noticias ya están cubiertas: el informe nuevo las cita (US1-6).
+    estado.agregar_consultas([consulta(Frente.NOTICIAS)])
+    _aceptar_informe(
+        hooks, tool_use_id="t2", identificador="INF-0002", hallazgos=afirmaciones_del_caso(estado)
+    )
     assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
 
 
@@ -1923,8 +1992,6 @@ def test_tras_escalar_el_informe_minimo_se_acepta_con_los_textos_fijos(monkeypat
         raise RuntimeError(TEXTO_INTERNO)
 
     # Con el sello, ni el `PreToolUse` ni la huella calculan cobertura ni conflictos (I1).
-    from due_diligence import informe as modulo_informe
-
     for modulo in (modulo_hooks, modulo_informe):
         monkeypatch.setattr(modulo, "calcular_cobertura", roto)
         monkeypatch.setattr(modulo, "calcular_conflictos", roto)
@@ -1947,6 +2014,17 @@ def test_tras_escalar_el_informe_minimo_se_acepta_con_los_textos_fijos(monkeypat
         "no calculados. Informe mínimo tras un fallo de hook."
     )
     assert all(TEXTO_INTERNO not in e.detalle for e in eventos.eventos())
+
+
+def test_el_informe_minimo_no_exige_afirmaciones_de_los_frentes_cubiertos():
+    # Con el sello la cobertura no se calcula (R9): no hay frentes cubiertos que comprobar.
+    estado, _, hooks = _caso_con_comercio()
+    _sellar(estado)
+    _escalar_confirmado(hooks)
+    entrada = {**_informe_de("decide_cumplimiento"), "hallazgos": {}}
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert salida["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert _sustituida(salida)["hallazgos"] == {}
 
 
 def test_el_informe_minimo_sigue_validando_la_forma_y_la_fuente():
@@ -1975,8 +2053,6 @@ def test_informe_minimo_tras_escalar_el_stop_permite_cerrar_y_el_caso_no_esta_co
 
     def roto(_estado):
         raise RuntimeError(TEXTO_INTERNO)
-
-    from due_diligence import informe as modulo_informe
 
     monkeypatch.setattr(modulo_informe, "calcular_cobertura", roto)
     monkeypatch.setattr(modulo_informe, "calcular_conflictos", roto)

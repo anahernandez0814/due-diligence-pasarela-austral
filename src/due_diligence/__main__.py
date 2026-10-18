@@ -11,7 +11,7 @@ de chat es del ticket #11.
 import asyncio
 import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from due_diligence import configuracion
 from due_diligence.coordinador import Caso, ejecutar_caso
@@ -25,8 +25,11 @@ INDEPENDIENTES = (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
 
 
 def _hora(marca: datetime) -> str:
-    """La hora del evento con su zona: los eventos y los informes guardados van en UTC (#9, R10)."""
-    return marca.strftime("%H:%M:%S.%f")[:-3] + " UTC"
+    """La hora del evento en UTC, como los eventos y los informes guardados (#9, R10).
+
+    Convierte antes de formatear: un reloj inyectado en otra zona no se muestra como UTC.
+    """
+    return marca.astimezone(UTC).strftime("%H:%M:%S.%f")[:-3] + " UTC"
 
 
 def _eventos_de(eventos: list[Evento], tipo: str) -> dict[Frente, Evento]:

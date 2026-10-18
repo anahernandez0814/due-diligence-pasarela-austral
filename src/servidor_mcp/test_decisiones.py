@@ -412,7 +412,7 @@ def test_si_falla_el_reemplazo_no_queda_un_archivo_a_medias(carpeta, monkeypatch
     assert [a for a in carpeta.rglob("*") if a.is_file()] == []
 
 
-# --- fecha de registro en hora local -------------------------------------------------------
+# --- fecha de registro en UTC --------------------------------------------------------------
 
 
 def test_la_hora_por_defecto_es_utc_con_su_desfase(monkeypatch):

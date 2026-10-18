@@ -239,10 +239,10 @@ _COBERTURA = _p(
         "pone el sistema a partir de lo consultado; las afirmaciones y la recomendación, quien "
         "registra. La recomendación es habilitar, no_habilitar o decide_cumplimiento (es una "
         "guía: el servidor no la valida). No valida reglas de negocio ni decide: guarda lo que "
-        "recibe. Tampoco comprueba que cada fuente se haya consultado (eso lo hace el sistema "
-        "antes de llamarla) ni escala el caso: para eso está escalar_a_cumplimiento. Si falta un "
-        "campo obligatorio o una afirmación no tiene la forma esperada, devuelve un error no "
-        "reintentable que nombra cada problema."
+        "recibe. Tampoco comprueba que cada fuente se haya consultado ni que cada frente cubierto "
+        "lleve su afirmación (eso lo hace el sistema antes de llamarla) ni escala el caso: para "
+        "eso está escalar_a_cumplimiento. Si falta un campo obligatorio o una afirmación no tiene "
+        "la forma esperada, devuelve un error no reintentable que nombra cada problema."
     ),
 )
 def registrar_informe(

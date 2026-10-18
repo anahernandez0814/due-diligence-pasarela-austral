@@ -167,6 +167,8 @@ def test_si_el_reintento_termina_antes_del_pre_el_informe_queda_vigente():
 
 SUR = "Registro Mercantil Ficticio del Sur"
 RUFE = "Registro Único Ficticio de Empresas"
+LISTA = "Lista Restrictiva Ficticia"  # la de `consulta_listas`
+CATALOGO = "Catálogo Ficticio de Categorías"  # la de `respuesta_riesgo`
 CONFLICTO_G = {
     "resumen": "1 conflicto entre las fuentes registrales.",
     "lista": [
@@ -233,8 +235,12 @@ def test_caso_g_un_conflicto_inventado_por_el_coordinador_no_queda():
     inventado = {
         "comercio": {"identificador": "CO-RF-0006", "nombre": "x", "verificado": True},
         "recomendacion": "no_habilitar",
+        # Los cuatro frentes quedan cubiertos: cada uno se cita (US1-6).
         "hallazgos": {
-            "registro": [{"texto": "Figura activo.", "fuente": SUR, "fecha": "2026-09-30"}]
+            "registro": [{"texto": "Figura activo.", "fuente": SUR, "fecha": "2026-09-30"}],
+            "listas": [{"texto": "Sin coincidencias.", "fuente": LISTA, "fecha": "2026-09-30"}],
+            "noticias": [{"texto": "Sin menciones.", "fuente": SUR, "fecha": "2026-09-30"}],
+            "categoria": [{"texto": "Riesgo medio.", "fuente": CATALOGO, "fecha": "2026-09-30"}],
         },
         "conflictos": {
             "resumen": "1 conflicto.",

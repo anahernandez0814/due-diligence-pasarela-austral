@@ -3,6 +3,8 @@
 - `fuentes_consultadas` y `problemas_de_fuente`: la fuente de cada afirmación tiene que ser una de
   las que el caso consultó para ese frente (FR-004). La pasarela no conoce el caso, así que esto lo
   comprueba el hook. Las fuentes salen de `estado.consultas`, que escribe el `Delegador`.
+- `problemas_de_frentes_cubiertos`: un frente cubierto lleva al menos una afirmación, aunque su
+  resultado sea «sin hallazgos» (US1-6). También depende del caso, así que es solo del hook.
 - `comercio_del_informe`: el comercio que el código pone en el informe (FR-006).
 - `huella_actual`, `informe_vigente` y `cambios`: qué cuenta como cambio para FR-023 (R7, decisión
   de la analista): solo la cobertura (cubierto o no por frente), los conflictos, las causas de
@@ -13,13 +15,12 @@
 Ninguna escribe en el estado ni registra eventos.
 """
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from due_diligence.cobertura import CoberturaCaso, calcular_cobertura, registro_caido
-from due_diligence.conflictos import ConflictosCaso, calcular_conflictos
+from due_diligence.conflictos import ConflictosCaso, calcular_conflictos, clave_de_valor
 from due_diligence.estado import EstadoCaso
 from due_diligence.frentes import Frente
 from due_diligence.reglas import causas_vigentes
@@ -27,6 +28,10 @@ from servidor_mcp.informe import Problema
 from servidor_mcp.normalizar import igual
 
 FUENTE_NO_CONSULTADA = "La fuente no es ninguna de las consultadas para {frente}."
+FRENTE_CUBIERTO_SIN_AFIRMACION = (
+    "El frente {frente} quedó cubierto: su resultado, aunque sea sin hallazgos, debe ir como "
+    "afirmación con fuente y fecha."
+)
 # Componente de la huella con el caso sellado (hallazgo I1): el informe mínimo lleva textos fijos
 # en la cobertura y los conflictos, así que la huella no los calcula, ni en el `PreToolUse` ni en
 # el `Stop`.
@@ -107,6 +112,23 @@ def problemas_de_fuente(estado: EstadoCaso, hallazgos: Any) -> list[Problema]:
     return problemas
 
 
+def problemas_de_frentes_cubiertos(cobertura: CoberturaCaso, hallazgos: Any) -> list[Problema]:
+    """Un problema por frente cubierto cuya lista de afirmaciones falta o está vacía (US1-6).
+
+    Un frente no cubierto puede ir vacío (I.5). Una lista con otra forma ya la nombra
+    `validar_informe`, igual que unos `hallazgos` que no son un objeto.
+    """
+    if not isinstance(hallazgos, Mapping):
+        return []
+    return [
+        Problema(
+            f"hallazgos.{frente.value}", FRENTE_CUBIERTO_SIN_AFIRMACION.format(frente=frente.value)
+        )
+        for frente, c in cobertura.frentes.items()
+        if c.cubierto and hallazgos.get(frente.value) in (None, [])
+    ]
+
+
 def huella_con(
     estado: EstadoCaso, cobertura: CoberturaCaso | None, conflictos: ConflictosCaso | None
 ) -> Huella:
@@ -127,10 +149,7 @@ def huella_con(
             tuple(
                 (
                     c.dato,
-                    tuple(
-                        (v.fuente, json.dumps(v.valor, ensure_ascii=False, sort_keys=True))
-                        for v in c.valores
-                    ),
+                    tuple((v.fuente, clave_de_valor(v.valor)) for v in c.valores),
                 )
                 for c in conflictos.lista
             ),

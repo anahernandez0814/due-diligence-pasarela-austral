@@ -39,6 +39,36 @@ uv run pytest
 Los tres comandos deben terminar sin errores; pytest ejecuta los tests de `src/` y de
 `.claude/hooks/`.
 
+## Pruebas
+
+Hay dos grupos, que se corren por separado (#12).
+
+| Grupo | Comando | Clave | Coste | Tiempo medido |
+|-------|---------|-------|-------|---------------|
+| Deterministas | `uv run pytest` | no | 0 | ≈ 4 min 37 s (4781 tests) |
+| De punta a punta, los casos (a)–(g) con el modelo real | `uv run pytest -m e2e -rs` | sí | ≈ 1,10 USD por ejecución completa | ≈ 1 min 25 s (los 7 a la vez) |
+
+- **Deterministas**: todos los tests de `src/` y `.claude/hooks/`, sin el modelo ni la red. El tiempo
+  está cerca del límite de 5 minutos: lo más lento son los tests de las guardas que crean
+  repositorios git de prueba. No necesitan
+  `ANTHROPIC_API_KEY` y nunca ejecutan los de punta a punta, aunque la clave esté definida: la marca
+  `e2e` está excluida en `pyproject.toml`.
+- **De punta a punta** (`src/due_diligence/test_e2e_casos.py`): un test por caso obligatorio, con el
+  coordinador y los subagentes reales, la pasarela con datos ficticios y todos los hooks. Toman la
+  clave del archivo de entorno, como el chat (ver «Interfaz de chat»). Los siete corren en paralelo y
+  cada uno escribe sus informes en una carpeta temporal, no en `resultados/`. Al final, pytest
+  imprime el coste y la duración de cada caso; el coste es aproximado (el coordinador más la última
+  ejecución de cada subagente).
+- **Sin la clave**, los siete salen **«skipped»** con el motivo (`-rs` lo muestra). **Omitido no
+  significa que pasó**: hay que configurar la clave y volver a ejecutarlos.
+- **Repetir un solo caso**, con el coste de ese caso: `uv run pytest -m e2e -rs -k caso_d`; los que
+  fallaron la última vez: `uv run pytest -m e2e -rs --lf`.
+- **Si el servicio limita la tasa**, se bajan los casos a la vez con `PASARELA_E2E_PARALELO=3`
+  (por defecto, 7). Con menos de 7 en paralelo el grupo puede pasar de 5 minutos.
+- Las verificaciones de punta a punta miran lo que hizo el sistema (eventos, llamadas a las
+  herramientas de la pasarela, cobertura y espera del analista), nunca el texto del modelo; un test
+  determinista lo comprueba (`test_observacion.py`).
+
 ## Token de GitHub para Claude Code (`GITHUB_PAT`)
 
 Claude Code lee y actualiza el GitHub Project con el servidor MCP oficial de GitHub

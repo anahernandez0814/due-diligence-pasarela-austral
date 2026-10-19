@@ -207,3 +207,12 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   - el coste por caso no se ve en el chat (desviación D2).
 
 Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/plan.md` y `research.md`.
+
+## 13. Suite de los siete casos
+
+- **Los casos (a)–(g) de punta a punta con el modelo real** (`test_e2e_casos.py`), con la marca `e2e`, excluida de `uv run pytest`. Corren en paralelo en un solo bucle de eventos y solo los seleccionados (`-k caso_d` cuesta un caso); sin la clave se omiten con el motivo. Cada uno con su entorno y su carpeta de registros.
+- **Solo eventos y llamadas, nunca el texto**: los tests reciben una `Observacion` sin texto del modelo, y un test determinista lo fija con campos cerrados y un guarda AST.
+- **«Stop» o recarga durante un hook** (R9): la excepción de control de Streamlit se guarda en el registro de eventos, el hook decide y su denegación sale (I.1, I.2), y en cuanto devuelve se corta el turno y se relanza la misma excepción. `CancelledError` sigue propagándose. Tras un turno interrumpido, el siguiente mensaje abre un caso nuevo (opción A).
+- Las noticias simuladas llevan la fuente del diario. Fuera de alcance: US3-9 del #10 y las sugerencias pendientes de los PR #26 y #27.
+
+Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.

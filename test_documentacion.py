@@ -124,6 +124,15 @@ def test_cada_enlace_al_detalle_llega_a_un_encabezado():
     assert not rotos, f"enlaces sin encabezado en el detalle: {rotos}"
 
 
+@pytest.mark.parametrize("encabezado", ["Flujo de trabajo", "Límites conocidos"])
+def test_cada_tema_del_flujo_y_de_los_limites_enlaza_al_detalle(encabezado):
+    cuerpo = seccion(leer(DECISIONES), encabezado)
+    temas = [linea for linea in cuerpo.splitlines() if linea.startswith("- ")]
+    assert temas, f"«{encabezado}» no tiene temas"
+    sin_enlace = [tema for tema in temas if "(docs/decisiones-detalle.md#" not in tema]
+    assert not sin_enlace, f"«{encabezado}»: temas sin enlace al detalle: {sin_enlace}"
+
+
 def test_los_enlaces_internos_del_detalle_llegan_a_un_encabezado():
     texto = leer(DETALLE)
     rotos = sorted({e for e in re.findall(r"\]\(#([^)]+)\)", texto) if e not in anclas(texto)})

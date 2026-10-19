@@ -265,6 +265,19 @@ Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `
 - **Revisión de credenciales sin valores**: `docs/entrega.md` busca prefijos con `git grep -l` en cada commit y pasa el detector del plugin por cada blob único del historial; solo imprime commit, archivo y tipo, y un test lo comprueba con una credencial generada al ejecutar (R10).
 - **Alternativas descartadas**: recortar `DECISIONES.md` borrando lo decidido, medir el HTML renderizado, `Compress-Archive` y `git archive` para el .zip, y `git log -p | grep` para las credenciales.
 
+## 16. Flujo de ramas por ticket
+
+- **Necesidad o tema**: trazabilidad de cada cambio (constitución IX) y el historial intacto como evidencia ([enunciado](enunciado.md), «Entregables»). Es el tema «Ramas» de [DECISIONES.md](../DECISIONES.md); hasta el #14 solo estaba en `docs/bitacora-decisiones.md` (3.3).
+- **Decisión**: un ticket = un issue de GitHub = una rama `NNN-nombre-corto` creada desde `main` actualizado; nunca se commitea en `main`. El cambio entra por un PR hacia `main` con `Closes #N`, que se fusiona con «Create a merge commit», sin squash ni rebase.
+- **Quién lo hace**:
+  - `CLAUDE.md` lo fija como convención del equipo.
+  - La skill `siguiente-ticket` se detiene si ya hay una rama con ese NNN, local o en `origin`, y si no, hace `git switch main`, `git pull --ff-only` y `git switch -c NNN-<nombre-corto>` (entrada 3).
+  - `/abrir-pr` exige una rama distinta de `main` que cumpla `^(\d{3})-[a-z0-9-]+$` y abre el PR con `base: main` y la línea `Closes #N`; al fusionarse, «Item closed» pasa el ticket a Done (entrada 3).
+  - `guarda_spec_previa` bloquea escribir código protegido en una rama que no es de un ticket, así que tampoco en `main` (entrada 4).
+- **Motivo**: el merge commit conserva cada commit del ticket (spec, plan, tareas, código y las correcciones tras la revisión, siempre en commits nuevos) en su orden, que es lo que mira un evaluador para reconstruir el avance. Squash los aplastaría en uno, y squash o rebase cambiarían sus sha: el commit revisado que citan el PR y el issue (entrada 5) dejaría de estar en `main`. Los PR #15 a #29 entraron así: 15 merge commits en `main`.
+- **Límite**: el método de fusión lo elige quien fusiona el PR en GitHub; ninguna guarda del repositorio lo impone, porque Claude Code no fusiona.
+- **Alternativas descartadas**: squash merge, rebase merge y trabajar directo en `main`.
+
 ## Desviaciones declaradas
 
 Índice de las desviaciones justificadas de los tickets #10 a #12; el texto completo está en la entrada citada y en el plan del ticket.

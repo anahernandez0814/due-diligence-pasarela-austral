@@ -113,7 +113,8 @@ for sha, tipo, tamano in zip(objetos[::3], objetos[1::3], objetos[2::3]):
     if b"\0" in datos[:8000]:
         continue
     for tipo_dato in sorted({t for t, _ in buscar(datos.decode("utf-8", "replace"))}):
-        commit = git("log", "--all", "--format=%h", f"--find-object={sha}").decode().split()[-1]
+        commits = git("log", "--all", "--format=%h", f"--find-object={sha}").decode().split()
+        commit = commits[-1] if commits else "(commit no encontrado)"
         print(f"{commit}  {rutas[sha]}  {tipo_dato}")
         hallazgos += 1
 print(f"Hallazgos: {hallazgos}")

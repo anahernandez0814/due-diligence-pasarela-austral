@@ -33,7 +33,7 @@ completo, las mediciones y los riesgos residuales están en
 ## Flujo de trabajo
 
 - **Arranque** (#1, [E2](docs/decisiones-detalle.md#2-ciclo-manual-de-tickets-durante-la-transición)): #1 y #2 hicieron a mano el ciclo que automatizan #2 y #4; hasta el #3, formato y `.env` a mano.
-- **Ramas**: un ticket, una rama `NNN-nombre` desde `main` y un PR con `Closes #N` y merge commit.
+- **Ramas** ([E16](docs/decisiones-detalle.md#16-flujo-de-ramas-por-ticket)): un ticket, una rama `NNN-nombre` desde `main` y un PR con `Closes #N` y merge commit.
 - **Project**: «Item closed» pasa a Done al cerrarse el issue; los PR no están en el Project, así que «Pull request merged» no mueve nada (corrige FR-015 del #2 y la [E3](docs/decisiones-detalle.md#3-ciclo-de-tickets-automatizado)).
 
 ## Límites conocidos

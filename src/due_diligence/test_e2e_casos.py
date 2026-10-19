@@ -24,16 +24,21 @@ pytestmark = pytest.mark.e2e
 
 ALMACEN = "CO-AM-0004"
 ALMACEN_NORTE = ("CO-AM-0005", "Almacén Mirador Norte SAS")
+REPRESENTANTE_NORTE = ("PE-0005", "Gaspar Linares Ibáñez")  # el de CO-AM-0005
 
 
 def _comunes(observado):
-    """Lo que vale para todo caso: registros coherentes y listas solo tras identificar (US1-8)."""
+    """Lo que vale para todo caso: registros coherentes y listas solo tras identificar (US1-8).
+
+    Solo cuentan las consultas válidas: una denegada o no válida no consultó ninguna fuente.
+    """
     assert observado.registros_coherentes, "el libro y los registros de la pasarela no cuadran"
-    listas = [i for i, c in enumerate(observado.consultas) if c.frente == "listas"]
+    validas = [c for c in observado.consultas if c.valida]
+    listas = [i for i, c in enumerate(validas) if c.frente == "listas"]
     if listas:
         unicas = [
             i
-            for i, c in enumerate(observado.consultas)
+            for i, c in enumerate(validas)
             if c.frente == "registro" and c.clase_registro == "unica"
         ]
         assert unicas, "se consultaron listas sin una identificación única en el registro"
@@ -106,6 +111,14 @@ def test_caso_d_dos_turnos(caso_e2e):
             and mismo_identificador(consulta.identificador, ALMACEN_NORTE[0])
         )
         assert not (consulta.nombre is not None and mismo_nombre(consulta.nombre, ALMACEN_NORTE[1]))
+    for consulta in (c for c in segundo.consultas_listas if c.tipo == "persona"):
+        assert not (
+            consulta.identificador is not None
+            and mismo_identificador(consulta.identificador, REPRESENTANTE_NORTE[0])
+        ), "una consulta de listas es del representante legal de CO-AM-0005"
+        assert not (
+            consulta.nombre is not None and mismo_nombre(consulta.nombre, REPRESENTANTE_NORTE[1])
+        ), "una consulta de listas es del representante legal de CO-AM-0005"
     assert len(segundo.informes) >= 1, "el segundo turno no registró el informe"
 
 

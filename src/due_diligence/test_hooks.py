@@ -2738,9 +2738,22 @@ def test_un_resumen_valido_sustituye_lo_del_codigo_y_deja_pendiente_el_escalamie
 
     estado, eventos, hooks = _caso_con_comercio()
     estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
-    declarado = {**_escalamiento(), "causa_escalamiento": "otra causa", "cobertura": "completa"}
+    # US2-4, FR-009: lo declarado es distinto en el comercio, la cobertura y la causa; lo que llega
+    # a la pasarela es lo del código. El comercio declarado es otro, para que una entrada que
+    # dejara pasar el del coordinador no coincida por casualidad con el del código.
+    declarado = {
+        **_escalamiento(),
+        "comercio": {
+            "identificador": "CO-ZZ-9999",
+            "nombre": "Comercio Declarado SAS",
+            "verificado": False,
+        },
+        "causa_escalamiento": "otra causa",
+        "cobertura": "completa",
+    }
     salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, declarado))
     sustituida = _sustituida(salida)
+    assert sustituida["comercio"] == COMERCIO_VERIFICADO != declarado["comercio"]
     assert sustituida == {
         "comercio": COMERCIO_VERIFICADO,
         "hallazgos": declarado["hallazgos"],

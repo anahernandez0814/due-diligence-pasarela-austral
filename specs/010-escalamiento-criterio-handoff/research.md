@@ -45,7 +45,7 @@ Lo marcado *(medido)* se comprobó con `claude-agent-sdk` 0.2.168, Haiku 5.5 y u
 - Para no decidir por subcadenas del motivo (sugerencia de la revisión del #7), `Identificacion` gana un campo `clase` (`unica`, `varias`, `ninguna`, `contradictoria` o `invalida`), que fija `derivar_comercio`. `EstadoCaso.clase_identificacion` lo consolida igual que `comercio`. `_motivo_sin_comercio` pasa a leer la clase.
 - La clase sale de una función hermana pura, `clase_de(resultado)`, junto a `derivar_comercio`, que sigue devolviendo `(comercio, motivo)` para no tocar a sus llamadores.
 - `contradictoria` (D3 del #9) **no** es una espera (decisión de la analista).
-- **El registro caído, por sí solo, no es una espera**. La espera `categoria` vale con cualquier estado del registro, también el caído, porque solo mira `categoria_bloqueada` y `consultas_riesgo`. Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
+- **El registro caído no es una espera**. La espera `categoria` mira `categoria_bloqueada` y `consultas_riesgo`, y vale con cualquier estado del registro **salvo el caído**: con el registro caído el cierre exige el informe con la categoría no determinada (I.5; corrección de criterio de la revisión previa). Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
 - **Durante la espera `identificador` o `nombre`** (FR-016):
   - el `PreToolUse` de `registrar_informe` rechaza el informe con su motivo fijo: `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` («El registro devolvió varias coincidencias: pida el identificador al analista antes de registrar el informe.») o `MOTIVO_INFORME_ESPERA_NOMBRE` («El registro no encontró el comercio: pida al analista que revise el nombre antes de registrar el informe.»);
   - la regla del evento es `V`;
@@ -229,3 +229,5 @@ Además, `_REGLA_ESCALAR` dice «No escales un comercio de bajo riesgo sin ning�
 5. **Riesgo residual 1 del #9** (informe vigente con afirmaciones viejas): decisión aceptada, sin cambio.
 6. **El texto de la respuesta al analista** sigue siendo del modelo: que muestre las coincidencias y pida el identificador es guía. Lo garantizado es que no se consultan listas, no se escala y no se informa sin identificador.
 7. **La acción recomendada** no se contrasta con nada: es texto del coordinador para el oficial.
+10. **La categoría que consulta el subagente no tiene guarda `PreToolUse`**: FR-020 comprueba la categoría al delegar, pero el subagente de categoría puede consultar otra distinta de la delegada, y el libro guarda la que devuelve la herramienta. El pendiente 1 del #7 («la categoría consultada la elige el modelo») queda abierto en el subagente. Listas sí tiene esa segunda guarda (I.1).
+11. **Con el caso sellado, el resumen no comprueba las fuentes citadas** (D4 del plan).

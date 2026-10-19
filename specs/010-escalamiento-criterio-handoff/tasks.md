@@ -484,6 +484,21 @@ La revisión de `/abrir-pr` del commit `2cda1c4` dio **con bloqueantes**: dos de
 - [X] T062 Test de US2-7 / FR-007 (revisión de código, `spec.md:50`): `test_hooks.py::test_us2_7_tras_un_resumen_rechazado_se_corrige_se_escala_y_el_caso_cierra`.
 - [X] T063 ruff y la suite completa en verde. Commit de las correcciones y `/abrir-pr`.
 
+## Fase 12: segunda ronda de la revisión previa
+
+La revisión de `/abrir-pr` del commit `8658d6c` dio **con bloqueantes**: uno de la revisión de código; la auditoría, sin bloqueantes. En esta ronda se corrige, se aplica una corrección de criterio de la analista y las sugerencias que ella eligió. Tests antes que el código. Las duplicaciones (`hooks.py`, `_escalar_previo` frente a `_denegar_informe`; `reglas.consulta_del_comercio` frente a `consulta_coincide`; `estado.clase_identificacion` frente a `_consolidar_comercio`) no se tocan: van en la descripción del PR como mejoras pendientes.
+
+- [X] T064 FR-010 / US2-5 (bloqueante): `test_hooks.py::test_caso_g_el_resumen_guardado_lleva_los_dos_valores_con_su_fuente`. Escala el caso (g), pasa la entrada completa por `decisiones.escalar_a_cumplimiento` y compara con igualdad exacta los conflictos del archivo guardado con las dos fechas de constitución y su fuente. Ya pasaba (el código era correcto; faltaba el test). Mutación comprobada: con `hooks.py` poniendo siempre «sin conflictos» en el resumen, falla.
+- [X] T065 Corrección de criterio de la analista (I.5): con el registro caído no hay espera de la categoría y el cierre exige el informe. `reglas.espera_del_analista` mira `cobertura.registro_caido`. Tests primero: `test_reglas.py` (el caído sale de los estados con espera de categoría, `test_con_el_registro_caido_la_categoria_bloqueada_no_es_espera`, y el recorrido de SC-004 con caído × bloqueada sin espera) y `test_hooks.py::test_con_el_registro_caido_la_categoria_bloqueada_no_es_espera_y_se_exige_el_informe`. spec (US4-3, FR-014, FR-015, SC-004, decisión confirmada), R3, data-model, contrato `continuacion-y-cierre.md` y `DECISIONES.md` actualizados.
+- [X] T066 D4 en «Desviaciones justificadas» del plan y en `DECISIONES.md`: con el caso sellado el resumen no comprueba las fuentes citadas (FR-008, I.4).
+- [X] T067 `resumen_sellado` solo con las seis claves del esquema. Test `test_con_el_sello_el_resumen_lleva_solo_las_claves_del_esquema`, que fallaba antes del cambio.
+- [X] T068 Descripciones de `escalar_a_cumplimiento` y de `causa_escalamiento` con todos los casos: las tres causas (coincidencia del comercio o del representante, alto riesgo, fallo de hook) y los cinco motivos sin causa. Tests de `test_servidor.py` primero.
+- [X] T069 Guía de datos del coordinador y descripción de `delegar_frente`: «los datos que dio el analista en sus mensajes» en lugar de «de la solicitud».
+- [X] T070 `__main__`: `CasoSinSesion` se muestra con `MENSAJE_SIN_SESION` en stderr, sin traza, y la salida es 1. Test `test_sin_sesion_que_continuar_muestra_un_mensaje_y_no_una_traza`, que fallaba antes del cambio.
+- [X] T071 Limpieza: comentarios de «nunca se deniega» en `hooks.py`, `_sustituir_cobertura` quitada (sin llamadores), `test_libro.py` con `Escalamiento`, imports de `test_cobertura.py` en la cabecera, comentario de `con_causas` en el recorrido de SC-004 y contrato `escalar-a-cumplimiento.md` alineado con `denegar_decision` y las excepciones de FR-016.
+- [X] T072 Riesgo residual 10 de R13: no hay guarda `PreToolUse` sobre la categoría que consulta el subagente.
+- [X] T073 ruff y la suite completa en verde. Un commit. Resumen a la analista **antes** de relanzar `/abrir-pr`.
+
 ## Para otros tickets (no se corrige en el #10)
 
 - **#12, simulación de noticias**: sin un resultado asignado, el `EjecutorSimulado` da a noticias la fuente por defecto `FUENTE` («Registro Mercantil Ficticio del Sur»); la real es «Diario Ficticio del Sur». Por eso el resumen simulado del caso (a) cita el registro como fuente de noticias. Solo afecta a la simulación: la pasarela real usa su fuente y FR-004 compara con la fuente que devolvió cada consulta (observación de la analista en la parada B).
@@ -532,19 +547,19 @@ La revisión de `/abrir-pr` del commit `2cda1c4` dio **con bloqueantes**: dos de
 | FR-004 | T005, T006, T034, T039 |
 | FR-005 | T045 |
 | FR-006, FR-007 | T030 a T033, T062 |
-| FR-008 | T025, T030, T034 |
+| FR-008 | T025, T030, T034, T066 (D4) |
 | FR-009 | T034, T035 |
-| FR-010 | T030, T034 |
+| FR-010 | T030, T034, T064 |
 | FR-011 | T030, T043 |
-| FR-012 | T036, T037 (D2: comercio fijo) |
+| FR-012 | T036, T037 (D2: comercio fijo), T067 |
 | FR-013 | T014, T015, T045 |
-| FR-014 | T010 a T013, T020, T023 |
-| FR-015 | T024 |
+| FR-014 | T010 a T013, T020, T023, T065 |
+| FR-015 | T024, T065 |
 | FR-016 | T012, T013 (informe), T036, T039, T041, T042, T060 (escalamiento) |
 | FR-017 | T016, T017 |
 | FR-018 | T014, T015 |
-| FR-019 | T048, T061 |
-| FR-020 | T020, T021 |
+| FR-019 | T048, T061, T070 |
+| FR-020 | T020, T021, T069, T072 (riesgo residual) |
 | FR-021 | T034 |
 | FR-022 | reglas para todas las tareas, T010, T020, T034, T045 |
 | FR-023 | T045 |
@@ -556,9 +571,10 @@ La revisión de `/abrir-pr` del commit `2cda1c4` dio **con bloqueantes**: dos de
 | SC-001 | T045, T055, T056 |
 | SC-002 | T030, T032, T034 |
 | SC-003 | T045, T057 |
-| SC-004 | T023, T060 |
+| SC-004 | T023, T060, T065 |
 | SC-005 | T055 |
 | SC-006 | T009, T019, T022, T029, T038, T050, T054 |
 | R4 (tests a y b) | T014 |
 | D2 (comercio fijo con el sello) | T030, T036 |
 | D3 (alto riesgo en la espera) | T041, T060 (no cubre una coincidencia en listas) |
+| D4 (resumen sellado sin comprobar fuentes) | T066, T067 |

@@ -7,7 +7,13 @@ comparte nada con otro libro.
 import copy
 from dataclasses import fields
 
-from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo, LibroReglas
+from due_diligence.libro import (
+    Coincidencia,
+    ConsultaListas,
+    ConsultaRiesgo,
+    Escalamiento,
+    LibroReglas,
+)
 
 
 def test_un_libro_nuevo_empieza_vacio():
@@ -27,7 +33,9 @@ def test_dos_libros_no_comparten_listas():
     )
     uno.coincidencias.append(Coincidencia("persona", "Lista A", "Fuente A", "2026-09-30"))
     uno.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
-    uno.escalamientos.append(frozenset({"alto_riesgo"}))
+    uno.escalamientos.append(
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    )
     uno.cierres_impedidos += 1
     uno.fallo_de_hook = "fallo"
     assert otro.consultas_listas == [] and otro.coincidencias == []

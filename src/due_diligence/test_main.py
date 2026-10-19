@@ -421,6 +421,31 @@ def test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar(
     assert "Esperando al analista:" in salida
 
 
+def test_sin_sesion_que_continuar_muestra_un_mensaje_y_no_una_traza(monkeypatch, capsys):
+    # El primer turno dejó una espera pero no un `session_id` (terminó sin `ResultMessage`).
+    from due_diligence.coordinador import CasoSinSesion
+
+    async def sin_sesion(solicitud):
+        caso = await _caso_d_simulado([])(solicitud)
+        caso.session_id = None
+        return caso
+
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", sin_sesion)
+    preguntas = []
+
+    def leer(pregunta):
+        preguntas.append(pregunta)
+        return "CO-AM-0005"
+
+    assert principal.main(["solicitud"], leer=leer) == 1
+    capturado = capsys.readouterr()
+    assert principal.MENSAJE_SIN_SESION in capturado.err
+    assert "Traceback" not in capturado.err and CasoSinSesion.__name__ not in capturado.err
+    assert preguntas == [principal.PREGUNTA_AL_ANALISTA]  # no vuelve a preguntar
+    assert capturado.out.count("Eventos del caso:") == 1
+
+
 def test_con_sin_continuar_no_pregunta(monkeypatch, capsys):
     monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
     monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([]))

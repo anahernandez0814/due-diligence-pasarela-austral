@@ -137,12 +137,12 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **Esperas del analista** (R3, FR-014; decisión de la analista): el `Stop` solo deja terminar un turno sin escalar ni informar cuando el código **comprueba en el estado** que falta un dato del analista. No basta con el texto del modelo. Hay tres esperas:
   - `identificador`: varias coincidencias en el registro;
   - `nombre`: ninguna coincidencia;
-  - `categoria`: la última delegación de categoría la bloqueó I.3 y no hay ningún resultado de categoría.
+  - `categoria`: la última delegación de categoría la bloqueó I.3, no hay ningún resultado de categoría y el registro no está caído.
 
   Qué hacen:
   - Las del registro no gastan devoluciones y dejan el evento `espera_analista`.
   - **La espera de la categoría exime solo del informe** (corrección de la parada A): si hay una causa sin cubrir (una coincidencia o el sello), el cierre sigue exigiendo el escalamiento.
-  - El registro caído, por sí solo, no es una espera.
+  - El registro caído no es una espera, tampoco con la categoría bloqueada (corrección de criterio de la analista en la revisión previa): el cierre exige el informe con la categoría no determinada, como pide I.5.
   - **Las fuentes que difieren en el nombre o el representante (D3 del #9) no son una espera** (decisión de la analista): no hay datos ficticios con ese caso y dejaría el caso sin salida.
 
   Para no decidir por subcadenas del motivo, la identificación tiene una clase (`clase_de`: única, varias, ninguna, contradictoria o inválida). Con el comercio identificado y la categoría con resultado, una pregunta al analista sigue exigiendo el cierre completo (FR-015): es el cambio a sabiendas de la limitación del #9. Durante la espera del identificador o del nombre, el informe se rechaza (FR-016); **cambio respecto al #9**, que lo aceptaba con el comercio pedido.
@@ -177,6 +177,7 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   - la espera tiene salida, el identificador o un nombre corregido, y el turno siguiente exige el escalamiento;
   - con el sello se escala igual;
   - solo cubre el alto riesgo: una coincidencia en listas de un comercio anterior (D1) se escala sin esperar, y el cierre la exige (regla I.2, corrección de la revisión previa).
+- **D4, el resumen con el caso sellado no comprueba las fuentes citadas** (desviación justificada de FR-008 e I.4): tras un fallo de hook el libro puede haber perdido datos y escalar es la salida segura (FR-012). **Mitigación**: la cobertura y los conflictos van como «no calculados», la pasarela sigue exigiendo fuente y fecha en cada afirmación y el caso no figura como completo.
 - **Riesgos residuales** (R13):
   1. plurales y varias categorías en FR-020;
   2. D1;
@@ -186,6 +187,8 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   6. el texto que pide el identificador lo redacta el modelo: lo garantizado son las acciones;
   7. la acción recomendada no se contrasta;
   8. D2;
-  9. D3.
+  9. D3;
+  10. el subagente de categoría puede consultar una categoría distinta de la delegada: no hay guarda `PreToolUse` sobre su consulta;
+  11. D4.
 
   Detalle en `specs/010-escalamiento-criterio-handoff/research.md` y `plan.md`.

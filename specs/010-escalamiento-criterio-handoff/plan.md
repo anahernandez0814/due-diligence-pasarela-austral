@@ -68,7 +68,7 @@ El presupuesto de turnos pasa a 21 de 30 por turno.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1, D2 y D3** de la sección siguiente.
+Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 a D4** de la sección siguiente.
 
 | Principio | Estado | Cómo |
 |-----------|--------|------|
@@ -97,7 +97,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1,
   - la limitación del `Stop` del #9.
 - **I.5 aplica**: la cobertura cambia por FR-027.
 
-**Re-evaluación tras el diseño (Fase 1)**: se mantiene. Los riesgos residuales están en R13 de [research.md](research.md). Los que contradicen un requisito de la spec o un principio son D1, D2 y D3; el resto se explica bajo la tabla.
+**Re-evaluación tras el diseño (Fase 1)**: se mantiene. Los riesgos residuales están en R13 de [research.md](research.md). Los que contradicen un requisito de la spec o un principio son D1 a D4; el resto se explica bajo la tabla.
 
 ## Desviaciones justificadas
 
@@ -106,6 +106,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1,
 | D1 | **Las coincidencias de un comercio anterior siguen siendo causas** si el analista cambia de comercio en un turno posterior: el libro no las borra (comportamiento desde el #7, R13.2). Además, el resumen del comercio nuevo muestra la causa «coincidencia del comercio» **sin una afirmación que la respalde**: R7 no deja citar la consulta del otro comercio. | FR-001 («si, y solo si, tiene una causa vigente»), V (escalar de más satura al oficial) y el resumen autosuficiente de V. | Borrar o filtrar coincidencias del libro toca la garantía de I.2 de los tickets #7 al #9. Un error ahí habilita de menos riesgo, que es peor que escalar de más. El caso del cambio de comercio no está entre los obligatorios. | Escala de más, nunca habilita de más. El escalamiento anterior no cubre al comercio nuevo (R8), así que el oficial recibe el caso con la causa nombrada. Aceptada por la analista; queda para un ticket posterior si lo pide. |
 | D2 | **Sin comercio identificado ni pedido, el escalamiento se rechaza** (R5, paso 4). Ocurre, por ejemplo, con el alto riesgo detectado antes de delegar el registro. | FR-003 (en un caso sin comercio comprobado, escalar se admite) y FR-001 (el alto riesgo exige escalar). | El oficial no puede recibir un caso sin comercio: el resumen no sería autosuficiente (V). Basta con delegar primero el registro, que deja el comercio pedido. | El motivo del rechazo pide delegar el registro (`MOTIVO_SIN_COMERCIO_ESCALAMIENTO`). Con el sello no se rechaza: va `COMERCIO_NO_IDENTIFICADO` (R5, paso 1) para que FR-012 se cumpla. |
 | D3 | **Con alto riesgo y el caso esperando el identificador o el nombre** (varias coincidencias o ninguna), **el escalamiento se rechaza** hasta identificar al comercio (FR-016, R5 paso 2). | Principio V («Se escala por… categoría de alto riesgo») y FR-001. | Escalar un comercio sin identificar llevaría al oficial un caso que no sabe a qué comercio corresponde. V también pide pedir el identificador en vez de elegir. | No se habilita y no figura como completo. La espera tiene salida: el analista da el identificador o corrige el nombre, y el escalamiento se exige en el turno siguiente. Con el sello se escala igual (excepción de FR-016). D3 cubre solo el alto riesgo: una coincidencia en listas de un comercio anterior (D1) se escala sin esperar, y el cierre la exige (excepción por I.2 de FR-016, corrección de la revisión previa). |
+| D4 | **Con el caso sellado, el resumen al oficial no comprueba que las fuentes citadas se consultaran** (`resumen_sellado`, R5 paso 1). | FR-008 (el resumen se valida como el informe, con la fuente consultada) e I.4. | Tras un fallo de hook el libro puede haber perdido datos, así que comprobar las fuentes contra él podría rechazar un escalamiento legítimo; escalar es la salida segura (FR-012). | La cobertura y los conflictos van como «no calculados», la causa nombra el fallo de hook, la pasarela sigue exigiendo fuente y fecha en cada afirmación y el caso no figura como completo. |
 
 **Riesgos de R13 que no son desviaciones**:
 - **1, plurales y varias categorías en FR-020**: los declara la spec (US5-5, Supuestos).
@@ -125,6 +126,11 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1,
 - **I.2 en la espera del registro** (bloqueante de la auditoría): con D1, una coincidencia de un comercio anterior seguía siendo causa mientras el caso esperaba el identificador, pero el `Stop` admitía la espera y `evaluar_escalamiento` rechazaba escalar, así que quedaba sin escalar y sin marca. Ahora `espera_exime_de_escalar` decide en los dos sitios: las esperas del registro eximen del alto riesgo (D3), no de una coincidencia.
 - **Un `asyncio.Event` por ejecución de cada frente** (bloqueante de la revisión de código): cada turno corre en su propio `asyncio.run` (R1), y en Python 3.12 un `Event` queda atado al bucle del primero que lo espera. Reutilizarlo hacía fallar con `RuntimeError` a `listas` si esperaba al registro en curso en dos turnos.
 - **El test de US2-7 / FR-007** (bloqueante de la revisión de código): un resumen rechazado, la corrección, el escalamiento aceptado y el cierre permitido, encadenados en el mismo caso.
+
+**Segunda ronda** (commit `8658d6c`, fase 12 de [tasks.md](tasks.md)):
+- **El test de FR-010 / US2-5** (bloqueante de la revisión de código): el resumen guardado del caso (g) lleva las dos fechas de constitución con su fuente.
+- **Corrección de criterio de la analista**: con el registro caído no hay espera de la categoría y el cierre exige el informe (I.5).
+- **D4** declarada; `resumen_sellado` solo con las claves del esquema; descripciones de `escalar_a_cumplimiento` con todos los casos; guía de datos «que dio el analista en sus mensajes»; `CasoSinSesion` como mensaje en la línea de comandos; limpieza de comentarios, código muerto y contrato; riesgo residual 10 de R13.
 
 ## Decisiones del plan
 
@@ -240,4 +246,4 @@ src/due_diligence/
 
 ## Complexity Tracking
 
-Sin violaciones de la constitución que justificar. Las desviaciones de requisitos de la spec y del principio V son D1, D2 y D3, con su motivo y su mitigación arriba.
+Sin violaciones de la constitución que justificar. Las desviaciones de requisitos de la spec y de los principios I.4 y V son D1 a D4, con su motivo y su mitigación arriba.

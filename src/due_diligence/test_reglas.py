@@ -908,17 +908,24 @@ def test_el_registro_caido_por_si_solo_no_es_espera():
     assert espera_del_analista(_registro_caido()) is None
 
 
-@pytest.mark.parametrize("estado_base", ["identificado", "caido", "sin_delegar"])
-def test_la_categoria_bloqueada_sin_resultado_es_espera_con_cualquier_registro(estado_base):
+@pytest.mark.parametrize("estado_base", ["identificado", "sin_delegar"])
+def test_la_categoria_bloqueada_sin_resultado_es_espera_sin_el_registro_caido(estado_base):
     from due_diligence.reglas import MOTIVO_ESPERA_CATEGORIA, Espera, espera_del_analista
 
     estado = {
         "identificado": _con_comercio,
-        "caido": _registro_caido,
         "sin_delegar": lambda: _estado_con_registro(Situacion.SIN_INICIAR, identificar=False),
     }[estado_base]()
     _con_categoria_bloqueada(estado)
     assert espera_del_analista(estado) == Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
+
+
+def test_con_el_registro_caido_la_categoria_bloqueada_no_es_espera():
+    # I.5 (corrección de criterio): con el registro caído se entrega el informe con la categoría
+    # no determinada; no se espera al analista.
+    from due_diligence.reglas import espera_del_analista
+
+    assert espera_del_analista(_con_categoria_bloqueada(_registro_caido())) is None
 
 
 @pytest.mark.parametrize("nivel", ["bajo", None])
@@ -1035,6 +1042,10 @@ def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria
         estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
     elif categoria == "bloqueada":
         estado.categoria_bloqueada = True
+    # `con_causas` no cambia ninguna aserción a propósito: la espera solo depende del registro y de
+    # la categoría, nunca de las causas. Lo que las causas cambian es si el cierre exime de escalar
+    # (`espera_exime_de_escalar`), y eso lo prueban los tests del `Stop` en `test_hooks.py`
+    # (`test_i2_*` y los de la espera de la categoría con coincidencia).
     if con_causas:
         estado.libro.coincidencias.append(Coincidencia("persona", "Lista A", "F", "2026-09-30"))
     espera = espera_del_analista(estado)
@@ -1042,8 +1053,8 @@ def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria
         assert espera.clase == "identificador"
     elif registro == "ninguna":
         assert espera.clase == "nombre"
-    elif categoria == "bloqueada":
-        # Hallazgo A1: también con el registro caído, que por sí solo no es una espera.
+    elif categoria == "bloqueada" and registro != "caido":
+        # Con el registro caído no hay espera de la categoría: se exige el informe (I.5).
         assert espera.clase == "categoria"
     else:
         assert espera is None

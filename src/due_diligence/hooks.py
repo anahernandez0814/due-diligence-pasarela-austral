@@ -14,7 +14,9 @@ Lo medido con el SDK 0.2.168 (research R1 a R3) condiciona el diseño:
   envuelven con `fallar_cerrado` y sus salidas se construyen solo con `permitir`, `denegar`,
   `bloquear_cierre` y `reemplazar_entrada` (la cobertura calculada por el código, #8).
 - La excepción es el `PreToolUse` de `escalar_a_cumplimiento`: escalar es la acción segura, así
-  que va envuelto con `degradar_escalamiento`, que nunca deniega (#8, R6).
+  que va envuelto con `degradar_escalamiento`, con el que una excepción nunca deniega (#8, R6).
+  Desde el #10 (R5) el hook sí deniega en los casos que comprueba: la espera del registro, el
+  bajo riesgo sin hallazgos, un resumen mal formado o sin fuente y la falta de comercio.
 """
 
 import json
@@ -456,13 +458,16 @@ def resumen_sellado(estado: EstadoCaso, argumentos: Mapping[str, Any]) -> dict[s
 
     El comercio que haya (o `COMERCIO_NO_IDENTIFICADO`), la cobertura y los conflictos como no
     calculados y la causa con las causas vigentes, entre ellas el sello. Los hallazgos y la acción
-    van tal cual: la forma la valida la pasarela. No calcula nada que pueda fallar sin protección.
+    van tal cual: la forma la valida la pasarela. Solo las claves del esquema, como sin el sello:
+    lo que el coordinador añada fuera de él no llega a la pasarela. No calcula nada que pueda
+    fallar sin protección.
     """
     return {
-        **argumentos,
         "comercio": _comercio_seguro(estado),
+        "hallazgos": argumentos.get("hallazgos"),
         "cobertura": [COBERTURA_NO_CALCULADA],
         "causa_escalamiento": _causa_segura(estado),
+        "accion_recomendada": argumentos.get("accion_recomendada"),
         "conflictos": no_calculados().como_entrada(),
     }
 
@@ -552,7 +557,8 @@ class HooksDelCaso:
                     HERRAMIENTA_DELEGAR_COMPLETA, self._delegar_previo, "PreToolUse", Frente.LISTAS
                 ),
                 self._matcher(HERRAMIENTA_INFORME, self._informe_previo, "PreToolUse", None),
-                # Sin `fallar_cerrado`: el escalamiento nunca se deniega (#8, R6).
+                # Sin `fallar_cerrado`: una excepción nunca deniega el escalamiento (#8, R6); los
+                # rechazos son solo los que el hook comprueba (#10, R5).
                 HookMatcher(
                     matcher=HERRAMIENTA_ESCALAR,
                     hooks=[degradar_escalamiento(self._escalar_previo, self.estado, self.eventos)],
@@ -1060,12 +1066,6 @@ class HooksDelCaso:
             resumen,
             _afirmaciones_de(completa),
         )
-
-    def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):
-        """La entrada completa con la cobertura calculada y el evento `cobertura_sustituida`."""
-        cobertura = calcular_cobertura(self.estado)
-        self._evento_cobertura(herramienta, argumentos, cobertura)
-        return reemplazar_entrada({**argumentos, "cobertura": cobertura.lineas()})
 
     def _evento_cobertura(
         self, herramienta: str, argumentos: Mapping[str, Any], cobertura: CoberturaCaso

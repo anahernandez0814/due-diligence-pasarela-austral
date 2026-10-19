@@ -188,18 +188,26 @@ def espera_del_analista(estado: EstadoCaso) -> Espera | None:
     - `identificador`: el registro terminó con varias coincidencias.
     - `nombre`: el registro terminó sin ninguna coincidencia.
     - `categoria`: la última delegación de categoría la bloqueó FR-020 y el caso no tiene ningún
-      resultado de categoría. Vale con cualquier estado del registro, también el caído.
+      resultado de categoría. Vale con cualquier estado del registro salvo el caído: con el
+      registro caído se exige el informe, con la categoría no determinada (I.5).
 
     Las del registro prevalecen. Ninguna otra situación es una espera: ni el registro caído, que
-    por sí solo exige reintentar o informar, ni las fuentes que difieren en el nombre o el
-    representante (D3 del #9, `contradictoria`). Es pura: no escribe nada.
+    exige reintentar o informar, ni las fuentes que difieren en el nombre o el representante (D3
+    del #9, `contradictoria`). Es pura: no escribe nada.
     """
+    # Importación diferida: `cobertura.py` importa este módulo.
+    from due_diligence.cobertura import registro_caido
+
     clase = estado.clase_identificacion
     if clase == "varias":
         return Espera("identificador", MOTIVO_ESPERA_IDENTIFICADOR)
     if clase == "ninguna":
         return Espera("nombre", MOTIVO_ESPERA_NOMBRE)
-    if estado.categoria_bloqueada and not estado.libro.consultas_riesgo:
+    if (
+        estado.categoria_bloqueada
+        and not estado.libro.consultas_riesgo
+        and not registro_caido(estado)
+    ):
         return Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
     return None
 

@@ -7,9 +7,15 @@ import pytest
 
 from due_diligence.cobertura import CoberturaCaso, CoberturaFrente, calcular_cobertura
 from due_diligence.ejecutor import TIPO_BLOQUEADO_POR_HOOK
-from due_diligence.estado import Causa, EstadoCaso, Situacion
+from due_diligence.estado import Causa, EstadoCaso, ResultadoFrente, Situacion
 from due_diligence.frentes import Frente
-from due_diligence.simulacion import comercio_del_registro, respuesta_registro
+from due_diligence.simulacion import (
+    comercio_del_registro,
+    comercios_parecidos,
+    consulta,
+    respuesta_registro,
+    terminacion_normal,
+)
 
 NOMBRE = "Taller Aurora SAS"
 IDENTIFICADOR = "CO-TA-0002"
@@ -202,13 +208,6 @@ def test_los_tipos_son_inmutables():
 
 
 # ------------------------------------- #10: noticias consultado con otro nombre (T025, FR-027)
-
-from due_diligence.estado import ResultadoFrente  # noqa: E402
-from due_diligence.simulacion import (  # noqa: E402
-    comercios_parecidos,
-    consulta,
-    terminacion_normal,
-)
 
 MOTIVO_OTRO_COMERCIO = (
     "se consultó con un nombre o identificador que no es el del comercio identificado"

@@ -39,26 +39,32 @@ El motivo es el JSON `resumen_rechazado`, con la forma de `informe_rechazado` de
 
 ```json
 {
+  "error": true,
   "tipo": "resumen_rechazado",
-  "motivos": ["…"],
-  "problemas": [{"ruta": "hallazgos.listas[0].fuente", "mensaje": "…"}]
+  "mensaje": "No se escala el caso. … Problemas de forma o de fuente: hallazgos.listas[0].fuente: …. Corrige y vuelve a escalar.",
+  "reintentable": false,
+  "motivos": [{"regla": "V", "texto": "…"}],
+  "problemas": [{"ruta": "hallazgos.listas[0].fuente", "texto": "…"}]
 }
 ```
 
+Cada motivo lleva la regla que lo causa (`null` si no es de ninguna, como el de D2); cada problema, su ruta y su texto. El `mensaje` junta los dos en un texto. Lo construye `denegar_decision`, el mismo del informe.
+
 | Situación | Motivo | Regla del evento |
 |-----------|--------|------------------|
-| Espera del identificador, sin sello | `MOTIVO_ESPERA_IDENTIFICADOR` | `V` |
-| Espera del nombre, sin sello | `MOTIVO_ESPERA_NOMBRE` | `V` |
+| Espera del identificador, sin sello ni coincidencia en listas | `MOTIVO_ESPERA_IDENTIFICADOR` | `V` |
+| Espera del nombre, sin sello ni coincidencia en listas | `MOTIVO_ESPERA_NOMBRE` | `V` |
 | Bajo riesgo sin hallazgos comprobado | `MOTIVO_SIN_CAUSA` | `V` |
 | Sin comercio identificado ni pedido (D2 del plan) | `MOTIVO_SIN_COMERCIO_ESCALAMIENTO`: pide delegar primero el registro | — |
 | Forma, fuente no consultada o frente cubierto sin afirmación | uno por problema en `problemas` | `I.4` |
 
 Cada rechazo deja `bloqueo_regla` con la acción `escalar_a_cumplimiento`.
 
-## Lo que no se deniega nunca
+## Lo que no se deniega
 
 - **Una excepción en el hook**: `degradar_escalamiento` deja pasar la entrada con la cobertura `COBERTURA_NO_CALCULADA`, los conflictos `no_calculados()` y la causa «fallo de un hook de verificación», y sella el caso.
-- **El caso sellado**: no se validan fuentes ni reglas; se admite incluso durante la espera del identificador (excepción de FR-016). Sin comercio identificado ni pedido, va `COMERCIO_NO_IDENTIFICADO` (`"no identificado"` en el identificador y el nombre, `verificado: false`).
+- **El caso sellado**: no se validan fuentes ni reglas (D4 del plan); se admite incluso durante la espera del identificador (excepción de FR-016). Lleva solo las seis claves del esquema: lo que el coordinador añada fuera de él no llega a la pasarela.
+- **Una coincidencia en listas durante la espera del registro** (excepción por I.2 de FR-016): se valida como siempre, con el comercio pedido (`verificado: false`). Sin comercio identificado ni pedido, va `COMERCIO_NO_IDENTIFICADO` (`"no identificado"` en el identificador y el nombre, `verificado: false`).
 
 ## Pasarela (`decisiones.escalar_a_cumplimiento`)
 

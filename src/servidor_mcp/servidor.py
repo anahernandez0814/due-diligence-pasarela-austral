@@ -271,11 +271,17 @@ def registrar_informe(
         "cobertura alcanzada, la causa del escalamiento, la acción recomendada y los conflictos "
         "entre fuentes. El comercio, la cobertura, la causa y los conflictos los pone el sistema a "
         "partir de lo consultado; las afirmaciones y la acción recomendada, quien escala. Se "
-        "escala por coincidencia en listas restrictivas o por categoría de alto riesgo, nunca por "
-        "una mención en noticias. No comprueba que cada fuente se haya consultado ni decide si "
-        "corresponde escalar (eso lo hace el sistema antes de llamarla), y no emite una "
-        "recomendación de habilitación. Si falta un campo obligatorio o una afirmación no tiene "
-        "la forma esperada, devuelve un error no reintentable que nombra cada problema."
+        "escala por una coincidencia en listas restrictivas, del comercio o de su representante "
+        "legal, por una categoría de alto riesgo o por un fallo de un hook de verificación. "
+        "También se puede escalar un caso sin ninguna de esas causas si la cobertura está "
+        "incompleta, la categoría no quedó determinada, hay menciones en noticias, hay conflictos "
+        "entre las fuentes registrales o el comercio no está identificado de forma unívoca; la "
+        "causa lo dice así, sin presentarlo como una coincidencia. Una mención en noticias no es "
+        "una coincidencia en listas restrictivas. No comprueba que cada fuente se haya "
+        "consultado ni decide si corresponde escalar (eso lo hace el sistema antes de llamarla), "
+        "y no emite una recomendación de habilitación. Si falta un campo obligatorio o una "
+        "afirmación no tiene la forma esperada, devuelve un error no reintentable que nombra cada "
+        "problema."
     ),
 )
 def escalar_a_cumplimiento(
@@ -285,8 +291,10 @@ def escalar_a_cumplimiento(
     causa_escalamiento: Annotated[
         Any,
         _p(
-            "Texto o lista. Por qué se escala: coincidencia en listas o categoría de alto riesgo. "
-            "Lo pone el sistema.",
+            "Texto o lista. Por qué se escala: coincidencia en listas, categoría de alto riesgo o "
+            "fallo de un hook de verificación. Sin ninguna de esas causas, los motivos por los que "
+            "se lleva al oficial: cobertura incompleta, categoría no determinada, menciones en "
+            "noticias, conflictos entre fuentes o comercio no identificado. Lo pone el sistema.",
             ["string", "array"],
         ),
     ] = None,

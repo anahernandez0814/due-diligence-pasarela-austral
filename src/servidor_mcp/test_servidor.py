@@ -290,8 +290,34 @@ def test_la_descripcion_del_escalamiento_dice_lo_que_pone_el_sistema_y_lo_que_no
         "El comercio, la cobertura, la causa y los conflictos los pone el sistema",
         "las afirmaciones y la acción recomendada, quien escala",
         "No comprueba que cada fuente se haya consultado ni decide si corresponde escalar",
-        "nunca por una mención en noticias",
         "el oficial no tiene acceso a la conversación",
+        # Todos los casos en que se escala (principio IV): las tres causas y los cinco motivos sin
+        # causa, y que una mención en noticias no es una coincidencia en listas.
+        "coincidencia en listas restrictivas, del comercio o de su representante legal",
+        "categoría de alto riesgo",
+        "fallo de un hook de verificación",
+        "la cobertura está incompleta",
+        "la categoría no quedó determinada",
+        "hay menciones en noticias",
+        "hay conflictos entre las fuentes registrales",
+        "el comercio no está identificado de forma unívoca",
+        "Una mención en noticias no es una coincidencia en listas restrictivas",
+    ):
+        assert fragmento in descripcion, fragmento
+
+
+def test_la_causa_del_escalamiento_nombra_todos_los_casos():
+    esquema = _herramientas()["escalar_a_cumplimiento"].input_schema
+    descripcion = esquema["properties"]["causa_escalamiento"]["description"]
+    for fragmento in (
+        "coincidencia en listas",
+        "categoría de alto riesgo",
+        "fallo de un hook de verificación",
+        "cobertura incompleta",
+        "categoría no determinada",
+        "menciones en noticias",
+        "conflictos entre fuentes",
+        "comercio no identificado",
     ):
         assert fragmento in descripcion, fragmento
 

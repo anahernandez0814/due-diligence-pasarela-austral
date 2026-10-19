@@ -65,7 +65,7 @@ Espera(clase: "identificador" | "nombre" | "categoria", motivo: str)
 | `nombre` | registro `terminado` y clase `ninguna` | «El registro no encontró el comercio: el caso espera que el analista revise el nombre.» |
 | `categoria` | `categoria_bloqueada` y sin `consultas_riesgo` | «La categoría no aparece en los mensajes del analista: el caso espera la categoría.» |
 
-La espera `categoria` vale con cualquier estado del registro, también el caído: el registro caído, por sí solo, no es una espera. Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
+La espera `categoria` vale con cualquier estado del registro salvo el caído: con el registro caído no hay espera y se exige el informe, con la categoría no determinada (I.5). Con el registro en `varias` o `ninguna`, prevalece el motivo del registro.
 
 Motivos del informe rechazado durante la espera `identificador` o `nombre` (FR-016): `MOTIVO_INFORME_ESPERA_IDENTIFICADOR` y `MOTIVO_INFORME_ESPERA_NOMBRE` (textos en research R3), con la regla `V`.
 

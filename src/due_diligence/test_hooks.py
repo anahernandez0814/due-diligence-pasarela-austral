@@ -1912,6 +1912,22 @@ def test_caso_g_los_conflictos_del_informe_son_los_del_codigo():
     assert all("2016" not in e.detalle and "Ferretería" not in e.detalle for e in datos)
 
 
+def test_caso_g_el_resumen_guardado_lleva_los_dos_valores_con_su_fuente(monkeypatch, tmp_path):
+    # FR-010, US2-5: el resumen que guarda la pasarela lleva el conflicto que calcula el código,
+    # con las dos fechas de constitución y la fuente de cada una (I.4: no se elige ninguna).
+    from servidor_mcp import decisiones
+
+    monkeypatch.setenv(decisiones.VARIABLE_CARPETA, str(tmp_path))
+    _, _, hooks = _caso_g()
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    assert not _es_denegacion(salida)
+    resultado = decisiones.escalar_a_cumplimiento(**_sustituida(salida))
+    assert resultado.is_error is False
+    identificador = resultado.structured_content["hechos"][0]["contenido"]["id"]
+    guardado = json.loads((tmp_path / "escalamientos" / f"{identificador}.json").read_text("utf-8"))
+    assert guardado["conflictos"] == CONFLICTO_G
+
+
 def test_si_calcular_conflictos_lanza_el_informe_se_deniega_y_se_sella(monkeypatch):
     estado, eventos, hooks = _caso_con_comercio()
 
@@ -2191,6 +2207,21 @@ def test_con_la_categoria_bloqueada_sin_resultado_la_pregunta_es_una_espera():
     assert _ejecutar(_stop(hooks), pregunta) == permitir()
     assert [e.tipo for e in eventos.eventos()] == [TIPO_ESPERA_ANALISTA]
     assert estado.libro.cierres_impedidos == 0
+
+
+def test_con_el_registro_caido_la_categoria_bloqueada_no_es_espera_y_se_exige_el_informe():
+    # I.5 (corrección de criterio): con el registro caído no se espera la categoría; el informe se
+    # entrega con la categoría no determinada y la cobertura incompleta declarada.
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _caso()
+    estado.comercio_pedido = {"identificador": "CO-TV-0001", "nombre": None}
+    _registro_caido_en_el_estado(estado)
+    estado.categoria_bloqueada = True
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida) and salida["reason"] == MOTIVO_SIN_INFORME
+    assert estado.libro.cierres_impedidos == 1
+    assert _eventos_de(eventos, TIPO_ESPERA_ANALISTA) == []
 
 
 # ------------------------------------------- #9: informe mínimo tras un fallo de hook (US4, R9)
@@ -3041,6 +3072,24 @@ def test_con_el_sello_el_escalamiento_pasa_con_textos_fijos_y_el_comercio_que_ha
         # D2: el comercio fijo pasa la forma; la afirmación sin fuente y fecha la rechazaría la
         # pasarela, que es la que valida la forma con el sello.
         assert validar_resumen({**sustituida, "hallazgos": {}}) == []
+
+
+def test_con_el_sello_el_resumen_lleva_solo_las_claves_del_esquema():
+    # Como sin el sello: lo que el coordinador añada fuera del esquema no llega a la pasarela.
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
+    entrada = {**_escalamiento(), "nota_interna": "x", "prioridad": 1}
+    sustituida = _sustituida(_ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada)))
+    assert list(sustituida) == [
+        "comercio",
+        "hallazgos",
+        "cobertura",
+        "causa_escalamiento",
+        "accion_recomendada",
+        "conflictos",
+    ]
+    assert sustituida["hallazgos"] == entrada["hallazgos"]
+    assert sustituida["accion_recomendada"] == entrada["accion_recomendada"]
 
 
 def test_con_el_sello_durante_la_espera_del_identificador_se_escala_y_despues_el_informe_minimo():

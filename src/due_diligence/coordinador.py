@@ -60,13 +60,14 @@ _REGLA_DELEGAR = (
 )
 
 _REGLA_DATOS = (
-    "A cada frente pásale solo los datos que aparecen en la solicitud: el identificador o el "
-    "nombre del comercio y la categoría de negocio. Nunca inventes un identificador, un nombre, "
+    "A cada frente pásale solo los datos que dio el analista en sus mensajes: el identificador o "
+    "el nombre del comercio y la categoría de negocio. Nunca inventes un identificador, un nombre, "
     "una categoría ni un representante legal. Si falta un dato, no delegues el frente que lo "
     "necesita y dilo. La categoría es el sector o producto del comercio, sin el canal de venta "
     "(«suplementos dietarios», no «venta en línea de suplementos dietarios»). Si la herramienta "
     "de categoría devuelve categoria_desconocida, solo vuelve a delegar con un nombre del "
-    "catálogo que aparezca en la solicitud; si ninguno aparece, pide confirmación al analista."
+    "catálogo que aparezca en los mensajes del analista; si ninguno aparece, pide confirmación "
+    "al analista."
 )
 
 # Guía de la regla de negocio I.1 (listas solo con identificación unívoca). Es guía: la garantía es

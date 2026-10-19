@@ -77,7 +77,7 @@ hay (`DecisionMensaje(accion, aviso)`).
 | Campo | Tipo | Producción |
 |-------|------|-----------|
 | `cargar_entorno` | `Callable[[], object]` | `configuracion.cargar_entorno` |
-| `entorno` | `Callable[[], Mapping[str, str]]` | `lambda: os.environ` |
+| `entorno` | `Mapping[str, str]` | `os.environ` (refleja lo que carga `load_dotenv`) |
 | `crear_caso` | `Callable[[Callable[[Evento], None] \| None], Caso]` | `lambda obs: Caso(observador=obs)` |
 
 ## Estado de la sesión de Streamlit (`st.session_state`)

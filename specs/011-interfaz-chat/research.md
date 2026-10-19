@@ -266,9 +266,16 @@ aplicación con la variable, como dice el README.
 
 Se prueban: el caso (d) en dos turnos, el caso (a) con sus indicadores, el (f) con la cobertura
 antes de la respuesta, la parada sin clave, caso completo → caso nuevo, y el botón «Caso nuevo».
-*(a medir)* Qué elementos expone `AppTest` para `st.status` y `st.chat_message`; si alguno no se
-puede inspeccionar, el test comprueba el texto en `markdown`, y el orden se prueba en las
-funciones puras.
+*(a medir, T033)* De la medición, **solo el envío de espacios queda como test** (decide la rama de
+FR-005). Lo demás se anota aquí, sin test:
+- qué elementos expone `AppTest` para `st.status`, `st.chat_message`, `st.error` y `st.info`; si
+  alguno no se puede inspeccionar, el test comprueba el texto en `markdown`, y el orden se prueba
+  en las funciones puras;
+- si `AppTest` procesa un `pendiente` sembrado en la misma ejecución. Si lo procesa, la entrada
+  deshabilitada (R7) se comprueba a mano en Q4.
+
+`CoordinadorSimulado` se amplía con `num_turns` por guion y un paso `("lanzar", excepcion)` (U1
+del analyze), con su test, para los turnos por turno y el fallo del turno.
 
 `streamlit` se añade a las dependencias del proyecto con `uv add` (versión fijada en `uv.lock`).
 

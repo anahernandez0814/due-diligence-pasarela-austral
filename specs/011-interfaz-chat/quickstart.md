@@ -58,12 +58,18 @@ Cambiar de modo exige reiniciar la aplicación.
 
 La analista valora SC-005 con las conversaciones de (a), (d) y (e).
 
+Durante cada turno, además (FR-002, R1):
+- los indicadores aparecen **en vivo** en el contenedor «El coordinador está trabajando…» a medida
+  que ocurren, no solo al terminar;
+- la entrada del chat y el botón «Caso nuevo» están deshabilitados hasta que el turno termina
+  (R7), si `AppTest` no lo pudo probar (T031).
+
 ## Q5. Hora y fecha
 
 - Las horas de los indicadores dicen «(hora de Colombia)».
-- Si se ejecuta de noche (después de las 19:00 en Colombia, ya el día siguiente en UTC), la
-  respuesta del caso (b) no dice que el informe se registró «un día después de hoy»; las fechas
-  van en `AAAA-MM-DD`.
+- **Condicional**: solo si la prueba cae después de las 19:00 en Colombia (ya el día siguiente en
+  UTC), la respuesta del caso (b) no dice que el informe se registró «un día después de hoy». Si
+  cae antes, se anota como no ejecutado. Las fechas van en `AAAA-MM-DD`.
 
 ## Q6. Línea de comandos
 

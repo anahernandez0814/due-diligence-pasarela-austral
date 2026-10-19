@@ -62,8 +62,11 @@ MAX_REINTENTOS_POR_FRENTE = 1
 # Presupuesto de turnos del peor caso razonable del coordinador (#8, R2, medido: cada reintento y
 # cada devolución del `Stop` gastan un turno). Los pasos fijos son las filas de la tabla de R2 que
 # no dependen de otras constantes: tres frentes juntos, listas, categoría con otra entrada, listas
-# rechazada por la carrera, escalar, informe rechazado, informe aceptado y respuesta final.
-PASOS_FIJOS_PEOR_CASO = 8
+# rechazada por la carrera, escalar, informe rechazado, informe aceptado y respuesta final. El #10
+# (R10) añade dos: el escalamiento rechazado por la forma y corregido, y noticias vuelto a delegar
+# con el comercio identificado (FR-027). El presupuesto es **por turno**: cada mensaje del analista
+# es una `query()` y su `num_turns` no se acumula (#10, R1, medido).
+PASOS_FIJOS_PEOR_CASO = 10
 
 
 def presupuesto_turnos_peor_caso(max_reintentos: int, max_cierres: int) -> int:
@@ -183,8 +186,13 @@ def opciones_base(
     prohibidas: list[str],
     mcp_servers: dict[str, Any],
     hooks: Any = None,
+    resume: str | None = None,
 ) -> ClaudeAgentOptions:
-    """Única función que construye `ClaudeAgentOptions` (R2)."""
+    """Única función que construye `ClaudeAgentOptions` (R2).
+
+    `resume` es el `session_id` del turno anterior del coordinador (#10, R1): la `query()` del
+    turno siguiente continúa esa conversación. Los subagentes nunca reanudan.
+    """
     return ClaudeAgentOptions(
         model=modelo,
         system_prompt=system_prompt,
@@ -198,6 +206,7 @@ def opciones_base(
         cwd=str(RAIZ),
         max_turns=MAX_TURNOS_SEGURIDAD,
         stderr=filtrar_stderr,
+        resume=resume,
     )
 
 
@@ -207,6 +216,7 @@ def opciones_coordinador(
     *,
     hooks: Any = None,
     entorno: Mapping[str, str] | None = None,
+    resume: str | None = None,
 ) -> ClaudeAgentOptions:
     permitidas, prohibidas = herramientas_coordinador()
     return opciones_base(
@@ -219,6 +229,7 @@ def opciones_coordinador(
             SERVIDOR_DELEGACION: servidor_delegacion,
         },
         hooks=hooks,
+        resume=resume,
     )
 
 

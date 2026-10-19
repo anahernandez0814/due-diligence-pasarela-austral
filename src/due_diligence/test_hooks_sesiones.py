@@ -23,6 +23,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import FRENTES, Frente
 from due_diligence.hooks import HooksDelCaso
+from due_diligence.libro import Escalamiento
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
@@ -34,6 +35,7 @@ from due_diligence.simulacion import (
     comercios_parecidos,
     error_estructurado,
     informe_del_caso,
+    resumen_del_caso,
 )
 
 REGISTRO = FRENTES[Frente.REGISTRO].herramienta_completa
@@ -96,7 +98,9 @@ class Caso:
         return asyncio.run(self.coordinador().terminar(mensaje))
 
     def escalar(self):
-        return asyncio.run(self.coordinador().llamar(ESCALAR, {"causa_escalamiento": "x"}))
+        """Un resumen al oficial válido del #10 (R6): las afirmaciones de las consultas del caso."""
+        entrada = resumen_del_caso(self.estado)
+        return asyncio.run(self.coordinador().llamar(ESCALAR, entrada))
 
     def registrar(self, **consulta):
         """El subagente de registro consulta y el frente termina (lo que haría el `Delegador`)."""
@@ -199,7 +203,12 @@ def test_caso_c_habilitar_se_rechaza_y_solo_se_acepta_el_informe_tras_escalar():
     assert caso.pasarela.informes == []  # ningún informe llegó al servidor
 
     assert caso.escalar().ejecutada
-    assert caso.estado.libro.escalamientos == [frozenset({"coincidencia_representante"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(
+            frozenset({"coincidencia_representante"}),
+            ("CO-PL-0003", "Panadería Luna Nueva SAS", True),
+        )
+    ]
 
     assert caso.informe("habilitar").denegada  # escalar no habilita
     aceptado = caso.informe("decide_cumplimiento")
@@ -249,7 +258,9 @@ def test_caso_a_alto_riesgo_no_se_habilita_y_exige_escalar_antes_de_cualquier_in
     assert caso.pasarela.informes == []
 
     assert caso.escalar().ejecutada
-    assert caso.estado.libro.escalamientos == [frozenset({"alto_riesgo"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    ]
     assert caso.informe("habilitar").denegada  # escalar no habilita
     assert caso.informe("decide_cumplimiento").ejecutada
     assert len(caso.pasarela.informes) == 1
@@ -458,3 +469,65 @@ def test_el_estado_sale_de_la_respuesta_de_la_herramienta_y_no_del_resumen_del_m
     asyncio.run(caso.ejecutar("solicitud"))
     assert len(caso.estado.libro.coincidencias) == 1
     assert "Sin coincidencias" in caso.estado.resultados[Frente.LISTAS].resumen
+
+
+# ------------------------------------- #10: la consulta con el identificador identifica (T016)
+
+
+def _registro_por_contexto(contexto):
+    """El registro según la entrada: el nombre ambiguo da dos coincidencias; el id, una."""
+    from due_diligence.simulacion import consulta, respuesta_registro, resultado_frente
+
+    parecidos = comercios_parecidos()
+    if "CO-AM-0005" in contexto:
+        argumentos, comercios = {"identificador": "CO-AM-0005"}, [parecidos[1]]
+    else:
+        argumentos, comercios = {"nombre": "Almacén Mirador SAS"}, parecidos
+    return resultado_frente(
+        Frente.REGISTRO,
+        [consulta(Frente.REGISTRO, argumentos, respuesta_registro(*comercios))],
+    )
+
+
+def test_tras_varias_coincidencias_la_consulta_con_el_identificador_identifica_al_comercio():
+    from due_diligence.reglas import permite_delegar_listas
+
+    caso = CasoReal(ejecutor=EjecutorSimulado(resultados={Frente.REGISTRO: _registro_por_contexto}))
+    delegador = caso.delegador
+    asyncio.run(delegador.delegar({"frente": "registro", "nombre": "Almacén Mirador SAS"}))
+    assert caso.estado.comercio is None and caso.estado.clase_identificacion == "varias"
+    assert permite_delegar_listas(caso.estado)[0] is False
+    asyncio.run(delegador.delegar({"frente": "registro", "identificador": "CO-AM-0005"}))
+    assert caso.estado.comercio["identificador"] == "CO-AM-0005"
+    assert caso.estado.clase_identificacion == "unica"
+    # La identificación ambigua anterior no queda: `_ejecutar` del registro la reinicia (#7).
+    assert [i.clase for i in caso.estado.identificaciones] == ["unica"]
+    assert permite_delegar_listas(caso.estado) == (True, "")
+
+
+def test_tras_identificar_listas_se_delega_y_consulta_al_comercio_y_al_representante():
+    from due_diligence.simulacion import consulta_listas, resultado_frente
+
+    listas = resultado_frente(
+        Frente.LISTAS,
+        [
+            consulta_listas("comercio", identificador="CO-AM-0005"),
+            consulta_listas("persona", identificador="PE-0005"),
+        ],
+    )
+    ejecutor = EjecutorSimulado(
+        resultados={Frente.REGISTRO: _registro_por_contexto, Frente.LISTAS: listas}
+    )
+    caso = CasoReal(ejecutor=ejecutor)
+    delegador = caso.delegador
+    asyncio.run(delegador.delegar({"frente": "registro", "nombre": "Almacén Mirador SAS"}))
+    rechazo = asyncio.run(delegador.delegar({"frente": "listas"}))
+    assert rechazo["error"] is True and rechazo["reintentable"] is False
+    asyncio.run(delegador.delegar({"frente": "registro", "identificador": "CO-AM-0005"}))
+    respuesta = asyncio.run(delegador.delegar({"frente": "listas"}))
+    assert respuesta["situacion"] == "terminado"
+    assert caso.estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+    # El subagente de listas se lanzó una sola vez (el primer pedido se rechazó sin lanzarlo) y
+    # recibió al comercio identificado y a su representante.
+    (llamada,) = ejecutor.llamadas_de(Frente.LISTAS)
+    assert "CO-AM-0005" in llamada.contexto and "PE-0005" in llamada.contexto

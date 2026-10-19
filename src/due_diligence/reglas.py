@@ -31,6 +31,7 @@ ALTO_RIESGO = (
 # Conjunto cerrado de recomendaciones del informe (R10). Solo `habilitar` está sujeta a las reglas
 # 1 a 3; cualquier otro valor se rechaza.
 RECOMENDACION_HABILITAR = "habilitar"
+RECOMENDACION_DECIDE = "decide_cumplimiento"
 RECOMENDACIONES = (RECOMENDACION_HABILITAR, "no_habilitar", "decide_cumplimiento")
 
 
@@ -86,6 +87,32 @@ def consulta_coincide(consulta: Any, entidad: Any, tipo: str) -> bool:
     return True
 
 
+def consulta_del_comercio(argumentos: Any, comercio: Any) -> bool:
+    """Si una consulta de noticias es del comercio identificado (#10, FR-027, R7).
+
+    Trae al menos su `identificador` o su `nombre`, y **cada uno que trae** coincide con el del
+    comercio: `igual_identificador` para el identificador e `igual` para el nombre completo, la
+    normalización del servidor. Una entrada malformada no es del comercio y no lanza.
+    """
+    if not isinstance(argumentos, Mapping) or not isinstance(comercio, Mapping):
+        return False
+    claves = {
+        clave: valor
+        for clave in ("identificador", "nombre")
+        if (valor := argumentos.get(clave)) not in (None, "")
+    }
+    if not claves:
+        return False
+    for clave, valor in claves.items():
+        buscado, existente = _texto(valor), _texto(comercio.get(clave))
+        if buscado is None or existente is None:
+            return False
+        coincide = igual_identificador if clave == "identificador" else igual
+        if not coincide(buscado, existente):
+            return False
+    return True
+
+
 # --------------------------------------------------------------------------- regla I.1 (listas)
 
 MOTIVO_SIN_COMERCIO = (
@@ -107,15 +134,100 @@ MOTIVO_CONSULTA_AJENA = (
 def _motivo_sin_comercio(estado: EstadoCaso) -> str:
     """El motivo de que no haya un comercio único, con textos fijos: no repite nada consultado.
 
-    Se apoya en `estado.motivo_comercio` solo para distinguir la causa (varias coincidencias,
-    ninguna) y devuelve siempre un texto propio, sin los identificadores que traiga el del registro.
+    Se apoya en `estado.clase_identificacion` (#10, R3) para distinguir la causa (varias
+    coincidencias, ninguna), no en subcadenas del motivo del registro, y devuelve siempre un texto
+    propio, sin los identificadores que traiga ese motivo.
     """
-    motivo = estado.motivo_comercio
-    if "varias coincidencias" in motivo:
+    clase = estado.clase_identificacion
+    if clase == "varias":
         return MOTIVO_VARIAS_COINCIDENCIAS
-    if "ninguna coincidencia" in motivo:
+    if clase == "ninguna":
         return MOTIVO_SIN_COINCIDENCIAS
     return MOTIVO_SIN_COMERCIO
+
+
+# ------------------------------------------------------------ esperas del analista (#10, R3)
+
+MOTIVO_ESPERA_IDENTIFICADOR = (
+    "El registro devolvió varias coincidencias: el caso espera el identificador del analista."
+)
+MOTIVO_ESPERA_NOMBRE = (
+    "El registro no encontró el comercio: el caso espera que el analista revise el nombre."
+)
+MOTIVO_ESPERA_CATEGORIA = (
+    "La categoría no aparece en los mensajes del analista: el caso espera la categoría."
+)
+
+
+class Espera(NamedTuple):
+    """Un fin de turno que espera un dato del analista (#10, R3, data-model).
+
+    `clase` es `identificador`, `nombre` o `categoria`; `motivo`, un texto fijo sin datos del caso.
+    """
+
+    clase: str
+    motivo: str
+
+
+MOTIVO_INFORME_ESPERA_IDENTIFICADOR = (
+    "El registro devolvió varias coincidencias: pida el identificador al analista antes de "
+    "registrar el informe."
+)
+MOTIVO_INFORME_ESPERA_NOMBRE = (
+    "El registro no encontró el comercio: pida al analista que revise el nombre antes de "
+    "registrar el informe."
+)
+# Regla de los rechazos por una espera del analista: el principio V (pedir el identificador en vez
+# de elegir), que no es ninguna de las reglas I.1 a I.5.
+REGLA_ESPERA = "V"
+
+
+def espera_del_analista(estado: EstadoCaso) -> Espera | None:
+    """La espera del analista que el código comprueba en el estado, o `None` (FR-014, R3).
+
+    - `identificador`: el registro terminó con varias coincidencias.
+    - `nombre`: el registro terminó sin ninguna coincidencia.
+    - `categoria`: la última delegación de categoría la bloqueó FR-020 y el caso no tiene ningún
+      resultado de categoría. No lo es si la fuente de **cualquier** frente no respondió
+      (`frente_caido`): entonces se exige el informe que declara el frente sin cubrir, con la
+      categoría no determinada (I.5). Esperar al analista dejaría terminar el caso sin informe.
+
+    Las del registro prevalecen y no cambian con una fuente caída: durante ellas el informe se
+    rechaza (FR-016) y ninguna fuente puede hablar de un comercio sin identificar (FR-027), así
+    que no hay informe que exigir hasta que responda el analista. Ninguna otra situación es una
+    espera: ni el registro caído, que exige reintentar o informar, ni las fuentes que difieren en
+    el nombre o el representante (D3 del #9, `contradictoria`). Es pura: no escribe nada.
+    """
+    # Importación diferida: `cobertura.py` importa este módulo.
+    from due_diligence.cobertura import frente_caido
+
+    clase = estado.clase_identificacion
+    if clase == "varias":
+        return Espera("identificador", MOTIVO_ESPERA_IDENTIFICADOR)
+    if clase == "ninguna":
+        return Espera("nombre", MOTIVO_ESPERA_NOMBRE)
+    if (
+        estado.categoria_bloqueada
+        and not estado.libro.consultas_riesgo
+        and not any(frente_caido(estado, f) for f in Frente)
+    ):
+        return Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
+    return None
+
+
+def motivo_del_informe_en_espera(estado: EstadoCaso) -> "Rechazo | None":
+    """El rechazo del informe durante la espera del identificador o del nombre (FR-016, R3).
+
+    `None` sin espera o con la espera de la categoría, en la que el informe sigue las reglas de
+    siempre. Cambio respecto al #9, que aceptaba el informe con el comercio pedido ante varias
+    coincidencias.
+    """
+    espera = espera_del_analista(estado)
+    if espera is None or espera.clase == "categoria":
+        return None
+    if espera.clase == "identificador":
+        return Rechazo(MOTIVO_INFORME_ESPERA_IDENTIFICADOR, REGLA_ESPERA)
+    return Rechazo(MOTIVO_INFORME_ESPERA_NOMBRE, REGLA_ESPERA)
 
 
 def permite_listas(estado: EstadoCaso, entrada: Any) -> tuple[bool, str]:
@@ -134,6 +246,27 @@ def permite_listas(estado: EstadoCaso, entrada: Any) -> tuple[bool, str]:
     if representante and consulta_coincide(entrada, representante, "persona"):
         return True, ""
     return False, MOTIVO_CONSULTA_AJENA
+
+
+# ------------------------------------------------- categoría del analista (#10, FR-020, R9)
+
+MOTIVO_CATEGORIA_NO_DEL_ANALISTA = (
+    "La categoría no aparece en los mensajes del analista: use la que dio o pregúntesela."
+)
+
+
+def categoria_en_mensajes(categoria: Any, mensajes: Iterable[str]) -> bool:
+    """Si la categoría aparece, como frase completa, en algún mensaje del analista (R9).
+
+    Compara con `normalizar` de la pasarela (mayúsculas, tildes, espacios y puntuación no importan)
+    y con límites de palabra: «ropa» no aparece en «tropa». No cubre plurales («suplemento
+    dietario» no es «suplementos dietarios»): es un riesgo declarado (US5-5). Una categoría vacía
+    o que no es texto no aparece.
+    """
+    if not isinstance(categoria, str) or not normalizar(categoria):
+        return False
+    buscada = f" {normalizar(categoria)} "
+    return any(buscada in f" {normalizar(mensaje)} " for mensaje in mensajes)
 
 
 def permite_delegar_listas(estado: EstadoCaso) -> tuple[bool, str]:
@@ -230,14 +363,57 @@ def requiere_escalamiento(libro: LibroReglas) -> bool:
     return bool(causas_vigentes(libro))
 
 
-def escalamiento_cubre(libro: LibroReglas) -> bool:
+def espera_exime_de_escalar(libro: LibroReglas, espera: Espera) -> bool:
+    """Si una espera del analista exime del escalamiento a un caso con causas sin cubrir (FR-014).
+
+    La de la categoría nunca exime (US4-7). Las del registro eximen del alto riesgo (D3), pero no
+    de una coincidencia en listas: sin identificación no se consultan listas, pero el libro
+    conserva las de un comercio identificado antes (D1), y la regla I.2 no espera al identificador
+    del comercio nuevo.
+    """
+    causas = causas_vigentes(libro)
+    return espera.clase != "categoria" and not (
+        causas & {CAUSA_COINCIDENCIA_COMERCIO, CAUSA_COINCIDENCIA_REPRESENTANTE}
+    )
+
+
+# Sin comercio dado, `escalamiento_cubre` mira los escalamientos de cualquier comercio: el libro
+# solo, como en el #7. Quien tiene el estado pasa la clave de su comercio (#10, R8).
+_CUALQUIER_COMERCIO = object()
+
+
+def escalamiento_cubre(libro: LibroReglas, comercio: Any = _CUALQUIER_COMERCIO) -> bool:
     """Si algún escalamiento exitoso cubría todas las causas vigentes (vacío ⇒ `True`).
 
     Una causa posterior a la instantánea de un escalamiento queda sin cubrir y exige escalar de
-    nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9).
+    nuevo; una segunda coincidencia de la misma entidad no es una causa nueva (R9). Desde el #10
+    (R8, FR-004) solo cuentan los escalamientos del comercio `comercio` (su clave): uno de otro
+    comercio del mismo caso no cubre al actual.
     """
     causas = causas_vigentes(libro)
-    return not causas or any(causas <= instantanea for instantanea in libro.escalamientos)
+    return not causas or any(
+        causas <= e.causas
+        for e in libro.escalamientos
+        if comercio is _CUALQUIER_COMERCIO or e.comercio == comercio
+    )
+
+
+def _clave(estado: EstadoCaso) -> Any:
+    """La clave del comercio del caso (`informe.clave_comercio`), con importación diferida."""
+    from due_diligence.informe import clave_comercio
+
+    return clave_comercio(estado)
+
+
+def escalamiento_del_caso_cubre(estado: EstadoCaso) -> bool:
+    """`escalamiento_cubre` con los escalamientos del comercio actual del caso (#10, R8)."""
+    return escalamiento_cubre(estado.libro, _clave(estado))
+
+
+def escalado_para_el_comercio(estado: EstadoCaso) -> bool:
+    """Si hay algún escalamiento del comercio actual, tenga o no causas (FR-004, R8)."""
+    clave = _clave(estado)
+    return any(e.comercio == clave for e in estado.libro.escalamientos)
 
 
 def reglas_de(causas: Iterable[str]) -> str | None:
@@ -279,6 +455,55 @@ def _listas_consultadas(estado: EstadoCaso) -> bool:
     return hay("comercio", comercio) and (not representante or hay("persona", representante))
 
 
+MOTIVO_DECIDE_SIN_ESCALAR = (
+    "decide_cumplimiento exige escalar antes: el oficial solo decide un caso que le llegó escalado."
+)
+MOTIVO_SIN_CAUSA = (
+    "El caso no tiene ninguna causa de escalamiento: es de bajo riesgo y no tiene hallazgos. No se "
+    "escala; registre el informe."
+)
+
+
+def bajo_riesgo_sin_hallazgos(estado: EstadoCaso) -> bool:
+    """El caso de bajo riesgo sin hallazgos comprobado (FR-002, R5): el único en que escalar se
+    rechaza. Exige todo a la vez: el comercio identificado, los cuatro frentes cubiertos (con
+    FR-027), ninguna coincidencia, la categoría determinada y no alta, ninguna mención en noticias,
+    ningún conflicto entre fuentes y ningún sello. Cualquier otro caso sin causas admite escalar.
+    """
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.conflictos import calcular_conflictos
+
+    libro = estado.libro
+    return (
+        estado.comercio is not None
+        and not libro.fallo_de_hook
+        and not libro.coincidencias
+        and categoria_determinada(libro)
+        and not es_alto_riesgo(libro)
+        and not menciones_en_noticias(estado)
+        and calcular_cobertura(estado).completa
+        and calcular_conflictos(estado).estado == "sin_conflictos"
+    )
+
+
+def evaluar_escalamiento(estado: EstadoCaso) -> list[Rechazo]:
+    """Los motivos por los que se rechaza escalar sin el sello (FR-002, FR-016, R5 pasos 2 y 3).
+
+    Durante la espera del identificador o del nombre, su motivo, también con alto riesgo (D3 del
+    plan), salvo con una coincidencia en listas entre las causas (`espera_exime_de_escalar`): esa
+    se escala sin esperar. Con un caso de bajo riesgo sin hallazgos comprobado,
+    `MOTIVO_SIN_CAUSA`. La espera de la categoría no impide escalar. Vacía si se admite.
+    """
+    espera = espera_del_analista(estado)
+    if espera is not None and espera_exime_de_escalar(estado.libro, espera):
+        if espera.clase == "identificador":
+            return [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, REGLA_ESPERA)]
+        return [Rechazo(MOTIVO_ESPERA_NOMBRE, REGLA_ESPERA)]
+    if bajo_riesgo_sin_hallazgos(estado):
+        return [Rechazo(MOTIVO_SIN_CAUSA, REGLA_ESPERA)]
+    return []
+
+
 MOTIVO_SOLO_OFICIAL = (
     "Tras un fallo de hook solo decide el oficial: la recomendación debe ser decide_cumplimiento."
 )
@@ -296,7 +521,7 @@ def evaluar_informe_minimo(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     if normalizar_recomendacion(entrada.get("recomendacion")) != "decide_cumplimiento":
         rechazos.append(Rechazo(MOTIVO_SOLO_OFICIAL, None))
     libro = estado.libro
-    if not escalamiento_cubre(libro):
+    if not escalamiento_del_caso_cubre(estado):
         causas = causas_vigentes(libro)
         rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
     return rechazos
@@ -317,8 +542,16 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
     if recomendacion is None:
         rechazos.append(Rechazo(MOTIVO_RECOMENDACION, None))
     causas = causas_vigentes(libro)
-    if not escalamiento_cubre(libro):
+    if not escalamiento_del_caso_cubre(estado):
         rechazos.append(Rechazo(motivo_de_escalar(causas), reglas_de(causas)))
+    # #10 (FR-004, R8): el oficial solo decide un caso que le llegó escalado. Con causas sin
+    # cubrir ya lo pide el motivo de escalar.
+    if (
+        recomendacion == RECOMENDACION_DECIDE
+        and escalamiento_del_caso_cubre(estado)
+        and not escalado_para_el_comercio(estado)
+    ):
+        rechazos.append(Rechazo(MOTIVO_DECIDE_SIN_ESCALAR, REGLA_ESPERA))
     if recomendacion == RECOMENDACION_HABILITAR:
         if libro.coincidencias:
             rechazos.append(Rechazo(MOTIVO_HABILITAR_CON_COINCIDENCIA, "I.2"))
@@ -329,6 +562,78 @@ def evaluar_informe(estado: EstadoCaso, entrada: Any) -> list[Rechazo]:
         if not _listas_consultadas(estado):
             rechazos.append(Rechazo(MOTIVO_FALTA_LISTAS, "I.2"))
     return rechazos
+
+
+# ------------------------------------------- causa del resumen al oficial (#10, FR-009, R5)
+
+# Sin causas vigentes (FR-003), una línea por cada motivo que se cumpla, en este orden.
+MOTIVOS_SIN_CAUSA = {
+    "cobertura_incompleta": "Sin causa de escalamiento vigente: la cobertura está incompleta.",
+    "categoria_no_determinada": (
+        "Sin causa de escalamiento vigente: la categoría no quedó determinada."
+    ),
+    "mencion_en_noticias": "Sin causa de escalamiento vigente: hay menciones en noticias.",
+    "conflicto_entre_fuentes": (
+        "Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales."
+    ),
+    # Cuarta ronda de la revisión previa: sin él, un caso con todo cubierto y los conflictos sin
+    # comparar (`sin_consulta`) daba una causa vacía, que la forma rechaza siempre (FR-009).
+    "conflictos_sin_comprobar": (
+        "Sin causa de escalamiento vigente: los conflictos entre fuentes no se pudieron comprobar."
+    ),
+    # Precisión de la implementación (T035): sin él, un caso sin comercio identificado y sin los
+    # otros cuatro motivos daría una causa vacía.
+    "comercio_no_identificado": (
+        "Sin causa de escalamiento vigente: el comercio no está identificado de forma unívoca."
+    ),
+}
+MOTIVO_SIN_COMERCIO_ESCALAMIENTO = (
+    "Delegue primero el registro mercantil: el oficial necesita saber de qué comercio se trata."
+)
+
+
+def menciones_en_noticias(estado: EstadoCaso) -> bool:
+    """Si el último resultado de noticias trae menciones (FR-002, R5).
+
+    Con el comercio identificado solo cuentan sus consultas (FR-027, R7): una mención encontrada
+    con el nombre ambiguo no es de este comercio.
+    """
+    resultado = estado.resultados.get(Frente.NOTICIAS)
+    if resultado is None:
+        return False
+    comercio = estado.comercio
+    return any(
+        c.valido
+        and isinstance(c.resultado, Mapping)
+        and c.resultado.get("resultado") == "coincidencias"
+        and (comercio is None or consulta_del_comercio(c.argumentos, comercio))
+        for c in resultado.consultas
+    )
+
+
+def causas_del_resumen(estado: EstadoCaso) -> list[str]:
+    """Las líneas de la causa que pone el código en el resumen al oficial (FR-009, R5).
+
+    Con causas vigentes, una por causa con su etiqueta fija. Sin causas (FR-003), una por cada
+    motivo de `MOTIVOS_SIN_CAUSA` que se cumpla. Ninguna repite datos del comercio.
+    """
+    # Importación diferida: `cobertura.py` y `conflictos.py` importan este módulo.
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.conflictos import calcular_conflictos
+
+    causas = causas_vigentes(estado.libro)
+    if causas:
+        return [texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas]
+    conflictos = calcular_conflictos(estado).estado
+    motivos = {
+        "cobertura_incompleta": not calcular_cobertura(estado).completa,
+        "categoria_no_determinada": not categoria_determinada(estado.libro),
+        "mencion_en_noticias": menciones_en_noticias(estado),
+        "conflicto_entre_fuentes": conflictos == "con_conflictos",
+        "conflictos_sin_comprobar": conflictos not in ("sin_conflictos", "con_conflictos"),
+        "comercio_no_identificado": estado.comercio is None,
+    }
+    return [MOTIVOS_SIN_CAUSA[clave] for clave, cumple in motivos.items() if cumple]
 
 
 # Motivos del cierre por el informe (#9, contrato `cierre.md`): textos fijos, sin datos del caso.
@@ -354,7 +659,7 @@ def falta_para_cerrar(estado: EstadoCaso) -> tuple[bool, bool]:
     # Importación diferida: `informe.py` importa este módulo (`causas_vigentes`).
     from due_diligence import informe
 
-    falta_escalar = not escalamiento_cubre(estado.libro)
+    falta_escalar = not escalamiento_del_caso_cubre(estado)
     falta_informe = informe.requiere_informe(estado) and not informe.informe_vigente(estado)
     return falta_escalar, falta_informe
 

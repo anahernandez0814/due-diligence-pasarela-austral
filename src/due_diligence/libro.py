@@ -11,6 +11,7 @@ consultado (FR-016).
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
 CAUSA_COINCIDENCIA_COMERCIO = "coincidencia_comercio"
 CAUSA_COINCIDENCIA_REPRESENTANTE = "coincidencia_representante"
@@ -54,13 +55,26 @@ class ConsultaRiesgo:
     nivel: str | None  # "alto", "medio", "bajo" o None
 
 
+@dataclass(frozen=True)
+class Escalamiento:
+    """Un escalamiento aceptado por la pasarela (#10, R8, data-model).
+
+    `causas` es la instantánea de las causas vigentes cuando el `PreToolUse` aceptó la llamada;
+    `comercio`, la clave `(identificador, nombre, verificado)` del comercio del caso en ese momento,
+    la misma de la huella del informe (#9). Solo cuenta para ese comercio.
+    """
+
+    causas: frozenset[str]
+    comercio: tuple[Any, Any, bool] | None
+
+
 @dataclass
 class LibroReglas:
     consultas_listas: list[ConsultaListas] = field(default_factory=list)
     coincidencias: list[Coincidencia] = field(default_factory=list)
     consultas_riesgo: list[ConsultaRiesgo] = field(default_factory=list)
-    # Instantáneas de las causas vigentes en cada escalamiento exitoso.
-    escalamientos: list[frozenset[str]] = field(default_factory=list)
+    # Cada escalamiento exitoso, con sus causas y su comercio (#10, R8).
+    escalamientos: list[Escalamiento] = field(default_factory=list)
     cierres_impedidos: int = 0
     # Sello pegajoso: un hook no pudo registrar un hecho o terminar su evaluación (R2).
     fallo_de_hook: str | None = None

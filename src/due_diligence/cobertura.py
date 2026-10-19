@@ -4,8 +4,9 @@
 `registrar_informe` y `escalar_a_cumplimiento` y la línea de comandos. Es puro: lee la situación de
 cada frente y su último error en el estado, no escribe nada y no registra eventos.
 
-`registro_caido` (#9, R8) lee lo mismo para el frente de registro. Vive aquí para que lo usen
-`informe.py` y `conflictos.py` sin importarse entre ellos.
+`frente_caido` (#9, R8; #10) lee lo mismo para decir si la fuente de un frente no respondió, y
+`registro_caido` es el del frente de registro. Viven aquí para que los usen `informe.py`,
+`conflictos.py` y `reglas.py` sin importarse entre ellos.
 
 Los motivos son textos fijos por situación y causa: el motivo crudo del estado puede traer
 identificadores del registro (por ejemplo, las coincidencias de un nombre ambiguo) y la cobertura
@@ -19,6 +20,7 @@ from typing import Any
 from due_diligence.ejecutor import es_bloqueo_de_hook
 from due_diligence.estado import Causa, EstadoCaso, Situacion
 from due_diligence.frentes import Frente
+from due_diligence.reglas import consulta_del_comercio
 
 MOTIVO_SIN_INICIAR = "no se delegó"
 MOTIVO_EN_CURSO = "seguía en curso"
@@ -35,8 +37,12 @@ _MOTIVOS: dict[Causa, str] = {
     ),
     Causa.CANCELADO: "se canceló",
     Causa.INVALIDADO: "el comercio del registro cambió después de consultar listas",
+    # #10, FR-027 (R7): noticias consultado con otro nombre o identificador.
+    Causa.OTRO_COMERCIO: (
+        "se consultó con un nombre o identificador que no es el del comercio identificado"
+    ),
 }
-# Causas de un registro que no respondió (#9, R8). `error_de_fuente` solo si algún error real no es
+# Causas de un frente que no respondió (#9, R8). `error_de_fuente` solo si algún error real no es
 # `entrada_invalida`: con una entrada inválida la fuente respondió (caso límite de la spec).
 _CAUSAS_DE_CAIDA = frozenset(
     {Causa.TERMINACION_ANOMALA, Causa.SIN_CONSULTAS, Causa.RESULTADO_INVALIDO, Causa.CANCELADO}
@@ -94,8 +100,26 @@ def _motivo(causa: Causa | None, error: Mapping[str, Any] | None) -> str:
     return _MOTIVOS[causa]
 
 
+def _de_otro_comercio(estado: EstadoCaso, frente: Frente) -> bool:
+    """Noticias terminó, pero para otro comercio que el identificado (#10, FR-027, R7).
+
+    Con el comercio identificado, su último resultado tiene consultas válidas y ninguna es del
+    comercio: por ejemplo, la del nombre ambiguo del primer turno del caso (d). Sin comercio
+    identificado, o sin resultado guardado, no se puede afirmar que sea de otro.
+    """
+    comercio = estado.comercio
+    resultado = estado.resultados.get(frente)
+    if frente is not Frente.NOTICIAS or comercio is None or resultado is None:
+        return False
+    validas = [c for c in resultado.consultas if c.valido]
+    return bool(validas) and not any(consulta_del_comercio(c.argumentos, comercio) for c in validas)
+
+
 def _del_frente(estado: EstadoCaso, frente: Frente) -> CoberturaFrente:
     situacion = estado.situacion(frente)
+    if situacion is Situacion.TERMINADO and _de_otro_comercio(estado, frente):
+        motivo = _MOTIVOS[Causa.OTRO_COMERCIO]
+        return CoberturaFrente(frente, False, motivo, Causa.OTRO_COMERCIO, 0)
     if situacion is Situacion.TERMINADO:
         return CoberturaFrente(frente, True, "", None, 0)
     if situacion is Situacion.SIN_INICIAR:
@@ -116,11 +140,15 @@ def calcular_cobertura(estado: EstadoCaso) -> CoberturaCaso:
     return CoberturaCaso(frentes, all(c.cubierto for c in frentes.values()))
 
 
-def registro_caido(estado: EstadoCaso) -> bool:
-    """El registro no terminó y la fuente no respondió, quede o no un reintento (R8)."""
-    if estado.situacion(Frente.REGISTRO) is not Situacion.NO_TERMINADO:
+def frente_caido(estado: EstadoCaso, frente: Frente) -> bool:
+    """El frente no terminó y su fuente no respondió, quede o no un reintento (#9, R8; #10, I.5).
+
+    No respondió si terminó con una causa de caída o con `error_de_fuente` y algún error que no sea
+    un bloqueo de hook ni `entrada_invalida`.
+    """
+    if estado.situacion(frente) is not Situacion.NO_TERMINADO:
         return False
-    error = estado.errores.get(Frente.REGISTRO) or {}
+    error = estado.errores.get(frente) or {}
     try:
         causa = Causa(error.get("causa"))
     except ValueError:
@@ -132,3 +160,8 @@ def registro_caido(estado: EstadoCaso) -> bool:
     errores = (error.get("obtenido") or {}).get("errores") or []
     tipos = [e.get("tipo") for e in errores if isinstance(e, Mapping) and not es_bloqueo_de_hook(e)]
     return any(tipo != "entrada_invalida" for tipo in tipos)
+
+
+def registro_caido(estado: EstadoCaso) -> bool:
+    """El registro no terminó y la fuente no respondió, quede o no un reintento (R8)."""
+    return frente_caido(estado, Frente.REGISTRO)

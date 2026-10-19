@@ -412,6 +412,20 @@ def test_registro_y_luego_listas_en_el_mismo_gather_listas_espera_al_fin_del_reg
     assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
 
 
+def test_listas_espera_al_registro_en_curso_en_dos_turnos_con_su_propio_bucle():
+    # Cada turno del caso corre en su propio `asyncio.run` (#10, R1). Un `Event` que en el primer
+    # turno esperó listas queda atado a ese bucle: si se reutilizara, el segundo `wait()` lanzaría
+    # `RuntimeError` fuera de cualquier error estructurado.
+    delegador, estado, registro, ejecutor = _crear(retardo=0.05)
+    asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS))
+    otro_registro = {"frente": "registro", "nombre": "Tienda Verde SAS"}
+    reg, listas = asyncio.run(_a_la_vez(delegador, otro_registro, LISTAS))
+    assert reg["situacion"] == "terminado"
+    assert "error" not in listas and listas["situacion"] == "terminado"
+    assert len(ejecutor.llamadas_de(Frente.REGISTRO)) == 2
+    assert estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+
+
 def test_dos_listas_mientras_corre_el_registro_lanzan_un_solo_subagente_y_responden_igual():
     delegador, estado, registro, ejecutor = _crear(retardo=0.05)
     reg, primera, segunda = asyncio.run(_a_la_vez(delegador, REGISTRO, LISTAS, LISTAS))
@@ -1206,3 +1220,10 @@ def test_otros_frentes_y_un_registro_rechazado_no_cambian_el_comercio_pedido():
     _delegar(delegador, frente="noticias", nombre="Taller Aurora SAS")
     _delegar(delegador, frente="registro")  # sin dato: se rechaza
     assert estado.comercio_pedido is None
+
+
+def test_la_descripcion_pide_la_categoria_que_dio_el_analista():
+    # #10, FR-020: el hook bloquea la que no aparece en los mensajes; la descripción lo anticipa.
+    from due_diligence.delegacion import DESCRIPCION
+
+    assert "La categoría tiene que ser la que dio el analista" in DESCRIPCION

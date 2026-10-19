@@ -273,19 +273,21 @@ def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos()
 # ------------------------------------------------ reintentos y presupuesto de turnos (#8, R2, R3)
 
 
-def test_un_reintento_por_frente_y_ocho_pasos_fijos():
+def test_un_reintento_por_frente_y_diez_pasos_fijos():
     assert configuracion.MAX_REINTENTOS_POR_FRENTE == 1
-    assert configuracion.PASOS_FIJOS_PEOR_CASO == 8
+    # 10 desde el #10 (R10): escalamiento rechazado por la forma y corregido, y noticias de nuevo.
+    assert configuracion.PASOS_FIJOS_PEOR_CASO == 10
 
 
 @pytest.mark.parametrize(
-    ("reintentos", "cierres", "esperado"), [(1, 3, 19), (0, 0, 8), (3, 5, 37), (2, 3, 27)]
+    ("reintentos", "cierres", "esperado"), [(1, 3, 21), (0, 0, 10), (3, 5, 39), (2, 3, 29)]
 )
 def test_el_presupuesto_se_calcula_con_los_reintentos_y_las_devoluciones(
     reintentos, cierres, esperado
 ):
-    # 8 pasos fijos + un reintento por frente (4 frentes) + un informe nuevo por cada reintento
-    # posible (#9, R8: un reintento con éxito invalida el informe) + devoluciones del Stop (R2).
+    # 10 pasos fijos (8 hasta el #9) + un reintento por frente (4 frentes) + un informe nuevo por
+    # cada reintento posible (#9, R8: un reintento con éxito invalida el informe) + devoluciones
+    # del Stop (R2).
     assert configuracion.presupuesto_turnos_peor_caso(reintentos, cierres) == esperado
 
 
@@ -293,7 +295,7 @@ def test_el_presupuesto_actual_sale_de_las_constantes_y_cabe_en_max_turns():
     esperado = configuracion.presupuesto_turnos_peor_caso(
         configuracion.MAX_REINTENTOS_POR_FRENTE, configuracion.MAX_CIERRES_IMPEDIDOS
     )
-    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO == esperado == 19  # 15 hasta el #8
+    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO == esperado == 21  # 19 hasta el #9
     assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO <= configuracion.MAX_TURNOS_SEGURIDAD
 
 
@@ -346,3 +348,29 @@ def test_la_variable_de_demostracion_no_se_reenvia_al_servidor():
     assert configuracion.VARIABLE_MODO_DEMO not in configuracion.VARIABLES_PASARELA
     entorno = {configuracion.VARIABLE_MODO_DEMO: "1"}
     assert "env" not in configuracion.servidor_pasarela(entorno)
+
+
+# ----------------------------------------------------------- #10: continuación con resume (T007)
+
+
+def test_opciones_base_pasa_el_resume():
+    opciones = configuracion.opciones_base(
+        modelo="m",
+        system_prompt="s",
+        permitidas=[],
+        prohibidas=[],
+        mcp_servers={},
+        resume="s-1",
+    )
+    assert opciones.resume == "s-1"
+
+
+def test_sin_resume_las_opciones_no_reanudan():
+    assert _opciones_coordinador().resume is None
+    assert all(_opciones_subagente(f).resume is None for f in Frente)
+
+
+def test_el_coordinador_acepta_el_resume_y_los_subagentes_no():
+    assert _opciones_coordinador(resume="s-2").resume == "s-2"
+    with pytest.raises(TypeError):
+        _opciones_subagente(Frente.REGISTRO, resume="s-2")  # los subagentes no reanudan

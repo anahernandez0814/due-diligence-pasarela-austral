@@ -344,3 +344,116 @@ def test_requiere_informe_con_comercio_identificado_y_no_con_varias_o_ninguna():
         sin_comercio.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
         sin_comercio.registrar_identificacion(respuesta)
         assert requiere_informe(sin_comercio) is False
+
+
+# -------------------------------- #10: fuentes de noticias y listas por comercio (T025, FR-027)
+
+NOTICIAS_FICTICIAS = "Noticias Ficticias"
+
+
+def _noticias(argumentos):
+    respuesta = respuesta_del_contrato("sin_coincidencias", fuente=NOTICIAS_FICTICIAS)
+    return consulta(Frente.NOTICIAS, argumentos, respuesta)
+
+
+def _identificado_como(estado, identificador):
+    parecidos = {c["identificador"]: c for c in comercios_parecidos()}
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    estado.registrar_identificacion(respuesta_registro(parecidos[identificador]))
+    return estado
+
+
+def test_con_otro_comercio_identificado_la_fuente_de_noticias_no_cuenta():
+    estado = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    estado.agregar_consultas([_noticias({"nombre": "Almacén Mirador SAS"})])
+    assert fuentes_consultadas(estado, Frente.NOTICIAS) == []
+    hallazgos = {"noticias": [_afirmacion(NOTICIAS_FICTICIAS)]}
+    assert problemas_de_fuente(estado, hallazgos) == [
+        Problema(
+            "hallazgos.noticias[0].fuente",
+            "La fuente no es ninguna de las consultadas para noticias.",
+        )
+    ]
+
+
+def test_con_la_consulta_del_comercio_identificado_la_fuente_de_noticias_cuenta():
+    estado = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    estado.agregar_consultas(
+        [_noticias({"nombre": "Almacén Mirador SAS"}), _noticias({"identificador": "CO-AM-0005"})]
+    )
+    assert fuentes_consultadas(estado, Frente.NOTICIAS) == [NOTICIAS_FICTICIAS]
+
+
+def test_en_listas_cuentan_el_comercio_y_su_representante_y_no_el_comercio_anterior():
+    estado = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    estado.agregar_consultas([consulta_listas("comercio", identificador="CO-AM-0004")])
+    assert fuentes_consultadas(estado, Frente.LISTAS) == []
+    estado.agregar_consultas([consulta_listas("persona", identificador="PE-0005")])
+    assert fuentes_consultadas(estado, Frente.LISTAS) == [LISTA]
+    # Y la del propio comercio identificado, sola.
+    del_comercio = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    del_comercio.agregar_consultas([consulta_listas("comercio", identificador="CO-AM-0005")])
+    assert fuentes_consultadas(del_comercio, Frente.LISTAS) == [LISTA]
+
+
+def test_sin_comercio_identificado_cuentan_todas_las_consultas_como_en_el_9():
+    estado = EstadoCaso()
+    estado.agregar_consultas([_noticias({"nombre": "cualquiera"})])
+    assert fuentes_consultadas(estado, Frente.NOTICIAS) == [NOTICIAS_FICTICIAS]
+
+
+def test_la_huella_cambia_al_pasar_noticias_a_no_cubierto():
+    # El registro ya terminó (ambiguo) antes y después: solo noticias cambia la cobertura.
+    from due_diligence.cobertura import calcular_cobertura
+    from due_diligence.estado import ResultadoFrente
+    from due_diligence.simulacion import terminacion_normal
+
+    estado = EstadoCaso()
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.REGISTRO, Situacion.TERMINADO)
+    estado.registrar_identificacion(respuesta_registro(*comercios_parecidos()))
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.TERMINADO)
+    estado.guardar_resultado(
+        ResultadoFrente(
+            Frente.NOTICIAS,
+            [_noticias({"nombre": "Almacén Mirador SAS"})],
+            "",
+            terminacion_normal(),
+            "",
+        )
+    )
+    antes = huella_actual(estado)
+    assert calcular_cobertura(estado).frentes[Frente.NOTICIAS].cubierto is True
+    # T025 (barrido): un informe registrado con la huella de antes deja de estar vigente.
+    estado.informes.append(InformeRegistrado("INF-0001", "no_habilitar", False, antes))
+    assert informe_vigente(estado) is True
+    estado.reiniciar_identificacion()
+    parecidos = {c["identificador"]: c for c in comercios_parecidos()}
+    estado.registrar_identificacion(respuesta_registro(parecidos["CO-AM-0005"]))
+    assert calcular_cobertura(estado).frentes[Frente.NOTICIAS].cubierto is False
+    # También cambian los conflictos (ya hay comercio que comparar) y el comercio; la cobertura
+    # solo cambia por noticias, porque el registro estaba terminado antes y después.
+    assert "la cobertura" in cambios(antes, huella_actual(estado))
+    assert informe_vigente(estado) is False
+
+
+def test_con_el_comercio_identificado_registro_y_categoria_siguen_contando_sus_fuentes():
+    # T025 (barrido): el filtro de FR-027 solo toca noticias y listas; registro y categoría no
+    # dependen del comercio consultado y sus fuentes valen aunque la consulta traiga otros datos.
+    from due_diligence.simulacion import respuesta_riesgo
+
+    estado = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    estado.agregar_consultas(
+        [
+            consulta(Frente.REGISTRO, {"nombre": "Almacén Mirador SAS"}),
+            consulta(
+                Frente.CATEGORIA,
+                {"categoria": "ropa y accesorios"},
+                respuesta_riesgo("ropa y accesorios", "bajo"),
+            ),
+        ]
+    )
+    assert fuentes_consultadas(estado, Frente.REGISTRO) == [SUR]
+    assert fuentes_consultadas(estado, Frente.CATEGORIA) == ["Catálogo Ficticio de Categorías"]

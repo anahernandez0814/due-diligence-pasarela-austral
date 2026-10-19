@@ -65,6 +65,9 @@ def test_los_tipos_de_evento_son_los_del_modelo():
         "informe_registrado",
         "datos_sustituidos",
         "cierre_sin_informe",
+        # Eventos del #10 (data-model, «Eventos»).
+        "mensaje_analista",
+        "espera_analista",
     }
     assert TIPO_CASO_INICIADO in TIPOS and TIPO_TERMINACION in TIPOS
 
@@ -290,7 +293,7 @@ def test_el_estado_empieza_sin_errores_y_no_los_comparte():
     assert uno.instantanea().errores == {Frente.NOTICIAS: {"causa": "error_de_fuente"}}
 
 
-def test_la_causa_es_un_conjunto_cerrado_de_ocho_valores():
+def test_la_causa_es_un_conjunto_cerrado_de_nueve_valores():
     assert {c.value for c in Causa} == {
         "terminacion_anomala",
         "error_de_fuente",
@@ -300,6 +303,7 @@ def test_la_causa_es_un_conjunto_cerrado_de_ocho_valores():
         "rechazado",
         "cancelado",
         "invalidado",
+        "otro_comercio",  # #10, FR-027
     }
 
 
@@ -421,3 +425,121 @@ def test_el_estado_empieza_sin_informes_ni_comercio_pedido_y_no_los_comparte():
     a.informes_pendientes["x"] = object()
     a.informes.append(object())
     assert b.informes_pendientes == {} and b.informes == []
+
+
+# ---------------------------------------------------------------- #10: fundamentos (T003)
+
+
+def test_los_mensajes_del_analista_empiezan_vacios_y_solicitud_es_el_primero():
+    estado = EstadoCaso()
+    assert estado.mensajes == [] and estado.solicitud == ""
+    estado.mensajes.append("primero")
+    estado.mensajes.append("segundo")
+    assert estado.solicitud == "primero"
+
+
+def test_solicitud_sigue_aceptando_la_forma_del_6_al_9():
+    # Por posición (`EstadoCaso("…")`) y por asignación, como lo usan los tests anteriores.
+    assert EstadoCaso("x").mensajes == ["x"]
+    estado = EstadoCaso()
+    estado.solicitud = "x"
+    assert estado.mensajes == ["x"] and estado.solicitud == "x"
+    estado.solicitud = "y"  # sustituye el primer mensaje, no añade otro
+    assert estado.mensajes == ["y"]
+
+
+def test_los_mensajes_no_se_comparten_entre_casos():
+    a, b = EstadoCaso("a"), EstadoCaso("b")
+    a.mensajes.append("otro")
+    assert b.mensajes == ["b"]
+    assert a.instantanea().mensajes == ["a", "otro"]
+
+
+def test_el_estado_empieza_sin_categoria_bloqueada_ni_escalamientos_pendientes():
+    estado = EstadoCaso()
+    assert estado.categoria_bloqueada is False
+    assert estado.escalamientos_pendientes == {}
+
+
+@pytest.mark.parametrize(
+    ("resultado", "clase"),
+    [
+        (None, "invalida"),
+        ({"hola": 1}, "invalida"),
+        ({"resultado": "otra_cosa", "hechos": [], "coincidencias": []}, "invalida"),
+        ({"resultado": "sin_coincidencias", "hechos": [], "coincidencias": []}, "ninguna"),
+        ({"resultado": "coincidencias", "hechos": [], "coincidencias": ["A", "B"]}, "varias"),
+        ({"resultado": "coincidencias", "hechos": [], "coincidencias": ["A"]}, "invalida"),
+    ],
+)
+def test_clase_de_sin_comercio_unico(resultado, clase):
+    from due_diligence.estado import clase_de
+
+    assert clase_de(resultado) == clase
+
+
+def test_clase_de_unica_y_contradictoria():
+    from due_diligence.estado import clase_de
+
+    unica = _registro(comercio_del_registro(), coincidencias=["CO-TV-0001"])
+    assert clase_de(unica) == "unica"
+    otra_fuente = {**comercio_del_registro(), "nombre": "Tienda Verde Ltda"}
+    contradictoria = _registro(comercio_del_registro(), otra_fuente, coincidencias=["CO-TV-0001"])
+    assert clase_de(contradictoria) == "contradictoria"
+    assert derivar_comercio(contradictoria)[0] is None  # derivar_comercio no cambia
+
+
+def _registro_terminado_con(estado, *respuestas):
+    _llevar_a(estado, Frente.REGISTRO, Situacion.TERMINADO)
+    for respuesta in respuestas:
+        estado.registrar_identificacion(respuesta)
+
+
+def test_la_identificacion_guarda_su_clase():
+    estado = EstadoCaso()
+    _registro_terminado_con(
+        estado, _registro(comercio_del_registro(), coincidencias=["CO-TV-0001"])
+    )
+    assert estado.identificaciones[0].clase == "unica"
+
+
+def test_clase_identificacion_se_consolida_como_el_comercio():
+    estado = EstadoCaso()
+    assert estado.clase_identificacion is None  # el registro no terminó
+    varias = {"resultado": "coincidencias", "hechos": [], "coincidencias": ["A", "B"]}
+    _registro_terminado_con(estado, varias)
+    assert estado.clase_identificacion == "varias" and estado.comercio is None
+
+
+def test_clase_identificacion_es_unica_exactamente_con_comercio():
+    estado = EstadoCaso()
+    _registro_terminado_con(
+        estado, _registro(comercio_del_registro(), coincidencias=["CO-TV-0001"])
+    )
+    assert estado.clase_identificacion == "unica" and estado.comercio is not None
+    # Dos consultas que identifican comercios distintos: hace falta el identificador.
+    otro = comercio_del_registro(identificador="CO-TA-0002", nombre="Taller Aurora SAS")
+    estado.registrar_identificacion(_registro(otro, coincidencias=["CO-TA-0002"]))
+    assert estado.comercio is None and estado.clase_identificacion == "varias"
+
+
+def test_clase_identificacion_sin_datos_del_registro_terminado_es_invalida():
+    estado = EstadoCaso()
+    _llevar_a(estado, Frente.REGISTRO, Situacion.TERMINADO)
+    assert estado.clase_identificacion == "invalida"
+
+
+def test_la_causa_otro_comercio_existe():
+    assert Causa.OTRO_COMERCIO.value == "otro_comercio"
+
+
+def test_los_eventos_del_10_existen_y_se_registran():
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA, TIPO_MENSAJE_ANALISTA
+
+    assert TIPO_MENSAJE_ANALISTA == "mensaje_analista"
+    assert TIPO_ESPERA_ANALISTA == "espera_analista"
+    eventos = RegistroEventos()
+    for tipo in (TIPO_MENSAJE_ANALISTA, TIPO_ESPERA_ANALISTA):
+        assert tipo in TIPOS
+        eventos.registrar(tipo, None, "detalle")
+    assert [e.tipo for e in eventos.eventos()] == [TIPO_MENSAJE_ANALISTA, TIPO_ESPERA_ANALISTA]

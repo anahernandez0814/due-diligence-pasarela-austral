@@ -20,6 +20,7 @@ from due_diligence.eventos import (
     TIPO_FALLO_DE_HOOK,
 )
 from due_diligence.frentes import FRENTES, Frente
+from due_diligence.libro import Escalamiento
 from due_diligence.simulacion import (
     CoordinadorSimulado,
     EjecutorSimulado,
@@ -41,6 +42,12 @@ SOLICITUD = (
     "Necesito el due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001. Quieren "
     "procesar ventas en línea de suplementos dietarios y estiman unos $80.000.000 mensuales. "
     "¿Lo podemos habilitar esta semana?"
+)
+# Desde el #10 (FR-020) la categoría delegada tiene que aparecer en un mensaje del analista: cada
+# caso pide el due diligence con la categoría que delega su guion.
+SOLICITUD_B = "Due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, talleres."
+SOLICITUD_C = (
+    "Due diligence de Panadería Luna Nueva SAS, identificador ficticio CO-PL-0003, panaderías."
 )
 
 LISTAS = FRENTES[Frente.LISTAS].herramienta_completa
@@ -69,12 +76,12 @@ def _resultados(comercios, categoria=None, nivel=None, listas=None, identificado
     return resultados
 
 
-def _caso(guion, resultados):
+def _caso(guion, resultados, solicitud=SOLICITUD):
     coordinador = CoordinadorSimulado(guion)
     ejecutor = EjecutorSimulado(resultados=resultados)
     caso = Caso(ejecutor=ejecutor, consulta=coordinador)
     coordinador.caso = caso
-    asyncio.run(caso.ejecutar(SOLICITUD))
+    asyncio.run(caso.ejecutar(solicitud))
     return caso, coordinador, ejecutor
 
 
@@ -148,7 +155,9 @@ def test_caso_a_un_comercio_de_alto_riesgo_nunca_se_habilita_y_va_a_un_oficial()
     pasarela = coordinador.pasarela
     assert len(pasarela.escalamientos) == 1 and len(pasarela.informes) == 1
     assert pasarela.informes[0]["recomendacion"] == "decide_cumplimiento"
-    assert caso.estado.libro.escalamientos == [frozenset({"alto_riesgo"})]
+    assert caso.estado.libro.escalamientos == [
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    ]
     assert caso.estado.cierre_sin_escalar is False
     assert caso.completo is True  # los cuatro frentes terminaron y el cierre fue normal
 
@@ -194,7 +203,7 @@ def test_caso_b_un_comercio_de_bajo_riesgo_sin_hallazgos_se_habilita_sin_escalar
     resultados = _resultados(
         [comercio_bajo_riesgo()], "talleres", "bajo", listas, identificador="CO-TA-0002"
     )
-    caso, coordinador, _ = _caso(guion, resultados)
+    caso, coordinador, _ = _caso(guion, resultados, SOLICITUD_B)
 
     informe = coordinador.resultados_de("informe")[0]
     assert informe.ejecutada and not informe.denegada
@@ -240,7 +249,7 @@ def test_caso_c_el_representante_con_coincidencia_impide_habilitar_y_exige_escal
         _listas_con_el_representante_en_listas(),
         "CO-PL-0003",
     )
-    caso, coordinador, _ = _caso(guion, resultados)
+    caso, coordinador, _ = _caso(guion, resultados, SOLICITUD_C)
 
     assert [c.causa for c in caso.estado.libro.coincidencias] == ["coincidencia_representante"]
     informes = coordinador.resultados_de("informe")
@@ -271,7 +280,7 @@ def test_caso_c_habilitar_sigue_rechazado_aunque_se_escale():
         _listas_con_el_representante_en_listas(),
         "CO-PL-0003",
     )
-    caso, coordinador, _ = _caso(guion, resultados)
+    caso, coordinador, _ = _caso(guion, resultados, SOLICITUD_C)
     habilitar, aceptado = coordinador.resultados_de("informe")
     assert habilitar.denegada and aceptado.ejecutada
     assert coordinador.pasarela.informes[0]["recomendacion"] == "decide_cumplimiento"
@@ -350,7 +359,7 @@ def test_el_caso_sigue_siendo_el_mismo_con_el_limite_de_devoluciones_agotado():
         _listas_con_el_representante_en_listas(),
         "CO-PL-0003",
     )
-    caso, coordinador, _ = _caso(guion, resultados)
+    caso, coordinador, _ = _caso(guion, resultados, SOLICITUD_C)
     cierres = coordinador.resultados_de("terminar")
     assert [c.termino for c in cierres] == [False] * configuracion.MAX_CIERRES_IMPEDIDOS + [True]
     assert caso.estado.cierre_sin_escalar is True and caso.completo is False

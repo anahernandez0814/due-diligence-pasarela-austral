@@ -282,11 +282,29 @@ def test_la_pasarela_simulada_guarda_informes_y_escalamientos():
     # #9: el informe tiene que tener la forma del esquema; la igualdad sigue siendo exacta.
     pasarela = _pasarela()
     informe = _llamar(pasarela, "registrar_informe", _informe_valido())
-    escalamiento = _llamar(pasarela, "escalar_a_cumplimiento", {"causa_escalamiento": "x"})
+    escalamiento = _llamar(pasarela, "escalar_a_cumplimiento", _resumen_valido())
     assert informe["resultado"] == "informe_registrado"
     assert escalamiento["resultado"] == "caso_escalado"
     assert pasarela.informes == [_informe_valido()]
-    assert pasarela.escalamientos == [{"causa_escalamiento": "x"}]
+    assert pasarela.escalamientos == [_resumen_valido()]
+
+
+def test_la_pasarela_simulada_rechaza_un_resumen_mal_formado_como_la_real():
+    # #10, R6: la misma `validar_resumen` que la pasarela; nada se guarda.
+    pasarela = _pasarela()
+    respuesta = _llamar(pasarela, "escalar_a_cumplimiento", {"causa_escalamiento": "x"})
+    assert respuesta["error"] is True and respuesta["tipo"] == "entrada_invalida"
+    assert respuesta["mensaje"].startswith("El resumen al oficial no tiene la forma esperada")
+    assert pasarela.escalamientos == []
+
+
+def _resumen_valido():
+    """Un resumen al oficial con la forma del #10 (contrato `escalar-a-cumplimiento.md`)."""
+    return {
+        **{k: v for k, v in _informe_valido().items() if k != "recomendacion"},
+        "causa_escalamiento": ["categoría de alto riesgo"],
+        "accion_recomendada": "Revisar el caso.",
+    }
 
 
 def test_la_pasarela_simulada_rechaza_un_informe_mal_formado_como_la_real():
@@ -402,7 +420,7 @@ def test_en_secuencia_da_un_resultado_por_ejecucion_y_repite_el_ultimo():
 def test_el_paso_escalar_con_llama_a_escalar_con_esa_entrada():
     from due_diligence.simulacion import CoordinadorSimulado
 
-    entrada = {"causa_escalamiento": "alto riesgo", "cobertura": "completa"}
+    entrada = _resumen_valido()  # #10: la pasarela simulada valida el resumen
     coordinador = CoordinadorSimulado([("escalar_con", entrada)])
 
     async def consumir():
@@ -547,3 +565,117 @@ def test_pre_y_post_reciben_el_mismo_tool_use_id_y_cada_llamada_el_suyo():
     assert ids[("pre", 1)] == ids[("post", 1)]
     assert ids[("pre", 2)] == ids[("post", 2)]
     assert ids[("pre", 1)] != ids[("pre", 2)]
+
+
+# ------------------------------------------------- #10: el coordinador simulado por turnos (T018)
+
+
+def _consumir_con(coordinador, opciones):
+    async def consumir():
+        return [m async for m in coordinador(prompt="p", options=opciones)]
+
+    return asyncio.run(consumir())
+
+
+def test_el_coordinador_simulado_consume_un_guion_por_turno():
+    from claude_agent_sdk import ResultMessage
+
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    uno, dos = _informe_valido(), _informe_valido(recomendacion="decide_cumplimiento")
+    coordinador = CoordinadorSimulado(guiones=[[("informe_con", uno)], [("informe_con", dos)]])
+    primero = _consumir_con(coordinador, ClaudeAgentOptions())
+    assert coordinador.pasarela.informes == [uno]
+    segundo = _consumir_con(coordinador, ClaudeAgentOptions(resume="sesion-de-prueba"))
+    assert coordinador.pasarela.informes == [uno, dos]
+    # Cada turno termina con su `ResultMessage`, con el mismo `session_id` estable.
+    for mensajes in (primero, segundo):
+        (resultado,) = [m for m in mensajes if isinstance(m, ResultMessage)]
+        assert resultado.session_id == "sesion-de-prueba"
+    assert coordinador.reanudaciones == [None, "sesion-de-prueba"]
+
+
+def test_un_guion_solo_sigue_valiendo_como_un_turno():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    entrada = _informe_valido()
+    coordinador = CoordinadorSimulado([("informe_con", entrada)])
+    _consumir_con(coordinador, ClaudeAgentOptions())
+    assert coordinador.pasarela.informes == [entrada]
+    assert coordinador.reanudaciones == [None]
+
+
+def test_un_turno_de_mas_que_el_guion_no_ejecuta_ningun_paso():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=[[("informe_con", _informe_valido())]])
+    _consumir_con(coordinador, ClaudeAgentOptions())
+    _consumir_con(coordinador, ClaudeAgentOptions(resume="sesion-de-prueba"))
+    assert len(coordinador.pasarela.informes) == 1
+
+
+def test_el_mensaje_de_resultado_acepta_otro_session_id():
+    from due_diligence.simulacion import mensaje_de_resultado
+
+    assert mensaje_de_resultado().session_id == "sesion-de-prueba"
+    assert mensaje_de_resultado(session_id="otra").session_id == "otra"
+
+
+# ---------------------------------------------- #10: noticias N-0001 y el resumen (T044, R12)
+
+
+def test_la_pasarela_simulada_devuelve_n_0001_solo_para_el_comercio_que_menciona():
+    pasarela = _pasarela()
+    for entrada in ({"identificador": "CO-AM-0005"}, {"nombre": "Almacén Mirador Norte SAS"}):
+        respuesta = _llamar(pasarela, "buscar_noticias", entrada)
+        assert respuesta["resultado"] == "coincidencias"
+        (hecho,) = respuesta["hechos"]
+        assert hecho["contenido"]["id"] == "N-0001"
+        assert hecho["metadatos"] == {"fuente": "Diario Ficticio del Sur", "fecha": "2026-03-18"}
+    for entrada in ({"nombre": "Almacén Mirador SAS"}, {"identificador": "CO-AM-0004"}):
+        assert _llamar(pasarela, "buscar_noticias", entrada)["resultado"] == "sin_coincidencias"
+
+
+def test_el_ejecutor_simulado_consulta_noticias_con_su_contexto_y_encuentra_n_0001():
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import EjecutorSimulado
+
+    ejecutor = EjecutorSimulado()
+    norte = asyncio.run(
+        ejecutor(Frente.NOTICIAS, "Consulta con el identificador «CO-AM-0005».", _opciones(None))
+    )
+    (consulta,) = norte.consultas
+    assert consulta.argumentos == {"identificador": "CO-AM-0005"}
+    assert consulta.resultado["hechos"][0]["contenido"]["id"] == "N-0001"
+    ambiguo = asyncio.run(
+        ejecutor(Frente.NOTICIAS, "Consulta con el nombre «Almacén Mirador SAS».", _opciones(None))
+    )
+    assert ambiguo.consultas[0].argumentos == {"nombre": "Almacén Mirador SAS"}
+    assert ambiguo.consultas[0].resultado["resultado"] == "sin_coincidencias"
+
+
+def test_el_resumen_del_caso_es_valido_y_solo_cita_fuentes_admitidas():
+    from due_diligence.estado import EstadoCaso
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import consulta, resumen_del_caso
+    from servidor_mcp.informe import validar_resumen
+
+    estado = EstadoCaso()
+    estado.agregar_consultas([consulta(Frente.REGISTRO)])
+    resumen = resumen_del_caso(estado, "Revisar.")
+    assert resumen["accion_recomendada"] == "Revisar."
+    assert set(resumen) == {
+        "comercio",
+        "hallazgos",
+        "cobertura",
+        "causa_escalamiento",
+        "accion_recomendada",
+        "conflictos",
+    }
+    assert validar_resumen(resumen) == []
+    from due_diligence.informe import fuentes_consultadas
+
+    assert resumen["hallazgos"]
+    for frente, afirmaciones in resumen["hallazgos"].items():
+        admitidas = fuentes_consultadas(estado, Frente(frente))
+        assert all(a["fuente"] in admitidas for a in afirmaciones), frente

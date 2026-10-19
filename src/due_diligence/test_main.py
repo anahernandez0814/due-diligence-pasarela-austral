@@ -21,6 +21,7 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.simulacion import EjecutorSimulado, resultado_frente
+from due_diligence.simulacion import consulta as consulta_de_frente
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +59,10 @@ def _ejecutar_caso_simulado(fin, llamadas):
             )
             yield fin
 
-        noticias = resultado_frente(Frente.NOTICIAS)
+        # La consulta de noticias lleva el dato delegado, como la del subagente (#10, FR-027).
+        noticias = resultado_frente(
+            Frente.NOTICIAS, [consulta_de_frente(Frente.NOTICIAS, {"identificador": "CO-TV-0001"})]
+        )
         noticias.coste_usd = 0.01
         caso = Caso(
             ejecutor=EjecutorSimulado(retardo=0.01, resultados={Frente.NOTICIAS: noticias}),
@@ -332,3 +336,153 @@ def test_un_informe_minimo_que_ya_no_esta_vigente_se_marca():
         "  INF-0001: recomendación no_habilitar; vigente: no",
         "  INF-0002: recomendación decide_cumplimiento; vigente: no; informe mínimo",
     ]
+
+
+# ------------------------------------------ #10: la continuación por la entrada estándar (T048)
+
+
+def _caso_d_simulado(llamadas):
+    """El caso (d): el primer turno espera el identificador; el segundo identifica y termina."""
+    from due_diligence.simulacion import (
+        CoordinadorSimulado,
+        comercios_parecidos,
+        consulta,
+        respuesta_registro,
+    )
+
+    def registro(contexto):
+        parecidos = {c["identificador"]: c for c in comercios_parecidos()}
+        comercios = (
+            [parecidos["CO-AM-0005"]] if "CO-AM-0005" in contexto else list(parecidos.values())
+        )
+        return resultado_frente(
+            Frente.REGISTRO,
+            [consulta(Frente.REGISTRO, {"nombre": "x"}, respuesta_registro(*comercios))],
+        )
+
+    async def falso(solicitud):
+        coordinador = CoordinadorSimulado(
+            guiones=[
+                [
+                    ("delegar", {"frente": "registro", "nombre": "Almacén Mirador SAS"}),
+                    ("terminar",),
+                ],
+                [("delegar", {"frente": "registro", "identificador": "CO-AM-0005"})],
+            ]
+        )
+        caso = Caso(
+            ejecutor=EjecutorSimulado(resultados={Frente.REGISTRO: registro}), consulta=coordinador
+        )
+        coordinador.caso = caso
+        llamadas.append("ejecutar_caso")
+        await caso.ejecutar(solicitud)
+        return caso
+
+    return falso
+
+
+def test_con_espera_pregunta_y_continua_en_el_mismo_caso(monkeypatch, capsys):
+    from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR
+
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    llamadas = []
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado(llamadas))
+    respuestas = iter(["CO-AM-0005", ""])
+    preguntas = []
+
+    def leer(pregunta):
+        preguntas.append(pregunta)
+        return next(respuestas)
+
+    assert principal.main(["solicitud"], leer=leer) == 0
+    salida = capsys.readouterr().out
+    assert f"Esperando al analista: {MOTIVO_ESPERA_IDENTIFICADOR}" in salida
+    assert "Sin espera del analista" in salida  # tras la respuesta, en la segunda impresión
+    assert preguntas == [principal.PREGUNTA_AL_ANALISTA]  # sin espera ya no vuelve a preguntar
+    assert salida.count("Eventos del caso:") == 2
+    assert llamadas == ["ejecutar_caso"]  # un solo caso: la respuesta continúa, no crea otro
+
+
+@pytest.mark.parametrize("respuesta", ["", "   ", EOFError])
+def test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar(
+    monkeypatch, capsys, respuesta
+):
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([]))
+
+    def leer(_pregunta):
+        if respuesta is EOFError:
+            raise EOFError
+        return respuesta
+
+    assert principal.main(["solicitud"], leer=leer) == 0
+    salida = capsys.readouterr().out
+    assert salida.count("Eventos del caso:") == 1
+    assert "Esperando al analista:" in salida
+
+
+def test_sin_sesion_que_continuar_muestra_un_mensaje_y_no_una_traza(monkeypatch, capsys):
+    # El primer turno dejó una espera pero no un `session_id` (terminó sin `ResultMessage`).
+    from due_diligence.coordinador import CasoSinSesion
+
+    async def sin_sesion(solicitud):
+        caso = await _caso_d_simulado([])(solicitud)
+        caso.session_id = None
+        return caso
+
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", sin_sesion)
+    preguntas = []
+
+    def leer(pregunta):
+        preguntas.append(pregunta)
+        return "CO-AM-0005"
+
+    assert principal.main(["solicitud"], leer=leer) == 1
+    capturado = capsys.readouterr()
+    assert principal.MENSAJE_SIN_SESION in capturado.err
+    assert "Traceback" not in capturado.err and CasoSinSesion.__name__ not in capturado.err
+    assert preguntas == [principal.PREGUNTA_AL_ANALISTA]  # no vuelve a preguntar
+    assert capturado.out.count("Eventos del caso:") == 1
+
+
+def test_con_sin_continuar_no_pregunta(monkeypatch, capsys):
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([]))
+
+    def leer(_pregunta):
+        raise AssertionError("no debe preguntar")
+
+    assert principal.main(["--sin-continuar", "solicitud"], leer=leer) == 0
+    salida = capsys.readouterr().out
+    assert "Esperando al analista:" in salida and salida.count("Eventos del caso:") == 1
+
+
+def test_la_bandera_no_entra_en_la_solicitud(monkeypatch):
+    recibidas = []
+
+    async def falso(solicitud):
+        recibidas.append(solicitud)
+        return await _caso_d_simulado([])(solicitud)
+
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", falso)
+    principal.main(["--sin-continuar", "Due", "diligence"], leer=lambda _p: "")
+    assert recibidas == ["Due diligence"]
+
+
+def test_la_salida_muestra_los_escalamientos_registrados_o_ninguno():
+    from due_diligence.eventos import TIPO_ESCALAMIENTO_REGISTRADO
+
+    caso = Caso(ejecutor=EjecutorSimulado())
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    i = lineas.index("Escalamientos registrados:")
+    assert lineas[i + 1] == "  ninguno"
+    assert "Sin espera del analista" in lineas
+    detalle = "Escalamiento ESC-0001 registrado; cubre: categoría de alto riesgo."
+    caso._eventos.registrar(TIPO_ESCALAMIENTO_REGISTRADO, None, detalle)
+    lineas = []
+    principal.imprimir_caso(caso, lineas.append)
+    i = lineas.index("Escalamientos registrados:")
+    assert lineas[i + 1] == f"  {detalle}"

@@ -186,7 +186,8 @@ def _caso_en_demo(guion, comercios, categoria=None, nivel=None, listas=None, ide
         entorno=DEMO, ejecutor=EjecutorSimulado(resultados=resultados), consulta=coordinador
     )
     coordinador.caso = caso
-    asyncio.run(caso.ejecutar("solicitud"))
+    # Desde el #10 (FR-020) la categoría delegada tiene que estar en un mensaje del analista.
+    asyncio.run(caso.ejecutar(f"Solicitud de {categoria}." if categoria else "solicitud"))
     return caso, coordinador
 
 
@@ -286,3 +287,23 @@ def test_la_guia_de_las_afirmaciones_esta_en_los_dos_modos_y_no_trae_reglas_de_n
         assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
     assert REGLA_3 not in _REGLA_AFIRMACIONES and ESCALAR not in _REGLA_AFIRMACIONES
     assert CUANDO_ESCALADO not in _REGLA_AFIRMACIONES
+
+
+def test_la_guia_tras_identificar_esta_en_los_dos_modos_y_no_trae_reglas_de_negocio():
+    # #10, FR-028: no es una regla I.1 a I.3 que el modo de demostración quite.
+    from due_diligence.coordinador import _REGLA_TRAS_IDENTIFICAR
+
+    for demo in (False, True):
+        assert _REGLA_TRAS_IDENTIFICAR in instrucciones_coordinador(demo=demo)
+    assert "escalar" not in _REGLA_TRAS_IDENTIFICAR.casefold()
+    assert "varias coincidencias" not in _REGLA_TRAS_IDENTIFICAR
+    assert CUANDO_ESCALADO not in _REGLA_TRAS_IDENTIFICAR
+
+
+def test_la_guia_del_resumen_no_trae_la_guia_de_escalar():
+    # #10, R11: es la forma del canal, no una regla I.1 a I.3; no dice cuándo escalar.
+    from due_diligence.coordinador import _REGLA_RESUMEN_OFICIAL
+
+    assert "escalar" not in _REGLA_RESUMEN_OFICIAL.casefold()
+    assert "varias coincidencias" not in _REGLA_RESUMEN_OFICIAL
+    assert CUANDO_ESCALADO not in _REGLA_RESUMEN_OFICIAL

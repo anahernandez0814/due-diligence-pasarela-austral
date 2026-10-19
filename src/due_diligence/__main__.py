@@ -14,13 +14,28 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from due_diligence import configuracion
-from due_diligence.coordinador import Caso, ejecutar_caso
-from due_diligence.eventos import TIPO_FRENTE_FIN, TIPO_FRENTE_INICIO, Evento
+from due_diligence.coordinador import Caso, CasoSinSesion, ejecutar_caso
+from due_diligence.eventos import (
+    TIPO_ESCALAMIENTO_REGISTRADO,
+    TIPO_FRENTE_FIN,
+    TIPO_FRENTE_INICIO,
+    Evento,
+)
 from due_diligence.frentes import Frente
 from due_diligence.informe import informe_vigente
 from due_diligence.terminacion import Terminacion
 
-USO = 'Uso: uv run python -m due_diligence "<solicitud del analista>"'
+USO = 'Uso: uv run python -m due_diligence [--sin-continuar] "<solicitud del analista>"'
+# #10 (R12, contrato `continuacion-y-cierre.md`): con espera del analista se le pregunta por la
+# entrada estándar, salvo con esta bandera (para los tests y las validaciones de un solo turno).
+BANDERA_SIN_CONTINUAR = "--sin-continuar"
+PREGUNTA_AL_ANALISTA = (
+    "El coordinador espera su respuesta; escríbala o deje la línea vacía para terminar: "
+)
+MENSAJE_SIN_SESION = (
+    "No se puede continuar el caso: el turno anterior no dejó una sesión del coordinador que "
+    "reanudar. El caso queda como está, sin completar; inicie uno nuevo con la solicitud completa."
+)
 INDEPENDIENTES = (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
 
 
@@ -113,6 +128,16 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
             f"vigente: {'sí' if es_vigente else 'no'}{minimo}"
         )
     escribir("")
+    # Los escalamientos que la pasarela aceptó, con su id y sus causas, como dice su evento (#10).
+    escribir("Escalamientos registrados:")
+    escalamientos = [e.detalle for e in eventos if e.tipo == TIPO_ESCALAMIENTO_REGISTRADO]
+    if not escalamientos:
+        escribir("  ninguno")
+    for detalle in escalamientos:
+        escribir(f"  {detalle}")
+    espera = caso.espera
+    escribir(f"Esperando al analista: {espera.motivo}" if espera else "Sin espera del analista")
+    escribir("")
     escribir("Números de la validación:")
     for frente, segundos in duraciones(eventos).items():
         escribir(f"  duración de {frente.value}: {segundos:.1f} s")
@@ -144,8 +169,35 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
     escribir(caso.respuesta or "(sin respuesta)")
 
 
-def main(argumentos: list[str] | None = None) -> int:
-    solicitud = " ".join(sys.argv[1:] if argumentos is None else argumentos).strip()
+def _conversar(caso: Caso, leer: Callable[[str], str]) -> bool:
+    """Mientras el caso espera al analista, pregunta y continúa en el mismo caso (#10, FR-019).
+
+    Termina con una línea vacía o con el fin de la entrada. Es recursiva y no un `while`, como el
+    resto del ciclo (FR-010 del #6): cada vuelta es un turno más que termina por su razón de parada.
+    Devuelve `False` si el caso no se pudo continuar por falta de sesión: el analista ve
+    `MENSAJE_SIN_SESION`, no una traza.
+    """
+    if caso.espera is None:
+        return True
+    try:
+        respuesta = leer(PREGUNTA_AL_ANALISTA).strip()
+    except EOFError:
+        return True
+    if not respuesta:
+        return True
+    try:
+        asyncio.run(caso.continuar(respuesta))
+    except CasoSinSesion:
+        print(MENSAJE_SIN_SESION, file=sys.stderr)
+        return False
+    imprimir_caso(caso)
+    return _conversar(caso, leer)
+
+
+def main(argumentos: list[str] | None = None, leer: Callable[[str], str] = input) -> int:
+    partes = list(sys.argv[1:] if argumentos is None else argumentos)
+    continuar = BANDERA_SIN_CONTINUAR not in partes
+    solicitud = " ".join(p for p in partes if p != BANDERA_SIN_CONTINUAR).strip()
     if not solicitud:
         print(USO, file=sys.stderr)
         return 2
@@ -154,8 +206,9 @@ def main(argumentos: list[str] | None = None) -> int:
     configuracion.cargar_entorno()
     caso = asyncio.run(ejecutar_caso(solicitud))
     imprimir_caso(caso)
+    continuado = _conversar(caso, leer) if continuar else True
     normal = caso.terminacion is not None and caso.terminacion.terminacion is Terminacion.NORMAL
-    return 0 if normal else 1
+    return 0 if normal and continuado else 1
 
 
 if __name__ == "__main__":

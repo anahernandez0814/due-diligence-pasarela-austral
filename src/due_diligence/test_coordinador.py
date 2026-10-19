@@ -213,6 +213,11 @@ def test_la_categoria_es_el_sector_sin_canal_y_lo_desconocido_se_confirma_en_las
         assert "categoria_desconocida" in texto
         assert "catálogo" in texto
     assert "pide confirmación al analista" in INSTRUCCIONES_COORDINADOR
+    # #10, cuarta ronda: sin confirmación no hay espera (FR-015), así que se informa.
+    assert (
+        "Si el analista no la confirma, registra el informe con la categoría no determinada, sin "
+        "recomendar habilitar." in INSTRUCCIONES_COORDINADOR
+    )
 
 
 def test_el_coordinador_trata_de_usted_y_no_menciona_tickets_al_analista():
@@ -517,6 +522,7 @@ def test_el_orden_del_caso_se_reconstruye_solo_con_los_eventos():
 
     esperado = [
         (TIPO_CASO_INICIADO, None),
+        ("mensaje_analista", None),  # #10, R2: cada turno empieza con su mensaje
         (TIPO_DELEGACION, Frente.REGISTRO),
         (TIPO_FRENTE_INICIO, Frente.REGISTRO),
         (TIPO_DELEGACION, Frente.NOTICIAS),
@@ -767,6 +773,27 @@ def test_los_turnos_del_coordinador_salen_del_mensaje_de_resultado():
     assert caso.turnos == 7
 
 
+def test_el_coste_y_los_turnos_del_coordinador_suman_todos_los_turnos_del_caso():
+    # #10, cuarta ronda: `total_cost_usd` y `num_turns` son del turno (R1); el caso los suma para
+    # que el coste total de la línea de comandos cuente todos los turnos.
+    fin = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=3,
+        session_id="sesion-de-prueba",
+        stop_reason="end_turn",
+        total_cost_usd=0.25,
+        terminal_reason="completed",
+    )
+    caso, _, _ = _caso([], fin=fin)
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert (caso.coste_usd, caso.turnos) == (0.25, 3)
+    asyncio.run(caso.continuar("respuesta del analista"))
+    assert (caso.coste_usd, caso.turnos) == (0.5, 6)
+
+
 def test_las_instrucciones_explican_el_reintento_y_que_la_cobertura_la_calcula_el_sistema():
     # #8, R7, FR-008: el reintento lo pide el modelo; el código lo guarda.
     assert "reintentable true" in _REGLA_FALLOS and "una vez" in _REGLA_FALLOS
@@ -829,3 +856,217 @@ def test_las_instrucciones_guian_las_afirmaciones_del_informe():
     assert (
         "Si hay que escalar, registra el informe después de escalar." in INSTRUCCIONES_COORDINADOR
     )
+
+
+# ------------------------------------------- #10: continuación del caso y cierre por turno (T014)
+
+SOLICITUD_B = "Due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, talleres."
+
+
+def _resultados_b():
+    from due_diligence.simulacion import comercio_bajo_riesgo, consulta_listas
+    from due_diligence.test_casos_reglas import _resultados
+
+    resultados = _resultados(
+        [comercio_bajo_riesgo()],
+        "talleres",
+        "bajo",
+        [
+            consulta_listas("comercio", identificador="CO-TA-0002"),
+            consulta_listas("persona", identificador="PE-0002"),
+        ],
+        identificador="CO-TA-0002",
+    )
+    resultados[Frente.NOTICIAS] = resultado_frente(
+        Frente.NOTICIAS, [consulta_de_frente(Frente.NOTICIAS, {"identificador": "CO-TA-0002"})]
+    )
+    return resultados
+
+
+DELEGACIONES_B = [
+    ("delegar", {"frente": "registro", "identificador": "CO-TA-0002"}),
+    ("delegar", {"frente": "noticias", "identificador": "CO-TA-0002"}),
+    ("delegar", {"frente": "categoria", "categoria": "talleres"}),
+    ("delegar", {"frente": "listas"}),
+]
+
+
+def _caso_por_turnos(guiones, resultados=None):
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=guiones)
+    caso = Caso(ejecutor=EjecutorSimulado(resultados=resultados or {}), consulta=coordinador)
+    coordinador.caso = caso
+    return caso, coordinador
+
+
+def test_ejecutar_y_continuar_registran_cada_mensaje_sin_repetir_su_texto():
+    from due_diligence.eventos import TIPO_MENSAJE_ANALISTA
+
+    caso, _, _ = _caso([])
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    asyncio.run(caso.continuar("CO-AM-0005"))
+    assert caso.estado.mensajes == [SOLICITUD, "CO-AM-0005"]
+    detalles = [e.detalle for e in caso.eventos() if e.tipo == TIPO_MENSAJE_ANALISTA]
+    assert detalles == ["Mensaje 1 del analista.", "Mensaje 2 del analista."]
+    assert all("CO-AM-0005" not in e.detalle for e in caso.eventos())
+
+
+def test_continuar_reanuda_la_sesion_con_el_mismo_caso():
+    caso, _, consulta = _caso([])
+    estado, hooks, delegador = caso.estado, caso.hooks, caso.delegador
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    asyncio.run(caso.continuar("respuesta del analista"))
+    (_, primeras), (prompt, segundas) = consulta.llamadas
+    assert primeras.resume is None
+    assert segundas.resume == "sesion-de-prueba" and prompt == "respuesta del analista"
+    assert caso.estado is estado and caso.hooks is hooks and caso.delegador is delegador
+
+
+def test_continuar_sin_una_sesion_previa_falla_sin_llamar_a_la_consulta():
+    from due_diligence.coordinador import CasoSinSesion
+
+    caso, _, consulta = _caso([])
+    with pytest.raises(CasoSinSesion) as error:
+        asyncio.run(caso.continuar("hola"))
+    assert "sesión" in str(error.value)
+    assert consulta.llamadas == []
+
+
+def test_cada_turno_tiene_su_clasificacion_y_la_terminacion_es_la_del_ultimo():
+    caso, _, _ = _caso([])
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    asyncio.run(caso.continuar("otra cosa"))
+    assert len(caso.turnos_del_caso) == 2
+    assert caso.terminacion is caso.turnos_del_caso[-1]
+    assert all(t.terminacion is Terminacion.NORMAL for t in caso.turnos_del_caso)
+
+
+def test_la_espera_del_caso_y_el_caso_que_espera_no_esta_completo():
+    from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR
+    from due_diligence.simulacion import comercios_parecidos, respuesta_registro
+
+    resultados = {
+        Frente.REGISTRO: resultado_frente(
+            Frente.REGISTRO,
+            [
+                consulta_de_frente(
+                    Frente.REGISTRO,
+                    {"nombre": "Almacén Mirador SAS"},
+                    respuesta_registro(*comercios_parecidos()),
+                )
+            ],
+        )
+    }
+    caso, coordinador = _caso_por_turnos(
+        [[("delegar", {"frente": "registro", "nombre": "Almacén Mirador SAS"}), ("terminar",)]],
+        resultados,
+    )
+    asyncio.run(caso.ejecutar("Due diligence de Almacén Mirador SAS."))
+    assert coordinador.resultados_de("terminar")[0].termino is True
+    assert (
+        caso.espera.clase == "identificador" and caso.espera.motivo == MOTIVO_ESPERA_IDENTIFICADOR
+    )
+    assert caso.completo is False
+
+
+def test_el_cierre_se_reinicia_al_empezar_cada_turno():
+    caso, _, _ = _caso([])
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    caso.estado.libro.cierres_impedidos = configuracion.MAX_CIERRES_IMPEDIDOS
+    caso.estado.cierre_sin_escalar = caso.estado.cierre_sin_informe = True
+    vistos = {}
+    original = caso._consulta
+
+    async def mira(*, prompt, options=None):
+        vistos["cierres"] = caso.estado.libro.cierres_impedidos
+        vistos["marcas"] = (caso.estado.cierre_sin_escalar, caso.estado.cierre_sin_informe)
+        async for mensaje in original(prompt=prompt, options=options):
+            yield mensaje
+
+    caso._consulta = mira
+    asyncio.run(caso.continuar("sigo"))
+    assert vistos == {"cierres": 0, "marcas": (False, False)}
+
+
+AGOTAR = [("terminar",)] * (configuracion.MAX_CIERRES_IMPEDIDOS + 1)
+
+
+def test_r4_a_el_turno_2_que_registra_el_informe_deja_el_caso_completo():
+    caso, coordinador = _caso_por_turnos(
+        [[*DELEGACIONES_B, *AGOTAR], [("informe", "no_habilitar"), ("terminar",)]],
+        _resultados_b(),
+    )
+    asyncio.run(caso.ejecutar(SOLICITUD_B))
+    assert caso.estado.cierre_sin_informe is True and caso.completo is False
+    asyncio.run(caso.continuar("¿Lo registra, por favor?"))
+    assert coordinador.resultados_de("terminar")[-1].termino is True
+    assert caso.estado.cierre_sin_escalar is False and caso.estado.cierre_sin_informe is False
+    assert caso.completo is True
+
+
+def test_r4_b_el_turno_2_que_no_hace_nada_vuelve_a_poner_la_marca():
+    caso, coordinador = _caso_por_turnos([[*DELEGACIONES_B, *AGOTAR], [*AGOTAR]], _resultados_b())
+    asyncio.run(caso.ejecutar(SOLICITUD_B))
+    asyncio.run(caso.continuar("¿Y entonces?"))
+    # Sin el reinicio, el turno 2 dejaría cerrar en su primer intento (el contador seguiría lleno);
+    # con él, vuelve a devolver MAX veces y la marca la pone el turno 2.
+    maximo = configuracion.MAX_CIERRES_IMPEDIDOS
+    turno_2 = coordinador.resultados_de("terminar")[-(maximo + 1) :]
+    assert [r.termino for r in turno_2] == [False] * maximo + [True]
+    assert caso.estado.cierre_sin_informe is True
+    assert caso.estado.libro.cierres_impedidos == configuracion.MAX_CIERRES_IMPEDIDOS
+    assert caso.completo is False
+
+
+# ------------------------------------------------ #10: guía tras identificar (T027, FR-028)
+
+
+def test_la_guia_tras_identificar_dice_que_el_rechazo_de_listas_deja_de_valer():
+    from due_diligence.coordinador import _REGLA_TRAS_IDENTIFICAR, instrucciones_coordinador
+
+    for fragmento in (
+        "ese rechazo deja de valer cuando el registro lo identifica",
+        "vuelve a delegar listas",
+        "aunque el rechazo dijera reintentable false",
+        "vuelve a delegar noticias con el comercio identificado",
+    ):
+        assert fragmento in _REGLA_TRAS_IDENTIFICAR, fragmento
+    for demo in (False, True):  # también en el modo de demostración (FR-028)
+        assert _REGLA_TRAS_IDENTIFICAR in instrucciones_coordinador(demo=demo)
+
+
+def test_la_regla_de_varias_coincidencias_pide_terminar_el_turno_y_seguir_en_el_mismo_caso():
+    from due_diligence.coordinador import _REGLA_VARIAS_COINCIDENCIAS, instrucciones_coordinador
+
+    assert (
+        "termina tu turno sin escalar ni registrar el informe; cuando responda, sigue en el mismo "
+        "caso" in _REGLA_VARIAS_COINCIDENCIAS
+    )
+    assert _REGLA_VARIAS_COINCIDENCIAS in INSTRUCCIONES_COORDINADOR
+    assert _REGLA_VARIAS_COINCIDENCIAS not in instrucciones_coordinador(demo=True)
+
+
+# ------------------------------------------- #10: guías del escalamiento y del resumen (T043)
+
+
+def test_la_regla_de_escalar_pide_no_escalar_el_bajo_riesgo_sin_hallazgos():
+    from due_diligence.coordinador import _REGLA_ESCALAR, instrucciones_coordinador
+
+    assert "No escales un comercio de bajo riesgo sin ningún hallazgo" in _REGLA_ESCALAR
+    assert _REGLA_ESCALAR in INSTRUCCIONES_COORDINADOR
+    assert _REGLA_ESCALAR not in instrucciones_coordinador(demo=True)
+
+
+def test_la_guia_del_resumen_al_oficial_esta_en_los_dos_modos():
+    from due_diligence.coordinador import _REGLA_RESUMEN_OFICIAL, instrucciones_coordinador
+
+    for fragmento in (
+        "resumen al oficial de cumplimiento",
+        "los hallazgos de cada frente como las afirmaciones del informe",
+        "una acción recomendada dirigida al oficial",
+        "el comercio, la cobertura, la causa y los conflictos los pone el sistema",
+    ):
+        assert fragmento in _REGLA_RESUMEN_OFICIAL, fragmento
+    for demo in (False, True):
+        assert _REGLA_RESUMEN_OFICIAL in instrucciones_coordinador(demo=demo)

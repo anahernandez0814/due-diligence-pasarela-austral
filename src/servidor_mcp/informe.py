@@ -21,6 +21,23 @@ from typing import Any
 FRENTES_INFORME = ("registro", "listas", "noticias", "categoria")
 # Orden en que se nombran las partes que faltan (el del #5, con `conflictos` al final).
 PARTES_INFORME = ("comercio", "recomendacion", "hallazgos", "cobertura", "conflictos")
+# El resumen al oficial de `escalar_a_cumplimiento` (#10, R6): los cinco campos del principio V y
+# los conflictos que pone el código (FR-010), en el orden en que se nombran los que faltan.
+PARTES_RESUMEN = (
+    "comercio",
+    "hallazgos",
+    "cobertura",
+    "causa_escalamiento",
+    "accion_recomendada",
+    "conflictos",
+)
+# El comercio que pone el código en un escalamiento sin comercio identificado ni pedido, con el
+# caso sellado (#10, R5, D2): textos fijos que pasan la validación, para que escalar no se deniegue.
+COMERCIO_NO_IDENTIFICADO = {
+    "identificador": "no identificado",
+    "nombre": "no identificado",
+    "verificado": False,
+}
 
 _FECHA = re.compile(r"\d{4}-\d{2}-\d{2}")
 _CAMPOS_AFIRMACION = ("texto", "fuente", "fecha")
@@ -174,12 +191,27 @@ def _conflictos(conflictos: Any) -> list[Problema]:
     return problemas
 
 
+def _textos(valor: Any, ruta: str) -> list[Problema]:
+    """Un texto no vacío o una lista no vacía de textos no vacíos (cobertura y causa)."""
+    if _texto(valor):
+        return []
+    if isinstance(valor, list) and valor and all(_texto(linea) for linea in valor):
+        return []
+    return [Problema(ruta, COBERTURA_MAL)]
+
+
 def _cobertura(cobertura: Any) -> list[Problema]:
-    if _texto(cobertura):
-        return []
-    if isinstance(cobertura, list) and cobertura and all(_texto(linea) for linea in cobertura):
-        return []
-    return [Problema("cobertura", COBERTURA_MAL)]
+    return _textos(cobertura, "cobertura")
+
+
+def _faltan(entrada: Mapping[str, Any], partes: tuple[str, ...]) -> list[Problema]:
+    """Las partes ausentes, en su orden. `hallazgos: {}` vale: un frente no cubierto va vacío."""
+    return [
+        Problema(parte, FALTA)
+        for parte in partes
+        if not _presente(entrada, parte)
+        and not (parte == "hallazgos" and isinstance(entrada.get(parte), Mapping))
+    ]
 
 
 def validar_informe(entrada: Any) -> list[Problema]:
@@ -189,12 +221,7 @@ def validar_informe(entrada: Any) -> list[Problema]:
     # `hallazgos: {}` vale: un informe sin afirmaciones se entrega igual si no se cubrió nada
     # (I.5). Ausente sigue siendo «falta». Qué frentes quedaron cubiertos depende del caso: que
     # cada uno lleve su afirmación (US1-6) lo comprueba el hook, no la pasarela.
-    faltan = [
-        Problema(parte, FALTA)
-        for parte in PARTES_INFORME
-        if not _presente(entrada, parte)
-        and not (parte == "hallazgos" and isinstance(entrada.get(parte), Mapping))
-    ]
+    faltan = _faltan(entrada, PARTES_INFORME)
     if faltan:
         return faltan
     problemas = _comercio(entrada["comercio"])
@@ -206,12 +233,43 @@ def validar_informe(entrada: Any) -> list[Problema]:
     return problemas
 
 
-def mensaje(problemas: list[Problema]) -> str:
-    """Una frase en español que nombra cada ruta con su problema, para el campo `mensaje`."""
+def validar_resumen(entrada: Any) -> list[Problema]:
+    """Todos los problemas de forma del resumen al oficial; `[]` si es válido (#10, R6).
+
+    Es el **único** validador del resumen: lo usan la pasarela (`decisiones`), el hook del
+    coordinador y la `PasarelaSimulada`. Comparte con `validar_informe` los validadores de
+    comercio, afirmaciones, cobertura y conflictos. Valida la forma, no si corresponde escalar.
+    """
+    if not isinstance(entrada, Mapping):
+        return [Problema("", "La entrada debe ser un objeto.")]
+    faltan = _faltan(entrada, PARTES_RESUMEN)
+    if faltan:
+        return faltan
+    problemas = _comercio(entrada["comercio"])
+    problemas += _hallazgos(entrada["hallazgos"])
+    problemas += _cobertura(entrada["cobertura"])
+    problemas += _textos(entrada["causa_escalamiento"], "causa_escalamiento")
+    if not _texto(entrada["accion_recomendada"]):
+        problemas.append(Problema("accion_recomendada", DEBE_SER_TEXTO))
+    problemas += _conflictos(entrada["conflictos"])
+    return problemas
+
+
+def _frase(sujeto: str, problemas: list[Problema]) -> str:
     partes = "; ".join(
         f"{p.ruta or 'entrada'}: {p.texto[0].lower()}{p.texto[1:].rstrip('.')}" for p in problemas
     )
-    return f"El informe no tiene la forma esperada ({len(problemas)} problemas): {partes}."
+    return f"{sujeto} no tiene la forma esperada ({len(problemas)} problemas): {partes}."
+
+
+def mensaje(problemas: list[Problema]) -> str:
+    """Una frase en español que nombra cada ruta con su problema, para el campo `mensaje`."""
+    return _frase("El informe", problemas)
+
+
+def mensaje_resumen(problemas: list[Problema]) -> str:
+    """La frase de `mensaje` para el resumen al oficial (#10, R6)."""
+    return _frase("El resumen al oficial", problemas)
 
 
 # Esquema JSON que se publica en `tools/list` para cada parte (R2). Es documentación para el

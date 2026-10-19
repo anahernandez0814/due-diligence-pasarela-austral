@@ -126,3 +126,69 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **Traza y hora** (R10): el evento nuevo `informe_registrado` (id, recomendación, cobertura y número de conflictos, y si es el mínimo, sin datos del comercio) y `datos_sustituidos`; los bloqueos llevan la `accion` intentada, sin datos del comercio. Todo se unifica en **UTC**, también `registrado_en` de la pasarela, y la línea de comandos imprime la hora con «UTC». El #11 mostrará la hora de Colombia.
 - **`PASARELA_FALLA_REGISTRO=1`** (R11): copia el patrón de `PASARELA_FALLA_NOTICIAS` (se lee en cada llamada; error `servicio_no_disponible` reintentable), para probar a mano y en la demo el registro caído.
 - **Riesgos residuales** (R13): (1) un informe sigue vigente aunque cambien afirmaciones que no mueven la huella (decisión aceptada); (2) con el registro caído y sin otras causas, `decide_cumplimiento` puede registrarse sin escalar: lo resuelve el #10; (3) la fecha de una afirmación no se contrasta con la de su fuente; (4) el texto de una afirmación no se verifica contra el contenido: I.4 garantiza la atribución, no la exactitud; (5) el `Stop` exige el informe en cualquier fin de turno con comercio identificado o registro caído: lo resuelve el #10; (6) con un doble fallo de hooks, el informe mínimo puede no registrarse; (7) cómo presenta el SDK al modelo el motivo en JSON lo comprueba Q3; (8) tras un cambio de comercio, las consultas del anterior siguen contando para FR-004. Detalle en `specs/009-informe-procedencia-conflictos/research.md`.
+
+## 11. Escalamiento con criterio, handoff y ambigüedad
+- **Continuación del caso** (R1, medido con el SDK 0.2.168): `Caso.continuar(mensaje)` lanza otra `query()` del coordinador con `resume=<session_id>` del último `ResultMessage`, sobre el mismo estado, los mismos hooks y el mismo `Delegador`. Lo medido:
+  - conserva el contexto del primer turno;
+  - ejecuta el `Stop` y las herramientas de un servidor en proceso creado de nuevo;
+  - `num_turns` es **del turno, no acumulado**.
+
+  Se descartaron un `ClaudeSDKClient` abierto entre mensajes, que obliga a mantener vivo un proceso y no encaja con la línea de comandos ni con la interfaz del #11, y reenviar la conversación en el `prompt`. Cada mensaje del analista queda en `estado.mensajes` y deja el evento `mensaje_analista`, sin repetir el texto. La línea de comandos pregunta en la entrada estándar cuando el caso espera al analista (`--sin-continuar` para no preguntar).
+- **Esperas del analista** (R3, FR-014; decisión de la analista): el `Stop` solo deja terminar un turno sin escalar ni informar cuando el código **comprueba en el estado** que falta un dato del analista. No basta con el texto del modelo. Hay tres esperas:
+  - `identificador`: varias coincidencias en el registro;
+  - `nombre`: ninguna coincidencia;
+  - `categoria`: la última delegación de categoría la bloqueó I.3, no hay ningún resultado de categoría y ningún frente está caído (con un frente caído se exige el informe, por la regla 5 y el caso f; decisión de la analista en la cuarta ronda de la revisión previa).
+
+  Qué hacen:
+  - Las del registro no gastan devoluciones y dejan el evento `espera_analista`.
+  - **La espera de la categoría exime solo del informe** (corrección de la parada A): si hay una causa sin cubrir (una coincidencia o el sello), el cierre sigue exigiendo el escalamiento.
+  - El registro caído no es una espera, tampoco con la categoría bloqueada (corrección de criterio de la analista en la revisión previa): el cierre exige el informe con la categoría no determinada, como pide I.5.
+  - **Las fuentes que difieren en el nombre o el representante (D3 del #9) no son una espera** (decisión de la analista): no hay datos ficticios con ese caso y dejaría el caso sin salida.
+
+  Para no decidir por subcadenas del motivo, la identificación tiene una clase (`clase_de`: única, varias, ninguna, contradictoria o inválida). Con el comercio identificado y la categoría con resultado, una pregunta al analista sigue exigiendo el cierre completo (FR-015): es el cambio a sabiendas de la limitación del #9. Durante la espera del identificador o del nombre, el informe se rechaza (FR-016); **cambio respecto al #9**, que lo aceptaba con el comercio pedido.
+- **El cierre es del turno** (R4): al empezar cada turno, el contador de devoluciones y las marcas `cierre_sin_escalar` y `cierre_sin_informe` vuelven a cero. `Caso.completo` sí lee las marcas. La garantía se mantiene porque el `Stop` vuelve a evaluar al final de cada turno e `informe_vigente` depende de las causas. Dos tests lo fijan: el turno 2 que informa deja el caso completo, y el turno 2 que no hace nada vuelve a poner la marca.
+- **La categoría la da el analista** (R9, FR-020): el `PreToolUse` de `delegar_frente` bloquea con la regla I.3 una categoría que no aparece, como frase completa normalizada y con límites de palabra, en ningún mensaje del analista. Resuelve el pendiente 1 del #7. **Riesgos declarados**:
+  - la normalización no cubre plurales («suplemento dietario» frente a «suplementos dietarios»);
+  - un mensaje que nombra varias categorías deja pasar todas.
+- **El escalamiento con criterio, y por qué cambia lo del #8** (R5, FR-001 a FR-005; decisión de la analista): el #8 decidió que el escalamiento nunca se deniega, porque escalar es la acción segura y un fallo calculando la cobertura no debía impedirlo. Desde el #10, el `PreToolUse` de `escalar_a_cumplimiento` **sí rechaza** en los casos que comprueba, con la regla V:
+  - durante la espera del identificador o del nombre;
+  - con un caso **de bajo riesgo sin hallazgos comprobado**: el comercio identificado, los cuatro frentes cubiertos, sin coincidencias, la categoría determinada y no alta, sin menciones en noticias, sin conflictos y sin sello.
+
+  Escalar de más satura al oficial (principio V). En cualquier otro caso sin causas (cobertura incompleta, categoría no determinada, una mención en noticias o un conflicto), escalar se admite pero no se exige. Lo que protegía el #8 se conserva: **una excepción en el hook nunca deniega** (`degradar_escalamiento`) y, con el sello, el escalamiento sale con textos fijos (FR-012).
+
+  `decide_cumplimiento` exige un escalamiento del comercio actual (FR-004): el oficial solo decide lo que le llega. Resuelve el riesgo residual 2 del #9 (D5).
+- **El resumen al oficial con datos del código** (R6, FR-006 a FR-012): el resumen tiene seis campos: comercio, hallazgos, cobertura, causa, acción recomendada y conflictos, que el código añade (FR-010).
+  - **Validación**: `validar_resumen`, en la pasarela y en el hook, comparte los validadores del informe del #9. El hook comprueba además la fuente consultada (FR-004) y una afirmación por frente cubierto.
+  - **Rechazo**: un resumen incompleto o mal formado se rechaza nombrando todo lo que falta. El hook usa el JSON `resumen_rechazado`; la pasarela, `campos_obligatorios_ausentes` y `entrada_invalida`.
+  - **Lo que pone el código**: el comercio, la cobertura, la causa y los conflictos, con `updatedInput`. Del coordinador solo quedan las afirmaciones y la acción recomendada.
+  - **La causa**: una etiqueta fija por causa vigente; sin causas, una línea fija por cada motivo que se cumple. Son cinco: cobertura incompleta, categoría no determinada, mención en noticias, conflicto y comercio no identificado; el quinto lo añadió la implementación para que la causa nunca quede vacía.
+  - **Vigencia**: el escalamiento queda pendiente por `tool_use_id` y lo confirma el `PostToolUse` con las causas y el comercio del momento en que se aceptó. Solo cuenta para ese comercio (R8). Sin pendiente, porque el `PreToolUse` falló y lo dejó pasar, cuenta con los de ese momento: el oficial lo recibió.
+- **FR-027, el frente consultado con otro nombre** (R7, decisión de la analista): con el comercio identificado, noticias consultado con un nombre o identificador que no es el suyo, como el nombre ambiguo del primer turno del caso (d), **no cuenta como cubierto**: la causa es `otro_comercio`. Sus fuentes, y las de listas de otro comercio, dejan de valer para las afirmaciones del informe y del resumen. Así el caso (d) no puede declarar noticias cubierto sin menciones con la consulta que no encuentra N-0001 de `CO-AM-0005`. La categoría no depende del comercio y se conserva. Lo calcula la propia cobertura, así que cambia la huella del informe sin otro mecanismo. Resuelve el riesgo residual 8 del #9 para esos dos frentes. Las instrucciones aclaran que el rechazo de listas por falta de identificación deja de valer cuando el comercio queda identificado (FR-028, riesgo residual 7 del #8).
+- **Presupuesto de 21 de 30 turnos, por turno** (R10): los pasos fijos pasan de 8 a 10 (el escalamiento rechazado y corregido, y noticias vuelto a delegar): 10 + 4 + 4 + 3 = 21. Una espera termina el turno; el siguiente tiene su propio presupuesto.
+- **D1, coincidencias de un comercio anterior** (desviación justificada, aceptada por la analista): si el analista cambia de comercio en un turno posterior, **las coincidencias en listas del comercio anterior siguen siendo causas de escalamiento del caso**, porque el libro no las borra (comportamiento desde el #7).
+  - El comercio nuevo tiene que escalarse.
+  - Su resumen al oficial **muestra la causa «coincidencia del comercio» sin una afirmación que la respalde**: FR-027 no deja citar la consulta del otro comercio.
+  - Contradice FR-001 («si, y solo si, hay causa») y el resumen autosuficiente de V.
+  - **Por qué se acepta**: filtrar coincidencias toca la garantía de I.2 de los tickets #7 al #9, y un error ahí habilita de menos riesgo, que es peor que escalar de más.
+  - **Mitigación**: el escalamiento anterior no cubre al comercio nuevo, así que el oficial recibe el caso con la causa nombrada.
+- **D2, sin comercio no se escala** (desviación justificada): sin comercio identificado ni pedido (por ejemplo, alto riesgo detectado antes de delegar el registro), el escalamiento se rechaza con un motivo que pide delegar primero el registro. El oficial no puede recibir un caso sin comercio. Con el sello no se rechaza: va `COMERCIO_NO_IDENTIFICADO` («no identificado», `verificado: false`), que pasa la forma de la pasarela.
+- **D3, alto riesgo en la espera del identificador o del nombre** (desviación justificada): el escalamiento se rechaza hasta identificar al comercio, aunque el principio V diga que se escala por alto riesgo. Escalar un comercio sin identificar llevaría al oficial un caso que no sabe a qué comercio corresponde. **Mitigación**:
+  - no se habilita y no figura como completo;
+  - la espera tiene salida, el identificador o un nombre corregido, y el turno siguiente exige el escalamiento;
+  - con el sello se escala igual;
+  - solo cubre el alto riesgo: una coincidencia en listas de un comercio anterior (D1) se escala sin esperar, y el cierre la exige (regla I.2, corrección de la revisión previa).
+- **D4, el resumen con el caso sellado no comprueba las fuentes citadas** (desviación justificada de FR-008 e I.4): tras un fallo de hook el libro puede haber perdido datos y escalar es la salida segura (FR-012). **Mitigación**: la cobertura y los conflictos van como «no calculados», la pasarela sigue exigiendo fuente y fecha en cada afirmación y el caso no figura como completo.
+- **Riesgos residuales** (R13):
+  1. plurales y varias categorías en FR-020;
+  2. D1;
+  3. `resume` depende de la sesión que persiste el SDK; si se pierde, `continuar` falla con un error claro;
+  4. D1 y D7 del #9 aplican también al resumen;
+  5. el informe vigente con afirmaciones viejas, aceptado en el #9;
+  6. el texto que pide el identificador lo redacta el modelo: lo garantizado son las acciones;
+  7. la acción recomendada no se contrasta;
+  8. D2;
+  9. D3;
+  10. el subagente de categoría puede consultar una categoría distinta de la delegada: no hay guarda `PreToolUse` sobre su consulta;
+  11. D4.
+
+  Detalle en `specs/010-escalamiento-criterio-handoff/research.md` y `plan.md`.

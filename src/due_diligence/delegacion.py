@@ -47,9 +47,12 @@ DESCRIPCION = (
     "independientes: delégalos juntos, en la misma respuesta. listas necesita el registro. Pasa "
     "solo los datos que el frente necesita y nunca inventes uno: si falta, la delegación se "
     "rechaza. La categoría es el sector o producto del comercio, sin el canal de venta (por "
-    "ejemplo «suplementos dietarios», no «venta en línea de suplementos dietarios»). Si "
+    "ejemplo «suplementos dietarios», no «venta en línea de suplementos dietarios»). La "
+    "categoría tiene que ser la que dio el analista: si no aparece en sus mensajes, la delegación "
+    "se bloquea y hay que preguntársela. Si "
     "consultar_riesgo_categoria devuelve categoria_desconocida, solo vuelve a delegar con un "
-    "nombre del catálogo que aparezca en la solicitud. Repetir un frente con la misma entrada "
+    "nombre del catálogo que aparezca en los mensajes del analista. Repetir un frente con la "
+    "misma entrada "
     "devuelve el resultado guardado si terminó; con otra entrada, vuelve a ejecutarlo. Si un "
     "frente devolvió un error con reintentable true, se puede pedir una vez más con la misma "
     "entrada; con reintentable false no se vuelve a ejecutar: sigue con los demás frentes. "
@@ -369,7 +372,9 @@ class Delegador:
             self.estado.reiniciar_identificacion()
         self.estado.cambiar_situacion(frente, Situacion.EN_CURSO)
         self._contextos[frente] = contexto
-        self._hecho[frente].clear()
+        # Un `Event` nuevo por ejecución y no `clear()`: en 3.12 un `Event` queda atado al bucle
+        # del primero que lo espera, y cada turno del caso corre en su propio `asyncio.run` (R1).
+        self._hecho[frente] = asyncio.Event()
         self.eventos.registrar(TIPO_FRENTE_INICIO, frente, f"Contexto entregado: {contexto}")
         try:
             try:

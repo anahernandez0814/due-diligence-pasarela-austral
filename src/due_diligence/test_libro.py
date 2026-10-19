@@ -7,7 +7,13 @@ comparte nada con otro libro.
 import copy
 from dataclasses import fields
 
-from due_diligence.libro import Coincidencia, ConsultaListas, ConsultaRiesgo, LibroReglas
+from due_diligence.libro import (
+    Coincidencia,
+    ConsultaListas,
+    ConsultaRiesgo,
+    Escalamiento,
+    LibroReglas,
+)
 
 
 def test_un_libro_nuevo_empieza_vacio():
@@ -27,7 +33,9 @@ def test_dos_libros_no_comparten_listas():
     )
     uno.coincidencias.append(Coincidencia("persona", "Lista A", "Fuente A", "2026-09-30"))
     uno.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
-    uno.escalamientos.append(frozenset({"alto_riesgo"}))
+    uno.escalamientos.append(
+        Escalamiento(frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True))
+    )
     uno.cierres_impedidos += 1
     uno.fallo_de_hook = "fallo"
     assert otro.consultas_listas == [] and otro.coincidencias == []
@@ -69,3 +77,32 @@ def test_la_copia_profunda_del_libro_es_independiente():
     libro.coincidencias.append(Coincidencia("persona", "L2", "F2", "2026-09-30"))
     libro.fallo_de_hook = "x"
     assert len(copia.coincidencias) == 1 and copia.fallo_de_hook is None
+
+
+# ---------------------------------------------------------------- #10: Escalamiento (T005)
+
+
+def test_el_escalamiento_guarda_sus_causas_y_su_comercio_y_es_inmutable():
+    import dataclasses
+
+    import pytest
+
+    from due_diligence.libro import Escalamiento
+
+    escalamiento = Escalamiento(
+        causas=frozenset({"alto_riesgo"}), comercio=("CO-TV-0001", "Tienda Verde SAS", True)
+    )
+    assert escalamiento.causas == frozenset({"alto_riesgo"})
+    assert escalamiento.comercio == ("CO-TV-0001", "Tienda Verde SAS", True)
+    assert Escalamiento(frozenset(), None).comercio is None
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        escalamiento.causas = frozenset()  # type: ignore[misc]
+
+
+def test_los_escalamientos_del_libro_se_anotan_como_lista_de_escalamiento():
+    # Que el hook guarda un `Escalamiento` con su comercio lo fija test_hooks.py
+    # (`test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_evento`).
+    from due_diligence.libro import Escalamiento
+
+    tipo = {f.name: f.type for f in fields(LibroReglas)}["escalamientos"]
+    assert tipo == list[Escalamiento]

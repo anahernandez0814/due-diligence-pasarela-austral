@@ -27,6 +27,7 @@ from due_diligence.ejecutor import EjecutorSDK, EjecutorSubagente
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
+    TIPO_MENSAJE_ANALISTA,
     TIPO_MODO_DEMOSTRACION,
     TIPO_TERMINACION,
     Evento,
@@ -35,6 +36,7 @@ from due_diligence.eventos import (
 from due_diligence.frentes import Frente
 from due_diligence.hooks import HooksDelCaso
 from due_diligence.informe import informe_vigente
+from due_diligence.reglas import Espera, espera_del_analista
 from due_diligence.terminacion import (
     Clasificacion,
     Terminacion,
@@ -58,27 +60,41 @@ _REGLA_DELEGAR = (
 )
 
 _REGLA_DATOS = (
-    "A cada frente pásale solo los datos que aparecen en la solicitud: el identificador o el "
-    "nombre del comercio y la categoría de negocio. Nunca inventes un identificador, un nombre, "
+    "A cada frente pásale solo los datos que dio el analista en sus mensajes: el identificador o "
+    "el nombre del comercio y la categoría de negocio. Nunca inventes un identificador, un nombre, "
     "una categoría ni un representante legal. Si falta un dato, no delegues el frente que lo "
     "necesita y dilo. La categoría es el sector o producto del comercio, sin el canal de venta "
     "(«suplementos dietarios», no «venta en línea de suplementos dietarios»). Si la herramienta "
     "de categoría devuelve categoria_desconocida, solo vuelve a delegar con un nombre del "
-    "catálogo que aparezca en la solicitud; si ninguno aparece, pide confirmación al analista."
+    "catálogo que aparezca en los mensajes del analista; si ninguno aparece, pide confirmación "
+    "al analista. Si el analista no la confirma, registra el informe con la categoría no "
+    "determinada, sin recomendar habilitar."
 )
 
 # Guía de la regla de negocio I.1 (listas solo con identificación unívoca). Es guía: la garantía es
 # el hook de `delegar_frente` y el de la consulta de listas. El modo de demostración la quita.
 _REGLA_VARIAS_COINCIDENCIAS = (
     "Si el registro devuelve varias coincidencias, no elijas una ni sigas con listas: informa las "
-    "coincidencias y pide al analista el identificador."
+    "coincidencias y pide al analista el identificador, y termina tu turno sin escalar ni "
+    "registrar el informe; cuando responda, sigue en el mismo caso."
 )
 
 # Guía de las reglas I.2 e I.3 (escalar). Es guía: la garantía son los hooks de `registrar_informe`
 # y del fin de turno. El modo de demostración la quita.
 _REGLA_ESCALAR = (
     "Si hay una coincidencia en listas restrictivas o la categoría es de alto riesgo, llama a "
-    "escalar_a_cumplimiento."
+    "escalar_a_cumplimiento. No escales un comercio de bajo riesgo sin ningún hallazgo."
+)
+
+# Guía del resumen al oficial (#10, R11, FR-011). Es la forma del canal, no una regla I.1 a I.3:
+# está también en el modo de demostración, y no dice cuándo se lleva el caso al oficial. Lo que no
+# puede fallar lo hace el código: el hook valida el resumen y pone el comercio, la cobertura, la
+# causa y los conflictos.
+_REGLA_RESUMEN_OFICIAL = (
+    "En el resumen al oficial de cumplimiento, escribe los hallazgos de cada frente como las "
+    "afirmaciones del informe, con texto, fuente y fecha, y una acción recomendada dirigida al "
+    "oficial, que no tiene acceso a la conversación; el comercio, la cobertura, la causa y los "
+    "conflictos los pone el sistema."
 )
 
 _REGLA_INFORME = (
@@ -101,6 +117,17 @@ _REGLA_FALLOS = (
     "la misma entrada; si devuelve reintentable false, no lo repitas: sigue con los demás "
     "frentes y registra el informe igualmente. La cobertura del informe la calcula el sistema a "
     "partir de lo que devolvieron los frentes."
+)
+
+# Guía tras identificar al comercio (#10, FR-028, R11; riesgo residual 7 del #8). No es una regla
+# I.1 a I.3: está también en el modo de demostración. Lo que no puede fallar lo hace el código: el
+# `Delegador` ejecuta listas cuando el comercio queda identificado, y la cobertura no da por
+# cubierto un noticias consultado con otro nombre (FR-027).
+_REGLA_TRAS_IDENTIFICAR = (
+    "Si listas se rechazó porque el comercio aún no estaba identificado, ese rechazo deja de valer "
+    "cuando el registro lo identifica: vuelve a delegar listas, aunque el rechazo dijera "
+    "reintentable false. Si consultaste noticias con otro nombre o identificador, vuelve a delegar "
+    "noticias con el comercio identificado."
 )
 
 # Guía del informe con procedencia (#9, R12). No es una regla de negocio I.1 a I.3: está también en
@@ -141,8 +168,10 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_DELEGAR,
             _REGLA_DATOS,
             _REGLA_FALLOS,
+            _REGLA_TRAS_IDENTIFICAR,
             _REGLA_INFORME,
             _REGLA_AFIRMACIONES,
+            _REGLA_RESUMEN_OFICIAL,
             _REGLA_RESUMEN,
         ]
     else:
@@ -151,8 +180,10 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_DATOS,
             _REGLA_FALLOS,
             _REGLA_VARIAS_COINCIDENCIAS,
+            _REGLA_TRAS_IDENTIFICAR,
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
+            _REGLA_RESUMEN_OFICIAL,
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))
@@ -162,8 +193,17 @@ def instrucciones_coordinador(demo: bool = False) -> str:
 INSTRUCCIONES_COORDINADOR = instrucciones_coordinador(demo=False)
 
 
+class CasoSinSesion(RuntimeError):
+    """`Caso.continuar` sin un turno anterior que dejara su `session_id` (#10, R1)."""
+
+
 class Caso:
-    """Una ejecución del due diligence: su estado, sus eventos y su delegación (FR-014)."""
+    """Una ejecución del due diligence: su estado, sus eventos y su delegación (FR-014).
+
+    Desde el #10 (R1) el caso puede tener varios turnos: `ejecutar` lanza el primero y `continuar`
+    los siguientes, con `resume` sobre la sesión del coordinador y el mismo estado, hooks y
+    `Delegador`.
+    """
 
     def __init__(
         self,
@@ -185,10 +225,16 @@ class Caso:
             self.estado, self._eventos, ejecutor or EjecutorSDK(), self._opciones_subagente
         )
         self.respuesta = ""
-        self.coste_usd: float | None = None  # `total_cost_usd` del coordinador
+        # `total_cost_usd` del coordinador, sumado en todos los turnos del caso (#10).
+        self.coste_usd: float | None = None
         # `num_turns` del coordinador (#8, R2): para comprobar que los reintentos y las
-        # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. `None` sin `ResultMessage`.
+        # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. Desde el #10, la suma de todos
+        # los turnos del caso. `None` sin `ResultMessage`.
         self.turnos: int | None = None
+        # #10 (R1): la sesión del coordinador que deja cada `ResultMessage` (la que `continuar`
+        # reanuda) y la clasificación de cada turno, en orden; `terminacion` es la del último.
+        self.session_id: str | None = None
+        self.turnos_del_caso: list[Clasificacion] = []
 
     def eventos(self) -> list[Evento]:
         return self._eventos.eventos()
@@ -208,17 +254,24 @@ class Caso:
         return calcular_conflictos(self.estado)
 
     @property
+    def espera(self) -> Espera | None:
+        """La espera del analista con la que terminó el último turno, si la hay (#10, R3)."""
+        return espera_del_analista(self.estado)
+
+    @property
     def completo(self) -> bool:
         """Si el caso puede presentarse como completo (#7, FR-007; #8, FR-012).
 
         Solo si la cobertura calculada es completa (los cuatro frentes cubiertos, R5), el ciclo
         terminó con normalidad, el `Stop` no tuvo que dejar terminar un caso sin su escalamiento
         obligatorio ni sin su informe (#9), ningún hook falló (un `PostToolUse` que falló pudo dejar
-        sin registrar una coincidencia o una identificación) y hay un informe vigente (#9, FR-023).
+        sin registrar una coincidencia o una identificación), hay un informe vigente (#9, FR-023) y
+        el caso no espera al analista (#10, FR-018).
         """
         estado = self.estado
         return (
-            self.cobertura.completa
+            self.espera is None
+            and self.cobertura.completa
             and estado.terminacion is not None
             and estado.terminacion.terminacion is Terminacion.NORMAL
             and not estado.cierre_sin_escalar
@@ -235,17 +288,17 @@ class Caso:
             entorno=self.entorno,
         )
 
-    def opciones_coordinador(self) -> ClaudeAgentOptions:
+    def opciones_coordinador(self, resume: str | None = None) -> ClaudeAgentOptions:
         return configuracion.opciones_coordinador(
             self.delegador.servidor(),
             instrucciones_coordinador(self.demo),
             hooks=self.hooks.coordinador(),
             entorno=self.entorno,
+            resume=resume,
         )
 
     async def ejecutar(self, solicitud: str) -> str:
-        """Ejecuta el ciclo del coordinador y devuelve su respuesta final al analista."""
-        self.estado.solicitud = solicitud
+        """Ejecuta el primer turno del coordinador y devuelve su respuesta final al analista."""
         self._eventos.registrar(TIPO_CASO_INICIADO, None, "Se inicia el caso.")
         if self.demo:
             self._eventos.registrar(
@@ -254,19 +307,51 @@ class Caso:
                 "Modo de demostración: las reglas 1, 2 y 3 no están en el prompt del coordinador "
                 "y los hooks siguen activos.",
             )
+        return await self._turno(solicitud, None)
+
+    async def continuar(self, mensaje: str) -> str:
+        """Un turno más del mismo caso con otro mensaje del analista (#10, R1, FR-013).
+
+        Reanuda la sesión del coordinador con su `session_id`; el estado, los hooks, el `Delegador`
+        y los eventos son los del caso. Sin un turno anterior que dejara la sesión, falla sin
+        llamar al modelo.
+        """
+        if self.session_id is None:
+            raise CasoSinSesion(
+                "No hay una sesión del coordinador que continuar: el caso no tiene un turno "
+                "anterior terminado."
+            )
+        return await self._turno(mensaje, self.session_id)
+
+    async def _turno(self, mensaje: str, resume: str | None) -> str:
+        """Un turno del coordinador: el mensaje, el cierre reiniciado y la `query()` (R1, R4)."""
+        estado = self.estado
+        estado.mensajes.append(mensaje)
+        self._eventos.registrar(
+            TIPO_MENSAJE_ANALISTA, None, f"Mensaje {len(estado.mensajes)} del analista."
+        )
+        # El cierre es del turno (R4): el `Stop` vuelve a evaluar al final de este turno y, si
+        # tampoco se escala o se informa, vuelve a poner la marca.
+        estado.libro.cierres_impedidos = 0
+        estado.cierre_sin_escalar = False
+        estado.cierre_sin_informe = False
+        self.respuesta = ""
         clasificacion: Clasificacion | None = None
         try:
-            async for mensaje in self._consulta(
-                prompt=solicitud, options=self.opciones_coordinador()
+            async for mensaje_sdk in self._consulta(
+                prompt=mensaje, options=self.opciones_coordinador(resume)
             ):
-                if isinstance(mensaje, AssistantMessage):
-                    for bloque in mensaje.content:
+                if isinstance(mensaje_sdk, AssistantMessage):
+                    for bloque in mensaje_sdk.content:
                         if isinstance(bloque, TextBlock):
                             self.respuesta = bloque.text
-                elif isinstance(mensaje, ResultMessage):
-                    clasificacion = clasificar_resultado(mensaje)
-                    self.coste_usd = mensaje.total_cost_usd
-                    self.turnos = mensaje.num_turns
+                elif isinstance(mensaje_sdk, ResultMessage):
+                    clasificacion = clasificar_resultado(mensaje_sdk)
+                    # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
+                    if mensaje_sdk.total_cost_usd is not None:
+                        self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
+                    self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
+                    self.session_id = mensaje_sdk.session_id or self.session_id
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
             if clasificacion is None:
@@ -285,6 +370,7 @@ class Caso:
 
     def _terminar(self, clasificacion: Clasificacion) -> None:
         self.estado.terminacion = clasificacion
+        self.turnos_del_caso.append(clasificacion)
         self._eventos.registrar(
             TIPO_TERMINACION, None, f"{clasificacion.terminacion.value}: {clasificacion.detalle}"
         )

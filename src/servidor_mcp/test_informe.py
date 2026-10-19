@@ -300,3 +300,156 @@ def test_validar_no_modifica_la_entrada():
 def test_un_informe_sin_ninguna_afirmacion_es_valido():
     # I.5: si ningún frente quedó cubierto, el informe se entrega igual, sin afirmaciones.
     assert validar_informe({**_informe(), "hallazgos": {}}) == []
+
+
+# ---------------------------------------------- #10: el resumen al oficial (T030, R6, data-model)
+
+
+def _resumen():
+    """El resumen del contrato `escalar-a-cumplimiento.md`, con `CO-TV-0001` (caso a)."""
+    return {
+        "comercio": {
+            "identificador": "CO-TV-0001",
+            "nombre": "Tienda Verde SAS",
+            "verificado": True,
+        },
+        "hallazgos": {
+            "categoria": [
+                {"texto": "Categoría de alto riesgo.", "fuente": "Catálogo", "fecha": "2026-09-30"}
+            ]
+        },
+        "cobertura": ["Cobertura completa: 4 de 4 frentes cubiertos."],
+        "causa_escalamiento": ["categoría de alto riesgo"],
+        "accion_recomendada": "Revisar el origen de fondos antes de decidir.",
+        "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
+    }
+
+
+def test_un_resumen_completo_no_tiene_problemas():
+    from servidor_mcp.informe import validar_resumen
+
+    assert validar_resumen(_resumen()) == []
+
+
+def test_faltan_todos_los_campos_y_se_nombran_en_su_orden():
+    from servidor_mcp.informe import FALTA, PARTES_RESUMEN, validar_resumen
+
+    assert PARTES_RESUMEN == (
+        "comercio",
+        "hallazgos",
+        "cobertura",
+        "causa_escalamiento",
+        "accion_recomendada",
+        "conflictos",
+    )
+    assert validar_resumen({}) == [Problema(parte, FALTA) for parte in PARTES_RESUMEN]
+
+
+@pytest.mark.parametrize(
+    "campo", ["comercio", "cobertura", "causa_escalamiento", "accion_recomendada", "conflictos"]
+)
+def test_falta_cada_campo_por_separado(campo):
+    from servidor_mcp.informe import FALTA, validar_resumen
+
+    resumen = _resumen()
+    del resumen[campo]
+    assert validar_resumen(resumen) == [Problema(campo, FALTA)]
+
+
+def test_hallazgos_vacios_valen_como_en_el_informe_y_ausentes_faltan():
+    from servidor_mcp.informe import FALTA, validar_resumen
+
+    resumen = _resumen()
+    resumen["hallazgos"] = {}
+    assert validar_resumen(resumen) == []
+    del resumen["hallazgos"]
+    assert validar_resumen(resumen) == [Problema("hallazgos", FALTA)]
+
+
+def test_cada_parte_se_valida_y_se_devuelven_todos_los_problemas():
+    from servidor_mcp.informe import (
+        COBERTURA_MAL,
+        DEBE_SER_FECHA,
+        DEBE_SER_TEXTO,
+        validar_resumen,
+    )
+
+    resumen = _resumen()
+    resumen["hallazgos"]["categoria"][0]["fecha"] = "2026-02-30"
+    resumen["causa_escalamiento"] = ["", "alto riesgo"]
+    # Presentes pero mal formados: en blanco o vacío cuenta como ausente (#5), no como forma.
+    resumen["accion_recomendada"] = ["Revisar."]
+    resumen["cobertura"] = [""]
+    assert validar_resumen(resumen) == [
+        Problema("hallazgos.categoria[0].fecha", DEBE_SER_FECHA),
+        Problema("cobertura", COBERTURA_MAL),
+        Problema("causa_escalamiento", COBERTURA_MAL),
+        Problema("accion_recomendada", DEBE_SER_TEXTO),
+    ]
+
+
+def test_la_causa_puede_ser_un_texto_o_una_lista_de_textos():
+    from servidor_mcp.informe import validar_resumen
+
+    for causa in ("categoría de alto riesgo", ["uno", "dos"]):
+        resumen = _resumen()
+        resumen["causa_escalamiento"] = causa
+        assert validar_resumen(resumen) == []
+
+
+def test_la_forma_vieja_del_5_no_es_valida():
+    from servidor_mcp.informe import validar_resumen
+
+    resumen = _resumen()
+    resumen["hallazgos"] = {"listas": {"contenido": "sin coincidencias", "fuente": SUR}}
+    assert _rutas(validar_resumen(resumen)) == ["hallazgos.listas"]
+
+
+def test_el_comercio_no_identificado_pasa_la_validacion():
+    from servidor_mcp.informe import COMERCIO_NO_IDENTIFICADO, validar_resumen
+
+    assert COMERCIO_NO_IDENTIFICADO == {
+        "identificador": "no identificado",
+        "nombre": "no identificado",
+        "verificado": False,
+    }
+    resumen = {**_resumen(), "comercio": dict(COMERCIO_NO_IDENTIFICADO)}
+    assert validar_resumen(resumen) == []
+
+
+def test_el_mensaje_del_resumen_nombra_cada_ruta_sin_repetir_valores():
+    from servidor_mcp.informe import mensaje_resumen, validar_resumen
+
+    resumen = _resumen()
+    resumen["accion_recomendada"] = [VALOR_FICTICIO]
+    resumen["hallazgos"]["categoria"][0]["fuente"] = {"x": VALOR_FICTICIO}
+    texto = mensaje_resumen(validar_resumen(resumen))
+    assert texto.startswith("El resumen al oficial no tiene la forma esperada (2 problemas): ")
+    assert "hallazgos.categoria[0].fuente" in texto and "accion_recomendada" in texto
+    assert VALOR_FICTICIO not in texto
+
+
+def test_una_accion_en_blanco_cuenta_como_ausente_como_en_el_5():
+    from servidor_mcp.informe import FALTA, validar_resumen
+
+    resumen = {**_resumen(), "accion_recomendada": "   "}
+    assert validar_resumen(resumen) == [Problema("accion_recomendada", FALTA)]
+
+
+def test_una_entrada_que_no_es_un_objeto():
+    from servidor_mcp.informe import validar_resumen
+
+    assert validar_resumen(["no"]) == [Problema("", "La entrada debe ser un objeto.")]
+
+
+def test_el_comercio_y_los_conflictos_del_resumen_se_validan_por_dentro():
+    # T030 (barrido): no solo cuando faltan; un comercio o unos conflictos mal formados dan su ruta.
+    from servidor_mcp.informe import DEBE_SER_BOOL, DEBE_SER_LISTA, validar_resumen
+
+    resumen = _resumen()
+    resumen["comercio"] = {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"}
+    resumen["conflictos"] = {"resumen": "x", "lista": "y"}
+    assert validar_resumen(resumen) == [
+        Problema("comercio.verificado", DEBE_SER_BOOL),
+        Problema("conflictos.lista", DEBE_SER_LISTA),
+    ]

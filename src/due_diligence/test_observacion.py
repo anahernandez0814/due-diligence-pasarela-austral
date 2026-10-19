@@ -7,6 +7,7 @@ No llaman al modelo: los casos son los del `CoordinadorSimulado` de los tickets 
 import ast
 import asyncio
 import dataclasses
+import json
 from pathlib import Path
 
 import pytest
@@ -44,9 +45,13 @@ def _sin_caidas(monkeypatch):
 
 
 def _registros(caso):
-    """Lo que aceptó la `PasarelaSimulada` del coordinador simulado del caso."""
+    """Lo que aceptó la `PasarelaSimulada` del caso, con el id que devolvió, como en el archivo."""
     pasarela = caso._consulta.pasarela
-    return Registros(tuple(pasarela.informes), tuple(pasarela.escalamientos))
+
+    def con_id(prefijo, documentos):
+        return tuple({"id": f"{prefijo}-{n:04d}"} | d for n, d in enumerate(documentos, 1))
+
+    return Registros(con_id("INF", pasarela.informes), con_id("ESC", pasarela.escalamientos))
 
 
 def _observar(caso):
@@ -152,18 +157,126 @@ def test_caso_g_el_conflicto_de_fecha_conserva_las_dos_fuentes():
     assert len(fecha.valores) == 2 and len(valores) == 2 and len(fuentes) == 2
 
 
-def test_leer_registros_lee_los_json_de_la_carpeta_en_orden(tmp_path):
+def test_leer_registros_lee_los_json_de_la_carpeta_en_orden_de_registro(tmp_path):
+    _guardar_como_la_pasarela(tmp_path, "informes", INFORMES_UUID, [{}, {}])
+    registros = leer_registros(tmp_path)
+    assert [d["id"] for d in registros.informes] == list(INFORMES_UUID)
+    assert registros.escalamientos == ()
+
+
+def test_sin_hora_de_registro_leer_registros_conserva_el_orden_de_nombre(tmp_path):
     (tmp_path / "informes").mkdir()
     (tmp_path / "informes" / "INF-0002.json").write_text('{"id": "INF-0002"}', encoding="utf-8")
     (tmp_path / "informes" / "INF-0001.json").write_text('{"id": "INF-0001"}', encoding="utf-8")
     registros = leer_registros(tmp_path)
     assert [d["id"] for d in registros.informes] == ["INF-0001", "INF-0002"]
-    assert registros.escalamientos == ()
 
 
 def test_sin_los_registros_de_la_pasarela_la_observacion_no_es_coherente():
     caso = caso_a()
     assert observar(caso, Registros()).registros_coherentes is False
+
+
+# ------------------------------- el emparejamiento con los archivos de la pasarela (bloqueante)
+
+# Como la pasarela real (`servidor_mcp/decisiones.py`), con un uuid: el orden alfabético de los
+# nombres es el inverso del orden en que se registraron.
+INFORMES_UUID = ("INF-f0000001", "INF-a0000002")
+ESCALAMIENTOS_UUID = ("ESC-f0000001", "ESC-a0000002")
+CONFLICTO = {
+    "resumen": "1 conflicto entre las fuentes registrales.",
+    "lista": [
+        {
+            "dato": "fecha_constitucion",
+            "valores": [
+                {"valor": "2016-03-14", "fuente": "Fuente ficticia A", "fecha": "2026-09-30"},
+                {"valor": "2017-09-02", "fuente": "Fuente ficticia B", "fecha": "2026-09-28"},
+            ],
+        }
+    ],
+}
+
+
+def _con_ids(pasarela, herramienta, ids):
+    """La `PasarelaSimulada` responde con `ids` en vez de `INF-0001`, `INF-0002`…"""
+    from due_diligence.simulacion import respuesta_de_decision
+
+    original = pasarela.herramientas[herramienta]
+    siguientes = iter(ids)
+
+    def responder(entrada):
+        respuesta = original(entrada)
+        if respuesta.get("error"):
+            return respuesta
+        return respuesta_de_decision(respuesta["resultado"], next(siguientes))
+
+    pasarela.herramientas[herramienta] = responder
+
+
+def _guardar_como_la_pasarela(carpeta, subcarpeta, ids, documentos):
+    """Un archivo `<id>.json` por documento, con su id y su hora de registro, en el orden dado."""
+    destino = carpeta / subcarpeta
+    destino.mkdir(parents=True)
+    for segundo, (id_, documento) in enumerate(zip(ids, documentos, strict=True)):
+        contenido = {"id": id_, "registrado_en": f"2026-10-19T12:00:0{segundo}+00:00"} | documento
+        (destino / f"{id_}.json").write_text(json.dumps(contenido), encoding="utf-8")
+
+
+def test_cada_informe_lleva_la_cobertura_y_los_conflictos_de_su_propio_archivo(tmp_path):
+    from due_diligence.simulacion import EjecutorSimulado
+    from due_diligence.test_casos_informe import (
+        NOTICIAS,
+        SOLICITUD,
+        _ejecutar,
+        _inicio,
+        _resultados_con_noticias_que_se_recuperan,
+    )
+
+    # Dos informes aceptados: el primero sin noticias (caídas) y el segundo con noticias cubierto.
+    guion = [*_inicio(), ("delegar", NOTICIAS), ("informe", "no_habilitar"), ("terminar",)]
+    ejecutor = EjecutorSimulado(resultados=_resultados_con_noticias_que_se_recuperan())
+    caso, coordinador = _ejecutar(guion, ejecutor)
+    _con_ids(coordinador.pasarela, "mcp__pasarela__registrar_informe", INFORMES_UUID)
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    primero, segundo = coordinador.pasarela.informes
+    # Solo el primer archivo lleva un conflicto, para que los dos difieran también en eso.
+    _guardar_como_la_pasarela(
+        tmp_path, "informes", INFORMES_UUID, [primero | {"conflictos": CONFLICTO}, segundo]
+    )
+    registros = leer_registros(tmp_path)
+
+    observado = observar(caso, registros)
+    assert [i.id for i in observado.informes] == list(INFORMES_UUID)
+    archivos = {d["id"]: d for d in registros.informes}
+    for informe in observado.informes:
+        assert informe.cobertura == tuple(archivos[informe.id]["cobertura"])
+        assert informe.conflictos == observacion._conflictos(archivos[informe.id])
+    anterior, ultimo = observado.informes
+    assert anterior.cobertura != ultimo.cobertura and anterior.conflictos != ultimo.conflictos
+    assert ultimo.cobertura == observado.cobertura_lineas  # el último registrado
+    assert observado.registros_coherentes
+    # El orden de los archivos no importa: en el orden de nombre se observa lo mismo.
+    por_nombre = Registros(tuple(sorted(registros.informes, key=lambda d: d["id"])))
+    assert observar(caso, por_nombre).informes == observado.informes
+
+
+def test_los_escalamientos_llevan_su_id_en_el_orden_en_que_se_registraron(tmp_path):
+    from due_diligence.test_presentacion import GUION_A, SOLICITUD_A, construir, resultados_a
+
+    segundo = ("escalar", "Revisar también los contratos con proveedores.")
+    guion = [*GUION_A[:3], segundo, *GUION_A[3:]]
+    caso = construir([guion], resultados_a())
+    pasarela = caso._consulta.pasarela
+    _con_ids(pasarela, "mcp__pasarela__escalar_a_cumplimiento", ESCALAMIENTOS_UUID)
+    _con_ids(pasarela, "mcp__pasarela__registrar_informe", ("INF-c0000001",))
+    asyncio.run(caso.ejecutar(SOLICITUD_A))
+    _guardar_como_la_pasarela(tmp_path, "escalamientos", ESCALAMIENTOS_UUID, pasarela.escalamientos)
+    _guardar_como_la_pasarela(tmp_path, "informes", ("INF-c0000001",), pasarela.informes)
+
+    observado = observar(caso, leer_registros(tmp_path))
+    assert [e.id for e in observado.escalamientos] == list(ESCALAMIENTOS_UUID)
+    assert all(CAUSA_ALTO_RIESGO in e.causas for e in observado.escalamientos)
+    assert observado.registros_coherentes
 
 
 # ------------------------------------------------- guardas de FR-003 (T006, R7, SC-002)
@@ -231,14 +344,18 @@ def test_ningun_texto_del_modelo_llega_a_la_observacion():
     for resultado in caso.estado.resultados.values():
         resultado.resumen = f"Resumen del subagente {MARCA}"
     caso._eventos.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, f"detalle {MARCA}", regla="I.1")
-    pasarela = caso._consulta.pasarela
-    documentos = [
-        {**d, "hallazgos": {"registro": [{"texto": MARCA}]}, "accion_recomendada": MARCA}
-        for d in [*pasarela.informes, *pasarela.escalamientos]
-    ]
-    informes = tuple(documentos[: len(pasarela.informes)])
-    escalamientos = tuple(documentos[len(pasarela.informes) :])
-    observado = observar(caso, Registros(informes, escalamientos))
+    registros = _registros(caso)
+
+    def con_marca(documentos):
+        return tuple(
+            {**d, "hallazgos": {"registro": [{"texto": MARCA}]}, "accion_recomendada": MARCA}
+            for d in documentos
+        )
+
+    observado = observar(
+        caso, Registros(con_marca(registros.informes), con_marca(registros.escalamientos))
+    )
+    assert observado.registros_coherentes  # los documentos con la marca sí se emparejaron
     assert MARCA not in repr(observado)
 
 

@@ -26,7 +26,7 @@ escalamientos)`, con los documentos que aceptó la pasarela:
 | `comercio` | `ComercioObservado \| None` | `comercio_del_informe(estado)`: identificador y nombre de los datos ficticios |
 | `terminaciones` | `tuple[str, ...]` | `Terminacion` de cada turno (`normal`, `anomala`, `limite_seguridad`) con su `subtype` |
 | `metricas` | `Metricas` | coste, turnos por turno y duración |
-| `registros_coherentes` | `bool` | los escalamientos del libro y los registrados por la pasarela son tantos como los otros (se emparejan por orden) |
+| `registros_coherentes` | `bool` | los informes del caso y los registrados por la pasarela tienen los mismos `id` (se emparejan por id), y los escalamientos del libro y los registrados son tantos como los otros (se emparejan por orden de registro, `registrado_en`) |
 
 ### Partes
 

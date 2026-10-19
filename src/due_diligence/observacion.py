@@ -12,8 +12,10 @@ Es la frontera que garantiza FR-003: `test_e2e_casos.py` solo importa este módu
 """
 
 import json
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -66,6 +68,8 @@ __all__ = [
 
 # Solo los argumentos de una consulta que identifican al comercio o a la persona consultada.
 _ARGUMENTOS_QUE_IDENTIFICAN = ("nombre", "identificador", "tipo")
+# Un registro sin `registrado_en` legible va primero, en el orden de su nombre.
+_SIN_HORA = datetime.min.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -144,7 +148,7 @@ class Metricas:
 
 @dataclass(frozen=True)
 class Registros:
-    """Los documentos que aceptó la pasarela, en orden: de la carpeta del caso o simulados."""
+    """Los documentos que aceptó la pasarela, en orden de registro: de la carpeta o simulados."""
 
     informes: tuple[Mapping[str, Any], ...] = ()
     escalamientos: tuple[Mapping[str, Any], ...] = ()
@@ -168,13 +172,30 @@ class Observacion:
 
 
 def leer_registros(carpeta: Path) -> Registros:
-    """Los informes y escalamientos que la pasarela guardó en `carpeta`, en orden de nombre."""
+    """Los informes y escalamientos que la pasarela guardó en `carpeta`, en orden de registro.
+
+    El orden es el de `registrado_en`, no el del nombre: la pasarela real nombra cada archivo con
+    un uuid (`INF-<uuid8>.json`), así que el orden alfabético no es el del registro. Sin hora, o
+    con la misma, se conserva el orden de nombre.
+    """
 
     def leer(subcarpeta: str) -> tuple[Mapping[str, Any], ...]:
         archivos = sorted((carpeta / subcarpeta).glob("*.json"))
-        return tuple(json.loads(a.read_text(encoding="utf-8")) for a in archivos)
+        documentos = [json.loads(a.read_text(encoding="utf-8")) for a in archivos]
+        return tuple(sorted(documentos, key=_hora_de_registro))
 
     return Registros(leer("informes"), leer("escalamientos"))
+
+
+def _hora_de_registro(documento: Mapping[str, Any]) -> datetime:
+    registrado = documento.get("registrado_en")
+    try:
+        hora = datetime.fromisoformat(registrado) if isinstance(registrado, str) else None
+    except ValueError:
+        hora = None
+    if hora is None:
+        return _SIN_HORA
+    return hora if hora.tzinfo is not None else hora.replace(tzinfo=UTC)
 
 
 def observar(caso: "Caso", registros: Registros, duracion_s: float = 0.0) -> Observacion:
@@ -184,6 +205,9 @@ def observar(caso: "Caso", registros: Registros, duracion_s: float = 0.0) -> Obs
     espera = caso.espera
     comercio = comercio_del_informe(estado)
     escalamientos = estado.libro.escalamientos
+    # Cada informe con el archivo de su id (`InformeRegistrado.id`), nunca por posición. El libro
+    # no guarda el id del escalamiento: se empareja por orden de registro (`leer_registros`).
+    por_id = {d.get("id"): d for d in registros.informes}
     return Observacion(
         eventos=tuple(
             EventoObservado(e.tipo, _frente(e.frente), e.regla, e.accion) for e in caso.eventos()
@@ -198,8 +222,8 @@ def observar(caso: "Caso", registros: Registros, duracion_s: float = 0.0) -> Obs
             for i, e in enumerate(escalamientos)
         ),
         informes=tuple(
-            _informe(informe.id, informe.recomendacion, informe.minimo, registros.informes, i)
-            for i, informe in enumerate(estado.informes)
+            _informe(informe.id, informe.recomendacion, informe.minimo, por_id.get(informe.id, {}))
+            for informe in estado.informes
         ),
         cobertura={
             f.value: FrenteObservado(c.cubierto, None if c.causa is None else c.causa.value)
@@ -216,7 +240,8 @@ def observar(caso: "Caso", registros: Registros, duracion_s: float = 0.0) -> Obs
         terminaciones=tuple(f"{t.terminacion.value} ({t.subtype})" for t in caso.turnos_del_caso),
         metricas=Metricas(_coste(caso), tuple(caso.turnos_por_turno), duracion_s),
         registros_coherentes=(
-            len(registros.informes) == len(estado.informes)
+            Counter(d.get("id") for d in registros.informes)
+            == Counter(i.id for i in estado.informes)
             and len(registros.escalamientos) == len(escalamientos)
         ),
     )
@@ -254,9 +279,8 @@ def _id(documentos: tuple[Mapping[str, Any], ...], indice: int) -> str | None:
 
 
 def _informe(
-    id_: str, recomendacion: str, minimo: bool, documentos: tuple[Mapping[str, Any], ...], i: int
+    id_: str, recomendacion: str, minimo: bool, documento: Mapping[str, Any]
 ) -> InformeObservado:
-    documento = documentos[i] if i < len(documentos) else {}
     cobertura = documento.get("cobertura")
     lineas = tuple(cobertura) if isinstance(cobertura, list) else ()
     return InformeObservado(id_, recomendacion, minimo, lineas, _conflictos(documento))

@@ -83,10 +83,10 @@ description: "Lista de tareas del ticket #12, suite de los siete casos de prueba
 
 - [x] T007 [US1] `src/due_diligence/observacion.py` (R6, [data-model.md](data-model.md)):
   - las clases inmutables `Observacion`, `EventoObservado`, `ConsultaObservada`, `ConsultaListasObservada`, `EscalamientoObservado`, `InformeObservado`, `ConflictoObservado`, `FrenteObservado`, `EsperaObservada`, `ComercioObservado`, `Metricas` y `Registros`;
-  - `observar(caso, registros, duracion_s)` y `leer_registros(carpeta)`, que lee `informes/*.json` y `escalamientos/*.json` en orden de nombre;
+  - `observar(caso, registros, duracion_s)` y `leer_registros(carpeta)`, que lee `informes/*.json` y `escalamientos/*.json` en orden de registro (`registrado_en`; antes, de nombre: corregido tras la puerta de `fd75bd0`, porque la pasarela real los nombra con un uuid);
   - las reglas del data-model, citadas literalmente: «Nada del modelo: no se copian `respuesta`, `detalle`, `resumen`, `hallazgos`, `accion_recomendada` ni los mensajes del analista» y «Las cadenas que sí se leen son constantes del código».
 
-  `EscalamientoObservado` empareja por orden las causas de `libro.escalamientos` con los `id` de los registros. Si los números difieren, `Observacion.registros_coherentes` es falso y todo test e2e lo comprueba (U2 del analyze).
+  Cada `InformeObservado` toma la cobertura y los conflictos del archivo de su `id` (`InformeRegistrado.id`), no del de su posición. `EscalamientoObservado` empareja por orden de registro las causas de `libro.escalamientos` con los `id` de los registros, porque el libro no guarda el id del escalamiento. Si los ids de los informes o el número de escalamientos difieren, `Observacion.registros_coherentes` es falso y todo test e2e lo comprueba (U2 del analyze).
 
   Reexporta `MOTIVO_ESPERA_IDENTIFICADOR` y las etiquetas de causa (`CAUSA_ALTO_RIESGO`, `CAUSA_COINCIDENCIA_REPRESENTANTE`) para que el test e2e solo importe `observacion`. El coste se calcula como en `__main__.py:149-155`. T005 en verde.
 - [x] T008 [US1] `src/due_diligence/conftest.py` (R1, R3, R5, R8):

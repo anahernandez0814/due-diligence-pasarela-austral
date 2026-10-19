@@ -5,6 +5,7 @@ el cableado (herramientas, delegación, estado, terminación), no lo que decidir
 """
 
 import asyncio
+import time
 
 import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
@@ -1305,14 +1306,18 @@ def test_la_interrupcion_corta_el_turno_al_decidir_el_hook_y_la_denegacion_sale(
     caso_ref["caso"] = caso
 
     async def probar():
+        # Se mide, sin `asyncio.timeout`: con la interrupción ya guardada, su cancelación también
+        # se convertiría en la interrupción y el test pasaría tarde (como en K13).
+        inicio = time.monotonic()
         with pytest.raises(Interrupcion) as lanzada:
-            async with asyncio.timeout(2):
-                await caso.ejecutar(SOLICITUD)
+            await caso.ejecutar(SOLICITUD)
+        duracion = time.monotonic() - inicio
         # Mutación K9: sin `uncancel()`, la tarea seguiría marcada como cancelada y la siguiente
         # espera de quien llamó (el chat, `asyncio.run`) se cortaría sola.
-        return lanzada.value, asyncio.current_task().cancelling()
+        return lanzada.value, asyncio.current_task().cancelling(), duracion
 
-    interrupcion, cancelando = asyncio.run(probar())
+    interrupcion, cancelando, duracion = asyncio.run(probar())
+    assert duracion < 2  # el turno no espera los 60 s del CLI simulado (FR-008)
     assert cancelando == 0
     # El mismo objeto que lanzó el observador: Streamlit entrega una recarga una sola vez.
     assert interrupcion is caso._eventos.interrupcion

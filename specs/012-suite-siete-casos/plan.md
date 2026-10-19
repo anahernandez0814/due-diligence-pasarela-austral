@@ -58,14 +58,16 @@ dependencia nueva**: sin `pytest-xdist` ni `pytest-asyncio` (R1).
 
 ## Constitution Check
 
-*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple la constitución. Tiene dos
+*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple la constitución. Tiene tres
 desviaciones justificadas**:
 - **D1**, declarada tras la Q4: el corte llega en el siguiente evento y el círculo queda congelado
   hasta el «Rerun».
 - **D2**, declarada tras la puerta de `/abrir-pr` en `a7f853e`: un «Stop» durante el cierre o el
   escalamiento puede dejar sin escalar un caso con una coincidencia.
+- **D3**, declarada tras la puerta de `/abrir-pr` en `fd75bd0`: el grupo determinista completo
+  puede pasar de 5 minutos en Windows.
 
-Las dos van abajo y en R9.
+Las tres van abajo; D1 y D2 también en R9, y D3 en R11.
 
 | Principio | Cómo se cumple |
 |-----------|----------------|
@@ -133,6 +135,30 @@ su comprobación en la implementación.
   - filtrar por `c.valida` las consultas a listas en `_comunes`;
   - comparar las consultas de persona con el representante de `CO-AM-0005` en el caso (d);
   - tests deterministas de `_ejecutar_casos` y `_ejecutar_uno`.
+
+  Las dos primeras se aplicaron tras la puerta de `fd75bd0`, abajo.
+
+**Re-evaluación tras la puerta de `/abrir-pr` en `fd75bd0`** (veredicto con un bloqueante):
+- **Bloqueante, corregido**: `observacion.py` emparejaba cada informe con su archivo por posición, y
+  los archivos se leían en orden de nombre, que en la pasarela real es un uuid. Ahora se empareja
+  por `id`, y los escalamientos por `registrado_en` (detalle en `tasks.md`).
+- **Aplicadas**: el «menos de 2 s» medido con `time.monotonic()`, `_comunes` solo con consultas
+  válidas y el caso (d) sin consultas del representante de `CO-AM-0005`. La segunda y última
+  ejecución e2e (T028) pasó 7 de 7.
+- **Desviación justificada D3**:
+  - **Contradice**: FR-006 y SC-003, en el grupo determinista completo (`uv run pytest`).
+  - **Qué pasa**: en Windows, el grupo completo puede pasar de 5 minutos. Mediciones en el equipo
+    de la analista: 4:43 en frío, 5:55 y 6:12.
+  - **Por qué se acepta**: el tiempo extra es de las guardas del flujo de trabajo
+    (`.claude/hooks/`, cuyos tests crean repositorios git de prueba), no del producto. El grupo de la
+    aplicación (`uv run pytest src`) tarda unos 25 s y el de punta a punta unos 80 s: los dos
+    cumplen el criterio.
+  - **Sugerencia**: un repositorio git de prueba compartido por módulo en `.claude/hooks/`, o
+    pytest-xdist. Medido: 1:40 con `-n auto`, pero falla
+    `test_guarda_pr.py::test_la_guarda_tarda_menos_de_un_segundo_en_caliente` por la carga en
+    paralelo, así que habría que aislar ese test.
+  - **Se documenta en**: README («Pruebas», con el tiempo de cada comando), R11, `tasks.md` y
+    DECISIONES.md. No cambia código ni dependencias.
 
 ## Decisiones (detalle en [research.md](research.md))
 

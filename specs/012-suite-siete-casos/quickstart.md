@@ -11,7 +11,9 @@ uv run ruff format --check . && uv run ruff check .
 ```
 
 - Todo en verde. Ningún test `e2e` seleccionado: aparecen como «deselected».
-- Menos de 5 minutos. Se anota el tiempo medido (antes del ticket: 4711 tests, 264 s).
+- Menos de 5 minutos. Se anota el tiempo medido (antes del ticket: 4711 tests, 264 s). Con la
+  desviación D3 del plan, el límite lo cumple `uv run pytest src` (unos 25 s); el grupo completo
+  midió de 4:43 a 6:12 en Windows, por `.claude/hooks/`.
 - Lo mismo con la clave definida: `uv run pytest` sigue sin ejecutar los tests `e2e`.
 
 ## Q2. Grupo e2e sin clave (US2-3)

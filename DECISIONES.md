@@ -219,6 +219,6 @@ Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/
 - **Tras la puerta de `fd75bd0`, sin cambiar código**: el aislamiento de la caída de noticias depende de que el CLI pase a cada servidor MCP su propio entorno, y ningún test lo cubre (`conftest.py:131`); el caso (e) determinista no usa el modo de demostración, que sí usa el e2e (`test_observacion.py:123`, `conftest.py:96`); y la ejecución en paralelo de la suite e2e no tiene tests deterministas (`conftest.py:163`).
 
 - **Observación menor de la Q4, sin corregir**: tras una interrupción, el texto de ayuda de la entrada sigue diciendo «El coordinador espera su respuesta…», aunque el siguiente mensaje abre un caso nuevo.
-- **Tiempo de la suite**: la completa tarda unos 4 min 50 s, casi todo en `.claude/hooks/`, y la de la aplicación (`uv run pytest src`), unos 25 s. Queda como sugerencia acelerar los tests de `.claude/hooks/` con un repositorio git de prueba compartido.
+- **Desviación D3, tiempo de la suite**: en Windows, `uv run pytest` puede pasar de 5 minutos (4:43 en frío, 5:55 y 6:12) por las guardas de `.claude/hooks/`, no por el producto: la aplicación (`uv run pytest src`) tarda unos 25 s y la e2e unos 80 s. Sugerencia: un repositorio git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, aislando el test de tiempo de `test_guarda_pr.py`).
 
 Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.

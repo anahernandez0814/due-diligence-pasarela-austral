@@ -457,6 +457,14 @@ resto del tiempo se reparte entre los miles de tests rápidos.
 aceleran los tests más lentos sin quitar aserciones, o se declara la desviación. El README da el
 número medido.
 
+**Tras la puerta de `fd75bd0`: desviación D3 del plan.** En copias limpias, el grupo completo midió
+5:55 con la máquina ocupada y 6:12 (4791 tests, commit `633bb87`); en frío, 4:43. Se declara la
+desviación en lugar de acelerar: el tiempo extra es de `.claude/hooks/`, no del producto, y el grupo
+de la aplicación (`uv run pytest src`) tarda unos 25 s. Alternativas, sin aplicar: un repositorio
+git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, pero
+`test_guarda_pr.py::test_la_guarda_tarda_menos_de_un_segundo_en_caliente` falla por la carga en
+paralelo y habría que aislarlo). El README da el tiempo de cada comando.
+
 ## R12. Documentación y cierre
 
 - **README, sección «Pruebas»**:

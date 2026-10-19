@@ -241,6 +241,7 @@ description: "Lista de tareas del ticket #12, suite de los siete casos de prueba
   - `test_veredicto.py`: `cli_con_el_commit_de_head_aprueba_como_siempre` 2,62 s.
 
   El margen sigue siendo poco, unos 20 s: es un riesgo para los próximos tickets.
+  **Tras la puerta de `fd75bd0`**: la copia limpia midió 6:12. Se declara la **desviación D3** en el plan (R11), sin tocar código ni dependencias; el README da el tiempo de cada comando.
 - [x] T032 **Detenerse** y entregar a la analista el resumen del barrido. `/abrir-pr` lo lanza ella. Ofrecerle como opcional la comprobación manual Q4 (interrupción con «Stop», con el coste de un caso) (G1 del analyze).
   **Resultado**: la analista hizo la Q4 cuatro veces (detalle en el quickstart).
   - La tercera destapó el turno que se repetía tras el «Rerun», corregido en `5b9154e`.
@@ -302,7 +303,7 @@ La revisión de código de `/abrir-pr` dio 1 bloqueante y 7 sugerencias; la audi
 - **Bloqueante** (`observacion.py`, commit `a085174`): cada informe se emparejaba con su archivo por posición, y `leer_registros` los ordenaba por nombre, que en la pasarela real es un uuid. Ahora cada `InformeObservado` toma el archivo de su `id`, `leer_registros` ordena por `registrado_en` (los escalamientos se emparejan por ese orden, porque el libro no guarda su id) y `registros_coherentes` compara los ids de los informes. Tests nuevos con nombres tipo uuid en orden alfabético inverso al de registro (`INF-f0000001`, `INF-a0000002`; lo mismo con `ESC-`): fallaron con el emparejamiento por posición antes de corregirlo.
 - **Sugerencias aplicadas**: `test_coordinador.py` mide el «menos de 2 s» con `time.monotonic()` (`502e178`); `_comunes` solo cuenta las consultas válidas, y el turno 2 del caso (d) comprueba que ninguna consulta de listas de tipo persona es del representante legal de `CO-AM-0005` (`dc81c94`).
 - **Sugerencias documentadas sin cambiar código**: una línea en DECISIONES.md, entrada 13 (`633bb87`).
-- **Copia limpia** (commit `633bb87`, `git clone` de la rama, sin archivo de entorno y sin `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `PYTHONUTF8` ni `PYTHONIOENCODING`): **4791 en verde y 7 deseleccionados, en 372,3 s (6:12)**. **Pasa de 5 minutos**: el riesgo abierto de la sección anterior se confirma, y el README («unos 4 min 50 s») queda por debajo del tiempo medido.
+- **Copia limpia** (commit `633bb87`, `git clone` de la rama, sin archivo de entorno y sin `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `PYTHONUTF8` ni `PYTHONIOENCODING`): **4791 en verde y 7 deseleccionados, en 372,3 s (6:12)**. **Pasa de 5 minutos**: el riesgo abierto de la sección anterior se confirma. Se resuelve con documentación: **desviación D3** en plan, spec (FR-006 y SC-003), R11, quickstart y DECISIONES.md, y el README («Pruebas») con una tabla de cuatro comandos y sus tiempos medidos.
 
 ## Ejecuciones e2e
 

@@ -41,21 +41,25 @@ Los tres comandos deben terminar sin errores; pytest ejecuta los tests de `src/`
 
 ## Pruebas
 
-Hay dos grupos, que se corren por separado (#12).
+Hay dos grupos, deterministas y de punta a punta, que se corren por separado (#12).
 
-| Grupo | Comando | Clave | Coste | Tiempo medido |
-|-------|---------|-------|-------|---------------|
-| Deterministas, completas | `uv run pytest` | no | 0 | ≈ 4 min 50 s |
-| Deterministas, solo la aplicación | `uv run pytest src` | no | 0 | ≈ 25 s |
-| De punta a punta, los casos (a)–(g) con el modelo real | `uv run pytest -m e2e -rs` | sí | ≈ 1,10 USD por ejecución completa | ≈ 1 min 25 s (los 7 a la vez) |
+| Comando | Qué ejecuta | Clave | Coste | Tiempo medido |
+|---------|-------------|-------|-------|---------------|
+| `uv run pytest src` | La aplicación: tests deterministas de `src/` | no | 0 | unos 25 s |
+| `uv run pytest -m e2e -rs` | Los siete casos (a)–(g) de punta a punta, con el modelo real | sí | unos 1,14 USD por ejecución completa | unos 80 s (los 7 a la vez) |
+| `uv run pytest .claude/hooks` | Las guardas del flujo de trabajo de Claude Code | no | 0 | de 4 a 6 min, según la carga del equipo |
+| `uv run pytest` | Todo lo determinista: `src/` y `.claude/hooks/` | no | 0 | de 4:43 a 6:12 |
 
-Tiempos medidos en el equipo de la analista.
+Tiempos medidos en el equipo de la analista, con Windows. **El criterio de menos de 5 minutos lo
+cumplen el grupo de la aplicación y el de punta a punta.** El grupo determinista completo depende
+de las guardas de `.claude/hooks/`, cuyos tests crean repositorios git de prueba, y puede pasar de
+5 minutos (desviación D3 del plan del #12).
 
 - **Deterministas**: todos los tests de `src/` y `.claude/hooks/`, sin el modelo ni la red. No
   necesitan `ANTHROPIC_API_KEY` y nunca ejecutan los de punta a punta, aunque la clave esté
   definida: la marca `e2e` está excluida en `pyproject.toml`.
-  - La suite completa queda cerca del límite de 5 minutos. Casi todo el tiempo es de `.claude/hooks/`
-    (las guardas del entorno de Claude Code), cuyos tests crean repositorios git de prueba.
+  - Casi todo el tiempo de la suite completa es de `.claude/hooks/` (las guardas del entorno de
+    Claude Code), cuyos tests crean repositorios git de prueba.
   - Los tests de la aplicación (`uv run pytest src`) tardan unos 25 s y son los que conviene correr
     mientras se trabaja en `src/`.
 - **De punta a punta** (`src/due_diligence/test_e2e_casos.py`): un test por caso obligatorio, con el

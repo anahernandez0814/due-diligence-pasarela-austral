@@ -109,11 +109,11 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 **Independent Test**: con el caso (a) y el caso (f) simulados, `resumen_del_turno` devuelve un indicador por cada delegación, bloqueo, informe y escalamiento de la traza, en orden; la cobertura de los cuatro frentes; y el estado correcto.
 
-- [ ] T013 [P] [US5] Tests de `hora_colombia` en `src/due_diligence/test_presentacion.py` (nuevo) (R9, FR-007):
+- [x] T013 [P] [US5] Tests de `hora_colombia` en `src/due_diligence/test_presentacion.py` (nuevo) (R9, FR-007):
   - `03:00 UTC` → `"22:00:00 (hora de Colombia)"`, también desde una marca en otra zona;
   - siempre con la zona declarada.
-- [ ] T014 [US5] Implementar `hora_colombia` en `src/due_diligence/presentacion.py` (nuevo), con `timezone(timedelta(hours=-5))` y sin `zoneinfo` (R9). T013 en verde.
-- [ ] T015 [US2] Tests en `src/due_diligence/test_presentacion.py` (R3, R4, R5, data-model):
+- [x] T014 [US5] Implementar `hora_colombia` en `src/due_diligence/presentacion.py` (nuevo), con `timezone(timedelta(hours=-5))` y sin `zoneinfo` (R9). T013 en verde.
+- [x] T015 [US2] Tests en `src/due_diligence/test_presentacion.py` (R3, R4, R5, data-model):
   - `frente_en_palabras` para los cuatro frentes;
   - `indicador`:
     - devuelve un indicador por cada tipo del mapa de R3 (`delegacion`, `bloqueo_regla` con `regla`, motivo y `accion`, `informe_registrado`, `escalamiento_registrado` y `fallo_de_hook`), con su `tipo`, `titulo`, `detalle`, `hora` (de `hora_colombia`) y `secuencia`;
@@ -126,7 +126,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
   - el caso (f) simulado (noticias con `servicio_no_disponible`): noticias «no cubierto» con su motivo, y el estado incompleto;
   - ningún texto del indicador lleva un nombre ficticio de comercio o de persona que no esté en el detalle del evento;
   - `presentacion.py` no importa `streamlit`: se comprueba con `ast` sobre el archivo.
-- [ ] T016 [US2] Implementar en `src/due_diligence/presentacion.py` `Indicador`, `FilaCobertura`, `EstadoMostrado` y `TurnoMostrado` (dataclasses `frozen`, campos de data-model), y `frente_en_palabras`, `indicador`, `eventos_del_turno`, `filas_cobertura`, `estado_mostrado` y `resumen_del_turno(caso, n, mensaje, aviso=None, respuesta=None)`, según el mapa de R3 y el orden de R4. `turnos` usa `configuracion.turnos_usados(caso.turnos_por_turno[n - 1])`, o `"sin dato"` si falta. T015 en verde.
+- [x] T016 [US2] Implementar en `src/due_diligence/presentacion.py` `Indicador`, `FilaCobertura`, `EstadoMostrado` y `TurnoMostrado` (dataclasses `frozen`, campos de data-model), y `frente_en_palabras`, `indicador`, `eventos_del_turno`, `filas_cobertura`, `estado_mostrado` y `resumen_del_turno(caso, n, mensaje, aviso=None, respuesta=None)`, según el mapa de R3 y el orden de R4. `turnos` usa `configuracion.turnos_usados(caso.turnos_por_turno[n - 1])`, o `"sin dato"` si falta. T015 en verde.
 
 ---
 
@@ -136,7 +136,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 **Independent Test**: la tabla de R6 completa con casos simulados.
 
-- [ ] T017 [US1] Tests de `decidir_mensaje` en `src/due_diligence/test_presentacion.py` (R6):
+- [x] T017 [US1] Tests de `decidir_mensaje` en `src/due_diligence/test_presentacion.py` (R6):
   - sin caso → `NUEVO` sin aviso;
   - caso completo → `NUEVO` con `AVISO_CASO_NUEVO` («Caso anterior cerrado; se inició un caso nuevo.»);
   - caso incompleto, por ejemplo el (f) → `CONTINUAR`;
@@ -144,7 +144,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
   - texto vacío sin espera → `IGNORAR`.
 
   También: `MENSAJE_SIN_SESION` y `MENSAJE_FALLO_TURNO` (con el nombre del tipo de error) no contienen trazas.
-- [ ] T018 [US1] Implementar en `src/due_diligence/presentacion.py` `Decision` (`StrEnum`), `DecisionMensaje(accion, aviso)`, `decidir_mensaje(caso, texto)`, `AVISO_CASO_NUEVO`, `AVISO_ESPERA` (plantilla con el motivo), `MENSAJE_FALLO_TURNO` (plantilla con el tipo) y `MENSAJE_SIN_SESION`.
+- [x] T018 [US1] Implementar en `src/due_diligence/presentacion.py` `Decision` (`StrEnum`), `DecisionMensaje(accion, aviso)`, `decidir_mensaje(caso, texto)`, `AVISO_CASO_NUEVO`, `AVISO_ESPERA` (plantilla con el motivo), `MENSAJE_FALLO_TURNO` (plantilla con el tipo) y `MENSAJE_SIN_SESION`.
   - `MENSAJE_SIN_SESION` se mueve aquí desde `__main__.py`, que lo importa para seguir exponiéndolo con el mismo nombre, sin romper `test_main.py`.
 
   T017 en verde.
@@ -153,13 +153,13 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## Fase 5: User Story 4, modos activos (Priority: P2)
 
-- [ ] T019 [US4] Tests de `modos_activos` en `src/due_diligence/test_presentacion.py` (R12, FR-010):
+- [x] T019 [US4] Tests de `modos_activos` en `src/due_diligence/test_presentacion.py` (R12, FR-010):
   - lista vacía sin variables;
   - una línea por cada una de `PASARELA_FALLA_NOTICIAS`, `PASARELA_FALLA_REGISTRO` y `PASARELA_MODO_DEMO_HOOKS`, solo con el valor exacto `"1"`; `"0"`, `"true"` y `""` no cuentan;
   - las tres juntas, en ese orden;
   - el texto del modo de demostración dice que los hooks siguen activos.
-- [ ] T020 [US4] Implementar `modos_activos(entorno)` en `src/due_diligence/presentacion.py`, con los textos de R12. T019 en verde.
-- [ ] T021 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «funciones puras de la interfaz (#11)».
+- [x] T020 [US4] Implementar `modos_activos(entorno)` en `src/due_diligence/presentacion.py`, con los textos de R12. T019 en verde.
+- [x] T021 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «funciones puras de la interfaz (#11)».
 
 ---
 

@@ -23,6 +23,9 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.informe import informe_vigente
+
+# El mismo texto que el chat (#11, R6): vive en `presentacion` y se sigue exponiendo aquí.
+from due_diligence.presentacion import MENSAJE_SIN_SESION
 from due_diligence.terminacion import Terminacion
 
 USO = 'Uso: uv run python -m due_diligence [--sin-continuar] "<solicitud del analista>"'
@@ -31,10 +34,6 @@ USO = 'Uso: uv run python -m due_diligence [--sin-continuar] "<solicitud del ana
 BANDERA_SIN_CONTINUAR = "--sin-continuar"
 PREGUNTA_AL_ANALISTA = (
     "El coordinador espera su respuesta; escríbala o deje la línea vacía para terminar: "
-)
-MENSAJE_SIN_SESION = (
-    "No se puede continuar el caso: el turno anterior no dejó una sesión del coordinador que "
-    "reanudar. El caso queda como está, sin completar; inicie uno nuevo con la solicitud completa."
 )
 INDEPENDIENTES = (Frente.REGISTRO, Frente.NOTICIAS, Frente.CATEGORIA)
 

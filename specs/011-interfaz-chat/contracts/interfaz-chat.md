@@ -45,6 +45,8 @@ uv run streamlit run src/due_diligence/chat.py
 | `estado_mostrado(caso)` | `Caso` | `EstadoMostrado` (orden de R4) |
 | `resumen_del_turno(caso, n, mensaje, aviso=None, respuesta=None)` | `Caso` y datos del turno | `TurnoMostrado` |
 | `decidir_mensaje(caso, texto)` | `Caso \| None`, `str` | `DecisionMensaje` (tabla de R6) |
+| `aviso_espera(espera)` | `Espera` | `AVISO_ESPERA` con el motivo en minúscula inicial tras los dos puntos (lo usan el chat y la línea de comandos) |
+| `mensaje_fallo_turno(error)` | excepción | `MENSAJE_FALLO_TURNO` con solo el tipo del error, sin traza |
 | `modos_activos(entorno)` | `Mapping[str, str]` | `list[str]` (R12) |
 
 Ninguna importa Streamlit, llama al modelo ni lee el entorno por su cuenta.

@@ -30,7 +30,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 ## Phase 1: Setup
 
-- [ ] T001 Commitear `specs/013-plugin-reutilizable-otros/tasks.md` en un commit `docs(tasks): …` antes de cualquier código (constitución IX).
+- [x] T001 Commitear `specs/013-plugin-reutilizable-otros/tasks.md` en un commit `docs(tasks): …` antes de cualquier código (constitución IX).
 - [x] T002 En `pyproject.toml`:
   - añadir `plugins` a `testpaths`;
   - añadir `plugins/guardas-y-revision/hooks` y `plugins/guardas-y-revision/scripts` a `pythonpath`.
@@ -188,7 +188,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - la convivencia (opción B) y el riesgo de `settings.local.json`;
   - los cambios declarados en la guarda (R10 y R5);
   - lo que haya quedado pendiente de Q6.
-- [ ] T027 Barrido:
+- [x] T027 Barrido:
   - ruff;
   - Q1 completa: `uv run pytest src` y `uv run pytest .claude/hooks plugins`, en el repositorio y en una copia limpia sin `.env`, sin clave y sin `PYTHONUTF8`;
   - `claude plugin validate --strict`;
@@ -198,6 +198,14 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - la limpieza de las carpetas temporales y de las trazas, y `marketplace remove` hecho.
 
   Commit. **Parada antes de `/abrir-pr`.**
+  - **Resultado (2026-10-19)**:
+    - **Ruff**: limpio.
+    - **En el repositorio**: `uv run pytest src`, 3325 en verde; `uv run pytest .claude/hooks plugins`, 1588 en verde.
+    - **En la copia limpia** de `721635a` (clon de la rama, sin el archivo de entorno, sin clave y sin `PYTHONUTF8`): `src`, 3325 en verde en 77 s; `.claude/hooks plugins`, 1588 en verde en 8:49. Es la lentitud de las guardas en Windows ya declarada en D3 del #12.
+    - **`claude plugin validate --strict`**: pasa en el marketplace y en el plugin.
+    - **Coste de `claude -p`**: unos 0,022 USD en 5 ejecuciones (detalle en el quickstart).
+    - **Limpieza**: plugin desinstalado, marketplace quitado (0 en `marketplace list`), y carpetas temporales y trazas borradas.
+    - **Pendiente de la analista**: SC-006, seguir la sección del README en un repositorio nuevo. Q6 no hizo falta.
 
 ---
 

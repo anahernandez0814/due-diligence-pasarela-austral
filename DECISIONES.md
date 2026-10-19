@@ -243,4 +243,7 @@ Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `
   - una sola ejecución de la guarda en un clon limpio de este repositorio.
 
   El plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta.
+- **La revisión detecta los archivos movidos**, desde este ticket, en el contexto del repositorio y en el del plugin.
+  - **Por qué**: los dos scripts usaban `--no-renames`. Con el traslado de la guarda al plugin, sus tres archivos aparecían como eliminados, el revisor no podía leer lo que había antes y la revisión quedó con cobertura incompleta.
+  - **Cómo**: con `-M`, el movido aparece en su ruta nueva con la marca `[movido desde <ruta anterior>, similitud N %]`, y su diff va en el contexto si cabe en el umbral. El revisor y el auditor lo leen en la ruta nueva; la anterior no cuenta como archivo sin leer.
 - **Pendiente**: que la analista valore la sección del README siguiéndola en un repositorio nuevo (SC-006). Otros equipos reciben los cambios al subir `version` en `plugin.json`.

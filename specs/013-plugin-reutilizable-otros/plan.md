@@ -182,6 +182,22 @@ declara como desviación:
       instalación desde GitHub y desde una copia local, y la desinstalación;
     - un `README.md` genérico dentro del plugin;
     - una entrada corta en DECISIONES.md.
+13. **La revisión detecta los archivos movidos**, desde este ticket y en los dos scripts de
+    contexto (`.claude/hooks/preparar_revision.py` y `scripts/contexto_revision.py` del plugin):
+    - **por qué**: usaban `--no-renames`. Al trasladar la guarda al plugin, sus tres archivos
+      aparecían como eliminados, el revisor no podía leer lo que había antes y la primera revisión
+      de `/abrir-pr` quedó con `cobertura=incompleta`;
+    - con `-M`, el movido aparece en su ruta nueva con la marca
+      `[movido desde <ruta anterior>, similitud N %]` y ya no como `[eliminado]`. Si el diff
+      completo no cabe en el umbral, el contexto trae el de cada movido con cambios mientras
+      quepa, o dice que no cabe;
+    - el revisor y el auditor, en el agente y en la skill, leen el movido en su ruta nueva, y la
+      ruta anterior no cuenta como archivo sin leer.
+
+**Dónde están las pruebas de `base_guarda.py`**: no hay un `test_base_guarda.py` dentro del
+plugin. Las pruebas directas de `normalizar_ruta`, `raiz`, `cwd`, `bloquear` y `ejecutar`, y el
+test de equivalencia con `comun.py`, están en `.claude/hooks/test_plugin_repositorio.py`. Dentro
+del plugin, `base_guarda.py` se prueba a través de la guarda, en `hooks/test_guarda_datos.py`.
 
 ## Riesgos residuales
 
@@ -230,14 +246,16 @@ plugins/guardas-y-revision/                        # nuevo (ver R1)
 ├── agents/revisor-codigo.md
 ├── skills/revisar-codigo/SKILL.md
 ├── hooks/{hooks.json, guarda_datos.py, detector_datos.py, base_guarda.py}
-├── hooks/{test_guarda_datos.py, test_detector_datos.py, test_base_guarda.py}
+├── hooks/{test_guarda_datos.py, test_detector_datos.py}
 ├── scripts/{contexto_revision.py, test_contexto_revision.py}
 └── test_plugin.py
 .claude/settings.json                              # ruta del script, matcher general, enabledPlugins
 .claude/hooks/guarda_datos.py                      # archivo de compatibilidad, sin lógica (R2)
+.claude/hooks/preparar_revision.py                 # detecta los archivos movidos (decisión 13)
+.claude/agents/, .claude/skills/                   # revisor y auditor: los movidos (decisión 13)
 .claude/hooks/test_configuracion.py                # adaptado (ruta y matcher)
 .claude/hooks/test_guarda_datos_repositorio.py     # nuevo: casos propios del proyecto
-.claude/hooks/test_plugin_repositorio.py           # nuevo: FR-004, FR-009 y equivalencia con comun
+.claude/hooks/test_plugin_repositorio.py           # nuevo: FR-004, FR-009, base_guarda y equivalencia con comun
 .claude/hooks/test_revision_repositorio.py         # sin cambios de fondo (importa del plugin)
 pyproject.toml                                     # testpaths y pythonpath
 README.md                                          # sección corta del plugin

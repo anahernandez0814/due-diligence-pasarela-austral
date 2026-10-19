@@ -56,6 +56,7 @@ from due_diligence.reglas import (
     MOTIVO_SIN_COMERCIO,
     MOTIVO_SIN_INFORME,
     causas_vigentes,
+    falta_para_cerrar,
     motivo_de_escalar,
 )
 from due_diligence.simulacion import (
@@ -2756,6 +2757,34 @@ def test_un_resumen_con_un_problema_se_rechaza_con_i4_y_lo_nombra(cambio, ruta):
     assert estado.escalamientos_pendientes == {}
 
 
+def test_us2_7_tras_un_resumen_rechazado_se_corrige_se_escala_y_el_caso_cierra():
+    # FR-007: el rechazo no deja nada guardado, el coordinador corrige y vuelve a escalar en el
+    # mismo caso, y ese escalamiento es el que cuenta para el cierre.
+    estado, _, hooks = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    incompleto = {k: v for k, v in _escalamiento().items() if k != "accion_recomendada"}
+    rechazo = _denegado_por_resumen(
+        _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, incompleto))
+    )
+    assert any(p["ruta"] == "accion_recomendada" for p in rechazo["problemas"])
+    assert estado.escalamientos_pendientes == {} and estado.libro.escalamientos == []
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida) and salida["reason"].startswith(
+        motivo_de_escalar({"coincidencia_representante"})
+    )
+
+    _escalar_confirmado(hooks)
+    assert estado.libro.escalamientos == [
+        Escalamiento(
+            frozenset({"coincidencia_representante"}), ("CO-TV-0001", "Tienda Verde SAS", True)
+        )
+    ]
+    assert falta_para_cerrar(estado) == (False, True)  # escalado: solo falta el informe
+    _aceptar_informe(hooks, "decide_cumplimiento", tool_use_id="t2")
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_escalar is False and estado.cierre_sin_informe is False
+
+
 def test_un_resumen_valido_sustituye_lo_del_codigo_y_deja_pendiente_el_escalamiento():
     from due_diligence.conflictos import calcular_conflictos
     from due_diligence.reglas import causas_del_resumen
@@ -3131,6 +3160,66 @@ def test_con_el_sello_la_espera_no_impide_escalar():
     estado.libro.fallo_de_hook = "PostToolUse: RuntimeError"
     salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento({})))
     assert not _es_denegacion(salida)
+
+
+def _espera_del_registro_con_coincidencia(preparar):
+    """D1: el libro conserva la coincidencia de otro comercio y el caso espera al analista."""
+    estado, eventos, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    preparar(estado)
+    estado.libro.coincidencias.append(Coincidencia("comercio", "L", "F", "2026-09-30"))
+    return estado, eventos, hooks
+
+
+ESPERAS_DEL_REGISTRO = [_registro_con_varias_coincidencias, _registro_sin_coincidencias]
+
+
+@pytest.mark.parametrize("preparar", ESPERAS_DEL_REGISTRO)
+def test_i2_la_espera_del_registro_no_exime_de_escalar_una_coincidencia(preparar):
+    # Hallazgo de la auditoría del #10: la regla I.2 no espera al identificador del comercio nuevo.
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _espera_del_registro_con_coincidencia(preparar)
+    salida = _ejecutar(_stop(hooks), _fin_de_turno())
+    assert _es_bloqueo(salida)
+    assert salida["reason"] == motivo_de_escalar({"coincidencia_comercio"})  # sin el informe
+    assert estado.libro.cierres_impedidos == 1
+    (evento,) = _eventos_de(eventos, TIPO_CIERRE_IMPEDIDO)
+    assert evento.regla == "I.2"
+    assert _eventos_de(eventos, TIPO_ESPERA_ANALISTA) == []
+
+
+@pytest.mark.parametrize("preparar", ESPERAS_DEL_REGISTRO)
+def test_i2_agotadas_las_devoluciones_en_la_espera_del_registro_marca_cierre_sin_escalar(preparar):
+    estado, eventos, hooks = _espera_del_registro_con_coincidencia(preparar)
+    estado.libro.cierres_impedidos = MAX_CIERRES_IMPEDIDOS
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert estado.cierre_sin_escalar is True
+    assert estado.cierre_sin_informe is False  # la espera del registro exime del informe
+    assert _tipos_de_cierre(eventos) == [TIPO_CIERRE_SIN_ESCALAR]
+
+
+@pytest.mark.parametrize("preparar", ESPERAS_DEL_REGISTRO)
+def test_i2_en_la_espera_del_registro_la_coincidencia_se_escala_y_luego_se_espera(preparar):
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _espera_del_registro_con_coincidencia(preparar)
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, _escalamiento()))
+    assert not _es_denegacion(salida)
+    sustituida = _sustituida(salida)
+    assert sustituida["comercio"] == {
+        "identificador": None,
+        "nombre": "Almacén Mirador",
+        "verificado": False,
+    }
+    assert sustituida["causa_escalamiento"] == ["coincidencia del comercio en listas restrictivas"]
+    escalado = respuesta_de_decision("caso_escalado", "ESC-0001")
+    _ejecutar(
+        _hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, _sustituida(salida))
+    )
+    assert _ejecutar(_stop(hooks), _fin_de_turno()) == permitir()
+    assert len(_eventos_de(eventos, TIPO_ESPERA_ANALISTA)) == 1
+    assert estado.libro.cierres_impedidos == 0 and estado.cierre_sin_escalar is False
 
 
 def test_la_espera_va_antes_que_la_forma_y_el_bajo_riesgo_antes_que_la_forma():

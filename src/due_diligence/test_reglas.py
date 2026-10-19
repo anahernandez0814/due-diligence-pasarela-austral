@@ -1331,3 +1331,8 @@ def test_evaluar_escalamiento_en_la_espera_y_con_el_bajo_riesgo_comprobado():
     # D3 del plan: el alto riesgo en la espera del identificador tampoco escala sin identificar.
     varias.libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", "alto"))
     assert evaluar_escalamiento(varias) == [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, "V")]
+    # I.2: una coincidencia de un comercio anterior (D1) se escala sin esperar al identificador.
+    varias.libro.coincidencias.append(Coincidencia("comercio", "Lista A", "F", "2026-09-30"))
+    assert evaluar_escalamiento(varias) == []
+    ninguna.libro.coincidencias.append(Coincidencia("persona", "Lista A", "F", "2026-09-30"))
+    assert evaluar_escalamiento(ninguna) == []

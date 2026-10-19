@@ -175,7 +175,8 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **D3, alto riesgo en la espera del identificador o del nombre** (desviación justificada): el escalamiento se rechaza hasta identificar al comercio, aunque el principio V diga que se escala por alto riesgo. Escalar un comercio sin identificar llevaría al oficial un caso que no sabe a qué comercio corresponde. **Mitigación**:
   - no se habilita y no figura como completo;
   - la espera tiene salida, el identificador o un nombre corregido, y el turno siguiente exige el escalamiento;
-  - con el sello se escala igual.
+  - con el sello se escala igual;
+  - solo cubre el alto riesgo: una coincidencia en listas de un comercio anterior (D1) se escala sin esperar, y el cierre la exige (regla I.2, corrección de la revisión previa).
 - **Riesgos residuales** (R13):
   1. plurales y varias categorías en FR-020;
   2. D1;

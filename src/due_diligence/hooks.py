@@ -76,6 +76,7 @@ from due_diligence.reglas import (
     causas_del_resumen,
     causas_vigentes,
     espera_del_analista,
+    espera_exime_de_escalar,
     evaluar_cierre,
     evaluar_escalamiento,
     evaluar_informe,
@@ -677,12 +678,15 @@ class HooksDelCaso:
         Antes mira si el turno termina esperando un dato del analista que el código comprueba en
         el estado (#10, R3): entonces deja terminar sin exigir nada y sin gastar devoluciones. La
         espera de la categoría exime solo del informe (FR-014): si falta escalar (una coincidencia
-        o el sello), se exige el escalamiento como en cualquier cierre. Las del registro no lo
-        necesitan: sin identificación no hay listas ni coincidencias.
+        o el sello), se exige el escalamiento como en cualquier cierre. Las del registro eximen
+        también del alto riesgo (D3), pero no de una coincidencia en listas de un comercio anterior
+        (D1): esa se exige igual (`espera_exime_de_escalar`).
         """
         espera = espera_del_analista(self.estado)
         falta_escalar, falta_informe = falta_para_cerrar(self.estado)
-        if espera is not None and not (espera.clase == "categoria" and falta_escalar):
+        if espera is not None and not (
+            falta_escalar and not espera_exime_de_escalar(self.estado.libro, espera)
+        ):
             self.eventos.registrar(TIPO_ESPERA_ANALISTA, None, espera.motivo)
             return permitir()
         if espera is not None:

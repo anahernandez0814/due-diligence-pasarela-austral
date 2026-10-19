@@ -371,7 +371,9 @@ class Delegador:
             self.estado.reiniciar_identificacion()
         self.estado.cambiar_situacion(frente, Situacion.EN_CURSO)
         self._contextos[frente] = contexto
-        self._hecho[frente].clear()
+        # Un `Event` nuevo por ejecución y no `clear()`: en 3.12 un `Event` queda atado al bucle
+        # del primero que lo espera, y cada turno del caso corre en su propio `asyncio.run` (R1).
+        self._hecho[frente] = asyncio.Event()
         self.eventos.registrar(TIPO_FRENTE_INICIO, frente, f"Contexto entregado: {contexto}")
         try:
             try:

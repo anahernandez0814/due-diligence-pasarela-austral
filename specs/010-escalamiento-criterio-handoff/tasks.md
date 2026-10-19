@@ -475,6 +475,15 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   **Resultado (aprobado por la analista)**: 23 coinciden, 0 difieren, 0 inconclusas. g5 y las tres de g6 coinciden. `$LASTEXITCODE` 0.
 - [X] T059 Commitear las anotaciones de T054 a T058 en este archivo. **Ningún commit después de la revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de T046 y las desviaciones D1, D2 y D3 del plan.
 
+## Fase 11: correcciones de la revisión previa
+
+La revisión de `/abrir-pr` del commit `2cda1c4` dio **con bloqueantes**: dos de la revisión de código y uno de la auditoría (I.2). Se corrigen con commits nuevos y se vuelve a ejecutar `/abrir-pr`. Las sugerencias no bloquean y se atienden en la descripción del PR.
+
+- [X] T060 I.2 en la espera del registro (auditoría, `hooks.py:685`): `reglas.espera_exime_de_escalar`, usada por el `Stop` y por `evaluar_escalamiento`. Las esperas del registro eximen del alto riesgo (D3), no de una coincidencia en listas de un comercio anterior (D1). Tests en `test_hooks.py` (`test_i2_*`, las dos esperas: el cierre exige escalar con regla I.2, la marca `cierre_sin_escalar` al agotar las devoluciones, y el escalamiento admitido con el comercio pedido y la espera después) y en `test_reglas.py` (`evaluar_escalamiento` con la coincidencia). Fallan con la regla anterior. spec (US4-7, FR-016, SC-004, un caso extremo), research (R3) y plan (D3) actualizados.
+- [X] T061 Un `asyncio.Event` nuevo por ejecución de cada frente en el `Delegador` (revisión de código, `delegacion.py:192`), en vez de `clear()`. Test `test_delegacion.py::test_listas_espera_al_registro_en_curso_en_dos_turnos_con_su_propio_bucle`: falla con `RuntimeError` si se vuelve a `clear()`.
+- [X] T062 Test de US2-7 / FR-007 (revisión de código, `spec.md:50`): `test_hooks.py::test_us2_7_tras_un_resumen_rechazado_se_corrige_se_escala_y_el_caso_cierra`.
+- [X] T063 ruff y la suite completa en verde. Commit de las correcciones y `/abrir-pr`.
+
 ## Para otros tickets (no se corrige en el #10)
 
 - **#12, simulación de noticias**: sin un resultado asignado, el `EjecutorSimulado` da a noticias la fuente por defecto `FUENTE` («Registro Mercantil Ficticio del Sur»); la real es «Diario Ficticio del Sur». Por eso el resumen simulado del caso (a) cita el registro como fuente de noticias. Solo afecta a la simulación: la pasarela real usa su fuente y FR-004 compara con la fuente que devolvió cada consulta (observación de la analista en la parada B).
@@ -522,7 +531,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 | FR-003 | T034, T039 |
 | FR-004 | T005, T006, T034, T039 |
 | FR-005 | T045 |
-| FR-006, FR-007 | T030 a T033 |
+| FR-006, FR-007 | T030 a T033, T062 |
 | FR-008 | T025, T030, T034 |
 | FR-009 | T034, T035 |
 | FR-010 | T030, T034 |
@@ -531,10 +540,10 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 | FR-013 | T014, T015, T045 |
 | FR-014 | T010 a T013, T020, T023 |
 | FR-015 | T024 |
-| FR-016 | T012, T013 (informe), T036, T039, T041, T042 (escalamiento) |
+| FR-016 | T012, T013 (informe), T036, T039, T041, T042, T060 (escalamiento) |
 | FR-017 | T016, T017 |
 | FR-018 | T014, T015 |
-| FR-019 | T048 |
+| FR-019 | T048, T061 |
 | FR-020 | T020, T021 |
 | FR-021 | T034 |
 | FR-022 | reglas para todas las tareas, T010, T020, T034, T045 |
@@ -547,9 +556,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 | SC-001 | T045, T055, T056 |
 | SC-002 | T030, T032, T034 |
 | SC-003 | T045, T057 |
-| SC-004 | T023 |
+| SC-004 | T023, T060 |
 | SC-005 | T055 |
 | SC-006 | T009, T019, T022, T029, T038, T050, T054 |
 | R4 (tests a y b) | T014 |
 | D2 (comercio fijo con el sello) | T030, T036 |
-| D3 (alto riesgo en la espera) | T041 |
+| D3 (alto riesgo en la espera) | T041, T060 (no cubre una coincidencia en listas) |

@@ -352,6 +352,20 @@ def requiere_escalamiento(libro: LibroReglas) -> bool:
     return bool(causas_vigentes(libro))
 
 
+def espera_exime_de_escalar(libro: LibroReglas, espera: Espera) -> bool:
+    """Si una espera del analista exime del escalamiento a un caso con causas sin cubrir (FR-014).
+
+    La de la categoría nunca exime (US4-7). Las del registro eximen del alto riesgo (D3), pero no
+    de una coincidencia en listas: sin identificación no se consultan listas, pero el libro
+    conserva las de un comercio identificado antes (D1), y la regla I.2 no espera al identificador
+    del comercio nuevo.
+    """
+    causas = causas_vigentes(libro)
+    return espera.clase != "categoria" and not (
+        causas & {CAUSA_COINCIDENCIA_COMERCIO, CAUSA_COINCIDENCIA_REPRESENTANTE}
+    )
+
+
 # Sin comercio dado, `escalamiento_cubre` mira los escalamientos de cualquier comercio: el libro
 # solo, como en el #7. Quien tiene el estado pasa la clave de su comercio (#10, R8).
 _CUALQUIER_COMERCIO = object()
@@ -465,13 +479,14 @@ def evaluar_escalamiento(estado: EstadoCaso) -> list[Rechazo]:
     """Los motivos por los que se rechaza escalar sin el sello (FR-002, FR-016, R5 pasos 2 y 3).
 
     Durante la espera del identificador o del nombre, su motivo, también con alto riesgo (D3 del
-    plan); con un caso de bajo riesgo sin hallazgos comprobado, `MOTIVO_SIN_CAUSA`. La espera de
-    la categoría no impide escalar. Vacía si se admite.
+    plan), salvo con una coincidencia en listas entre las causas (`espera_exime_de_escalar`): esa
+    se escala sin esperar. Con un caso de bajo riesgo sin hallazgos comprobado,
+    `MOTIVO_SIN_CAUSA`. La espera de la categoría no impide escalar. Vacía si se admite.
     """
     espera = espera_del_analista(estado)
-    if espera is not None and espera.clase == "identificador":
-        return [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, REGLA_ESPERA)]
-    if espera is not None and espera.clase == "nombre":
+    if espera is not None and espera_exime_de_escalar(estado.libro, espera):
+        if espera.clase == "identificador":
+            return [Rechazo(MOTIVO_ESPERA_IDENTIFICADOR, REGLA_ESPERA)]
         return [Rechazo(MOTIVO_ESPERA_NOMBRE, REGLA_ESPERA)]
     if bajo_riesgo_sin_hallazgos(estado):
         return [Rechazo(MOTIVO_SIN_CAUSA, REGLA_ESPERA)]

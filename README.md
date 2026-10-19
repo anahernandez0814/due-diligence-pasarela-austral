@@ -10,7 +10,49 @@ caso a un oficial de cumplimiento. Todos los datos son ficticios.
 - **Video de funcionamiento**: _pendiente_
 - **Requisitos de la prueba**: [docs/enunciado.md](docs/enunciado.md)
 - **Principios del proyecto**: [constitución](.specify/memory/constitution.md)
-- **Decisiones**: [DECISIONES.md](DECISIONES.md)
+- **Decisiones**: [DECISIONES.md](DECISIONES.md) (dos páginas) y su
+  [detalle](docs/decisiones-detalle.md)
+- **Entrega**: [lista de verificación y guiones de los videos](docs/entrega.md)
+- **Acceso** (_pendiente de la analista: confirmar con la visibilidad final_): el repositorio
+  es privado y pide acceso.
+
+## Inicio rápido
+
+Para correr el sistema y sus pruebas en menos de 5 minutos desde un clon recién hecho.
+Necesita `git`, [uv](https://docs.astral.sh/uv/getting-started/installation/) (instala Python y
+las dependencias del proyecto) y una clave de la API de Anthropic. Los comandos son iguales en
+PowerShell y en bash, salvo donde se indica.
+
+1. **Python 3.12**: `uv python install 3.12`. Termina indicando que instaló Python 3.12 o que ya
+   estaba instalado.
+2. **Dependencias**: `uv sync`. Crea el entorno virtual `.venv/` y termina sin errores.
+3. **Clave de Anthropic**: copie la plantilla del archivo de entorno y escriba su clave en
+   `ANTHROPIC_API_KEY` con un editor de texto. `.env` está en `.gitignore`: nunca se sube.
+
+   ```powershell
+   Copy-Item .env.example .env   # PowerShell
+   ```
+
+   ```bash
+   cp .env.example .env          # bash
+   ```
+
+4. **Pruebas de la aplicación**: `uv run pytest src`. Tardan unos 25 s y terminan todas en
+   «passed». No usan la clave ni la red; las de punta a punta, que sí la usan, no se ejecutan
+   aquí (ver [Pruebas](#pruebas)).
+5. **Chat**: `uv run streamlit run src/due_diligence/chat.py`. Se abre http://localhost:8501;
+   escriba uno de los mensajes de [los siete casos](#interfaz-de-chat). Cada caso consume API:
+   del orden de 0,15 a 0,30 USD con Opus 5.5.
+
+## Credenciales
+
+| Credencial | Quién la usa | Dónde se define |
+|------------|--------------|-----------------|
+| `ANTHROPIC_API_KEY` | La aplicación: el chat, la línea de comandos y las pruebas de punta a punta | En `.env`, en la raíz (paso 3); git lo ignora |
+| `GITHUB_PAT` | El servidor MCP de GitHub de Claude Code, para leer y mover el backlog del Project | En el entorno del sistema, porque `.mcp.json` no lee `.env`; con los permisos `repo` y `project` |
+
+`GITHUB_PAT` solo hace falta para trabajar en el backlog con Claude Code, no para correr el
+sistema; cómo crearlo está en [Token de GitHub](#token-de-github-para-claude-code-github_pat).
 
 ## Requisitos
 
@@ -33,15 +75,24 @@ uv sync
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run pytest
+uv run pytest src
 ```
 
-Los tres comandos deben terminar sin errores; pytest ejecuta los tests de `src/` y de
-`.claude/hooks/`.
+Los tres comandos deben terminar sin errores. `uv run pytest`, sin carpeta, ejecuta además los
+tests de `.claude/hooks/`, de `plugins/` y de la documentación, y tarda de 4 a 6 minutos en
+Windows: ver [Pruebas](#pruebas).
 
 ## Pruebas
 
-Hay dos grupos, deterministas y de punta a punta, que se corren por separado (#12).
+Hay dos grupos que se corren por separado (#12): los **deterministas**, que no llaman al modelo
+ni a la red y dan siempre el mismo resultado, y los **de punta a punta** (marca `e2e`), que
+ejecutan los siete casos con el modelo real y por eso consumen API: unos 1,14 USD la ejecución
+completa y unos 0,16 USD por caso.
+
+**El paso de verificación es `uv run pytest src`** (unos 25 s). La suite completa, `uv run
+pytest`, tarda de 4:43 a 6:12 en Windows (desviación D3 del #12) por los tests de las guardas
+de Claude Code (los hooks de `.claude/hooks/`, que bloquean acciones prohibidas antes de
+ejecutarlas), que crean repositorios git de prueba; no es el paso principal.
 
 | Comando | Qué ejecuta | Clave | Coste | Tiempo medido |
 |---------|-------------|-------|-------|---------------|
@@ -160,7 +211,8 @@ local (`claude mcp add-json github '<json>' --scope local`); no modifique ni com
 El servidor `pasarela` ([src/servidor_mcp/](src/servidor_mcp/)) simula, con **datos ficticios**,
 las fuentes de la pasarela y sus dos canales de decisión. Está registrado en
 [.mcp.json](.mcp.json) junto al de GitHub y aprobado en `.claude/settings.json`, sin
-credenciales. Las decisiones están en la entrada 6 de [DECISIONES.md](DECISIONES.md).
+credenciales. Las decisiones están en la
+[entrada 6 del detalle de decisiones](docs/decisiones-detalle.md#6-servidor-mcp-de-la-pasarela).
 
 | Herramienta | Qué hace |
 |-------------|----------|
@@ -357,8 +409,8 @@ quita las reglas de las instrucciones del coordinador, pero **no desactiva ning�
 ## Guardas del entorno
 
 Claude Code trabaja con cuatro guardas y un hook de formato, registrados en
-[.claude/settings.json](.claude/settings.json). Las decisiones están en la entrada 4 de
-[DECISIONES.md](DECISIONES.md).
+[.claude/settings.json](.claude/settings.json). Las decisiones están en la
+[entrada 4 del detalle de decisiones](docs/decisiones-detalle.md#4-guardas-de-claude-code).
 
 - **`guarda_secretos`**: bloquea leer, buscar, editar o escribir `.env`, `.env.*` (salvo
   `.env.example`), `*.key` y `secrets/`, también desde la terminal y desde código en línea.
@@ -408,6 +460,25 @@ Con `--scope project`, la instalación queda en el `.claude/settings.json` del o
 repositorio, para todo el equipo; `--scope user` la deja en todos sus proyectos y
 `--scope local`, solo en ese repositorio y solo para usted.
 
+**Para todo el equipo del otro repositorio**, en lugar de `marketplace add`, el marketplace
+puede declararse en su `.claude/settings.json` versionado:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "piezas-reutilizables": {
+      "source": { "source": "github", "repo": "anahernandez0814/due-diligence-pasarela-austral" }
+    }
+  },
+  "enabledPlugins": { "guardas-y-revision@piezas-reutilizables": true }
+}
+```
+
+Claude Code registra el marketplace cuando cada persona acepta la confianza de la carpeta; cada
+una instala el plugin una vez con el comando `install` de arriba. Mientras el repositorio sea
+privado, quien instala necesita acceso a él (_pendiente de la analista_: la frase «el
+repositorio es privado y pide acceso» depende de la visibilidad final).
+
 **Desinstalar**:
 
 ```bash
@@ -418,7 +489,8 @@ claude plugin marketplace remove piezas-reutilizables
 **En este repositorio el plugin está deshabilitado a propósito**
 (`"enabledPlugins": {"guardas-y-revision@piezas-reutilizables": false}`): la guarda ya está
 registrada en `.claude/settings.json`, y así no se ejecuta dos veces aunque instale el
-plugin a nivel de usuario. Detalle en la entrada 14 de [DECISIONES.md](DECISIONES.md).
+plugin a nivel de usuario. Detalle en la
+[entrada 14 del detalle de decisiones](docs/decisiones-detalle.md#14-plugin-reutilizable-para-otros-equipos).
 
 ## Cómo se trabaja
 

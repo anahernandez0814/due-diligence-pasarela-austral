@@ -15,8 +15,9 @@ paths:
   de Luhn calculado sobre un prefijo, dígito de verificación de la DIAN calculado,
   prefijo de credencial concatenado con caracteres aleatorios. Las guardas bloquean
   escribirlos y la revisión del repositorio falla si aparecen.
-- **pytest y ruff**: `uv run pytest` recoge `src/`, `.claude/hooks/` y `plugins/` (los
-  `testpaths` de `pyproject.toml`); el código se formatea con ruff.
+- **pytest y ruff**: `uv run pytest` recoge `src/`, `.claude/hooks/`, `plugins/` y
+  `test_documentacion.py`, el de los documentos de la raíz y de `docs/` (los `testpaths` de
+  `pyproject.toml`); el código se formatea con ruff.
 - **Casos obligatorios** de la constitución (principio X), que DEBEN pasar en la entrega
   final y en el ticket de la suite de pruebas:
   - (a) comercio en categoría de alto riesgo que va a un oficial;

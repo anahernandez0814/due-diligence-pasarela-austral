@@ -1,250 +1,47 @@
 # Decisiones del ecosistema
 
-Registro breve de las decisiones de diseño del ecosistema de Claude Code y su motivo. Se
-completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunciado.
+Qué mecanismo resuelve cada necesidad del enunciado, por qué y qué se descartó. El razonamiento
+completo, las mediciones y los riesgos residuales están en
+[docs/decisiones-detalle.md](docs/decisiones-detalle.md) («E*n*» enlaza a su entrada *n*).
 
-## 1. La constitución se carga en cada sesión con `@import`
+## Necesidades del ecosistema
 
-- **Necesidad o tema**: convenciones del equipo al clonar, sin configurar nada (necesidad 1).
-- **Decisión**: `CLAUDE.md` raíz breve (40 líneas como máximo) con las convenciones del
-  equipo, que importa la constitución con `@.specify/memory/constitution.md` en lugar de
-  copiarla.
-- **Motivo**:
-  - Las reglas de negocio y los principios aplican a casi todo el trabajo del proyecto,
-    así que cada sesión debe partir de ellos.
-  - La importación evita una segunda copia que se desactualice: un cambio en la
-    constitución llega a todas las sesiones sin editar `CLAUDE.md`.
-  - El coste es de unas 190 líneas de contexto por sesión, aceptable para un MVP.
-- **Alternativas descartadas**:
-  - Copiar la constitución en `CLAUDE.md`: duplicación que diverge.
-  - Cargarla bajo demanda con una skill o una regla con `paths`: podría omitirse justo en
-    la tarea donde aplica una regla de negocio.
+| N | Necesidad | Mecanismo | Por qué | Descartado | Dónde |
+|---|-----------|-----------|---------|------------|-------|
+| 1 | Convenciones al clonar | Memoria `CLAUDE.md` con `@import` de la constitución; `CLAUDE.md` de subdirectorio en `src/servidor_mcp/`; `.claude/` versionado | Llegan solas a cada sesión, sin copias que diverjan | Copiar la constitución; cargarla con una skill | #1, #5 · `CLAUDE.md` [E1](docs/decisiones-detalle.md#1-la-constitución-se-carga-en-cada-sesión-con-import) |
+| 2 | Lo personal no afecta | `CLAUDE.local.md` y `.claude/settings.local.json` en `.gitignore`; el hook `guarda_spec_previa` impide que Claude escriba `settings.local.json` | Lo personal no se versiona ni apaga las guardas | Solo `.gitignore` | #1, #3 · `.gitignore` [E4](docs/decisiones-detalle.md#4-guardas-de-claude-code) |
+| 3 | Tests junto al código | Regla `.claude/rules/tests.md` con `paths: **/test_*.py`; `testpaths` de pytest | Se carga al tocar un test, en cualquier carpeta | Un `CLAUDE.md` por carpeta; todo en el raíz | #3, #12 · `.claude/rules/tests.md` [E4](docs/decisiones-detalle.md#4-guardas-de-claude-code) |
+| 4 | Spec antes del código | Hook `PreToolUse` `guarda_spec_previa`: sin spec, plan y tareas del ticket no se escribe código protegido | Código, no instrucción (II) | Pedirlo en `CLAUDE.md` | #3 · `.claude/hooks/guarda_spec_previa.py` [E4](docs/decisiones-detalle.md#4-guardas-de-claude-code) |
+| 5 | Sin datos con forma real | Hook `PreToolUse` `guarda_datos` del plugin (Luhn, dígito DIAN, credenciales) al escribir, ejecutar o publicar | Bloquea antes de que el dato exista | Hook de git `pre-commit`: llega tarde | #3, #13 · `plugins/guardas-y-revision/hooks/` [E14](docs/decisiones-detalle.md#14-plugin-reutilizable-para-otros-equipos) |
+| 6 | Secretos intocables | Permisos `deny` y hook `PreToolUse` `guarda_secretos`, también en la terminal | El permiso es la primera barrera; el hook, la garantía | Solo `deny`: Bash lo rodea | #1, #3 · `.claude/settings.json` [E4](docs/decisiones-detalle.md#4-guardas-de-claude-code) |
+| 7 | Formato tras editar | Hook `PostToolUse` `formatear_python` (ruff); nunca bloquea | No depende del modelo | Formatear antes del commit | #3 · `.claude/hooks/formatear_python.py` [E4](docs/decisiones-detalle.md#4-guardas-de-claude-code) |
+| 8 | Revisión independiente | Subagente `revisor-codigo` (`Read, Grep, Glob`) vía la skill `revisar-codigo` con `context: fork`; hook `guarda_pr` exige el veredicto del commit | Contexto aparte y solo lectura; la puerta es código | Revisar en la misma sesión | #4 · `.claude/skills/revisar-codigo/` [E5](docs/decisiones-detalle.md#5-revisión-independiente-y-puerta-de-pr) |
+| 9 | Cumplimiento de reglas | Subagente `auditor-cumplimiento` vía la skill `auditar-cumplimiento` (`context: fork`): evidencia por regla I.1–I.5 | Separa negocio de calidad | Un solo revisor para todo | #4, #19 · `.claude/agents/` [E5](docs/decisiones-detalle.md#5-revisión-independiente-y-puerta-de-pr) |
+| 10 | Tickets sincronizados | Skill `siguiente-ticket`; comandos `/abrir-pr` y `/comentar-avance`; hooks de Spec Kit; MCP de GitHub limitado por el hook `PreToolUse` `guarda_mcp_github` (`projects_write` solo `update_project_item`); workflow «Item closed» | Nadie mueve tarjetas | GitHub Action propia | #2, #3 · `.claude/hooks/guarda_mcp_github.py` [E3](docs/decisiones-detalle.md#3-ciclo-de-tickets-automatizado) |
+| 11 | Piezas para otro equipo | Plugin `guardas-y-revision` (subagente, skill y hook) en el marketplace del repositorio; aquí, deshabilitado | Dos comandos, sin rutas del proyecto | Usar aquí el hook del plugin | #13 · `.claude-plugin/` [E14](docs/decisiones-detalle.md#14-plugin-reutilizable-para-otros-equipos) |
 
-## 2. Ciclo manual de tickets durante la transición
+## Sistema con el Agent SDK
 
-- **Necesidad o tema**: trazabilidad de cada ticket (constitución IX) antes de la automatización del ciclo (#2) y de la revisión previa al PR (#4).
-- **Decisión**: #1 y #2 siguieron el ciclo a mano (rama desde `main`, Spec Kit, ticket y comentarios con el MCP de GitHub, PR con `Closes #N`, revisión previa con un subagente). Desde #3 lo automatiza la entrada 3.
-- **Desviación temporal de II y X**: formateo manual antes de cada commit y protección parcial de `.env` (solo Read, Edit, `cat .env*` y `type .env*`) hasta #3. La cierra la entrada 4, salvo la revisión previa, que sigue siendo de transición hasta #4.
-- **Motivo**: trazabilidad desde el primer ticket, aunque las piezas que la automatizan sean tickets del backlog.
-- **Alternativa descartada**: esperar a la automatización, lo que dejaría los primeros tickets sin historial en GitHub.
+- Coordinador (#6): delega con `delegar_frente`; cada subagente, solo su herramienta.
+- Contexto explícito; listas espera al registro; el ciclo termina por `stop_reason`.
+- Hooks del SDK (#7, #9, #10): las reglas I.1 a I.5 en código, que falla cerrado.
+- Servidor MCP (#5): datos ficticios, descripciones sin ambigüedad, errores reintentables.
+- Fallas (#8): error estructurado por frente; la cobertura la calcula el código.
+- Chat (#11, #12): Streamlit; los indicadores salen de la traza, no del texto del modelo.
+- Detalle: [E6](docs/decisiones-detalle.md#6-servidor-mcp-de-la-pasarela) a [E13](docs/decisiones-detalle.md#13-suite-de-los-siete-casos).
 
-## 3. Ciclo de tickets automatizado
+## Flujo de trabajo
 
-- **Necesidad o tema**: estado del Project sincronizado y avance visible en el issue sin mover tarjetas (necesidad 10, constitución IX). Detalle en `specs/002-automatizacion-tickets/research.md`.
-- **Arranque**: skill `siguiente-ticket`. Comprueba todo antes de mover el ticket y luego mueve → comenta → rama → `/speckit-specify` (R3).
-- **Número exacto**: `--number` no es estricto, así que la skill pasa `SPECIFY_FEATURE_DIRECTORY=specs/NNN-<nombre>` y verifica `.specify/feature.json` (R1).
-- **Sin `context: fork`**: `/speckit-specify` puede preguntar y su resultado debe quedar en la conversación principal; `context: fork` se usará en las revisiones de #4 (R9).
-- **Comentarios de avance**: hooks obligatorios de Spec Kit en `.specify/extensions.yml` (`after_specify`, `after_clarify`, `after_plan`, `after_analyze`) que ejecutan `/comentar-avance`. No se editan las skills de Spec Kit, que se sobrescriben al actualizar (R4).
-- **Alcance de esos hooks**: son instrucciones que el modelo ejecuta al terminar el comando, no hooks de Claude Code. Mejoran la constancia, pero no la garantizan. Se acepta porque los comentarios no están entre las garantías del principio II (R4).
-- **Marcadores**: cada comentario lleva `<!-- ciclo-tickets:<tipo> -->` para no duplicarse. Las actualizaciones amplían el comentario y conservan lo anterior (R6).
-- **PR**: `/abrir-pr` comprueba spec, plan y tareas, ejecuta una revisión previa aislada (subagente `Plan`, de transición: la reemplazó #4, ver la entrada 5), abre el PR con `Closes #N` y mueve el ticket a In review (R9).
-- **Done**: lo hacen los workflows nativos del Project, "Item closed" y "Pull request merged"; nadie mueve tarjetas (FR-016).
-- **Verificación posterior al merge**: es el paso 0 de cada `/siguiente-ticket`, que comenta el cierre o lo reporta sin mover la tarjeta. Nunca es una tarea de `tasks.md`, para no dejar cambios en una rama fusionada (R5).
-- **Alternativas descartadas**: confiar en `--number`, editar las skills de Spec Kit, una GitHub Action para el cierre y un issue de prueba para validar (R1, R4, R5, R10).
+- **Arranque** (#1, [E2](docs/decisiones-detalle.md#2-ciclo-manual-de-tickets-durante-la-transición)): #1 y #2 hicieron a mano el ciclo que automatizan #2 y #4; hasta el #3, formato y `.env` a mano.
+- **Ramas**: un ticket, una rama `NNN-nombre` desde `main` y un PR con `Closes #N` y merge commit.
+- **Project**: «Item closed» pasa a Done al cerrarse el issue; los PR no están en el Project, así que «Pull request merged» no mueve nada (corrige FR-015 del #2 y la [E3](docs/decisiones-detalle.md#3-ciclo-de-tickets-automatizado)).
 
-## 4. Guardas de Claude Code
+## Límites conocidos
 
-- **Necesidad o tema**: reglas que se cumplen con código, no con instrucciones (necesidades 3 a 7; constitución II, VII, VIII y IX). Detalle en `specs/003-guardas-claude-code/research.md`.
-- **Hooks**: Python 3.12 con la biblioteca estándar, en forma exec con `uv run --no-project --python 3.12 --quiet`, igual en Windows, macOS y Linux (R1).
-- **Fallo cerrado en dos capas**: salida 2 ante un error propio y `onFailure: "block"` si el hook no arranca o se agota; el formato nunca bloquea (R2).
-- **Matchers**: listas exactas de nombres, no expresiones regulares, con PowerShell como respaldo (R3).
-- **MCP de GitHub**: 7 herramientas denegadas por nombre; `projects_write` se permite para el ciclo de tickets, limitada a `update_project_item` por `guarda_mcp_github` (R4).
-- **PowerShell**: apagada por las denegaciones de Bash con Git Bash, sin reglas `PowerShell(...)`, que la encenderían; si se activa, la cubren las guardas (R5).
-- **Denegaciones**: primera barrera, y el hook la garantía; `!**/.env.example` va detrás de `**/.env.*`, y `grep` no se deniega para poder buscar el texto ".env" (R6).
-- **Plugin**: `plugins/<nombre>/` y `.claude-plugin/`, protegidos como código desde ya (R7).
-- **`settings.local.json`**: Claude Code no puede escribirlo, borrarlo, moverlo ni restaurarlo para desactivar las guardas; se bloquea en cualquier rama porque no se versiona (R14, FR-025).
-- **Texto ejecutable**: un extractor común analiza `bash -c`, `eval`, sustituciones, heredocs, tuberías, código en línea y los lanzadores `xargs`, `sudo`, `doas`, `env -S`, `script -c` y `watch`, hasta 3 niveles (R9, R10, FR-026).
-- **Riesgos residuales**: (1) lecturas de secretos ocultas: rodeos deliberados (variables, base64, scripts) y lectores de archivos completos (`tar c`, `zip -r`, `git show <rev>:<ruta>`) (R9); (2) escrituras no reconocibles: `git apply`/`patch`/`git reset`/`git stash`, `find …`, `xargs rm`, `cd $X`, rutas construidas al ejecutar y programas que escriben en código versionado que el PR ve; lista completa en R10; (3) `.py` escritos por terminal se formatean en `ruff format --check` (R12); (4) cambiar a una rama sin `.claude/hooks/` exige reiniciar la sesión (R14).
-
-## 5. Revisión independiente y puerta de PR
-
-- **Necesidad o tema**: ningún PR sin una revisión independiente y una auditoría de las reglas de negocio, hecha cumplir por un hook (necesidades 8 y 9; constitución II y X). Detalle en `specs/004-revision-independiente-auditoria/research.md`.
-- **Revisores**: dos subagentes de solo lectura (`tools: Read, Grep, Glob`) y una skill con `context: fork` y `agent:` por revisión. Sin `agent:` correría como `general-purpose`, con todas las herramientas (R1, R5).
-- **Contexto**: la skill inyecta un script antes de crear el subagente, que por eso no necesita Bash. Sale siempre con 0, empieza con `CONTEXTO DE REVISIÓN`, y entrega la lista de archivos y el diff solo si toda la salida cabe en el umbral (R2, R4, R6).
-- **Constitución**: los revisores la leen con `Read`; no se depende de que el `@import` llegue al subagente (R3).
-- **Veredicto**: línea `RESUMEN` de formato estricto por revisión. `veredicto.py registrar --commit` lo ata al commit revisado, rechaza la rama sin cambios y guarda un archivo por commit en `.claude/veredictos/`, ignorado por git (R7, R8).
-- **Puerta**: `guarda_pr` bloquea `create_pull_request`, `gh pr create` y `gh pr new`, `gh api` con POST (ruta o URL) y la mutación GraphQL. Compara con `origin/<rama>` local, porque `git ls-remote` tarda ≈ 1,2 s (R9, R10).
-- **Veredictos protegidos**: `guarda_spec_previa` y una denegación impiden escribir el directorio en cualquier rama. La regla de copias y movimientos es sobre el destino (`.claude`), no sobre el origen (R8).
-- **`/abrir-pr`**: fetch, sha, las dos skills, registro, push y PR. Sustituye a la revisión de transición de la entrada 3 (R11).
-- **Rutas**: `${CLAUDE_PROJECT_DIR}` solo se sustituye en skills y en `allowed-tools`; `/abrir-pr` usa la ruta relativa y se ejecuta desde la raíz (R2.5).
-- **Regla delegada y cobertura (#19)**: una regla del principio I se delega a otro ticket solo si la spec lo dice con el número del ticket (`#N`): el auditor la da `no aplica` con esa razón, también cuando el cambio solo aporta datos o clasificación que la regla usa. La delegación no exime si el diff la contradice (`incumple`) ni si borra o debilita el código o el test que ya la garantizaba (`no verificada`), y una regla citada sin número se trata como asignada a este ticket. `uv.lock` es referencia y no cuenta para la cobertura. Los cuatro archivos de la puerta dicen lo mismo y lo comprueba un test (R1 a R4 de #19). Límites: (1) el auditor no consulta GitHub, así que no comprueba que el ticket nombrado exista ni que cubra la regla; (2) el test garantiza que el texto es el mismo en los cuatro archivos, no que el modelo lo interprete bien.
-- **Riesgos residuales**: (1) invocar `veredicto.py registrar` con `RESUMEN` inventados; (2) la validación del `RESUMEN` antes de pasarlo es una instrucción de `/abrir-pr`, no código; (3) crear el PR fuera de Claude Code, alias propios de `gh`, la mutación GraphQL leída de un archivo y otros clientes HTTP con el token de `gh`; (4) commits de otras personas empujados tras el último `fetch`; (5) la inyección de una skill no pasa por `PreToolUse` (Q6): solo la comprueba la capa de permisos, y el único comando inyectado es fijo, versionado y sin argumentos; los hooks sí alcanzan a las herramientas del subagente (Q5), según esta versión de Claude Code; (6) la ruta relativa exige ejecutar `/abrir-pr` desde la raíz y, si no, se detiene sin push ni PR (falla cerrado); (7) la calidad de la revisión depende del modelo: la puerta garantiza que ocurrió, no que encontró todo; (8) los residuales de escritura de #3 (`curl -o`, `wget -O`, `dd of=`, `rsync`, `tar -C`, `ln`) también alcanzan a `.claude/veredictos/`: la guarda no los reconoce como escritura; (9) **Claude Code se abre siempre en la raíz del repositorio**: desde la subcarpeta `specs` (Q1) `/hooks` no muestra ninguna entrada del proyecto, así que las guardas no se cargan, y `/revisar-codigo` falla con `Failed to spawn …/specs/.claude/hooks/preparar_revision.py`. No se cambia la skill: es un requisito de uso, declarado en el README y en `CLAUDE.md`; (10) **con unos 140 archivos cambiados la lista se agrupa y la cobertura sale incompleta** (el techo de la inyección no deja entregarlos todos), y la puerta bloquea. Recomendación: tickets pequeños.
-- **Comprobaciones en sesión (Q1 a Q6)**: `${CLAUDE_PROJECT_DIR}` se resuelve en el contenido de la skill y en su `allowed-tools`, y la inyección corre sin pedir permiso (Q1); el subagente solo tiene `Read`, `Grep` y `Glob` (Q2); la constitución y `CLAUDE.md` le llegan por `@import`, pero se le ordena leerla con `Read` (Q3); el techo de la inyección es 29 000 bytes en línea y 30 000 ya no, así que `UMBRAL_SALIDA` es 14 500 (Q4); los hooks sí alcanzan a las herramientas del subagente (Q5) y la inyección **no** pasa por `PreToolUse` (Q6).
-- **Alternativas descartadas**: un solo subagente con las dos tareas, `ls-remote` en la guarda, un veredicto global en lugar de uno por commit y entregar siempre el diff completo.
-
-## 6. Servidor MCP de la pasarela
-- **SDK y errores**: `mcp` 2.x con `MCPServer` (no `FastMCP`); los errores son `CallToolResult(is_error=True)` y los parámetros, opcionales con su tipo en el esquema y validados dentro, porque el SDK rechaza en inglés y sin estructura lo que no encaja (R1, R2).
-- **Datos y coincidencias**: JSON ficticio con `fecha_corte` (la de nivel superior es la más antigua de las fuentes); el registro busca por contención sin la forma jurídica final, listas y noticias por nombre completo, y el identificador no distingue mayúsculas (R3, R8, R9).
-- **Riesgos residuales**: la caída de noticias se activa al lanzar el servidor; la raíz de `resultados/` vale con la instalación editable; el comando de `.mcp.json` depende de abrir Claude Code en la raíz y de `uv sync`; los nombres inventados son verosímiles. Detalle en `specs/005-servidor-mcp-pasarela/research.md`.
-
-## 7. Coordinador y subagentes con el Agent SDK
-- **Opción (a)**: el coordinador delega con la herramienta propia `delegar_frente` (servidor en proceso), que lanza a cada subagente con su propio `query()` y un ejecutor inyectable; así el solape se prueba con subagentes simulados (R1).
-- **Aislamiento**: toda opción sale de `opciones_base` con `setting_sources=[]`, `tools=[]` y `strict_mcp_config`; `allowed_tools` solo pre-aprueba, así que cada agente lleva también `disallowed_tools` con las herramientas ajenas (R2, R3).
-- **Orden y paralelismo en código**: `readOnlyHint=True` hace que el SDK solape las llamadas de un mismo turno; `listas` espera al registro, se rechaza de forma reintentable si el registro no empezó y comprueba que consultó al comercio y a su representante con `igual()` estricto (R4).
-- **Fin del ciclo**: se clasifica por `subtype` y `stop_reason`; `error_max_turns` es el límite de seguridad (30 turnos), no el control (R5). `python-dotenv` se carga solo desde `__main__` (R8).
-- **Re-delegación**: misma entrada devuelve lo guardado; otra entrada vuelve a ejecutar el frente; si el comercio del registro cambia, `listas` pasa a `no_terminado` con el evento `frente_invalidado`.
-- **Modelos**: `claude-sonnet-5-5` en el coordinador y en los cuatro subagentes, por fidelidad al copiar datos; Haiku descartado. Medido en el caso real: unos 0,06 USD por caso (coordinador 0,026 a 0,034; cada subagente 0,006 a 0,011), 25 a 30 s, sin diferencia apreciable entre frío y caliente; el prefijo de ≈ 0,13 USD del sondeo no apareció (R9, R14.3, R14.4).
-- **Cambio de modelo en el #7**: por decisión de la analista, el producto usa `claude-opus-5-5` en el coordinador y en los cuatro subagentes. Se fija en `MODELO_POR_DEFECTO` (código), no solo por variable de entorno, para que quien lo ejecute sin archivo de entorno (por ejemplo, un evaluador) obtenga el mismo modelo; `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` siguen permitiendo volver a Sonnet. Coste: Opus 5.5 cuesta el doble por token que Sonnet 5.5 (4 y 20 USD por millón de tokens de entrada y salida, frente a 2 y 10), así que el caso de unos 0,06 USD con Sonnet pasa a estimarse en unos 0,12 USD, sin medir todavía (Q5 del #7). El sondeo de los hooks sigue con Haiku: mide el SDK, no el modelo del producto.
-- **Riesgos residuales**: el modelo decide si pide los tres frentes juntos (lo hizo en las tres ejecuciones); el coordinador conserva `registrar_informe` y `escalar_a_cumplimiento` sin guarda hasta el #7, solo se le instruye no usarlas; el nombre que consulta listas y un `listas` en curso mientras el registro se repite los cubre el hook del #7 (R13.7, R13.10).
-
-## 8. Hooks del SDK: reglas de negocio 1, 2 y 3
-- **Reglas por hooks, por agente**: las reglas I.1, I.2 e I.3 las hacen cumplir hooks del Agent SDK, no el prompt. Lo compartido es el estado del caso (un libro de reglas dentro de `EstadoCaso`); los hooks van por agente: el coordinador lleva `delegar_frente` de listas, `registrar_informe`, `escalar_a_cumplimiento` y el `Stop`, y cada subagente los de su herramienta (R5). Cierra la desviación temporal del principio II del #6 solo para las reglas 1 a 3.
-- **El SDK deja pasar la acción si un hook falla** (medido con 0.2.168): ante una excepción o una salida inválida la herramienta se ejecuta y un `Stop` que lanza deja terminar. Por eso cada hook se envuelve para denegar o bloquear, y un `PostToolUse` que falla sella el libro (`fallo_de_hook`): los `PreToolUse` de las reglas deniegan mientras exista y el caso no figura como completo (R2).
-- **Lo que llega a cada hook** (R1): `PostToolUse` recibe `tool_response` como texto JSON (stdio) o lista de bloques (en proceso); un error estructurado de la pasarela llega solo por `PostToolUseFailure`. Un único lector, `interpretar_resultado`, entiende las dos formas.
-- **Una sola fuente de verdad para la identificación** (R4): `derivar_comercio` es el único intérprete de la respuesta del registro y el hook del registro el único escritor; `estado.comercio` es una propiedad derivada y desaparecen `fijar_comercio` y `_fijar_comercio`. La comparación de una consulta con el comercio o el representante (tipo, y cada clave que trae debe existir en la entidad y coincidir) es una función pura compartida por el hook y por la defensa del Delegador (R7).
-- **Causas y recomendaciones** (R8 a R10): tres causas de escalamiento fijas (`coincidencia_comercio`, `coincidencia_representante`, `alto_riesgo`), sin nombres ni identificadores; el alto riesgo no baja una vez detectado y la categoría está determinada si es de alto riesgo o la última consulta tuvo nivel. El informe solo admite `habilitar`, `no_habilitar` o `decide_cumplimiento`; cualquier otro valor se rechaza y solo `habilitar` está sujeta a las reglas.
-- **Cierre garantizado** (R3): el `Stop` impide terminar un caso que requiere escalamiento sin escalar. El contador `MAX_CIERRES_IMPEDIDOS = 3` (propio del caso, no `stop_hook_active`, que no sirve de contador) es una protección, no el mecanismo de control: lo garantizado en código es que ese caso nunca se recomienda habilitar, nunca figura como completo y queda marcado `cierre_sin_escalar`; que el escalamiento ocurra depende del modelo, con esas oportunidades. Cada devolución gasta un turno de `max_turns` (medido).
-- **Un intento bloqueado no hace fallar el frente de listas** si el comercio y el representante se consultaron de forma válida (decisión de la analista): se reconoce por su texto (`bloqueado_por_hook`), queda como evento `bloqueo_regla` y como traza en el estado, y no entra en la respuesta al coordinador. Un error real de la herramienta sí hace fallar el frente.
-- **Instrucciones y modo de demostración** (R11): se retiran la prohibición de decidir del #6 y «No decidas la habilitación»; la instrucción mínima pide escalar y registrar el informe con una recomendación del conjunto cerrado y dice cuándo usar cada una. `PASARELA_MODO_DEMO_HOOKS=1` quita del prompt la regla de las varias coincidencias y la guía de escalar, deja el evento `modo_demostracion` y no toca los hooks, que no se pueden desactivar.
-- **Riesgos residuales** (R12): (1) las reglas valen para lo que pasa por las herramientas del SDK con los hooks del caso: llamar directo al servidor MCP o escribir en `resultados/` por otra vía las salta; (2) `recomendacion` es una etiqueta: que los hallazgos o el resumen digan otra cosa es de #9 y #10; (3) no se midió qué hace el SDK con un hook que se cuelga; (4) un `listas` pedido en el mismo turno que `registro` puede rechazarse una vez y exigir reintento; (5) un informe ya registrado no se anula si el registro cambia de comercio después; (6) un hook de registro que falla bloquea el caso en lugar de degradarlo, a propósito; (7) el evento `frente_inicio` del #6 registra el contexto entregado a cada subagente, que incluye nombres e identificadores: es la traza de la delegación, y la regla de no repetir datos solo vale para los eventos de las reglas; (8) una segunda coincidencia de la misma entidad en otra lista no es una causa nueva y no exige otro escalamiento. Detalle en `specs/007-hooks-sdk-reglas/research.md`.
-- **Alternativas descartadas**: dejar la identificación en el Delegador y que el hook solo la lea (dos escritores), quitar el contador del `Stop` (no garantizaría el escalamiento y solo gastaría turnos hasta `max_turns`) y tratar una recomendación desconocida como `habilitar` solo si una regla aplica.
-- **Medido con Opus 5.5 en modo de demostración** (Q5): el modelo respeta las reglas aunque no estén en el prompt; con presión del analista cede y el hook lo bloquea (I.3 al registrar el informe, I.1 al delegar listas), así que la garantía es del código. Coste medido: 0,07 a 0,16 USD por caso, 23 a 56 s.
-
-## 9. Errores estructurados y cobertura
-- **Cobertura calculada en código** (R5): `calcular_cobertura` parte de la situación de cada frente y de su último error, y un frente está cubierto solo si terminó con normalidad. Es el único cálculo, y lo usan `Caso.completo`, los dos canales de decisión y la línea de comandos. Se registra como lista de textos (la pasarela acepta texto o lista): una línea de resumen y una por frente.
-- **Texto fijo por causa** (decisión de la analista en la parada B): las líneas de la cobertura no copian el motivo del estado, que puede traer identificadores del registro (las coincidencias de un nombre ambiguo); usan un texto fijo por causa, y el de un error de la fuente lleva su tipo (`servicio_no_disponible`). Así la cobertura no repite datos del comercio.
-- **Cobertura sustituida con `updatedInput`** (R1, medido con el SDK 0.2.168): un `PreToolUse` reemplaza lo que recibe una herramienta MCP por stdio, con o sin `allow`, pero **sustituye la entrada entera**: no se fusiona. El hook de `registrar_informe` del #7 evalúa primero las reglas y, si acepta, devuelve la entrada completa con la cobertura del código; un `PreToolUse` nuevo hace lo mismo en `escalar_a_cumplimiento`. Ambos dejan el evento `cobertura_sustituida`, que se emite antes de que la pasarela acepte la llamada y por eso nunca dice que quedó registrada. El plan B (`deny` con motivo) no hizo falta.
-- **El escalamiento nunca se deniega** (R6, decisión de la analista): si falla el cálculo, el informe falla cerrado con `deny`, pero el escalamiento sale con el texto fijo «No se pudo calcular la cobertura; debe tratarse como incompleta.» y sella `fallo_de_hook`, de modo que el caso no figura como completo.
-- **Error estructurado** (R4): cada frente no cubierto devuelve `frente`, `causa`, `intento` y `reintentos_restantes` además de `tipo`, `reintentable` y `obtenido` del #6. **El «tipo de error» de FR-002 es `causa`** (ocho valores cerrados); `tipo` se conserva por compatibilidad con el #6 y el tipo de la pasarela sigue en `obtenido.errores[].tipo`. Una excepción del subagente solo deja su tipo, nunca su texto.
-- **Reintento** (R3, decisión de la analista): lo pide el modelo volviendo a delegar con la misma entrada y lo guarda el `Delegador`, con **1 reintento por `(frente, contexto)`** (`MAX_REINTENTOS_POR_FRENTE`, protección y no control del ciclo). Solo es reintentable un error de la fuente que la fuente declara reintentable, y el rechazo de listas antes del registro, que no cuenta como intento. `reintentable` en la respuesta significa «la política permite otro intento». Eventos `frente_reintento` y `reintento_denegado`.
-- **Presupuesto de turnos** (R2, medido): cada reintento y cada devolución del `Stop` gastan un turno. `PRESUPUESTO_TURNOS_PEOR_CASO` se calcula con `MAX_REINTENTOS_POR_FRENTE`, `MAX_CIERRES_IMPEDIDOS` y ocho pasos fijos (hoy 15) y un test exige que no supere `MAX_TURNOS_SEGURIDAD` (30), así que protege si esas constantes cambian. `caso.turnos` y la línea de comandos muestran los turnos usados.
-- **Also fixes** (defecto del #6, decisión de la analista en la parada B): un `listas` que había quedado `no_terminado` y se invalidaba porque el registro cambiaba de comercio lanzaba `TransicionInvalida`, porque `no_terminado → no_terminado` no estaba permitido. Ahora sí, con el motivo nuevo, igual que `rechazado → rechazado`.
-- **Riesgos residuales** (R10): (1) la respuesta final al analista es texto del modelo y podría contradecir la cobertura; lo autoritativo es lo registrado, los eventos y la línea de comandos; (2) alternar entradas (A, B, A) da a cada una su propio reintento, acotado por `max_turns`; (3) `updatedInput` depende del SDK 0.2.168 y lo vigila el sondeo; (4) con `PASARELA_FALLA_NOTICIAS=1` el reintento falla siempre, como se espera; (5) la cobertura incompleta no restringe la recomendación más allá del #7 (decisión de la analista); (6) si falla el cálculo de la cobertura en un escalamiento, el sello impide registrar el informe: el caso queda escalado sin informe, y lo resolverá el #9, dueño de «todo caso terminado queda registrado». Detalle en `specs/008-errores-estructurados-cobertura/research.md`.
-
-
-## 10. Informe con procedencia, conflictos y registro
-- **Dónde se valida cada cosa** (R1): la forma del informe (comercio, recomendación, hallazgos, conflictos y cobertura; cada afirmación con `texto`, `fuente` y `fecha` AAAA-MM-DD) la comprueba una función pura, `validar_informe`, que usan la pasarela y el hook: la pasarela no guarda un informe mal formado venga de donde venga. Que cada fuente citada se haya consultado para ese frente (FR-004) solo lo comprueba el hook, porque la pasarela no conoce el caso. Nada obligatorio queda en el prompt.
-- **Lo que pone el código** (R5, R6): el hook de `registrar_informe` sustituye por `updatedInput` (siempre la entrada completa) el comercio, los conflictos y la cobertura; del coordinador solo quedan la recomendación y los hallazgos. Los conflictos salen de comparar en código los hechos estructurados de las fuentes registrales del comercio identificado: cada conflicto muestra todos los valores con su fuente y su fecha, sin elegir uno. Sin una consulta del registro que coincida con el comercio, los conflictos son «no se pudieron comparar», nunca «sin conflictos».
-- **Rechazo en JSON** (R3): el deny del hook lleva como motivo un error estructurado `informe_rechazado` (`motivos` con su regla y `problemas` con su ruta), con la misma forma que los de la pasarela, que rechaza con `entrada_invalida` y sus `problemas`. Así el coordinador recibe en un solo rechazo todo lo que falla.
-- **Decisión (a), sin comercio en el registro**: si el registro responde que no hay ningún comercio (o la entrada es inválida), se pide al analista que revise el nombre y no se exige informe.
-- **Decisión (b), registro caído**: el comercio del informe es el que pidió el analista, con `verificado: false`. **Ampliación** (fase 3, R5; pedido de la analista en la parada A): vale siempre que no hay comercio identificado, no solo con el registro caído; sin comercio pedido, el hook deniega el informe.
-- **El registro caído exige informe aunque quede un reintento** (R8, decisión de la analista): el comportamiento 7 del enunciado deja al coordinador reintentar o entregar el informe, no cerrar sin ninguna de las dos cosas. Con un reintento disponible, el `Stop` devuelve «reintenta el registro o registra el informe»; sin él, pide el informe.
-- **Informe obligatorio y vigente** (R7, R8): el `Stop` exige, en orden, el escalamiento si corresponde y luego un informe vigente cuando hay comercio identificado o registro caído, con el mismo contador `MAX_CIERRES_IMPEDIDOS` del #7. Si se agotan las devoluciones, el caso termina marcado `cierre_sin_informe` y no figura como completo.
-- **Huella del informe vigente** (R7, propuesta de la analista): un informe deja de estar vigente solo si cambia la cobertura (cubierto o no por frente, sin causa ni intentos), los conflictos, las causas de escalamiento o el comercio; un reintento que vuelve a fallar no lo invalida. La huella se calcula en el `PreToolUse`, con los mismos datos que se sustituyen, queda pendiente por `tool_use_id` y la confirma el `PostToolUse` si la pasarela aceptó: calculada después, un frente reintentado en el mismo mensaje dejaría vigente un informe con contenido viejo (lo fija un test).
-- **Cambio respecto al #7** (R9): el sello `fallo_de_hook` pasa a ser una causa de escalamiento. Un caso sellado sin otras causas, que en el #7 podía cerrarse sin escalar, ahora debe escalar primero; después solo se acepta el **informe mínimo**, con `decide_cumplimiento`, el esquema y FR-004 validados, y la cobertura y los conflictos en textos fijos, sin calcularlos. Su huella lleva «no calculados» y la causa `fallo_de_hook`. El caso sellado nunca figura como completo. Así se resuelve el riesgo residual 6 del #8.
-- **Presupuesto de 19 de 30 turnos** (R8): la fórmula del #8 suma un informe nuevo por cada reintento posible, porque un reintento con éxito cambia la huella y obliga a registrar otro: 8 pasos fijos + 4 reintentos + 4 informes nuevos + 3 devoluciones del `Stop` = 19. Se calcula, no se escribe a mano, y un test exige que no supere `MAX_TURNOS_SEGURIDAD` (30).
-- **Traza y hora** (R10): el evento nuevo `informe_registrado` (id, recomendación, cobertura y número de conflictos, y si es el mínimo, sin datos del comercio) y `datos_sustituidos`; los bloqueos llevan la `accion` intentada, sin datos del comercio. Todo se unifica en **UTC**, también `registrado_en` de la pasarela, y la línea de comandos imprime la hora con «UTC». El #11 mostrará la hora de Colombia.
-- **`PASARELA_FALLA_REGISTRO=1`** (R11): copia el patrón de `PASARELA_FALLA_NOTICIAS` (se lee en cada llamada; error `servicio_no_disponible` reintentable), para probar a mano y en la demo el registro caído.
-- **Riesgos residuales** (R13): (1) un informe sigue vigente aunque cambien afirmaciones que no mueven la huella (decisión aceptada); (2) con el registro caído y sin otras causas, `decide_cumplimiento` puede registrarse sin escalar: lo resuelve el #10; (3) la fecha de una afirmación no se contrasta con la de su fuente; (4) el texto de una afirmación no se verifica contra el contenido: I.4 garantiza la atribución, no la exactitud; (5) el `Stop` exige el informe en cualquier fin de turno con comercio identificado o registro caído: lo resuelve el #10; (6) con un doble fallo de hooks, el informe mínimo puede no registrarse; (7) cómo presenta el SDK al modelo el motivo en JSON lo comprueba Q3; (8) tras un cambio de comercio, las consultas del anterior siguen contando para FR-004. Detalle en `specs/009-informe-procedencia-conflictos/research.md`.
-
-## 11. Escalamiento con criterio, handoff y ambigüedad
-- **Continuación del caso** (R1, medido con el SDK 0.2.168): `Caso.continuar(mensaje)` lanza otra `query()` del coordinador con `resume=<session_id>` del último `ResultMessage`, sobre el mismo estado, los mismos hooks y el mismo `Delegador`. Lo medido:
-  - conserva el contexto del primer turno;
-  - ejecuta el `Stop` y las herramientas de un servidor en proceso creado de nuevo;
-  - `num_turns` es **del turno, no acumulado**.
-
-  Se descartaron un `ClaudeSDKClient` abierto entre mensajes, que obliga a mantener vivo un proceso y no encaja con la línea de comandos ni con la interfaz del #11, y reenviar la conversación en el `prompt`. Cada mensaje del analista queda en `estado.mensajes` y deja el evento `mensaje_analista`, sin repetir el texto. La línea de comandos pregunta en la entrada estándar cuando el caso espera al analista (`--sin-continuar` para no preguntar).
-- **Esperas del analista** (R3, FR-014; decisión de la analista): el `Stop` solo deja terminar un turno sin escalar ni informar cuando el código **comprueba en el estado** que falta un dato del analista. No basta con el texto del modelo. Hay tres esperas:
-  - `identificador`: varias coincidencias en el registro;
-  - `nombre`: ninguna coincidencia;
-  - `categoria`: la última delegación de categoría la bloqueó I.3, no hay ningún resultado de categoría y ningún frente está caído (con un frente caído se exige el informe, por la regla 5 y el caso f; decisión de la analista en la cuarta ronda de la revisión previa).
-
-  Qué hacen:
-  - Las del registro no gastan devoluciones y dejan el evento `espera_analista`.
-  - **La espera de la categoría exime solo del informe** (corrección de la parada A): si hay una causa sin cubrir (una coincidencia o el sello), el cierre sigue exigiendo el escalamiento.
-  - El registro caído no es una espera, tampoco con la categoría bloqueada (corrección de criterio de la analista en la revisión previa): el cierre exige el informe con la categoría no determinada, como pide I.5.
-  - **Las fuentes que difieren en el nombre o el representante (D3 del #9) no son una espera** (decisión de la analista): no hay datos ficticios con ese caso y dejaría el caso sin salida.
-
-  Para no decidir por subcadenas del motivo, la identificación tiene una clase (`clase_de`: única, varias, ninguna, contradictoria o inválida). Con el comercio identificado y la categoría con resultado, una pregunta al analista sigue exigiendo el cierre completo (FR-015): es el cambio a sabiendas de la limitación del #9. Durante la espera del identificador o del nombre, el informe se rechaza (FR-016); **cambio respecto al #9**, que lo aceptaba con el comercio pedido.
-- **El cierre es del turno** (R4): al empezar cada turno, el contador de devoluciones y las marcas `cierre_sin_escalar` y `cierre_sin_informe` vuelven a cero. `Caso.completo` sí lee las marcas. La garantía se mantiene porque el `Stop` vuelve a evaluar al final de cada turno e `informe_vigente` depende de las causas. Dos tests lo fijan: el turno 2 que informa deja el caso completo, y el turno 2 que no hace nada vuelve a poner la marca.
-- **La categoría la da el analista** (R9, FR-020): el `PreToolUse` de `delegar_frente` bloquea con la regla I.3 una categoría que no aparece, como frase completa normalizada y con límites de palabra, en ningún mensaje del analista. Resuelve el pendiente 1 del #7. **Riesgos declarados**:
-  - la normalización no cubre plurales («suplemento dietario» frente a «suplementos dietarios»);
-  - un mensaje que nombra varias categorías deja pasar todas.
-- **El escalamiento con criterio, y por qué cambia lo del #8** (R5, FR-001 a FR-005; decisión de la analista): el #8 decidió que el escalamiento nunca se deniega, porque escalar es la acción segura y un fallo calculando la cobertura no debía impedirlo. Desde el #10, el `PreToolUse` de `escalar_a_cumplimiento` **sí rechaza** en los casos que comprueba, con la regla V:
-  - durante la espera del identificador o del nombre;
-  - con un caso **de bajo riesgo sin hallazgos comprobado**: el comercio identificado, los cuatro frentes cubiertos, sin coincidencias, la categoría determinada y no alta, sin menciones en noticias, sin conflictos y sin sello.
-
-  Escalar de más satura al oficial (principio V). En cualquier otro caso sin causas (cobertura incompleta, categoría no determinada, una mención en noticias o un conflicto), escalar se admite pero no se exige. Lo que protegía el #8 se conserva: **una excepción en el hook nunca deniega** (`degradar_escalamiento`) y, con el sello, el escalamiento sale con textos fijos (FR-012).
-
-  `decide_cumplimiento` exige un escalamiento del comercio actual (FR-004): el oficial solo decide lo que le llega. Resuelve el riesgo residual 2 del #9 (D5).
-- **El resumen al oficial con datos del código** (R6, FR-006 a FR-012): el resumen tiene seis campos: comercio, hallazgos, cobertura, causa, acción recomendada y conflictos, que el código añade (FR-010).
-  - **Validación**: `validar_resumen`, en la pasarela y en el hook, comparte los validadores del informe del #9. El hook comprueba además la fuente consultada (FR-004) y una afirmación por frente cubierto.
-  - **Rechazo**: un resumen incompleto o mal formado se rechaza nombrando todo lo que falta. El hook usa el JSON `resumen_rechazado`; la pasarela, `campos_obligatorios_ausentes` y `entrada_invalida`.
-  - **Lo que pone el código**: el comercio, la cobertura, la causa y los conflictos, con `updatedInput`. Del coordinador solo quedan las afirmaciones y la acción recomendada.
-  - **La causa**: una etiqueta fija por causa vigente; sin causas, una línea fija por cada motivo que se cumple. Son cinco: cobertura incompleta, categoría no determinada, mención en noticias, conflicto y comercio no identificado; el quinto lo añadió la implementación para que la causa nunca quede vacía.
-  - **Vigencia**: el escalamiento queda pendiente por `tool_use_id` y lo confirma el `PostToolUse` con las causas y el comercio del momento en que se aceptó. Solo cuenta para ese comercio (R8). Sin pendiente, porque el `PreToolUse` falló y lo dejó pasar, cuenta con los de ese momento: el oficial lo recibió.
-- **FR-027, el frente consultado con otro nombre** (R7, decisión de la analista): con el comercio identificado, noticias consultado con un nombre o identificador que no es el suyo, como el nombre ambiguo del primer turno del caso (d), **no cuenta como cubierto**: la causa es `otro_comercio`. Sus fuentes, y las de listas de otro comercio, dejan de valer para las afirmaciones del informe y del resumen. Así el caso (d) no puede declarar noticias cubierto sin menciones con la consulta que no encuentra N-0001 de `CO-AM-0005`. La categoría no depende del comercio y se conserva. Lo calcula la propia cobertura, así que cambia la huella del informe sin otro mecanismo. Resuelve el riesgo residual 8 del #9 para esos dos frentes. Las instrucciones aclaran que el rechazo de listas por falta de identificación deja de valer cuando el comercio queda identificado (FR-028, riesgo residual 7 del #8).
-- **Presupuesto de 21 de 30 turnos, por turno** (R10): los pasos fijos pasan de 8 a 10 (el escalamiento rechazado y corregido, y noticias vuelto a delegar): 10 + 4 + 4 + 3 = 21. Una espera termina el turno; el siguiente tiene su propio presupuesto.
-- **D1, coincidencias de un comercio anterior** (desviación justificada, aceptada por la analista): si el analista cambia de comercio en un turno posterior, **las coincidencias en listas del comercio anterior siguen siendo causas de escalamiento del caso**, porque el libro no las borra (comportamiento desde el #7).
-  - El comercio nuevo tiene que escalarse.
-  - Su resumen al oficial **muestra la causa «coincidencia del comercio» sin una afirmación que la respalde**: FR-027 no deja citar la consulta del otro comercio.
-  - Contradice FR-001 («si, y solo si, hay causa») y el resumen autosuficiente de V.
-  - **Por qué se acepta**: filtrar coincidencias toca la garantía de I.2 de los tickets #7 al #9, y un error ahí habilita de menos riesgo, que es peor que escalar de más.
-  - **Mitigación**: el escalamiento anterior no cubre al comercio nuevo, así que el oficial recibe el caso con la causa nombrada.
-- **D2, sin comercio no se escala** (desviación justificada): sin comercio identificado ni pedido (por ejemplo, alto riesgo detectado antes de delegar el registro), el escalamiento se rechaza con un motivo que pide delegar primero el registro. El oficial no puede recibir un caso sin comercio. Con el sello no se rechaza: va `COMERCIO_NO_IDENTIFICADO` («no identificado», `verificado: false`), que pasa la forma de la pasarela.
-- **D3, alto riesgo en la espera del identificador o del nombre** (desviación justificada): el escalamiento se rechaza hasta identificar al comercio, aunque el principio V diga que se escala por alto riesgo. Escalar un comercio sin identificar llevaría al oficial un caso que no sabe a qué comercio corresponde. **Mitigación**:
-  - no se habilita y no figura como completo;
-  - la espera tiene salida, el identificador o un nombre corregido, y el turno siguiente exige el escalamiento;
-  - con el sello se escala igual;
-  - solo cubre el alto riesgo: una coincidencia en listas de un comercio anterior (D1) se escala sin esperar, y el cierre la exige (regla I.2, corrección de la revisión previa).
-- **D4, el resumen con el caso sellado no comprueba las fuentes citadas** (desviación justificada de FR-008 e I.4): tras un fallo de hook el libro puede haber perdido datos y escalar es la salida segura (FR-012). **Mitigación**: la cobertura y los conflictos van como «no calculados», la pasarela sigue exigiendo fuente y fecha en cada afirmación y el caso no figura como completo.
-- **Riesgos residuales** (R13):
-  1. plurales y varias categorías en FR-020;
-  2. D1;
-  3. `resume` depende de la sesión que persiste el SDK; si se pierde, `continuar` falla con un error claro;
-  4. D1 y D7 del #9 aplican también al resumen;
-  5. el informe vigente con afirmaciones viejas, aceptado en el #9;
-  6. el texto que pide el identificador lo redacta el modelo: lo garantizado son las acciones;
-  7. la acción recomendada no se contrasta;
-  8. D2;
-  9. D3;
-  10. el subagente de categoría puede consultar una categoría distinta de la delegada: no hay guarda `PreToolUse` sobre su consulta;
-  11. D4.
-
-  Detalle en `specs/010-escalamiento-criterio-handoff/research.md` y `plan.md`.
-
-## 12. Interfaz de chat
-
-- **Chat con Streamlit** (`src/due_diligence/chat.py`) sobre el `Caso` del #10. Lo que se ve sale de funciones puras (`presentacion.py`), que leen la traza y el estado del caso, nunca el texto del modelo. La cobertura y el estado del caso van antes de la respuesta, y «completo» solo si `caso.completo` (I.5).
-- **Indicadores en vivo, con la traza como verdad** (R1): un observador opcional del registro de eventos los muestra mientras el coordinador trabaja. Se llama fuera del candado, que no es reentrante, y su excepción se ignora para que nunca llegue a un hook. Al terminar, el turno se reconstruye de la traza.
-- **Una sola comprobación de la credencial** (`comprobar_credencial`) en el chat y en la línea de comandos: solo `ANTHROPIC_API_KEY`, y parada si hay otra credencial que se usaría en su lugar. El mensaje no nombra el archivo de entorno (desviación D1), porque ningún módulo lo nombra (garantía R8 del #6).
-- **Hora de Colombia en la interfaz, UTC en la traza y los registros.** El coordinador sabe que la fecha de registro está en UTC, y las fechas van en `AAAA-MM-DD`; es guía, no garantía (principio II).
-- **Un caso completo hace que el mensaje siguiente inicie otro** (decisión de la analista): con D1 del #10, un caso de prueba heredaría las causas del anterior.
-
-- **De la validación manual**:
-  - `.streamlit/config.toml` quita la pregunta del correo de la primera ejecución sin `headless`, y Streamlit no envía estadísticas de uso;
-  - las afirmaciones de listas van una por autoridad (guía; la garantía sigue en el hook I.4);
-  - el coste por caso no se ve en el chat (desviación D2).
-
-Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/plan.md` y `research.md`.
-
-## 13. Suite de los siete casos
-
-- **Los casos (a)–(g) de punta a punta con el modelo real** (`test_e2e_casos.py`), con la marca `e2e`, excluida de `uv run pytest`. Corren en paralelo en un solo bucle de eventos y solo los seleccionados (`-k caso_d` cuesta un caso); sin la clave se omiten con el motivo. Cada uno con su entorno y su carpeta de registros.
-- **Solo eventos y llamadas, nunca el texto**: los tests reciben una `Observacion` sin texto del modelo, y un test determinista lo fija con campos cerrados y un guarda AST.
-- **«Stop» o recarga durante un hook** (R9): la excepción de control de Streamlit se guarda en el registro de eventos, el hook decide y su denegación sale (I.1, I.2), y en cuanto devuelve se corta el turno y se relanza la misma excepción. `CancelledError` sigue propagándose. Tras un turno interrumpido, el siguiente mensaje abre un caso nuevo (opción A). Desviación D1: Streamlit solo entrega «Stop» en un punto de cesión, así que el corte llega en el siguiente evento y el contenedor «trabajando» queda congelado hasta el «Rerun». El turno nunca se repite: la Q4 lo aprobó.
-- Las noticias simuladas llevan la fuente del diario. Fuera de alcance: US3-9 del #10.
-- **Pendiente**: las sugerencias de los PR #26 y #27, D7 del #9, `RESUMEN_REGISTRO_CAIDO`, el evento de espera con el registro sin delegar y el caso (b) de noche (T043 del #11).
-- **Tras la puerta de `a7f853e`** (detalle en el plan): desviación D2 (un «Stop» en el cierre o el escalamiento puede dejar sin escalar un caso con coincidencia, que nunca queda habilitado y se repite en un caso nuevo); limitaciones (el `Caso` admite `continuar` tras una interrupción, y `uncancel` también deshace un `asyncio.timeout`), y sugerencias de los tests e2e sin aplicar, porque no se pueden ejecutar.
-- **Tras la puerta de `fd75bd0`, sin cambiar código**: el aislamiento de la caída de noticias depende de que el CLI pase a cada servidor MCP su propio entorno, y ningún test lo cubre (`conftest.py:131`); el caso (e) determinista no usa el modo de demostración, que sí usa el e2e (`test_observacion.py:123`, `conftest.py:96`); y la ejecución en paralelo de la suite e2e no tiene tests deterministas (`conftest.py:163`).
-
-- **Observación menor de la Q4, sin corregir**: tras una interrupción, el texto de ayuda de la entrada sigue diciendo «El coordinador espera su respuesta…», aunque el siguiente mensaje abre un caso nuevo.
-- **Desviación D3, tiempo de la suite**: en Windows, `uv run pytest` puede pasar de 5 minutos (4:43 en frío, 5:55 y 6:12) por las guardas de `.claude/hooks/`, no por el producto: la aplicación (`uv run pytest src`) tarda unos 25 s y la e2e unos 80 s. Sugerencia: un repositorio git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, aislando el test de tiempo de `test_guarda_pr.py`).
-
-Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.
-
-## 14. Plugin reutilizable para otros equipos
-
-- **Plugin `guardas-y-revision`** (`plugins/guardas-y-revision/`) en el marketplace `piezas-reutilizables` (`.claude-plugin/marketplace.json`): la guarda de datos con forma real del #3 y versiones genéricas del subagente revisor y de su skill del #4. Ninguna pieza nombra este proyecto, y un test lo comprueba.
-- **La guarda tiene una sola fuente, dentro del plugin** (R2): un plugin instalado se copia a una caché y no llega a archivos de fuera, así que la guarda, el detector y lo que usaban de `comun` (`base_guarda.py`) se movieron al plugin. Este repositorio ejecuta ese mismo archivo desde `.claude/settings.json`.
-- **Archivo de compatibilidad** `.claude/hooks/guarda_datos.py`: sin lógica, ejecuta la guarda del plugin con `runpy` y, si no puede, sale con 2 (fallo cerrado). Sirve a las sesiones que conserven la ruta antigua. `settings.json` no lo registra.
-- **Claude Code 2.1.303 recarga `settings.json` en caliente**, observado al mover la guarda: un hook con `onFailure: block` que apunta a un archivo que todavía no carga bloquea `Bash`, `Write` y `Edit` de la sesión. Al mover o cambiar una guarda, el destino tiene que funcionar antes de cambiar la ruta.
-- **Convivencia, opción B** (R3): este repositorio registra la guarda y deshabilita el plugin con `enabledPlugins` a `false`.
-  - **Por qué**: Claude Code no deduplica el hook de un plugin con el de `settings.json`, y la opción A (usar el hook del plugin) dejaría sin protección un clon nuevo (principio II).
-  - **Instalado a nivel de usuario**, el `false` del proyecto gana y la guarda corre una vez.
-  - **Riesgo residual**: un `true` en `settings.local.json` lo duplicaría. Daría un mensaje doble, nunca menos protección.
-- **Cambios declarados en la guarda** (R5 y R10):
-  - el mensaje ya no cita el identificador ficticio del proyecto;
-  - el matcher es una expresión anclada que acepta las herramientas de publicación de cualquier servidor MCP, y la guarda revisa cualquier `mcp__…` que le llegue.
-- **Verificado con la CLI** (quickstart Q2–Q5, Haiku):
-  - la instalación sin interfaz en un repositorio temporal;
-  - el bloqueo de la guarda del plugin;
-  - la línea `!` y `allowed-tools` con `${CLAUDE_PLUGIN_ROOT}`, y el agente con prefijo en `agent:`;
-  - una sola ejecución de la guarda en un clon limpio de este repositorio.
-
-  El plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta.
-- **La revisión detecta los archivos movidos**, desde este ticket, en el contexto del repositorio y en el del plugin.
-  - **Por qué**: los dos scripts usaban `--no-renames`. Con el traslado de la guarda al plugin, sus tres archivos aparecían como eliminados, el revisor no podía leer lo que había antes y la revisión quedó con cobertura incompleta.
-  - **Cómo**: con `-M`, el movido aparece en su ruta nueva con la marca `[movido desde <ruta anterior>, similitud N %]`, y su diff va en el contexto si cabe en el umbral. El revisor y el auditor lo leen en la ruta nueva; la anterior no cuenta como archivo sin leer.
-- **Pendiente**: que la analista valore la sección del README siguiéndola en un repositorio nuevo (SC-006). Otros equipos reciben los cambios al subir `version` en `plugin.json`.
-- **Pendiente de la revisión del PR**: unificar lo que repiten `contexto_revision.py` del plugin y `preparar_revision.py` del repositorio, que ningún test mantiene iguales, y que las pruebas directas de `base_guarda.py` viajen con el plugin (hoy están en `.claude/hooks/test_plugin_repositorio.py`).
+- Las reglas valen para lo que pasa por el SDK con sus hooks ([E8](docs/decisiones-detalle.md#8-hooks-del-sdk-reglas-de-negocio-1-2-y-3)).
+- Rodeos deliberados de las guardas y escrituras no reconocidas ([E4](docs/decisiones-detalle.md#4-guardas-de-claude-code)).
+- La puerta garantiza que la revisión ocurrió, no que encontró todo ([E5](docs/decisiones-detalle.md#5-revisión-independiente-y-puerta-de-pr)).
+- [Desviaciones](docs/decisiones-detalle.md#desviaciones-declaradas) de #10 a #12 y [límites del plugin](docs/decisiones-detalle.md#límites-del-plugin-pr-29).
+- `settings.json` se recarga en caliente ([E14](docs/decisiones-detalle.md#14-plugin-reutilizable-para-otros-equipos)).
+- [Sugerencias no atendidas](docs/decisiones-detalle.md#sugerencias-no-atendidas-de-los-pr) de los PR.
+- `uv run pytest` tarda más de 5 min en Windows; latencia con Opus ([mejoras](docs/decisiones-detalle.md#mejoras-futuras)).

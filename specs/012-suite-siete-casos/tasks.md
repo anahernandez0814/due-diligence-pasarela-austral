@@ -295,12 +295,21 @@ La analista revisó en un clon de la rama, sin archivo de entorno ni clave, y ob
   - Se corrieron solo `test_chat.py` y `test_presentacion.py` (74 en verde), como pidió la analista.
   - README («Pruebas») con los tiempos reales: unos 4 min 50 s la suite completa y unos 25 s la de `uv run pytest src`. DECISIONES.md, entrada 13, con la sugerencia del repositorio compartido para `.claude/hooks/`.
 
+## Corrección tras la puerta de `fd75bd0`
+
+La revisión de código de `/abrir-pr` dio 1 bloqueante y 7 sugerencias; la auditoría, 0 bloqueantes y 2 sugerencias (las dos coinciden con sugerencias de la revisión).
+
+- **Bloqueante** (`observacion.py`, commit `a085174`): cada informe se emparejaba con su archivo por posición, y `leer_registros` los ordenaba por nombre, que en la pasarela real es un uuid. Ahora cada `InformeObservado` toma el archivo de su `id`, `leer_registros` ordena por `registrado_en` (los escalamientos se emparejan por ese orden, porque el libro no guarda su id) y `registros_coherentes` compara los ids de los informes. Tests nuevos con nombres tipo uuid en orden alfabético inverso al de registro (`INF-f0000001`, `INF-a0000002`; lo mismo con `ESC-`): fallaron con el emparejamiento por posición antes de corregirlo.
+- **Sugerencias aplicadas**: `test_coordinador.py` mide el «menos de 2 s» con `time.monotonic()` (`502e178`); `_comunes` solo cuenta las consultas válidas, y el turno 2 del caso (d) comprueba que ninguna consulta de listas de tipo persona es del representante legal de `CO-AM-0005` (`dc81c94`).
+- **Sugerencias documentadas sin cambiar código**: una línea en DECISIONES.md, entrada 13 (`633bb87`).
+- **Copia limpia** (commit `633bb87`, `git clone` de la rama, sin archivo de entorno y sin `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `PYTHONUTF8` ni `PYTHONIOENCODING`): **4791 en verde y 7 deseleccionados, en 372,3 s (6:12)**. **Pasa de 5 minutos**: el riesgo abierto de la sección anterior se confirma, y el README («unos 4 min 50 s») queda por debajo del tiempo medido.
+
 ## Ejecuciones e2e
 
 | Ejecución | Fecha | Tiempo | Coste | Resultado |
 |-----------|-------|--------|-------|-----------|
 | T027 | 2026-10-19 07:43 UTC | 85 s en total (83 s de pytest); el caso más lento, el (d), 82 s | 1,10 USD (a 0,16 · b 0,13 · c 0,18 · d 0,24 · e 0,09 · f 0,14 · g 0,15) | **7 de 7 pasaron**; 7 casos a la vez, sin límite de tasa ni reintentos |
-| T028 | — | — | — | No hizo falta: T027 pasó entera. Queda sin gastar la segunda ejecución del presupuesto. |
+| T028 | 2026-10-19 ~11:32 UTC | 78 s de pytest; el caso más lento, el (d), 77 s (a 66 · b 57 · c 75 · d 77 · e 45 · f 73 · g 58 s) | 1,14 USD (a 0,16 · b 0,14 · c 0,19 · d 0,24 · e 0,09 · f 0,16 · g 0,17) | **7 de 7 pasaron**. Segunda y **última** ejecución del presupuesto, sobre `633bb87`, tras las correcciones de la puerta de `fd75bd0`, que cambian `observacion.py` y `test_e2e_casos.py` (afectan a los siete casos). |
 | Repeticiones `-k` (T029) | — | — | — | Ninguna. |
 
 ---

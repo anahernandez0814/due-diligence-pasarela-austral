@@ -91,6 +91,7 @@ El ejecutor simulado de los tests da a las noticias la fuente de un diario, no l
 - **Registros de las pruebas**: los informes y escalamientos que registran los tests de punta a punta no se mezclan con los de la carpeta de resultados del repositorio.
 - **La clave definida, pero el grupo no pedido**: `uv run pytest` sigue sin ejecutar los tests de punta a punta.
 - **La interrupción de la interfaz fuera de un hook**: se comporta como hasta ahora; el cambio solo afecta a lo que ocurre mientras un hook decide.
+- **El mensaje siguiente a un turno interrumpido** (decisión de la analista en la revisión del plan, opción A): abre un caso nuevo con un aviso visible, como el caso nuevo del #11, y nunca reanuda una sesión cortada a mitad de una herramienta. El analista vuelve a escribir el nombre del comercio.
 - **Dos interrupciones seguidas** (por ejemplo, «Stop» y luego recarga): la primera ya terminó el turno; la segunda no deja un hook a medias.
 
 ## Requirements *(mandatory)*

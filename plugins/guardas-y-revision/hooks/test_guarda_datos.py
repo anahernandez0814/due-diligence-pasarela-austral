@@ -1,4 +1,4 @@
-"""Pruebas de guarda_datos.py (FR-004, FR-006, FR-008, FR-020, R3; contracts/guardas.md).
+"""Pruebas de guarda_datos.py: qué revisa, qué bloquea, el mensaje y el fallo cerrado.
 
 Ningún valor con forma real se escribe en este archivo: se generan en la prueba con las
 funciones de test_detector_datos.py.
@@ -6,7 +6,6 @@ funciones de test_detector_datos.py.
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +15,7 @@ import pytest
 from test_detector_datos import ALNUM, AZAR, aleatorio, con_puntos, dv_dian, nueve_digitos, tarjeta
 
 SCRIPT = Path(__file__).with_name("guarda_datos.py")
-RAIZ = Path(__file__).resolve().parents[2]
+MENSAJE_FINAL = "Usa valores claramente ficticios o genera el valor en la prueba."
 
 HERRAMIENTAS_MCP = [
     "mcp__github__add_issue_comment",
@@ -74,16 +73,11 @@ def ejecutar_script(repo, datos):
     )
 
 
-def mensaje_de_ejemplo() -> str:
-    enunciado = (RAIZ / "docs" / "enunciado.md").read_text(encoding="utf-8")
-    return re.search(r'"(Necesito el due diligence[^"]*)"', enunciado).group(1)
-
-
 # --- Herramientas de archivo y de terminal --------------------------------------------
 
 
 def datos_de(herramienta: str, repo: Path, texto: str) -> dict:
-    archivo = str(repo / "src" / "a.py")
+    archivo = str(repo / "lib" / "a.py")
     if herramienta == "Write":
         return {"file_path": archivo, "content": texto}
     if herramienta == "Edit":
@@ -136,6 +130,16 @@ def test_bloquea_valores_anidados(repo, datos, campo):
     )
 
 
+@pytest.mark.parametrize(
+    "herramienta",
+    ["mcp__plugin_github_github__add_issue_comment", "mcp__otro_servidor__create_pull_request"],
+)
+def test_revisa_las_herramientas_mcp_de_cualquier_servidor(repo, herramienta):
+    datos = {"body": f"Hola\n{generar('tarjeta')}"}
+    motivo = guarda_datos.motivo(entrada(repo, herramienta, datos))
+    assert motivo and f"tarjeta en {herramienta} (body), línea 2" in motivo
+
+
 def test_valores_que_no_son_texto_se_ignoran(repo):
     datos = {"owner": "o", "repo": "r", "issue_number": 3, "draft": False, "body": None}
     assert guarda_datos.motivo(entrada(repo, "mcp__github__issue_write", datos)) is None
@@ -144,23 +148,11 @@ def test_valores_que_no_son_texto_se_ignoran(repo):
 # --- Lo que se permite ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("herramienta", ["Write", "Bash", "mcp__github__add_issue_comment"])
-def test_mensaje_de_ejemplo_del_enunciado_se_permite(repo, herramienta):
-    mensaje = mensaje_de_ejemplo()
-    if herramienta == "mcp__github__add_issue_comment":
-        datos = {"body": mensaje}
-    elif herramienta == "Write":
-        datos = {"file_path": str(repo / "docs" / "x.md"), "content": mensaje}
-    else:
-        datos = {"command": f"echo '{mensaje}'"}
-    assert guarda_datos.motivo(entrada(repo, herramienta, datos)) is None
-
-
 def test_edit_solo_revisa_el_texto_nuevo(repo):
     datos = {
         "file_path": str(repo / "a.py"),
         "old_string": f"numero = '{generar('tarjeta')}'",
-        "new_string": "numero = 'CO-TV-0001'",
+        "new_string": "numero = 'XX-0000'",
     }
     assert guarda_datos.motivo(entrada(repo, "Edit", datos)) is None
 
@@ -174,10 +166,9 @@ def test_herramienta_fuera_del_matcher_se_permite(repo):
 
 
 def test_mensaje_con_un_hallazgo(repo):
-    datos = {"file_path": str(repo / "src" / "a.py"), "content": f"x\n{generar('nit')}"}
+    datos = {"file_path": str(repo / "lib" / "a.py"), "content": f"x\n{generar('nit')}"}
     assert guarda_datos.motivo(entrada(repo, "Write", datos)) == (
-        "Dato con forma real bloqueado: nit en src/a.py, línea 2. Usa identificadores "
-        "ficticios (por ejemplo CO-TV-0001) o genera el valor en la prueba."
+        f"Dato con forma real bloqueado: nit en lib/a.py, línea 2. {MENSAJE_FINAL}"
     )
 
 
@@ -190,15 +181,14 @@ def test_script_lista_varios_hallazgos_sin_el_valor(repo):
     assert resultado.stdout == ""
     assert resultado.stderr.strip() == (
         "[guarda_datos] Dato con forma real bloqueado: tarjeta en a.py, línea 2; "
-        "nit en a.py, línea 4; credencial en a.py, línea 5. Usa identificadores ficticios "
-        "(por ejemplo CO-TV-0001) o genera el valor en la prueba."
+        f"nit en a.py, línea 4; credencial en a.py, línea 5. {MENSAJE_FINAL}"
     )
     for valor in valores:
         assert valor not in resultado.stderr
 
 
 def test_script_permite_con_salida_0(repo):
-    datos = entrada(repo, "Write", {"file_path": str(repo / "a.md"), "content": "CO-TV-0001"})
+    datos = entrada(repo, "Write", {"file_path": str(repo / "a.md"), "content": "XX-0000"})
     resultado = ejecutar_script(repo, datos)
     assert (resultado.returncode, resultado.stdout, resultado.stderr) == (0, "", "")
 

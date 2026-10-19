@@ -31,7 +31,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 ## Phase 1: Setup
 
 - [ ] T001 Commitear `specs/013-plugin-reutilizable-otros/tasks.md` en un commit `docs(tasks): …` antes de cualquier código (constitución IX).
-- [ ] T002 En `pyproject.toml`:
+- [x] T002 En `pyproject.toml`:
   - añadir `plugins` a `testpaths`;
   - añadir `plugins/guardas-y-revision/hooks` y `plugins/guardas-y-revision/scripts` a `pythonpath`.
 
@@ -41,24 +41,27 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 **⚠️ Bloquea** US1 y US3: el plugin y este repositorio usan este mismo archivo.
 
-- [ ] T003 Mover con `git mv` a `plugins/guardas-y-revision/hooks/`:
+- [x] T003 Mover con `git mv` a `plugins/guardas-y-revision/hooks/`:
   - `.claude/hooks/guarda_datos.py`;
   - `.claude/hooks/detector_datos.py`;
   - `.claude/hooks/test_guarda_datos.py`;
   - `.claude/hooks/test_detector_datos.py`.
 
   Sin cambios de contenido en este paso.
-- [ ] T004 Crear `plugins/guardas-y-revision/hooks/base_guarda.py`.
+  - **Hecho**: el primer `git mv` dejó la sesión sin la guarda en su ruta antigua y bloqueada; la analista la recuperó con `!`. Se rehízo en un solo comando con el archivo de compatibilidad `.claude/hooks/guarda_datos.py` (R2) y `settings.json` apuntando al plugin.
+  - **Hecho**: Claude Code recargó `settings.json` en caliente y la sesión se volvió a bloquear, porque la guarda del plugin aún importaba `comun`. La analista puso una copia temporal de `comun.py` en el plugin (nunca commiteada) mientras se hacían T004 y T005.
+  - **Desde entonces**, antes y después de cada paso que toca la guarda o `settings.json`, la guarda del plugin se ejecuta directamente con una entrada que debe permitirse y otra que debe bloquearse (`control_guarda.py`, en el scratchpad). Todos los controles dieron `permitir: salida=0` y `bloquear: salida=2`, con un solo `[guarda_datos]`.
+- [x] T004 Crear `plugins/guardas-y-revision/hooks/base_guarda.py`.
   - Contiene `leer_entrada`, `raiz`, `cwd`, `normalizar_ruta`, `bloquear`, `flujos_utf8` y `ejecutar`, copiadas de `.claude/hooks/comun.py` sin cambiar su comportamiento.
   - Solo usa la biblioteca estándar.
   - Sus docstrings no remiten a specs ni a tickets (FR-004).
-- [ ] T005 Generalizar `plugins/guardas-y-revision/hooks/guarda_datos.py` (R10 y R5; FR-002, FR-003 y FR-005):
+- [x] T005 Generalizar `plugins/guardas-y-revision/hooks/guarda_datos.py` (R10 y R5; FR-002, FR-003 y FR-005):
   - importa `base_guarda` en vez de `comun`;
   - el mensaje pasa a ser «Dato con forma real bloqueado: {hallazgos}. Usa valores claramente ficticios o genera el valor en la prueba.»;
   - `textos()` revisa todos los valores de texto de cualquier herramienta que empiece por `mcp__`;
   - docstrings sin rutas de specs.
-- [ ] T006 Generalizar `plugins/guardas-y-revision/hooks/detector_datos.py`: docstrings sin rutas de specs. Ningún cambio de lógica.
-- [ ] T007 Repartir los tests movidos (FR-007 y SC-004; R2). **Ningún test se borra ni se debilita.**
+- [x] T006 Generalizar `plugins/guardas-y-revision/hooks/detector_datos.py`: docstrings sin rutas de specs. Ningún cambio de lógica.
+- [x] T007 Repartir los tests movidos (FR-007 y SC-004; R2). **Ningún test se borra ni se debilita.**
   - **Se quedan en `plugins/…/hooks/test_guarda_datos.py` y `test_detector_datos.py`**: los casos genéricos. No usan la raíz del repositorio ni términos del proyecto, y el texto del mensaje pasa al nuevo (R10).
   - **Pasan a `.claude/hooks/test_guarda_datos_repositorio.py`**: los casos propios del proyecto, contra la misma guarda:
     - el ejemplo del enunciado no se bloquea;
@@ -66,12 +69,12 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
     - los mensajes que lo citaban.
   - **Se añade un test** que comprueba que la guarda revisa una herramienta `mcp__otro_servidor__add_issue_comment`, por el cambio de R5.
   - La tabla de adaptación va al final de este archivo.
-- [ ] T008 En `.claude/settings.json` (R3 y R5; FR-009):
+- [x] T008 En `.claude/settings.json` (R3 y R5; FR-009):
   - la entrada de la guarda de datos pasa a `${CLAUDE_PROJECT_DIR}/plugins/guardas-y-revision/hooks/guarda_datos.py`, con el matcher anclado de R5;
   - se añade `"enabledPlugins": {"guardas-y-revision@piezas-reutilizables": false}`.
 
   En `.claude/hooks/test_configuracion.py`, adaptar las expectativas de la ruta y admitir el matcher de R5 **solo para la guarda de datos**; las demás guardas siguen con listas de nombres exactos (cambio declarado en R5).
-- [ ] T009 Ejecutar `uv run ruff format . && uv run ruff check .` y `uv run pytest .claude/hooks plugins`, y dejarlo en verde.
+- [x] T009 Ejecutar `uv run ruff format . && uv run ruff check .` y `uv run pytest .claude/hooks plugins`, y dejarlo en verde. **Resultado**: 1480 en verde.
 
 **Checkpoint**: este repositorio ya usa la guarda del plugin, con el mismo comportamiento.
 
@@ -152,7 +155,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - **Una ejecución por herramienta**: para cada una de las 13 herramientas (las 5 del sistema y las 8 de publicación con el servidor `github` y con otro nombre), exactamente una entrada de `PreToolUse` de `.claude/settings.json` cuyo matcher la acepta ejecuta `guarda_datos.py` (SC-003).
   - **El plugin, deshabilitado**: `enabledPlugins` lo tiene a `false` y no hay `extraKnownMarketplaces` que lo traiga.
   - **Los dos registros, equivalentes**: el de `settings.json` y el de `hooks.json` tienen el mismo matcher, `type`, `command`, `timeout` y `onFailure`, y los mismos `args` salvo la raíz.
-  - **Una sola fuente**: no existe `.claude/hooks/guarda_datos.py` ni `.claude/hooks/detector_datos.py`.
+  - **Una sola fuente**: no existe `.claude/hooks/detector_datos.py`, y `.claude/hooks/guarda_datos.py` es solo el archivo de compatibilidad. Ya lo prueban los tests de `test_guarda_datos_repositorio.py`: sin lógica, no registrado y con fallo cerrado si falta el script, si no carga o si no decide.
   - **`base_guarda` equivale a `comun`**: `normalizar_ruta` (con los casos de `test_comun.py`), `raiz`, `cwd`, `bloquear` y `ejecutar` dan el mismo resultado en las dos implementaciones.
 - [ ] T024 [US3] **Q5, obligatoria**:
   - en el clon limpio de la rama (sin `.env`, sin clave y sin `PYTHONUTF8`), `claude -p --model haiku --strict-mcp-config` con `Write` y el valor generado en disco;
@@ -210,4 +213,18 @@ Foundational, US1 hasta T018, US2 y US3 (tests), commit, Q2–Q5 con la CLI, US4
 
 ## Tabla de adaptación de los tests del #3 (T007)
 
-La rellena T007: cada test de `test_guarda_datos.py` y `test_detector_datos.py`, adónde fue y si cambió su expectativa.
+Ningún test se borró ni se debilitó.
+
+| Test del #3 | Adónde fue | Cambio |
+|---|---|---|
+| `test_detector_datos.py`: todos los genéricos | `plugins/…/hooks/test_detector_datos.py` | Ninguno. Encabezados sin referencias a FR ni a revisiones. |
+| `test_detector_datos.py::test_mensaje_de_ejemplo_del_enunciado_no_coincide` | `.claude/hooks/test_guarda_datos_repositorio.py` | Ninguno; usa la raíz del repositorio. |
+| `test_detector_datos.py::test_datos_ficticios_no_coinciden` | Se queda en el plugin con `XX-0000`. | Con `CO-TV-0001`, `CO-TA-0002` y `CO-AM-0004` también en `test_identificadores_ficticios_del_proyecto_no_coinciden` del repositorio. |
+| `test_guarda_datos.py`: todos los genéricos | `plugins/…/hooks/test_guarda_datos.py` | La ruta de prueba `src/a.py` pasa a `lib/a.py`, por la lista de términos (R11). |
+| `test_guarda_datos.py::test_mensaje_de_ejemplo_del_enunciado_se_permite` | `.claude/hooks/test_guarda_datos_repositorio.py` | Ninguno. |
+| `test_guarda_datos.py::test_edit_solo_revisa_el_texto_nuevo` | Se queda en el plugin con `XX-0000`. | Con `CO-TV-0001` también en `test_edit_con_identificador_del_proyecto_se_permite` del repositorio. |
+| `test_guarda_datos.py::test_mensaje_con_un_hallazgo` y `test_script_lista_varios_hallazgos_sin_el_valor` | Plugin | El texto final del mensaje es el nuevo (R10); se siguen fijando el tipo, la ruta, la línea y la ausencia del valor. |
+| `test_guarda_datos.py::test_script_permite_con_salida_0` | Plugin | Contenido `XX-0000`. En el repositorio, `test_compatibilidad_ejecuta_la_guarda_del_plugin` lo hace con `CO-TV-0001`. |
+| Nuevo | Plugin | `test_revisa_las_herramientas_mcp_de_cualquier_servidor` (R5). |
+| Nuevos | Repositorio | `test_la_guarda_importada_es_la_del_plugin` y los cinco del archivo de compatibilidad. |
+| `test_configuracion.py` | Se queda | La guarda de datos queda exenta de «listas de nombres exactos» y tiene su test de la expresión anclada; la ruta de la guarda es la del plugin, y la existencia del script se comprueba con su ruta real. |

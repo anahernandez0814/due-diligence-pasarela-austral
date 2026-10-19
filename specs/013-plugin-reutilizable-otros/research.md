@@ -78,6 +78,33 @@ repositorio (`guarda_datos.py:19`).
 - `test_revision_repositorio.py` sigue importando `test_guarda_datos` y `detector_datos`, ahora
   desde el `pythonpath` del plugin.
 
+**Archivo de compatibilidad, aprobado por la analista durante la implementación**:
+`.claude/hooks/guarda_datos.py` se queda como archivo de compatibilidad para cualquier sesión que
+conserve la ruta antigua (por ejemplo, una versión de Claude Code que no recargue la configuración).
+- **Sin lógica**: no importa el detector ni arma mensajes. Solo ejecuta el archivo del plugin con
+  `runpy.run_path(…, run_name="__main__")`.
+- **Falla cerrado**: si el script del plugin no existe, no carga o termina sin decidir, sale con 2,
+  así que nunca sale con 0 sin haber ejecutado la guarda.
+- **No se registra**: `.claude/settings.json` no lo nombra.
+- **Tests** en `.claude/hooks/test_guarda_datos_repositorio.py`: sin lógica de detección (AST y
+  texto), no registrado, ejecuta la guarda del plugin, y falla cerrado si falta el script, si no
+  carga o si no decide.
+- **Escribe stderr en UTF-8**: lo hace por su cuenta, porque sin `PYTHONUTF8` Windows usa cp1252,
+  y su test lo detectó.
+
+**Hecho observado: Claude Code 2.1.303 recarga `settings.json` en caliente**.
+- **Lo que se suponía**: el plan asumía que los hooks se fijaban al arrancar la sesión.
+- **Lo que pasó**:
+  - al mover la guarda con `git mv`, la sesión siguió llamando a la ruta antigua y se bloqueó;
+  - al cambiar la ruta en `settings.json`, la sesión pasó a la nueva **en el acto**, cuando el
+    script del plugin todavía importaba `comun`.
+
+  En los dos casos, `onFailure: block` bloqueó `Bash`, `Write` y `Edit`, y la analista tuvo que
+  recuperar la sesión con dos comandos `!`.
+- **Desde entonces**: antes y después de cada paso que toca la guarda o `settings.json`, se ejecuta
+  la guarda directamente con una entrada que debe permitirse y otra que debe bloquearse (con el
+  valor generado en memoria). Solo se sigue si las dos responden bien.
+
 **Duplicación que queda**: `base_guarda.py` repite unas 60 líneas de `comun.py`, que las demás
 guardas del repositorio siguen usando. Un test de `.claude/hooks/` ejecuta las dos
 implementaciones de `normalizar_ruta`, `raiz`, `cwd`, `bloquear` y `ejecutar` con los mismos

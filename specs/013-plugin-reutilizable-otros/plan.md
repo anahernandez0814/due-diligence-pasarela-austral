@@ -91,6 +91,15 @@ declara como desviación:
      divergir;
    - la copia de la caché es la distribución de una versión, no otra fuente.
 
+   **Archivo de compatibilidad** `.claude/hooks/guarda_datos.py`, aprobado por la analista
+   durante la implementación:
+   - no tiene lógica: ejecuta la guarda del plugin con `runpy`;
+   - falla cerrado si no puede ejecutarla o si no decide;
+   - `settings.json` no lo registra.
+
+   Sirve a sesiones con la ruta antigua. Se observó que Claude Code 2.1.303 recarga
+   `settings.json` en caliente (R2).
+
    **Los tests del #3 se mueven junto al código**. Sus casos propios del proyecto (el enunciado y
    los identificadores ficticios) quedan en `.claude/hooks/test_guarda_datos_repositorio.py`,
    contra la misma guarda. Las unas 60 líneas que `base_guarda.py` repite de `comun.py` tienen un
@@ -224,6 +233,7 @@ plugins/guardas-y-revision/                        # nuevo (ver R1)
 ├── scripts/{contexto_revision.py, test_contexto_revision.py}
 └── test_plugin.py
 .claude/settings.json                              # ruta del script, matcher general, enabledPlugins
+.claude/hooks/guarda_datos.py                      # archivo de compatibilidad, sin lógica (R2)
 .claude/hooks/test_configuracion.py                # adaptado (ruta y matcher)
 .claude/hooks/test_guarda_datos_repositorio.py     # nuevo: casos propios del proyecto
 .claude/hooks/test_plugin_repositorio.py           # nuevo: FR-004, FR-009 y equivalencia con comun

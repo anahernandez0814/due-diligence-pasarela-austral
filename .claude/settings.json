@@ -4,6 +4,9 @@
     "PYTHONUTF8": "1"
   },
   "enabledMcpjsonServers": ["github", "pasarela"],
+  "enabledPlugins": {
+    "guardas-y-revision@piezas-reutilizables": false
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -20,13 +23,13 @@
         ]
       },
       {
-        "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell|mcp__github__add_issue_comment|mcp__github__update_issue_comment|mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write|mcp__github__add_reply_to_pull_request_comment|mcp__github__pull_request_review_write|mcp__github__add_comment_to_pending_review",
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|PowerShell|mcp__.+__(add_issue_comment|update_issue_comment|create_pull_request|update_pull_request|issue_write|add_reply_to_pull_request_comment|pull_request_review_write|add_comment_to_pending_review))$",
         "hooks": [
           {
             "type": "command",
             "command": "uv",
             "args": ["run", "--no-project", "--python", "3.12", "--quiet",
-                     "${CLAUDE_PROJECT_DIR}/.claude/hooks/guarda_datos.py"],
+                     "${CLAUDE_PROJECT_DIR}/plugins/guardas-y-revision/hooks/guarda_datos.py"],
             "timeout": 10,
             "onFailure": "block"
           }

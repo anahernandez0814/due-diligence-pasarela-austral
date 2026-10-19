@@ -222,3 +222,10 @@ Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/
 - **Desviación D3, tiempo de la suite**: en Windows, `uv run pytest` puede pasar de 5 minutos (4:43 en frío, 5:55 y 6:12) por las guardas de `.claude/hooks/`, no por el producto: la aplicación (`uv run pytest src`) tarda unos 25 s y la e2e unos 80 s. Sugerencia: un repositorio git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, aislando el test de tiempo de `test_guarda_pr.py`).
 
 Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.
+
+## 14. Plugin reutilizable para otros equipos
+
+- **Plugin `guardas-y-revision`** (`plugins/guardas-y-revision/`) en el marketplace `piezas-reutilizables` (`.claude-plugin/marketplace.json`): la guarda de datos con forma real del #3 y versiones genéricas del subagente revisor y de su skill del #4. Ninguna pieza nombra este proyecto, y un test lo comprueba.
+- **La guarda tiene una sola fuente, dentro del plugin** (R2): un plugin instalado se copia a una caché y no llega a archivos de fuera, así que la guarda, el detector y lo que usaban de `comun` (`base_guarda.py`) se movieron al plugin. Este repositorio ejecuta ese mismo archivo desde `.claude/settings.json`.
+- **Archivo de compatibilidad** `.claude/hooks/guarda_datos.py`: sin lógica, ejecuta la guarda del plugin con `runpy` y, si no puede, sale con 2 (fallo cerrado). Sirve a las sesiones que conserven la ruta antigua. `settings.json` no lo registra.
+- **Claude Code 2.1.303 recarga `settings.json` en caliente**, observado al mover la guarda: un hook con `onFailure: block` que apunta a un archivo que todavía no carga bloquea `Bash`, `Write` y `Edit` de la sesión. Al mover o cambiar una guarda, el destino tiene que funcionar antes de cambiar la ruta.

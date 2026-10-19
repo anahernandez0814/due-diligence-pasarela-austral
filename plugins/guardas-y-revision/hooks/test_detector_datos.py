@@ -6,15 +6,12 @@ concatenadas con caracteres aleatorios).
 """
 
 import random
-import re
 import string
 import time
-from pathlib import Path
 
 import detector_datos
 import pytest
 
-RAIZ = Path(__file__).resolve().parents[2]
 AZAR = random.Random(20261016)
 
 # --- Generadores --------------------------------------------------------------------
@@ -197,18 +194,10 @@ def test_prefijos_sin_longitud_minima_no_coinciden():
     assert detector_datos.buscar("Los tokens empiezan por gh" + "p_ o por sk-" + "ant-.") == []
 
 
-# --- Permitidos (FR-006) ------------------------------------------------------------
+# --- Permitidos ---------------------------------------------------------------------
 
 
-def test_mensaje_de_ejemplo_del_enunciado_no_coincide():
-    enunciado = (RAIZ / "docs" / "enunciado.md").read_text(encoding="utf-8")
-    mensaje = re.search(r'"(Necesito el due diligence[^"]*)"', enunciado)
-    assert mensaje is not None
-    assert "CO-TV-0001" in mensaje.group(1)
-    assert detector_datos.buscar(mensaje.group(1)) == []
-
-
-@pytest.mark.parametrize("texto", ["CO-TV-0001", "$80.000.000", "2026-10-16"])
+@pytest.mark.parametrize("texto", ["XX-0000", "$80.000.000", "2026-10-16"])
 def test_datos_ficticios_no_coinciden(texto):
     assert detector_datos.buscar(texto) == []
 
@@ -223,7 +212,7 @@ def test_resultado_solo_tiene_tipo_y_linea():
     assert numero not in repr(hallazgos)
 
 
-# --- Correcciones de la revisión de la parada B (T008a) -----------------------------
+# --- Partes decimales y separadores -------------------------------------------------
 
 
 def test_parte_decimal_de_un_numero_no_es_tarjeta():

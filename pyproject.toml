@@ -29,8 +29,14 @@ extend-exclude = [".specify"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["src", ".claude/hooks"]
-pythonpath = [".claude/hooks"]
+testpaths = ["src", ".claude/hooks", "plugins"]
+# #13: las carpetas del plugin van primero, porque `.claude/hooks/guarda_datos.py` es solo el
+# archivo de compatibilidad y `import guarda_datos` debe llegar a la guarda del plugin.
+pythonpath = [
+    "plugins/guardas-y-revision/hooks",
+    "plugins/guardas-y-revision/scripts",
+    ".claude/hooks",
+]
 python_files = ["test_*.py"]
 # #12 (R4): los casos (a)–(g) de punta a punta llaman al modelo real; `uv run pytest` los excluye
 # y se piden con `uv run pytest -m e2e -rs` (el último `-m` sustituye a este).

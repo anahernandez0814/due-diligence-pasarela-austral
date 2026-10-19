@@ -186,10 +186,39 @@ def test_si_el_diff_completo_no_cabe_va_el_de_cada_movido_con_cambios(movidos):
     assert "Diff de lib/cambia.py (movido desde cambia.py):" in salida
     assert "+linea_5 = 50" in salida
     assert "Diff de lib/igual.py" not in salida
-    justo = len(salida[: salida.index("Diff de lib/cambia.py")].encode("utf-8")) + 10
-    salida = contexto_revision.construir(movidos, umbral=justo)
-    assert "Diff de lib/cambia.py (movido desde cambia.py) omitido: no cabe en el umbral" in salida
+
+
+AVISO_DE_CAMBIA = (
+    "Diff de lib/cambia.py (movido desde cambia.py) omitido: no cabe en el umbral. Lee el "
+    "archivo en su ruta nueva.\n"
+)
+SIN_AVISO = "Diffs de archivos movidos omitidos sin aviso propio:"
+
+
+def antes_del_movido(repo: Path) -> int:
+    """Bytes de la salida antes del diff de `lib/cambia.py`, con el diff completo fuera."""
+    escribir(repo, "app/grande.py", "x = 1\n" * 3000)
+    confirmar(repo, "grande")
+    salida = contexto_revision.construir(repo)
+    return len(salida[: salida.index("Diff de lib/cambia.py")].encode("utf-8"))
+
+
+def test_si_el_diff_del_movido_no_cabe_va_su_aviso_si_cabe(movidos):
+    umbral = antes_del_movido(movidos) + len(AVISO_DE_CAMBIA.encode("utf-8"))
+    salida = contexto_revision.construir(movidos, umbral=umbral)
+    assert salida.endswith(AVISO_DE_CAMBIA)
     assert "+linea_5 = 50" not in salida
+    assert SIN_AVISO not in salida
+    assert len(salida.encode("utf-8")) <= umbral
+
+
+def test_si_ni_el_aviso_cabe_una_linea_final_cuenta_los_omitidos(movidos):
+    umbral = antes_del_movido(movidos) + 10
+    salida = contexto_revision.construir(movidos, umbral=umbral)
+    assert "omitido: no cabe en el umbral" not in salida
+    assert "+linea_5 = 50" not in salida
+    assert salida.splitlines()[-1].startswith(f"{SIN_AVISO} 1.")
+    assert "[movido desde cambia.py" in fila(salida, "lib/cambia.py")
 
 
 # --- Spec Kit, opcional ---------------------------------------------------------------

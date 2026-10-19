@@ -176,7 +176,12 @@ def _ticket(raiz: Path, rama: str) -> tuple[str | None, str | None, str | None]:
 
 
 def _diffs_de_movidos(raiz: Path, base: str, archivos: list, salida: str, umbral: int) -> str:
-    """`salida` con el diff de cada archivo movido con cambios, mientras quepa en `umbral`."""
+    """`salida` con el diff de cada archivo movido con cambios, mientras quepa en `umbral`.
+
+    Un diff que no cabe deja un aviso con su nombre, solo si el aviso cabe. Los que no caben ni
+    así se cuentan en una sola línea final, la única que puede pasar del umbral.
+    """
+    sin_aviso = 0
     for archivo in archivos:
         if archivo.anterior is None or archivo.similitud == 100:
             continue
@@ -194,10 +199,18 @@ def _diffs_de_movidos(raiz: Path, base: str, archivos: list, salida: str, umbral
             archivo.ruta,
         )
         bloque = f"{titulo}:\n{diff}\n"
+        aviso = f"{titulo} omitido: no cabe en el umbral. Lee el archivo en su ruta nueva.\n"
         if _bytes(salida + bloque) <= umbral:
             salida += bloque
+        elif _bytes(salida + aviso) <= umbral:
+            salida += aviso
         else:
-            salida += f"{titulo} omitido: no cabe en el umbral. Lee el archivo en su ruta nueva.\n"
+            sin_aviso += 1
+    if sin_aviso:
+        salida += (
+            f"Diffs de archivos movidos omitidos sin aviso propio: {sin_aviso}. No caben en el "
+            "umbral; lee en su ruta nueva los archivos marcados [movido desde …].\n"
+        )
     return salida
 
 

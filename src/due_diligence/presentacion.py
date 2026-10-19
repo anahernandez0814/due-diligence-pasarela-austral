@@ -7,6 +7,7 @@ mismos textos donde coinciden. Lo que se muestra sale de la traza y del estado, 
 modelo (R3, R4).
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -48,7 +49,8 @@ COMPLETO, INCOMPLETO, ESPERANDO = "completo", "incompleto", "esperando"
 
 # Textos fijos de la conversación (R6). `MENSAJE_SIN_SESION` es el del #10, que `__main__` importa.
 AVISO_CASO_NUEVO = "Caso anterior cerrado; se inició un caso nuevo."
-AVISO_ESPERA = "El coordinador espera su respuesta: {motivo} El caso sigue sin completar."
+# Dos oraciones, sin unir dos «dos puntos» seguidos: el motivo ya lleva los suyos (validación).
+AVISO_ESPERA = "El coordinador espera su respuesta. {motivo} El caso sigue sin completar."
 MENSAJE_FALLO_TURNO = (
     "El turno falló por un error del sistema ({tipo}). El caso queda incompleto; puede escribir de "
     "nuevo o iniciar un caso nuevo."
@@ -122,20 +124,51 @@ def frente_en_palabras(frente: Frente) -> str:
     return FRENTES_EN_PALABRAS[frente]
 
 
-def _tras_dos_puntos(frase: str) -> str:
-    """Una frase completa puesta después de dos puntos: con minúscula inicial.
-
-    Solo si la segunda letra ya es minúscula, para no estropear una sigla, una regla o un
-    identificador al principio («I.3», «CO-AM-0004», «NIT»).
-    """
-    if len(frase) < 2 or not frase[1].islower():
-        return frase
-    return frase[0].lower() + frase[1:]
-
-
 def aviso_espera(espera: "Espera") -> str:
     """El aviso ante un mensaje vacío con la espera abierta (chat y línea de comandos)."""
-    return AVISO_ESPERA.format(motivo=_tras_dos_puntos(espera.motivo))
+    return AVISO_ESPERA.format(motivo=espera.motivo)
+
+
+# Los tipos de error de la pasarela y del ejecutor, en palabras (validación manual: el chat
+# mostraba el código interno). Un tipo que no está aquí se deja tal cual.
+ERRORES_EN_PALABRAS = {
+    "servicio_no_disponible": "el servicio no está disponible",
+    "datos_no_disponibles": "la fuente no tiene datos disponibles",
+    "entrada_invalida": "la consulta tenía una entrada inválida",
+    "campos_obligatorios_ausentes": "faltaban campos obligatorios en la consulta",
+    "error_interno": "error interno de la fuente",
+    "error_de_almacenamiento": "no se pudo guardar el registro",
+    "error_de_herramienta": "la herramienta devolvió un error",
+}
+_TIPOS_DE_ERROR = re.compile(r"\(([a-z_]+(?:, [a-z_]+)*)\)")
+
+
+def _motivo_en_palabras(motivo: str) -> str:
+    """El motivo de la cobertura con los tipos de error conocidos en palabras.
+
+    `cobertura.py` los pone entre paréntesis («error de la fuente (servicio_no_disponible)»); la
+    cobertura registrada no cambia, solo lo que se muestra.
+    """
+
+    def traducir(encontrado: re.Match[str]) -> str:
+        tipos = encontrado.group(1).split(", ")
+        return f"({', '.join(ERRORES_EN_PALABRAS.get(t, t) for t in tipos)})"
+
+    return _TIPOS_DE_ERROR.sub(traducir, motivo)
+
+
+def _detalle_de_delegacion(detalle: str) -> str:
+    """Solo lo que aporta: el título ya nombra el frente en palabras.
+
+    `delegacion.py` escribe «Se delega el frente X.», «Se reintenta el frente X con la misma
+    entrada.» o «Se vuelve a delegar el frente X con otra entrada.», con el nombre interno del
+    frente; aquí no se repite.
+    """
+    if detalle.startswith("Se reintenta"):
+        return "Reintento con la misma entrada, tras un error que se puede reintentar."
+    if "con otra entrada" in detalle:
+        return "Se vuelve a delegar con otra entrada."
+    return ""
 
 
 def mensaje_fallo_turno(error: BaseException) -> str:
@@ -156,9 +189,11 @@ def indicador(evento: Evento) -> Indicador | None:
     estado del caso. El título no añade datos del comercio: el detalle es el del evento, con los
     textos fijos de las reglas, y la acción intentada no lleva datos del comercio (#9, FR-017).
     """
+    detalle = evento.detalle
     if evento.tipo == TIPO_DELEGACION:
         frente = frente_en_palabras(evento.frente) if evento.frente else "un frente"
         tipo, titulo = "delegacion", f"Delegación al subagente de {frente}"
+        detalle = _detalle_de_delegacion(detalle)
     elif evento.tipo == TIPO_BLOQUEO_REGLA:
         tipo, titulo = "bloqueo", _titulo_bloqueo(evento)
     elif evento.tipo == TIPO_INFORME_REGISTRADO:
@@ -170,7 +205,7 @@ def indicador(evento: Evento) -> Indicador | None:
         titulo = "Un control de las reglas falló; el caso se bloqueó por precaución"
     else:
         return None
-    return Indicador(tipo, titulo, evento.detalle, hora_colombia(evento.marca), evento.secuencia)
+    return Indicador(tipo, titulo, detalle, hora_colombia(evento.marca), evento.secuencia)
 
 
 def eventos_del_turno(eventos: Sequence[Evento], n: int) -> list[Evento]:
@@ -190,9 +225,16 @@ def eventos_del_turno(eventos: Sequence[Evento], n: int) -> list[Evento]:
 
 
 def filas_cobertura(cobertura: CoberturaCaso) -> tuple[FilaCobertura, ...]:
-    """La cobertura calculada por el sistema (la que se registra), un frente por fila (FR-003)."""
+    """La cobertura calculada por el sistema (la que se registra), un frente por fila (FR-003).
+
+    El motivo de un frente sin cubrir lleva los tipos de error en palabras.
+    """
     return tuple(
-        FilaCobertura(frente_en_palabras(c.frente), c.cubierto, "" if c.cubierto else c.motivo)
+        FilaCobertura(
+            frente_en_palabras(c.frente),
+            c.cubierto,
+            "" if c.cubierto else _motivo_en_palabras(c.motivo),
+        )
         for c in cobertura.frentes.values()
     )
 
@@ -228,9 +270,8 @@ def estado_mostrado(caso: "Caso") -> EstadoMostrado:
         )
     espera = caso.espera
     if espera is not None:
-        return EstadoMostrado(
-            ESPERANDO, f"Esperando al analista: {_tras_dos_puntos(espera.motivo)}"
-        )
+        # Dos oraciones: el motivo ya lleva sus dos puntos (validación manual).
+        return EstadoMostrado(ESPERANDO, f"Esperando al analista. {espera.motivo}")
     terminacion = estado.terminacion
     if terminacion is not None and terminacion.terminacion is not Terminacion.NORMAL:
         return EstadoMostrado(

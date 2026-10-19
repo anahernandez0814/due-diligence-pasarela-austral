@@ -144,7 +144,7 @@ def test_en_el_caso_f_la_cobertura_va_antes_que_la_respuesta():
     ((_, asistente),) = _turnos(at)
     textos = _textos(asistente)
     (noticias,) = _contiene(textos, "noticias: no cubierto")
-    assert "servicio_no_disponible" in textos[noticias]
+    assert "el servicio no está disponible" in textos[noticias]
     (respuesta,) = _contiene(textos, fabrica.casos[0].respuesta)
     assert noticias < respuesta  # SC-003
     assert _contiene(textos, "Incompleto")
@@ -260,3 +260,23 @@ def test_sin_sesion_que_continuar_la_conversacion_lo_explica_sin_traza():
     assert not _contiene(textos, "Traceback") and not _contiene(textos, "CasoSinSesion")
     assert caso.estado.mensajes == [SOLICITUD_D]  # no llegó a empezar el turno
     assert len(fabrica.casos) == 1
+
+
+def test_un_caso_nuevo_no_dibuja_el_historial_anterior_y_avisa_desde_el_principio():
+    # Validación manual: el aviso llegaba al final y, mientras corría el turno, se veía el
+    # historial del caso anterior. La fábrica falla al crear el segundo caso: `AppTest` muestra lo
+    # que se dibujó hasta ese punto, es decir, lo que se ve durante el turno.
+    class FallaAlSegundo(Fabrica):
+        def __call__(self, observador):
+            if self.casos:
+                raise RuntimeError("se detiene aquí para ver la página durante el turno")
+            return super().__call__(observador)
+
+    fabrica = FallaAlSegundo([GUION_A], resultados_a)
+    at = _enviar(_app(fabrica), SOLICITUD_A)
+    assert fabrica.casos[0].completo
+    at = _enviar(at, "Otro comercio, por favor.")
+    assert at.exception  # la parada provocada
+    ((usuario, asistente),) = _turnos(at)  # ningún turno del caso anterior
+    assert _textos(usuario) == ["Otro comercio, por favor."]
+    assert _textos(asistente)[0] == presentacion.AVISO_CASO_NUEVO

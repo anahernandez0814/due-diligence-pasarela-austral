@@ -1225,3 +1225,16 @@ def test_el_resumen_al_analista_empieza_por_la_cobertura():
         "Al terminar, empieza por la cobertura: qué frentes no se pudieron cubrir y por qué"
     )
     assert "frente por frente" in _REGLA_RESUMEN and "fuente y su fecha" in _REGLA_RESUMEN
+
+
+def test_las_afirmaciones_de_listas_van_una_por_autoridad_en_los_dos_modos():
+    # Validación manual del #11: en 4 de los 7 casos el hook (I.4) rechazó el primer informe por
+    # juntar varias autoridades en una afirmación. Es guía de estilo; la garantía sigue en el hook.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES, instrucciones_coordinador
+
+    assert (
+        "En listas restrictivas, escribe una afirmación por cada autoridad consultada, cada una "
+        "con su propia fuente; no juntes varias autoridades en una sola afirmación."
+    ) in _REGLA_AFIRMACIONES
+    for demo in (False, True):
+        assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)

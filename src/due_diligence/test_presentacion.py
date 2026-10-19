@@ -197,7 +197,8 @@ def test_cada_tipo_del_mapa_da_su_indicador():
         evento = _evento(tipo, frente, "el detalle", "I.1", "una acción", secuencia)
         indicador = presentacion.indicador(evento)
         assert indicador.tipo == esperado
-        assert indicador.detalle == "el detalle"
+        # La delegación normal no repite el detalle: el título ya nombra el frente.
+        assert indicador.detalle == ("" if tipo == "delegacion" else "el detalle")
         assert indicador.hora == "22:00:00 (hora de Colombia)"
         assert indicador.secuencia == secuencia
         assert indicador.titulo
@@ -274,7 +275,8 @@ def test_la_cobertura_tiene_los_cuatro_frentes_en_orden_y_motivo_solo_si_falta()
     for fila in filas:
         assert (fila.motivo == "") is fila.cubierto
     (noticias,) = [f for f in filas if f.frente == "noticias"]
-    assert noticias.cubierto is False and "servicio_no_disponible" in noticias.motivo
+    assert noticias.cubierto is False
+    assert noticias.motivo == "error de la fuente (el servicio no está disponible)"
 
 
 def test_el_estado_completo_solo_si_el_caso_esta_completo():
@@ -292,8 +294,9 @@ def test_el_estado_completo_solo_si_el_caso_esta_completo():
 def test_el_estado_en_espera_dice_que_espera():
     caso = caso_d(1)
     estado = presentacion.estado_mostrado(caso)
+    # Dos oraciones: el motivo ya lleva sus dos puntos (validación manual).
     assert estado.texto == (
-        "Esperando al analista: el registro devolvió varias coincidencias: el caso espera el "
+        "Esperando al analista. El registro devolvió varias coincidencias: el caso espera el "
         "identificador del analista."
     )
 
@@ -431,7 +434,7 @@ def test_un_mensaje_vacio_con_la_espera_abierta_se_avisa_sin_llamar_al_coordinad
     assert decision.accion is presentacion.Decision.AVISO_ESPERA
     assert decision.aviso == presentacion.aviso_espera(caso.espera)
     assert decision.aviso == (
-        "El coordinador espera su respuesta: el registro devolvió varias coincidencias: el caso "
+        "El coordinador espera su respuesta. El registro devolvió varias coincidencias: el caso "
         "espera el identificador del analista. El caso sigue sin completar."
     )
 
@@ -499,23 +502,60 @@ def test_el_modo_de_demostracion_coincide_con_el_de_la_configuracion():
         assert activo is configuracion.modo_demostracion(entorno)
 
 
-# ------------------------------------------ minúscula tras los dos puntos (revisión, parada A)
+# ------------------------------------------------ validación manual: textos que se leen mejor
+
+
+def test_la_delegacion_normal_no_repite_el_detalle_y_el_reintento_lo_dice_en_palabras():
+    # El detalle de la traza dice «Se delega el frente categoria» (nombre interno, sin tilde).
+    indicadores = presentacion.resumen_del_turno(caso_f(), 1, "solicitud").indicadores
+    delegaciones = [i for i in indicadores if i.tipo == "delegacion"]
+    detalles = [i.detalle for i in delegaciones]
+    assert "" in detalles
+    (reintento,) = [d for d in detalles if d]  # el caso (f) reintenta noticias una vez
+    assert reintento == "Reintento con la misma entrada, tras un error que se puede reintentar."
+    for indicador in delegaciones:
+        assert "categoria" not in indicador.detalle and "Se delega" not in indicador.detalle
+
+
+def test_volver_a_delegar_con_otra_entrada_lo_dice_sin_el_nombre_interno():
+    dos = presentacion.resumen_del_turno(caso_d(2), 2, "CO-AM-0004")
+    (registro,) = [
+        i for i in dos.indicadores if i.titulo == "Delegación al subagente de registro mercantil"
+    ]
+    assert registro.detalle == "Se vuelve a delegar con otra entrada."
 
 
 @pytest.mark.parametrize(
-    ("frase", "esperada"),
+    ("motivo", "esperado"),
     [
         (
-            "El registro devolvió varias coincidencias.",
-            "el registro devolvió varias coincidencias.",
+            "error de la fuente (servicio_no_disponible)",
+            "error de la fuente (el servicio no está disponible)",
         ),
-        ("La categoría no aparece.", "la categoría no aparece."),
-        ("I.3 bloquea habilitar.", "I.3 bloquea habilitar."),  # una regla
-        ("CO-AM-0004 no está.", "CO-AM-0004 no está."),  # un identificador
-        ("NIT ficticio.", "NIT ficticio."),  # una sigla
-        ("A", "A"),  # una sola letra: no hay segunda que mirar
-        ("", ""),
+        (
+            "error de la fuente (datos_no_disponibles, servicio_no_disponible)",
+            "error de la fuente (la fuente no tiene datos disponibles, el servicio no está "
+            "disponible)",
+        ),
+        ("error de la fuente (codigo_desconocido)", "error de la fuente (codigo_desconocido)"),
+        (
+            "error de la fuente (servicio_no_disponible, codigo_desconocido)",
+            "error de la fuente (el servicio no está disponible, codigo_desconocido)",
+        ),
+        ("no se delegó", "no se delegó"),
     ],
 )
-def test_tras_dos_puntos_solo_baja_la_inicial_de_una_palabra_normal(frase, esperada):
-    assert presentacion._tras_dos_puntos(frase) == esperada
+def test_la_cobertura_muestra_los_codigos_de_error_conocidos_en_palabras(motivo, esperado):
+    from due_diligence.cobertura import CoberturaCaso, CoberturaFrente
+    from due_diligence.frentes import Frente
+
+    frentes = {f: CoberturaFrente(f, True, "", None, 0) for f in Frente}
+    frentes[Frente.NOTICIAS] = CoberturaFrente(Frente.NOTICIAS, False, motivo, None, 1)
+    filas = presentacion.filas_cobertura(CoberturaCaso(frentes, False))
+    (noticias,) = [f for f in filas if f.frente == "noticias"]
+    assert noticias.motivo == esperado
+
+
+def test_cada_codigo_conocido_tiene_su_traduccion():
+    for codigo, palabras in presentacion.ERRORES_EN_PALABRAS.items():
+        assert codigo not in palabras and palabras == palabras.lower()

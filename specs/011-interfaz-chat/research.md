@@ -99,7 +99,7 @@ indicadores → cobertura → estado del caso → respuesta del coordinador → 
   palabras, cubierto o no y el motivo.
 - **Estado**, un único valor, evaluado en este orden:
   1. `fallo_de_hook` → «Incompleto: un control de las reglas falló».
-  2. espera del analista → «Esperando al analista: {motivo}».
+  2. espera del analista → «Esperando al analista. {motivo}» (dos oraciones: el motivo ya lleva sus dos puntos; validación manual).
   3. terminación anómala → «Incompleto: el turno terminó de forma anómala ({detalle})».
   4. `caso.completo` → «Completo».
   5. si no → «Incompleto», con lo que falta (cobertura incompleta, sin informe vigente,
@@ -128,7 +128,7 @@ la suma y mezcla dos significados.
 
 | Situación | Decisión |
 |-----------|----------|
-| texto vacío o solo espacios, caso esperando al analista | `AVISO_ESPERA`: «El coordinador espera su respuesta: {motivo}. El caso sigue sin completar.» No se llama al coordinador. |
+| texto vacío o solo espacios, caso esperando al analista | `AVISO_ESPERA`: «El coordinador espera su respuesta. {motivo} El caso sigue sin completar.» (dos oraciones, validación manual). No se llama al coordinador. |
 | texto vacío o solo espacios, sin espera | `IGNORAR` |
 | sin caso | `NUEVO` |
 | caso **completo** | `NUEVO`, con el aviso «Caso anterior cerrado; se inició un caso nuevo.» (decisión de la analista) |

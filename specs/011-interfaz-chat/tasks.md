@@ -298,10 +298,10 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 ## Fase 10: Validación
 
 - [x] T040 Q1 de [quickstart.md](quickstart.md): `uv run ruff format --check .`, `uv run ruff check .` y `uv run pytest`, en verde, con el número de tests anotado junto a la línea base de T003.
-- [ ] T041 [MANUAL] Q3: arranque sin clave en el chat y en la línea de comandos (Q6, último punto). Sin modelo.
-- [ ] T042 [MANUAL] Q4: los siete casos desde el chat con el modelo real, con el coste de cada uno. Se observan los indicadores **en vivo** durante el turno (C2) y, si T033 no lo pudo probar, la entrada deshabilitada (C1). La analista valora SC-005 con (a), (d) y (e).
-- [ ] T043 [MANUAL] Q5 y Q6: la hora de Colombia en los indicadores; la línea de comandos con los turnos de este turno y el aviso ante la línea vacía. **Condicional (A1)**: el caso (b) sin «un día después de hoy» solo se comprueba si la prueba cae después de las 19:00 de Colombia; si no, se anota como no ejecutado.
-- [ ] T044 Anotar los resultados de T041 a T043 en este archivo, bajo «Resultados de la validación», y commitear.
+- [x] T041 [MANUAL] Q3: arranque sin clave en el chat y en la línea de comandos (Q6, último punto). Sin modelo.
+- [x] T042 [MANUAL] Q4: los siete casos desde el chat con el modelo real, con el coste de cada uno. Se observan los indicadores **en vivo** durante el turno (C2) y, si T033 no lo pudo probar, la entrada deshabilitada (C1). La analista valora SC-005 con (a), (d) y (e).
+- [x] T043 [MANUAL] Q5 y Q6: la hora de Colombia en los indicadores; la línea de comandos con los turnos de este turno y el aviso ante la línea vacía. **Condicional (A1)**: el caso (b) sin «un día después de hoy» solo se comprueba si la prueba cae después de las 19:00 de Colombia; si no, se anota como no ejecutado.
+- [x] T044 Anotar los resultados de T041 a T043 en este archivo, bajo «Resultados de la validación», y commitear.
 
 ---
 
@@ -340,7 +340,26 @@ Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 ins
 
 ## Resultados de la validación (T044)
 
-_Pendiente._
+Validación manual de la analista, con el modelo real (Opus 5.5) y desde el chat, el 2026-10-19.
+
+- **T041, arranque sin clave (Q3)**: aprobado, en el chat y en la línea de comandos.
+- **T042, los siete casos (Q4)**: (a), (b), (c), (d), (e), (f) y (g) aprobados desde el chat. El coste por caso no se anotó en esta validación.
+  - **C2**: los indicadores aparecen en vivo durante el turno, confirmado a mano.
+  - **C1**: la entrada y «Caso nuevo» están deshabilitados durante el turno, confirmado a mano (J6 de la verificación por mutaciones; `AppTest` no lo puede ver, T033).
+  - **SC-005**: aprobado por la analista con (a), (d) y (e).
+- **T043, hora y fecha (Q5 y Q6)**: **no aplica** el caso (b) de noche. La prueba fue después de medianoche, cuando la fecha local y la UTC coinciden, así que no se pudo observar el «un día después de hoy». La regla `_REGLA_FECHAS` queda fijada por su test.
+
+**Observaciones de la validación, corregidas en el commit posterior a `2b43e36`**:
+1. **La pregunta del correo de Streamlit** («Welcome to Streamlit! … Email:») detenía la primera ejecución hasta pulsar Enter.
+   - `.streamlit/config.toml` con `server.showEmailPrompt = false` y `browser.gatherUsageStats = false`.
+   - Comprobado en un arranque real con un perfil de usuario sin credenciales de Streamlit: sin la configuración aparece la pregunta; con ella, no, y el navegador se sigue abriendo (no hizo falta `headless`).
+   - El README dice qué hacer si la pregunta aparece.
+2. **El caso nuevo automático avisaba tarde**: se veía el historial del caso anterior durante el primer turno del nuevo. Ahora el historial se vacía antes de dibujarse y el aviso abre el turno en vivo, con su test de `AppTest`.
+3. **El detalle de la delegación** mostraba el nombre interno del frente («categoria»). La delegación normal ya no repite el detalle; el reintento y la entrada nueva se dicen en palabras.
+4. **El caso (e)**: con el mensaje del caso (d) el modelo no intentó consultar listas, ni siquiera en el modo de demostración. El README y el quickstart llevan un mensaje que provoca el intento; validado a mano: «Bloqueado por la regla I.1: delegar_frente (listas)».
+5. **«Esperando al analista: …: …»** llevaba dos «dos puntos» seguidos. Ahora son dos oraciones, en el estado y en el aviso de espera, y desaparece `_tras_dos_puntos`.
+6. **La cobertura del chat** mostraba códigos internos («servicio_no_disponible»). Los tipos de error conocidos se muestran en palabras y el código queda solo si no se conoce. La cobertura registrada no cambia.
+7. **I.4 rechazó el primer informe** en 4 de los 7 casos, por juntar varias autoridades de listas en una afirmación. `_REGLA_AFIRMACIONES` pide ahora una afirmación por autoridad, con su fuente, en los dos modos. Es guía; la garantía sigue en el hook.
 
 ---
 

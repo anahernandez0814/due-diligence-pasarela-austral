@@ -1,0 +1,12 @@
+# Configuración de Streamlit para la interfaz de chat (#11). Streamlit la lee al arrancar desde la
+# raíz del repositorio (`uv run streamlit run src/due_diligence/chat.py`).
+
+[browser]
+# Streamlit no envía estadísticas de uso.
+gatherUsageStats = false
+
+[server]
+# Sin la pregunta del correo de la primera ejecución («Welcome to Streamlit! … Email:»), que
+# detiene el arranque hasta pulsar Enter. A diferencia de `headless = true`, el navegador se sigue
+# abriendo solo en http://localhost:8501.
+showEmailPrompt = false

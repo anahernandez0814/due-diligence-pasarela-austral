@@ -46,7 +46,8 @@ class Dependencias:
 
 def _dibujar_indicador(indicador: Indicador) -> None:
     st.markdown(f"{ICONOS[indicador.tipo]} **{indicador.titulo}** · {indicador.hora}")
-    st.caption(indicador.detalle)
+    if indicador.detalle:
+        st.caption(indicador.detalle)
 
 
 def _mostrar_en_vivo(evento: Evento) -> None:
@@ -90,10 +91,13 @@ def _ejecutar_turno(
     with st.chat_message("user"):
         st.markdown(texto)
     with st.chat_message("assistant"):
+        # El aviso del caso nuevo, desde el principio del turno y no al terminar (validación
+        # manual): durante el turno no debe parecer que continúa el caso anterior.
+        if aviso:
+            st.info(aviso)
         with st.status("El coordinador está trabajando…", expanded=True) as trabajando:
             if decision is Decision.NUEVO:
                 st.session_state["caso"] = dependencias.crear_caso(_mostrar_en_vivo)
-                st.session_state["historial"] = []
             caso: Caso = st.session_state["caso"]
             numero = len(caso.estado.mensajes) + 1
             respuesta = None
@@ -132,6 +136,10 @@ def main() -> None:
     pendiente = st.session_state.get("pendiente")
     if st.button("Caso nuevo", disabled=pendiente is not None):
         st.session_state.pop("caso", None)
+        st.session_state["historial"] = []
+    if pendiente is not None and pendiente[1] is Decision.NUEVO:
+        # Un caso nuevo no muestra el historial del anterior, tampoco mientras corre su primer
+        # turno (validación manual).
         st.session_state["historial"] = []
     for turno in st.session_state.get("historial", []):
         _dibujar_turno(turno)

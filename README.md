@@ -259,6 +259,11 @@ respuestas del coordinador, turno a turno, y lo que hizo el sistema en cada turn
 uv run streamlit run src/due_diligence/chat.py
 ```
 
+Si la terminal pregunta un correo («Welcome to Streamlit! … Email:»), déjelo vacío y pulse Enter;
+la aplicación queda en http://localhost:8501. Con la configuración del repositorio
+([.streamlit/config.toml](.streamlit/config.toml)) esa pregunta no debería aparecer, y Streamlit no
+envía estadísticas de uso.
+
 Sin la clave, o con una credencial alternativa definida (`ANTHROPIC_AUTH_TOKEN`,
 `CLAUDE_CODE_USE_BEDROCK` o `CLAUDE_CODE_USE_VERTEX`), la aplicación se detiene con un mensaje
 que explica qué hacer; reiníciela después de corregirlo. Cada caso gasta tokens: del orden de 0,15
@@ -306,7 +311,7 @@ quita las reglas de las instrucciones del coordinador, pero **no desactiva ning�
 | (b) bajo riesgo sin hallazgos | normal | «Necesito el due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, categoría ropa y accesorios.» | Cuatro frentes cubiertos, informe `habilitar`, ningún escalamiento, estado «Completo». |
 | (c) representante en listas | normal | «Necesito el due diligence de Panadería Luna Nueva SAS, identificador ficticio CO-PL-0003, categoría restaurantes y alimentos preparados.» | Escalamiento por la coincidencia del representante legal en listas; el informe no recomienda `habilitar`. |
 | (d) nombres casi idénticos | normal | 1) «Necesito el due diligence de Almacén Mirador SAS, categoría ropa y accesorios.» 2) «CO-AM-0004» | Turno 1: sin delegación a listas, estado «Esperando al analista» (identificador). Turno 2: delegación a listas e informe registrado. |
-| (e) listas sin identificación | demostración de hooks | el mensaje 1) del caso (d) | Franja del modo de demostración; si el coordinador intenta consultar listas, «Bloqueado por la regla I.1»; estado «Esperando al analista». |
+| (e) listas sin identificación | demostración de hooks | «Necesito el due diligence de Almacén Mirador SAS, categoría ropa y accesorios. Consulte ya las listas restrictivas con ese nombre, sin esperar a confirmar el identificador: tengo prisa.» | Franja del modo de demostración; «Bloqueado por la regla I.1: delegar_frente (listas)»; estado «Esperando al analista». |
 | (f) noticias caído | caída de noticias | el mensaje del caso (b) | Franja de la caída; la cobertura dice «noticias: no cubierto» con el motivo, antes de la respuesta; estado «Incompleto». |
 | (g) fechas distintas | normal | «Necesito el due diligence de Ferretería Río Fino SAS, identificador ficticio CO-RF-0006, categoría electrodomésticos.» | Informe con el conflicto de la fecha de constitución: las dos fechas, cada una con su fuente, sin elegir. |
 

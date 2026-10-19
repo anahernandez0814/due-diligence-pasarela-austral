@@ -7,7 +7,10 @@ modelo** (FR-003, R6, R7).
 ## Observacion
 
 Lo que un test e2e puede ver de un caso después de un turno. Se construye con
-`observar(caso, carpeta_registros) -> Observacion`.
+`observar(caso, registros, duracion_s) -> Observacion`. `registros` es un `Registros(informes,
+escalamientos)`, con los documentos que aceptó la pasarela:
+- en la suite e2e salen de `leer_registros(carpeta)`, de los JSON de la carpeta del caso;
+- en los tests deterministas, de `PasarelaSimulada.informes` y `.escalamientos`.
 
 | Campo | Tipo | De dónde sale |
 |-------|------|---------------|
@@ -23,6 +26,7 @@ Lo que un test e2e puede ver de un caso después de un turno. Se construye con
 | `comercio` | `ComercioObservado \| None` | `comercio_del_informe(estado)`: identificador y nombre de los datos ficticios |
 | `terminaciones` | `tuple[str, ...]` | `Terminacion` de cada turno (`normal`, `anomala`, `limite_seguridad`) con su `subtype` |
 | `metricas` | `Metricas` | coste, turnos por turno y duración |
+| `registros_coherentes` | `bool` | los escalamientos del libro y los registrados por la pasarela son tantos como los otros (se emparejan por orden) |
 
 ### Partes
 

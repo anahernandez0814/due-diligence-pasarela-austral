@@ -6,14 +6,14 @@ ejecutan **después del merge del último PR**, desde `main` en GitHub. Ninguno 
 
 ## Lista de verificación
 
-- [ ] **Acceso de los evaluadores** al repositorio (colaboradores o visibilidad) y al GitHub
-  Project (https://github.com/users/anahernandez0814/projects/1), comprobado con su usuario o
-  en una ventana privada.
-- [ ] **Visibilidad** (_pendiente de la analista_): la frase del README
-  «el repositorio es privado y pide acceso» coincide con la visibilidad final; si el
-  repositorio pasa a público, se corrige en el README.
-- [ ] **Video de funcionamiento** enlazado en el README, en lugar de «_pendiente_», y probado en
-  una ventana privada: se abre sin iniciar sesión ni pedir acceso.
+- [x] **Acceso de los evaluadores** al repositorio y al GitHub Project
+  (https://github.com/users/anahernandez0814/projects/1): los dos son públicos, así que no
+  necesitan invitación.
+- [x] **Visibilidad**: el repositorio y el Project son públicos (`gh` devuelve `PUBLIC` y
+  `public: true`) y los dos se abren sin iniciar sesión; verificado el 2026-10-19. El README lo
+  dice en «Acceso» y en la instalación del plugin.
+- [ ] **Video de funcionamiento** enlazado en el README (la carpeta pública de Drive) y probado
+  en una ventana privada: se abre sin iniciar sesión ni pedir acceso.
 - [ ] **El .zip se genera desde un clon limpio** (`git clone`), para que no entre ningún archivo
   ignorado o no versionado ([Generar el .zip](#generar-el-zip)).
 - [ ] **El .zip incluye** `.git/` (el historial), `specs/` y `.specify/memory/`, y **no incluye**

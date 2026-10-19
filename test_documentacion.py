@@ -211,18 +211,26 @@ def test_el_readme_tiene_los_mensajes_de_los_siete_casos():
     [
         "https://github.com/users/anahernandez0814/projects/1",
         "**Video de funcionamiento**",
+        "https://drive.google.com/drive/folders/1rSTSfAmOHiynPiSuxiYv8jmOx_QwKvHT",
         "ANTHROPIC_API_KEY",
         "GITHUB_PAT",
         "`.mcp.json` no lee `.env`",
         "`repo` y `project`",
         "claude plugin marketplace add",
         "extraKnownMarketplaces",
-        "el repositorio es privado y pide acceso",
-        "4:43",
+        "el repositorio y el GitHub Project son públicos",
+        "de 4:43 a 6:23",
     ],
 )
 def test_el_readme_tiene_lo_que_pide_la_entrega(termino):
     assert termino in leer(README)
+
+
+@pytest.mark.parametrize("ruta", [README, ENTREGA], ids=["README", "entrega"])
+def test_no_queda_nada_pendiente_de_la_visibilidad_ni_del_video(ruta):
+    texto = leer(ruta)
+    for frase in ("privado y pide acceso", "pendiente de la analista", "_pendiente_"):
+        assert frase not in texto, f"{ruta.name}: queda «{frase}»"
 
 
 # --- docs/entrega.md (US5; FR-017 a FR-021) ------------------------------------------
@@ -237,7 +245,7 @@ def test_el_readme_tiene_lo_que_pide_la_entrega(termino):
         "50 MB",
         "no se reescribió",
         "ventana privada",
-        "el repositorio es privado y pide acceso",
+        "el repositorio y el Project son públicos",
         "## Guion del video de funcionamiento",
         "## Guion del video de defensa",
     ],

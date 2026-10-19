@@ -7,14 +7,16 @@ restrictivas, noticias y riesgo de categoría) y entrega un informe con fuentes,
 caso a un oficial de cumplimiento. Todos los datos son ficticios.
 
 - **GitHub Project (backlog)**: https://github.com/users/anahernandez0814/projects/1
-- **Video de funcionamiento**: _pendiente_
+- **Video de funcionamiento** (carpeta pública de Drive con el video «Video de funcionamiento -
+  Pasarela Austral»):
+  https://drive.google.com/drive/folders/1rSTSfAmOHiynPiSuxiYv8jmOx_QwKvHT?usp=drive_link
 - **Requisitos de la prueba**: [docs/enunciado.md](docs/enunciado.md)
 - **Principios del proyecto**: [constitución](.specify/memory/constitution.md)
 - **Decisiones**: [DECISIONES.md](DECISIONES.md) (dos páginas) y su
   [detalle](docs/decisiones-detalle.md)
 - **Entrega**: [lista de verificación y guiones de los videos](docs/entrega.md)
-- **Acceso** (_pendiente de la analista: confirmar con la visibilidad final_): el repositorio
-  es privado y pide acceso.
+- **Acceso**: el repositorio y el GitHub Project son públicos; se abren sin iniciar sesión ni
+  pedir acceso.
 
 ## Inicio rápido
 
@@ -85,7 +87,7 @@ uv run pytest src
 ```
 
 Los tres comandos deben terminar sin errores. `uv run pytest`, sin carpeta, ejecuta además los
-tests de `.claude/hooks/`, de `plugins/` y de la documentación, y tarda de 4 a 6 minutos en
+tests de `.claude/hooks/`, de `plugins/` y de la documentación, y tarda de 4:43 a 6:23 en
 Windows: ver [Pruebas](#pruebas).
 
 ## Pruebas
@@ -96,9 +98,8 @@ ejecutan los siete casos con el modelo real y por eso consumen API: unos 1,14 US
 completa y unos 0,16 USD por caso.
 
 **El paso de verificación es `uv run pytest src`** (unos 25 s). La suite completa, `uv run
-pytest`, tarda de 4:43 a 6:12 en Windows (desviación D3 del #12; 6:23 en el barrido del #14,
-con el equipo ocupado) por los tests de las guardas
-de Claude Code (los hooks de `.claude/hooks/`, que bloquean acciones prohibidas antes de
+pytest`, tarda de 4:43 a 6:23 en Windows (de 4:43 a 6:12 en el #12, desviación D3; 6:23 en el
+barrido del #14, con el equipo ocupado) por los tests de las guardas de Claude Code (los hooks de `.claude/hooks/`, que bloquean acciones prohibidas antes de
 ejecutarlas), que crean repositorios git de prueba; no es el paso principal.
 
 | Comando | Qué ejecuta | Clave | Coste | Tiempo medido |
@@ -106,7 +107,7 @@ ejecutarlas), que crean repositorios git de prueba; no es el paso principal.
 | `uv run pytest src` | La aplicación: tests deterministas de `src/` | no | 0 | unos 25 s |
 | `uv run pytest -m e2e -rs` | Los siete casos (a)–(g) de punta a punta, con el modelo real | sí | unos 1,14 USD por ejecución completa | unos 80 s (los 7 a la vez) |
 | `uv run pytest .claude/hooks` | Las guardas del flujo de trabajo de Claude Code | no | 0 | de 4 a 6 min, según la carga del equipo |
-| `uv run pytest` | Todo lo determinista: `src/` y `.claude/hooks/` | no | 0 | de 4:43 a 6:12 |
+| `uv run pytest` | Todo lo determinista: `src/`, `.claude/hooks/`, `plugins/` y `test_documentacion.py` | no | 0 | de 4:43 a 6:23 |
 
 Tiempos medidos en el equipo de la analista, con Windows. **El criterio de menos de 5 minutos lo
 cumplen el grupo de la aplicación y el de punta a punta.** El grupo determinista completo depende
@@ -455,7 +456,7 @@ lleva tres piezas reutilizables a otro repositorio:
 **Instalar**, desde la raíz del otro repositorio:
 
 ```bash
-# Desde GitHub (rama main; el repositorio es privado y pide acceso)
+# Desde GitHub (rama main; el repositorio es público)
 claude plugin marketplace add anahernandez0814/due-diligence-pasarela-austral
 # o desde una copia local
 claude plugin marketplace add <ruta de la copia>
@@ -482,9 +483,8 @@ puede declararse en su `.claude/settings.json` versionado:
 ```
 
 Claude Code registra el marketplace cuando cada persona acepta la confianza de la carpeta; cada
-una instala el plugin una vez con el comando `install` de arriba. Mientras el repositorio sea
-privado, quien instala necesita acceso a él (_pendiente de la analista_: la frase «el
-repositorio es privado y pide acceso» depende de la visibilidad final).
+una instala el plugin una vez con el comando `install` de arriba. El repositorio es público:
+quien instala desde GitHub no necesita acceso ni invitación.
 
 **Desinstalar**:
 

@@ -20,6 +20,8 @@ from due_diligence.eventos import (
     RegistroEventos,
 )
 from due_diligence.frentes import Frente
+from due_diligence.presentacion import aviso_espera
+from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR, Espera
 from due_diligence.simulacion import EjecutorSimulado, resultado_frente
 from due_diligence.simulacion import consulta as consulta_de_frente
 
@@ -28,6 +30,18 @@ from due_diligence.simulacion import consulta as consulta_de_frente
 def _sin_caida_del_registro(monkeypatch):
     """Los tests que consultan el registro real no dependen de la caída simulada de la sesión."""
     monkeypatch.delenv("PASARELA_FALLA_REGISTRO", raising=False)
+
+
+CLAVE_FICTICIA = "clave-ficticia-de-prueba"
+
+
+@pytest.fixture(autouse=True)
+def _con_clave_ficticia(monkeypatch):
+    """#11 (R8, T027): `main` comprueba la credencial antes de crear el caso. Los tests llegan al
+    caso con una clave ficticia y sin credenciales alternativas; los de la credencial la quitan."""
+    monkeypatch.setenv(configuracion.VARIABLE_CLAVE, CLAVE_FICTICIA)
+    for variable in configuracion.CREDENCIALES_ALTERNATIVAS:
+        monkeypatch.delenv(variable, raising=False)
 
 
 def _fin(stop_reason="end_turn", coste=0.5):
@@ -125,7 +139,7 @@ def test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador(monkeypatch
         "Cobertura incompleta: 2 de 4 frentes cubiertos.",
         "registro: cubierto.",
         "listas: no cubierto; no se delegó.",
-        "turnos del coordinador: 1 de 30",
+        "turnos del coordinador en este turno: 1 de 30",  # #11, FR-004: el del turno
         "Caso completo: no",
     ):
         assert esperado in salida
@@ -240,7 +254,7 @@ def test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra():
     lineas = []
     principal.imprimir_caso(caso, lineas.append)
     salida = "\n".join(lineas)
-    assert "turnos del coordinador: sin dato" in salida
+    assert "turnos del coordinador en este turno: sin dato" in salida  # #11, FR-004
     assert "Cobertura:" in salida
     for linea in caso.cobertura.lineas():
         assert linea in salida
@@ -341,8 +355,10 @@ def test_un_informe_minimo_que_ya_no_esta_vigente_se_marca():
 # ------------------------------------------ #10: la continuación por la entrada estándar (T048)
 
 
-def _caso_d_simulado(llamadas):
-    """El caso (d): el primer turno espera el identificador; el segundo identifica y termina."""
+def _caso_d_simulado(llamadas, num_turns=None):
+    """El caso (d): el primer turno espera el identificador; el segundo identifica y termina.
+
+    `num_turns` da el de cada turno (#11, T028)."""
     from due_diligence.simulacion import (
         CoordinadorSimulado,
         comercios_parecidos,
@@ -368,7 +384,8 @@ def _caso_d_simulado(llamadas):
                     ("terminar",),
                 ],
                 [("delegar", {"frente": "registro", "identificador": "CO-AM-0005"})],
-            ]
+            ],
+            num_turns=num_turns,
         )
         caso = Caso(
             ejecutor=EjecutorSimulado(resultados={Frente.REGISTRO: registro}), consulta=coordinador
@@ -419,6 +436,8 @@ def test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar(
     salida = capsys.readouterr().out
     assert salida.count("Eventos del caso:") == 1
     assert "Esperando al analista:" in salida
+    # #11 (FR-005): avisa antes de terminar, en lugar de terminar en silencio.
+    assert AVISO_D in salida
 
 
 def test_sin_sesion_que_continuar_muestra_un_mensaje_y_no_una_traza(monkeypatch, capsys):
@@ -486,3 +505,80 @@ def test_la_salida_muestra_los_escalamientos_registrados_o_ninguno():
     principal.imprimir_caso(caso, lineas.append)
     i = lineas.index("Escalamientos registrados:")
     assert lineas[i + 1] == f"  {detalle}"
+
+
+# ------------------------------------------ #11: credencial, turnos por turno y aviso (T027–T029)
+
+AVISO_D = aviso_espera(Espera("identificador", MOTIVO_ESPERA_IDENTIFICADOR))
+
+
+def _contar(llamadas):
+    async def falso(solicitud):
+        llamadas.append("ejecutar_caso")
+        raise AssertionError("no debe crear el caso")
+
+    return falso
+
+
+@pytest.mark.parametrize("variable", [None, *configuracion.CREDENCIALES_ALTERNATIVAS])
+def test_sin_credencial_valida_main_se_detiene_con_el_mensaje_y_codigo_dos(
+    monkeypatch, capsys, variable
+):
+    if variable is None:
+        monkeypatch.delenv(configuracion.VARIABLE_CLAVE)
+        esperado = configuracion.MENSAJE_SIN_CLAVE
+    else:
+        monkeypatch.setenv(variable, "1")
+        esperado = configuracion.MENSAJE_OTRA_CREDENCIAL.format(variable=variable)
+    orden = []
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: orden.append("cargar_entorno"))
+    monkeypatch.setattr(principal, "ejecutar_caso", _contar(orden))
+    assert principal.main(["solicitud"]) == 2
+    capturado = capsys.readouterr()
+    assert esperado in capturado.err and CLAVE_FICTICIA not in capturado.err
+    assert orden == ["cargar_entorno"]  # comprobó tras cargar y no creó el caso
+
+
+def test_la_credencial_se_comprueba_despues_de_cargar_el_entorno(monkeypatch, capsys):
+    # La clave solo existe tras `cargar_entorno` (como si viniera del archivo): debe bastar.
+    monkeypatch.delenv(configuracion.VARIABLE_CLAVE)
+    monkeypatch.setattr(
+        configuracion,
+        "cargar_entorno",
+        lambda: monkeypatch.setenv(configuracion.VARIABLE_CLAVE, CLAVE_FICTICIA),
+    )
+    llamadas = []
+    monkeypatch.setattr(principal, "ejecutar_caso", _ejecutar_caso_simulado(_fin(), llamadas))
+    assert principal.main(["solicitud"]) == 0
+    assert llamadas == ["ejecutar_caso"]
+
+
+def test_los_turnos_se_muestran_por_turno_y_nunca_la_suma(monkeypatch, capsys):
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([], num_turns=[3, 4]))
+    respuestas = iter(["CO-AM-0005"])
+    assert principal.main(["solicitud"], leer=lambda _p: next(respuestas)) == 0
+    salida = capsys.readouterr().out
+    primera, segunda = salida.split("Eventos del caso:")[1:]
+    assert "turnos del coordinador en este turno: 3 de 30" in primera
+    assert "turnos del coordinador en este turno: 4 de 30" in segunda
+    assert "7 de 30" not in salida
+
+
+def test_sin_espera_no_hay_aviso(monkeypatch, capsys):
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _ejecutar_caso_simulado(_fin(), []))
+
+    def leer(_pregunta):
+        raise AssertionError("no debe preguntar")
+
+    assert principal.main(["solicitud"], leer=leer) == 0
+    assert "El coordinador espera su respuesta" not in capsys.readouterr().out
+
+
+def test_tras_responder_y_sin_espera_ya_no_hay_aviso(monkeypatch, capsys):
+    monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([]))
+    respuestas = iter(["CO-AM-0005"])
+    assert principal.main(["solicitud"], leer=lambda _p: next(respuestas)) == 0
+    assert AVISO_D not in capsys.readouterr().out

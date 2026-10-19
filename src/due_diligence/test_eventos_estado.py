@@ -543,3 +543,74 @@ def test_los_eventos_del_10_existen_y_se_registran():
         assert tipo in TIPOS
         eventos.registrar(tipo, None, "detalle")
     assert [e.tipo for e in eventos.eventos()] == [TIPO_MENSAJE_ANALISTA, TIPO_ESPERA_ANALISTA]
+
+
+# ------------------------------------------------- #11: el observador del registro (T006, R1)
+
+
+def _sin_bloqueo(accion, limite=5.0):
+    """Ejecuta `accion` en un hilo con tiempo límite: un bloqueo falla el test y no cuelga nada."""
+    import threading
+
+    errores = []
+
+    def ejecutar():
+        try:
+            accion()
+        except BaseException as error:  # el test lo vuelve a lanzar en el hilo principal
+            errores.append(error)
+
+    hilo = threading.Thread(target=ejecutar, daemon=True)
+    hilo.start()
+    hilo.join(timeout=limite)
+    assert not hilo.is_alive(), "registrar se bloqueó: el observador se llamó dentro del candado"
+    if errores:
+        raise errores[0]
+
+
+def test_el_observador_recibe_cada_evento_en_orden_y_ya_guardado():
+    vistos = []
+    registro = RegistroEventos(observador=lambda e: vistos.append((e, registro.eventos()[-1])))
+    _sin_bloqueo(lambda: registro.registrar(TIPO_CASO_INICIADO, None, "uno"))
+    _sin_bloqueo(lambda: registro.registrar(TIPO_DELEGACION, Frente.REGISTRO, "dos"))
+    assert [e.detalle for e, _ in vistos] == ["uno", "dos"]
+    # Dentro de la llamada, el evento ya está en la traza: se observa después de guardarlo.
+    assert all(evento is ultimo for evento, ultimo in vistos)
+    assert [e for e, _ in vistos] == registro.eventos()
+
+
+def test_sin_observador_registrar_no_cambia():
+    registro = RegistroEventos()
+    evento = registro.registrar(TIPO_CASO_INICIADO, None, "uno")
+    assert registro.eventos() == [evento]
+    assert evento.secuencia == 1
+
+
+def test_la_excepcion_del_observador_no_sale_de_registrar_y_el_evento_queda():
+    def observador(evento):
+        raise RuntimeError("fallo del observador")
+
+    registro = RegistroEventos(observador=observador)
+    evento = registro.registrar(TIPO_BLOQUEO_REGLA, None, "motivo", regla="I.1")
+    assert registro.eventos() == [evento]
+
+
+def test_un_observador_que_registra_otro_evento_no_bloquea_y_los_dos_quedan_en_orden():
+    def observador(evento):
+        if evento.tipo == TIPO_CASO_INICIADO:
+            registro.registrar(TIPO_MODO_DEMOSTRACION, None, "desde el observador")
+
+    registro = RegistroEventos(observador=observador)
+    _sin_bloqueo(lambda: registro.registrar(TIPO_CASO_INICIADO, None, "primero"))
+    eventos = registro.eventos()
+    assert [(e.secuencia, e.tipo) for e in eventos] == [
+        (1, TIPO_CASO_INICIADO),
+        (2, TIPO_MODO_DEMOSTRACION),
+    ]
+
+
+def test_un_observador_que_lee_la_traza_no_bloquea():
+    leidos = []
+    registro = RegistroEventos(observador=lambda e: leidos.append(len(registro.eventos())))
+    _sin_bloqueo(lambda: registro.registrar(TIPO_CASO_INICIADO, None, "uno"))
+    assert leidos == [1]

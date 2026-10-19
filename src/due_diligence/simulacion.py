@@ -731,6 +731,10 @@ class CoordinadorSimulado:
     `Caso` (`ejecutar` y después `continuar`). `guion=[…]` es un solo turno, como hasta el #9; una
     llamada de más que los guiones no ejecuta ningún paso. `reanudaciones` guarda el `resume` de
     las opciones de cada llamada, y el `ResultMessage` lleva siempre el mismo `session_id`.
+
+    Del #11 (U1 del analyze): `num_turns=[…]` da el `num_turns` del `ResultMessage` de cada guion
+    (1 si falta), y el paso `("lanzar", excepcion)` lanza esa excepción desde la `query()`, después
+    de los pasos anteriores y sin `ResultMessage`, como un fallo del SDK.
     """
 
     SESION = "sesion-de-prueba"
@@ -742,11 +746,13 @@ class CoordinadorSimulado:
         texto: str = "Resumen para el analista.",
         *,
         guiones: list[list[tuple[Any, ...]]] | None = None,
+        num_turns: list[int] | None = None,
     ) -> None:
         if guion is not None and guiones is not None:
             raise ValueError("Pasa guion o guiones, no los dos.")
         self.guiones = [list(g) for g in guiones] if guiones is not None else [list(guion or [])]
         self.guion = self.guiones[0]
+        self.num_turns = list(num_turns or [])
         self.reanudaciones: list[str | None] = []
         self.pasarela = pasarela or PasarelaSimulada()
         self.texto = texto
@@ -796,6 +802,8 @@ class CoordinadorSimulado:
             return await sesion.llamar("mcp__pasarela__escalar_a_cumplimiento", paso[1])
         if tipo == "terminar":
             return await sesion.terminar(self.texto)
+        if tipo == "lanzar":
+            raise paso[1]
         raise ValueError(f"Paso de guion desconocido: {tipo!r}")
 
     async def __call__(self, *, prompt: str, options: Any = None):
@@ -811,4 +819,5 @@ class CoordinadorSimulado:
         for paso in guion:
             self.pasos.append((paso[0], await self._paso(sesion, paso)))
         yield AssistantMessage(content=[TextBlock(self.texto)], model="simulado")
-        yield mensaje_de_resultado(session_id=self.SESION)
+        turnos = self.num_turns[turno] if turno < len(self.num_turns) else 1
+        yield mensaje_de_resultado(num_turns=turnos, session_id=self.SESION)

@@ -192,3 +192,18 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   11. D4.
 
   Detalle en `specs/010-escalamiento-criterio-handoff/research.md` y `plan.md`.
+
+## 12. Interfaz de chat
+
+- **Chat con Streamlit** (`src/due_diligence/chat.py`) sobre el `Caso` del #10. Lo que se ve sale de funciones puras (`presentacion.py`), que leen la traza y el estado del caso, nunca el texto del modelo. La cobertura y el estado del caso van antes de la respuesta, y «completo» solo si `caso.completo` (I.5).
+- **Indicadores en vivo, con la traza como verdad** (R1): un observador opcional del registro de eventos los muestra mientras el coordinador trabaja. Se llama fuera del candado, que no es reentrante, y su excepción se ignora para que nunca llegue a un hook. Al terminar, el turno se reconstruye de la traza.
+- **Una sola comprobación de la credencial** (`comprobar_credencial`) en el chat y en la línea de comandos: solo `ANTHROPIC_API_KEY`, y parada si hay otra credencial que se usaría en su lugar. El mensaje no nombra el archivo de entorno (desviación D1), porque ningún módulo lo nombra (garantía R8 del #6).
+- **Hora de Colombia en la interfaz, UTC en la traza y los registros.** El coordinador sabe que la fecha de registro está en UTC, y las fechas van en `AAAA-MM-DD`; es guía, no garantía (principio II).
+- **Un caso completo hace que el mensaje siguiente inicie otro** (decisión de la analista): con D1 del #10, un caso de prueba heredaría las causas del anterior.
+
+- **De la validación manual**:
+  - `.streamlit/config.toml` quita la pregunta del correo de la primera ejecución sin `headless`, y Streamlit no envía estadísticas de uso;
+  - las afirmaciones de listas van una por autoridad (guía; la garantía sigue en el hook I.4);
+  - el coste por caso no se ve en el chat (desviación D2).
+
+Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/plan.md` y `research.md`.

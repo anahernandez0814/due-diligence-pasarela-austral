@@ -258,3 +258,44 @@ def cargar_entorno() -> bool:
     tests la usan. No lleva el nombre del archivo: `load_dotenv()` lo busca subiendo desde aquí.
     """
     return load_dotenv(override=False)
+
+
+# Credencial (#11, R8, FR-006): la única es `ANTHROPIC_API_KEY`. La comprueban los dos puntos de
+# entrada (el chat y `__main__`) después de cargar el entorno y antes de crear ningún caso. El
+# mensaje describe el archivo sin nombrarlo, porque ningún módulo lo nombra (R8 del #6, que fija
+# `test_sin_control_propio.py`); el README lo nombra paso a paso (desviación D1 del plan).
+VARIABLE_CLAVE = "ANTHROPIC_API_KEY"
+# Las que el CLI de Claude Code usaría antes que `ANTHROPIC_API_KEY`, según su precedencia
+# documentada (no medida, R14): con alguna definida, la clave del proyecto no sería la que se usa.
+CREDENCIALES_ALTERNATIVAS = (
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+)
+MENSAJE_SIN_CLAVE = (
+    "Falta la clave de Anthropic: la variable ANTHROPIC_API_KEY no está definida o está vacía. "
+    "Para configurarla, copie la plantilla de variables de entorno de la raíz del repositorio (la "
+    "que termina en «.example») como archivo de entorno local, sin esa terminación; ponga su clave "
+    "en ANTHROPIC_API_KEY (solo en ese archivo, que no se sube al repositorio) y reinicie la "
+    "aplicación. El README lo explica paso a paso en «Interfaz de chat»."
+)
+MENSAJE_OTRA_CREDENCIAL = (
+    "Está definida la variable {variable}, que haría usar otra credencial en lugar de "
+    "ANTHROPIC_API_KEY. Esta aplicación solo usa ANTHROPIC_API_KEY: quite {variable} del entorno y "
+    "reinicie la aplicación."
+)
+
+
+def comprobar_credencial(entorno: Mapping[str, str] | None = None) -> str | None:
+    """El mensaje que detiene la aplicación, o `None` si la credencial está bien (#11, R8).
+
+    Pura: con `entorno=None` lee `os.environ` (como `modo_demostracion`). Nunca incluye el valor de
+    ninguna variable.
+    """
+    fuente = os.environ if entorno is None else entorno
+    if not fuente.get(VARIABLE_CLAVE, "").strip():
+        return MENSAJE_SIN_CLAVE
+    for variable in CREDENCIALES_ALTERNATIVAS:
+        if fuente.get(variable, "").strip():
+            return MENSAJE_OTRA_CREDENCIAL.format(variable=variable)
+    return None

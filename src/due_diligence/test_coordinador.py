@@ -22,8 +22,11 @@ from due_diligence.estado import Situacion
 from due_diligence.eventos import (
     TIPO_CASO_INICIADO,
     TIPO_DELEGACION,
+    TIPO_ESCALAMIENTO_REGISTRADO,
+    TIPO_FALLO_DE_HOOK,
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
+    TIPO_INFORME_REGISTRADO,
     TIPO_TERMINACION,
 )
 from due_diligence.frentes import FRENTES, Frente
@@ -1070,3 +1073,168 @@ def test_la_guia_del_resumen_al_oficial_esta_en_los_dos_modos():
         assert fragmento in _REGLA_RESUMEN_OFICIAL, fragmento
     for demo in (False, True):
         assert _REGLA_RESUMEN_OFICIAL in instrucciones_coordinador(demo=demo)
+
+
+# ------------------------------------- #11: observador y turnos por turno (T008, R1, R5, FR-004)
+
+
+def _caso_a_con(observador):
+    """El caso (a) del #10, de extremo a extremo simulado, con un observador de la traza."""
+    from due_diligence.simulacion import (
+        CoordinadorSimulado,
+        comercio_alto_riesgo,
+        consulta_listas,
+        respuesta_registro,
+        respuesta_riesgo,
+    )
+
+    categoria = "suplementos dietarios"
+    resultados = {
+        Frente.REGISTRO: resultado_frente(
+            Frente.REGISTRO,
+            [
+                consulta_de_frente(
+                    Frente.REGISTRO,
+                    {"identificador": "CO-TV-0001"},
+                    respuesta_registro(comercio_alto_riesgo()),
+                )
+            ],
+        ),
+        Frente.CATEGORIA: resultado_frente(
+            Frente.CATEGORIA,
+            [
+                consulta_de_frente(
+                    Frente.CATEGORIA, {"categoria": categoria}, respuesta_riesgo(categoria, "alto")
+                )
+            ],
+        ),
+        Frente.LISTAS: resultado_frente(
+            Frente.LISTAS,
+            [
+                consulta_listas("comercio", identificador="CO-TV-0001"),
+                consulta_listas("persona", identificador="PE-0001"),
+            ],
+        ),
+    }
+    guion = [
+        (
+            "delegar_paralelo",
+            [
+                {"frente": "registro", "identificador": "CO-TV-0001"},
+                {"frente": "noticias", "identificador": "CO-TV-0001"},
+                {"frente": "categoria", "categoria": categoria},
+            ],
+        ),
+        ("delegar", {"frente": "listas"}),
+        ("escalar", "Revisar el origen de fondos antes de decidir."),
+        ("informe", "decide_cumplimiento"),
+        ("terminar",),
+    ]
+    coordinador = CoordinadorSimulado(guion)
+    caso = Caso(
+        ejecutor=EjecutorSimulado(resultados=resultados),
+        consulta=coordinador,
+        observador=observador,
+    )
+    coordinador.caso = caso
+    asyncio.run(
+        caso.ejecutar(
+            "Necesito el due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001, "
+            "de suplementos dietarios."
+        )
+    )
+    return caso
+
+
+def test_el_observador_del_caso_recibe_los_mismos_eventos_que_la_traza():
+    vistos = []
+    caso = _caso_a_con(vistos.append)
+    assert vistos == caso.eventos()
+    assert [e.secuencia for e in vistos] == list(range(1, len(vistos) + 1))
+
+
+def test_un_observador_que_lanza_no_cambia_el_caso_a():
+    def lanza(evento):
+        raise RuntimeError("fallo de la vista")
+
+    con_fallo, sin_observador = _caso_a_con(lanza), _caso_a_con(None)
+    tipos = [e.tipo for e in con_fallo.eventos()]
+    assert TIPO_FALLO_DE_HOOK not in tipos
+    assert con_fallo.estado.libro.fallo_de_hook is None
+    assert tipos == [e.tipo for e in sin_observador.eventos()]
+    assert TIPO_ESCALAMIENTO_REGISTRADO in tipos and TIPO_INFORME_REGISTRADO in tipos
+    assert con_fallo.completo is sin_observador.completo is True
+
+
+def test_los_turnos_se_guardan_por_turno_y_el_caso_los_sigue_sumando():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=[[], []], num_turns=[3, 4])
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=coordinador)
+    coordinador.caso = caso
+    assert caso.turnos_por_turno == []
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.turnos_por_turno == [3]
+    asyncio.run(caso.continuar("respuesta del analista"))
+    assert caso.turnos_por_turno == [3, 4]
+    assert caso.turnos == 7
+
+
+def test_un_turno_que_lanza_guarda_turnos_sin_dato():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado([("lanzar", RuntimeError("fallo simulado del SDK"))])
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=coordinador)
+    coordinador.caso = caso
+    with pytest.raises(RuntimeError):
+        asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.turnos_por_turno == [None]
+
+
+def test_un_turno_sin_mensaje_de_resultado_guarda_turnos_sin_dato():
+    async def sin_resultado(*, prompt, options=None):
+        yield AssistantMessage(content=[TextBlock("texto")], model="simulado")
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=sin_resultado)
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso.turnos_por_turno == [None]
+
+
+# ------------------------------------- #11: fechas y orden del resumen (T025, R9, R10, R4)
+
+
+def test_la_regla_de_fechas_esta_en_los_dos_modos():
+    from due_diligence.coordinador import _REGLA_FECHAS, instrucciones_coordinador
+
+    for fragmento in (
+        "AAAA-MM-DD",
+        "al guardar un informe o un caso para el oficial",
+        "está en UTC",
+        "puede ser la del día siguiente en Colombia",
+        "no la presentes como una fecha posterior a hoy ni como una anomalía",
+    ):
+        assert fragmento in _REGLA_FECHAS, fragmento
+    for demo in (False, True):  # es guía de estilo, no una regla de negocio: va en los dos
+        assert _REGLA_FECHAS in instrucciones_coordinador(demo=demo)
+
+
+def test_el_resumen_al_analista_empieza_por_la_cobertura():
+    from due_diligence.coordinador import _REGLA_RESUMEN
+
+    assert _REGLA_RESUMEN.startswith(
+        "Al terminar, empieza por la cobertura: qué frentes no se pudieron cubrir y por qué"
+    )
+    assert "frente por frente" in _REGLA_RESUMEN and "fuente y su fecha" in _REGLA_RESUMEN
+
+
+def test_las_afirmaciones_de_listas_van_una_por_autoridad_en_los_dos_modos():
+    # Validación manual del #11: en 4 de los 7 casos el hook (I.4) rechazó el primer informe por
+    # juntar varias autoridades en una afirmación. Es guía de estilo; la garantía sigue en el hook.
+    from due_diligence.coordinador import _REGLA_AFIRMACIONES, instrucciones_coordinador
+
+    assert (
+        "En listas restrictivas, escribe una afirmación por cada autoridad consultada, cada una "
+        "con su propia fuente; no juntes varias autoridades en una sola afirmación."
+    ) in _REGLA_AFIRMACIONES
+    for demo in (False, True):
+        assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)

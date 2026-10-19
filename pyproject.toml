@@ -7,6 +7,7 @@ dependencies = [
     "mcp>=2.3,<3",
     "pydantic>=2",
     "python-dotenv>=1.2,<2",
+    "streamlit>=1.66,<2",
 ]
 
 [dependency-groups]

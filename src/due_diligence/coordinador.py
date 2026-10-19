@@ -138,7 +138,9 @@ _REGLA_AFIRMACIONES = (
     "con texto, fuente y fecha; la fuente y la fecha son las de los metadatos del resultado, y "
     "solo cites fuentes que consultaste para ese frente. Cada frente cubierto lleva al menos una "
     "afirmación, también si no hubo hallazgos (por ejemplo, sin coincidencias); un frente que no "
-    "quedó cubierto puede ir sin afirmaciones. El comercio, los conflictos entre fuentes y la "
+    "quedó cubierto puede ir sin afirmaciones. En listas restrictivas, escribe una afirmación por "
+    "cada autoridad consultada, cada una con su propia fuente; no juntes varias autoridades en una "
+    "sola afirmación. El comercio, los conflictos entre fuentes y la "
     "cobertura los pone el "
     "sistema: no elijas entre valores que se contradicen. Si el registro mercantil no responde, "
     "reintenta el registro o registra el informe con el comercio que pidió el analista."
@@ -148,9 +150,22 @@ _REGLA_AFIRMACIONES = (
 # demostración la quita con `_REGLA_ESCALAR`. La garantía es el hook de `registrar_informe`.
 _REGLA_INFORME_TRAS_ESCALAR = "Si hay que escalar, registra el informe después de escalar."
 
+# #11 (R4): la cobertura va antes que la recomendación. Lo garantiza la interfaz, que la muestra
+# antes de la respuesta; esta guía hace que el texto del modelo siga el mismo orden.
 _REGLA_RESUMEN = (
-    "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
-    "fecha, y qué frentes no se pudieron cubrir y por qué."
+    "Al terminar, empieza por la cobertura: qué frentes no se pudieron cubrir y por qué. Después "
+    "resume al analista, frente por frente, lo que se obtuvo con su fuente y su fecha, y por "
+    "último la recomendación."
+)
+
+# #11 (R9, R10, FR-007, FR-008): guía de estilo y comprensión, no una regla de negocio
+# (principio II), por eso va también en el modo de demostración, y sin nombrar el escalamiento,
+# que ese modo quita (#7). La pasarela guarda la fecha de registro en UTC (#9, R10), que de noche
+# en Colombia ya es la del día siguiente.
+_REGLA_FECHAS = (
+    "Escribe todas las fechas como AAAA-MM-DD. La fecha que devuelve la pasarela al guardar un "
+    "informe o un caso para el oficial está en UTC y puede ser la del día siguiente en Colombia: "
+    "no la presentes como una fecha posterior a hoy ni como una anomalía."
 )
 
 
@@ -172,6 +187,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_INFORME,
             _REGLA_AFIRMACIONES,
             _REGLA_RESUMEN_OFICIAL,
+            _REGLA_FECHAS,
             _REGLA_RESUMEN,
         ]
     else:
@@ -184,6 +200,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
             _REGLA_RESUMEN_OFICIAL,
+            _REGLA_FECHAS,
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))
@@ -212,9 +229,12 @@ class Caso:
         consulta: Callable[..., Any] | None = None,
         reloj: Callable[[], datetime] | None = None,
         entorno: Mapping[str, str] | None = None,
+        observador: Callable[[Evento], None] | None = None,
     ) -> None:
         self.estado = EstadoCaso()
-        self._eventos = RegistroEventos(reloj)
+        # `observador` recibe cada evento ya guardado (#11, R1): la interfaz de chat muestra con él
+        # los indicadores en vivo. No puede afectar al caso: `RegistroEventos` ignora su excepción.
+        self._eventos = RegistroEventos(reloj, observador)
         # Los hooks de las reglas (#7, R5) cierran sobre el estado y los eventos de este caso y se
         # reparten por agente. No se pueden desactivar desde fuera: no hay parámetro `hooks`.
         self.hooks = HooksDelCaso(self.estado, self._eventos, entorno)
@@ -231,6 +251,9 @@ class Caso:
         # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. Desde el #10, la suma de todos
         # los turnos del caso. `None` sin `ResultMessage`.
         self.turnos: int | None = None
+        # #11 (R5, FR-004): el `num_turns` de cada turno, en orden, que es lo que se compara con
+        # `MAX_TURNOS_SEGURIDAD`; `None` si el turno no dejó `ResultMessage`. `turnos` es la suma.
+        self.turnos_por_turno: list[int | None] = []
         # #10 (R1): la sesión del coordinador que deja cada `ResultMessage` (la que `continuar`
         # reanuda) y la clasificación de cada turno, en orden; `terminacion` es la del último.
         self.session_id: str | None = None
@@ -337,6 +360,7 @@ class Caso:
         estado.cierre_sin_informe = False
         self.respuesta = ""
         clasificacion: Clasificacion | None = None
+        turnos_del_turno: int | None = None
         try:
             async for mensaje_sdk in self._consulta(
                 prompt=mensaje, options=self.opciones_coordinador(resume)
@@ -351,6 +375,7 @@ class Caso:
                     if mensaje_sdk.total_cost_usd is not None:
                         self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
                     self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
+                    turnos_del_turno = mensaje_sdk.num_turns
                     self.session_id = mensaje_sdk.session_id or self.session_id
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
@@ -361,16 +386,17 @@ class Caso:
             clasificacion = Clasificacion(
                 Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
             )
-            self._terminar(clasificacion)
+            self._terminar(clasificacion, turnos_del_turno)
             raise
         if clasificacion is None:
             clasificacion = sin_resultado()
-        self._terminar(clasificacion)
+        self._terminar(clasificacion, turnos_del_turno)
         return self.respuesta
 
-    def _terminar(self, clasificacion: Clasificacion) -> None:
+    def _terminar(self, clasificacion: Clasificacion, turnos: int | None) -> None:
         self.estado.terminacion = clasificacion
         self.turnos_del_caso.append(clasificacion)
+        self.turnos_por_turno.append(turnos)
         self._eventos.registrar(
             TIPO_TERMINACION, None, f"{clasificacion.terminacion.value}: {clasificacion.detalle}"
         )

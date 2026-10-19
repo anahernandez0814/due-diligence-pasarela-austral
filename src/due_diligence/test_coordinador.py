@@ -1304,13 +1304,17 @@ def test_la_interrupcion_corta_el_turno_al_decidir_el_hook_y_la_denegacion_sale(
     caso_ref["caso"] = caso
 
     async def probar():
-        async with asyncio.timeout(2):
-            await caso.ejecutar(SOLICITUD)
+        with pytest.raises(Interrupcion) as lanzada:
+            async with asyncio.timeout(2):
+                await caso.ejecutar(SOLICITUD)
+        # Mutación K9: sin `uncancel()`, la tarea seguiría marcada como cancelada y la siguiente
+        # espera de quien llamó (el chat, `asyncio.run`) se cortaría sola.
+        return lanzada.value, asyncio.current_task().cancelling()
 
-    with pytest.raises(Interrupcion) as lanzada:
-        asyncio.run(probar())
+    interrupcion, cancelando = asyncio.run(probar())
+    assert cancelando == 0
     # El mismo objeto que lanzó el observador: Streamlit entrega una recarga una sola vez.
-    assert lanzada.value is caso._eventos.interrupcion
+    assert interrupcion is caso._eventos.interrupcion
     (decision,) = escritas
     especifica = decision["hookSpecificOutput"]
     assert especifica["permissionDecision"] == "deny"
@@ -1352,5 +1356,43 @@ def test_una_interrupcion_que_sale_de_la_consulta_tambien_marca_el_turno_interru
     with pytest.raises(Interrupcion) as lanzada:
         asyncio.run(caso.ejecutar(SOLICITUD))
     assert lanzada.value is interrupcion
+    assert caso.interrumpido is True
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+
+
+def test_una_interrupcion_antes_de_la_consulta_corta_el_turno_sin_esperar_a_un_hook():
+    # Mutación K13: la interrupción del primer evento (`caso_iniciado`, antes de que el turno ponga
+    # su aviso) queda guardada; el turno la avisa al empezar, sin que ningún hook llegue a correr.
+    vistos = []
+
+    def observador(evento):
+        vistos.append(evento.tipo)
+        raise Interrupcion("Stop")
+
+    iniciadas = []
+
+    async def consulta(*, prompt, options=None):
+        iniciadas.append(prompt)
+        # Sin el aviso, el turno esperaría aquí y terminaría con normalidad, sin la interrupción.
+        # No se usa `asyncio.timeout`: su cancelación, con la interrupción ya guardada, también
+        # se convertiría en la interrupción y el test pasaría tarde.
+        await asyncio.sleep(3)
+        yield AssistantMessage(content=[TextBlock("no debe llegar")], model="simulado")
+
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=observador,
+        interrupciones=(Interrupcion,),
+    )
+
+    async def probar():
+        inicio = asyncio.get_running_loop().time()
+        with pytest.raises(Interrupcion):
+            await caso.ejecutar(SOLICITUD)
+        return asyncio.get_running_loop().time() - inicio
+
+    assert asyncio.run(probar()) < 2
+    assert vistos == [TIPO_CASO_INICIADO]  # el observador se apagó en el primer evento
     assert caso.interrumpido is True
     assert caso.terminacion.terminacion is Terminacion.ANOMALA

@@ -340,6 +340,16 @@ def test_un_turno_interrumpido_queda_en_el_historial_sin_pendiente():
     assert caso.interrumpido and not caso.completo
 
 
+def test_el_turno_interrumpido_relanza_la_interrupcion_y_el_script_se_detiene():
+    # Mutación K15: si `_ejecutar_turno` no relanzara la interrupción, el script seguiría y
+    # dibujaría la entrada; con una recarga, Streamlit no la volvería a entregar y se perdería.
+    _, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert not at.exception
+    # La entrada se dibuja después del turno: si aparece, el script siguió tras la interrupción.
+    assert len(at.chat_input) == 0, "el script siguió después de la interrupción: no se relanzó"
+
+
 def test_tras_un_turno_interrumpido_el_siguiente_mensaje_abre_un_caso_nuevo_con_aviso():
     fabrica, crear = _fabrica_interrumpida()
     at = _enviar(_app(crear), SOLICITUD_A)

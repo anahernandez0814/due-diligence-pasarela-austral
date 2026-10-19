@@ -273,7 +273,7 @@ def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos()
 # ------------------------------------------------ reintentos y presupuesto de turnos (#8, R2, R3)
 
 
-def test_un_reintento_por_frente_y_ocho_pasos_fijos():
+def test_un_reintento_por_frente_y_diez_pasos_fijos():
     assert configuracion.MAX_REINTENTOS_POR_FRENTE == 1
     # 10 desde el #10 (R10): escalamiento rechazado por la forma y corregido, y noticias de nuevo.
     assert configuracion.PASOS_FIJOS_PEOR_CASO == 10

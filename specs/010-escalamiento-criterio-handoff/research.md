@@ -112,6 +112,7 @@ Dos tests lo fijan:
   - `categoria_no_determinada`: «Sin causa de escalamiento vigente: la categoría no quedó determinada.»
   - `mencion_en_noticias`: «Sin causa de escalamiento vigente: hay menciones en noticias.»
   - `conflicto_entre_fuentes`: «Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales.»
+  - `comercio_no_identificado`: «Sin causa de escalamiento vigente: el comercio no está identificado de forma unívoca.» Lo añadió la implementación (T035): sin él, un caso sin comercio identificado y sin los otros cuatro motivos daba una causa vacía. No es una desviación (plan, «Decisiones de la implementación»).
 
   Lo calcula `causas_del_resumen(estado)` con las mismas lecturas que `bajo_riesgo_sin_hallazgos`. Si no se cumple ninguno, el caso es de bajo riesgo comprobado y el escalamiento ya se rechazó (paso 3).
 

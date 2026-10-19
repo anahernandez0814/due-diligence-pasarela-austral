@@ -205,6 +205,14 @@ def reemplazar_entrada(entrada: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- informe (#9)
 
 
+def _afirmaciones_de(resumen: Any) -> int:
+    """Cuántas afirmaciones trae un resumen al oficial (FR-021), o 0 si no tiene la forma."""
+    hallazgos = resumen.get("hallazgos") if isinstance(resumen, Mapping) else None
+    if not isinstance(hallazgos, Mapping):
+        return 0
+    return sum(len(v) for v in hallazgos.values() if isinstance(v, list))
+
+
 def _resumen_cobertura(cobertura: CoberturaCaso) -> str:
     """«completa, 4 de 4 frentes» o «incompleta, 2 de 4 frentes», sin datos del comercio."""
     cubiertos = sum(c.cubierto for c in cobertura.frentes.values())
@@ -774,11 +782,13 @@ class HooksDelCaso:
         nombre = f"Escalamiento {identificador}" if identificador else "Escalamiento"
         if pendiente is None:
             # Sin `PreToolUse` que lo aceptara (uno que falló y degradó): el oficial lo recibió
-            # igual, así que cuenta, con las causas y el comercio de ahora.
+            # igual, así que cuenta, con las causas y el comercio de ahora. La cobertura que llevó
+            # es la fija de la degradación, y las afirmaciones son las de lo que llegó (FR-021).
             escalamiento = Escalamiento(
                 causas_vigentes(self.estado.libro), clave_comercio(self.estado)
             )
-            sufijo = ""
+            enviadas = _afirmaciones_de(entrada.get("tool_input"))
+            sufijo = f"; cobertura no calculada; {enviadas} afirmaciones"
         else:
             escalamiento, resumen, afirmaciones = pendiente
             sufijo = f"; cobertura {resumen}; {afirmaciones} afirmaciones"
@@ -1040,17 +1050,11 @@ class HooksDelCaso:
 
     def _dejar_pendiente(self, tool_use_id: str | None, completa: dict[str, Any], resumen: str):
         """El escalamiento aceptado queda pendiente hasta su `PostToolUse` (R8)."""
-        hallazgos = completa.get("hallazgos")
-        afirmaciones = (
-            sum(len(v) for v in hallazgos.values() if isinstance(v, list))
-            if isinstance(hallazgos, Mapping)
-            else 0
-        )
         escalamiento = Escalamiento(causas_vigentes(self.estado.libro), clave_comercio(self.estado))
         self.estado.escalamientos_pendientes[tool_use_id or ""] = (
             escalamiento,
             resumen,
-            afirmaciones,
+            _afirmaciones_de(completa),
         )
 
     def _sustituir_cobertura(self, herramienta: str, argumentos: Mapping[str, Any]):

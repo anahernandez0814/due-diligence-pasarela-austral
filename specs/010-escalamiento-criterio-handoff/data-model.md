@@ -42,7 +42,7 @@ La clase la da una función hermana pura, `clase_de(resultado) -> ClaseIdentific
 | `mensajes` | `list[str]` | `Caso.ejecutar`, `Caso.continuar` | `categoria_en_mensajes` |
 | `solicitud` | propiedad: `mensajes[0]` o `""` | — | compatibilidad del #6 al #9 |
 | `categoria_bloqueada` | `bool` | `_delegar_previo` (R9) | `espera_del_analista` |
-| `escalamientos_pendientes` | `dict[str, Escalamiento]` por `tool_use_id` | `_escalar_previo` | `_escalar_posterior` y `_escalar_fallido` |
+| `escalamientos_pendientes` | `dict[str, tuple[Escalamiento, str, int]]` por `tool_use_id`: el `Escalamiento`, el resumen de la cobertura y el número de afirmaciones (para el evento, FR-021) | `_escalar_previo` | `_escalar_posterior` y `_escalar_fallido` |
 
 ## `Escalamiento` (`libro.py`, R8)
 

@@ -153,7 +153,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 - [X] T017 [US3] Si T016 falla, corregir en `src/due_diligence/delegacion.py` o `estado.py` la consolidación, sin tocar I.1. Si pasa sin cambios, anotarlo aquí.
 
   **Resultado**: T016 pasó sin cambios de código; el reinicio de la identificación en `Delegador._ejecutar` del #7 ya lo garantizaba. Los dos tests están en `test_hooks_sesiones.py`, con un `Caso` real, porque la identificación solo la escribe el hook del registro. Con la mutación que quita `reiniciar_identificacion` fallan los dos (2 de 2); se restauró desde una copia propia, sin `git checkout`.
-- [ ] T019 [US3] Fase 3: ruff, la suite completa y los tests de T046 adaptados. Commit «esperas del analista y continuación del caso (#10, US3)».
+- [X] T019 [US3] Fase 3: ruff, la suite completa y los tests de T046 adaptados. Commit «esperas del analista y continuación del caso (#10, US3)».
 
 ---
 
@@ -383,8 +383,9 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_reglas.py`: `_libro_con` y las ayudas con escalamientos | `escalamiento_cubre` cuenta solo el comercio actual (R8) y estos estados tienen `CO-TV-0001` identificado. | Los escalamientos llevan `CLAVE_TV`, la clave de su comercio; las aserciones no cambian. |
   | `test_reglas.py::test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar`, ahora `…no_habilitar_se_acepta_sin_escalar_y_decide_cumplimiento_exige_escalar` | FR-004: `decide_cumplimiento` exige un escalamiento del comercio actual (D5 del #9). | `no_habilitar` sigue aceptándose igual; `decide_cumplimiento` pasa de `[]` al rechazo exacto, y con el escalamiento vuelve a `[]`. |
   | `test_hooks.py`: 11 tests del #8 y del #9 sobre cobertura, forma, fuentes y comercio del informe (las 625 combinaciones, los frentes cubiertos sin afirmación, el comercio pedido, los eventos de datos, etc.) | Usaban `decide_cumplimiento` como recomendación de relleno, sin escalar: FR-004 la rechaza. | Cambia solo la **entrada** a `no_habilitar`; lo que prueban (cobertura, forma, fuentes, comercio) no depende de la recomendación. |
-  | `test_configuracion.py`: `PASOS_FIJOS_PEOR_CASO`, el parametrizado del presupuesto y el valor actual | R10: dos pasos fijos más. | `8 → 10`; `(1, 3, 19) → 21`, `(0, 0, 8) → 10`, `(3, 5, 37) → 39`, `(2, 3, 27) → 29`; `== 21  # 19 hasta el #9`. La comparación con `MAX_TURNOS_SEGURIDAD` sigue. |
+  | `test_configuracion.py`: `PASOS_FIJOS_PEOR_CASO`, el parametrizado del presupuesto y el valor actual | R10: dos pasos fijos más. | `8 → 10`; `(1, 3, 19) → 21`, `(0, 0, 8) → 10`, `(3, 5, 37) → 39`, `(2, 3, 27) → 29`; `== 21  # 19 hasta el #9`. La comparación con `MAX_TURNOS_SEGURIDAD` sigue. En el barrido, `test_un_reintento_por_frente_y_ocho_pasos_fijos` pasa a `…_diez_pasos_fijos`: el nombre dice lo que comprueba. |
   | `test_sondeo_hooks.py::test_los_experimentos_del_8_se_ejecutan_despues_de_los_del_7` | g6 (`_reanudacion`) se añade al final. | La lista exacta añade `_reanudacion`. |
+  | **Barrido previo al PR** (T059): `test_reglas.py::test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar` | No cambia por el diseño: se **refuerza**. Para `habilitar` solo se comprobaba que hubiera algún rechazo. | `habilitar` tras escalar se rechaza exactamente con `["I.3"]`. Ninguna aserción anterior se quita. |
 
   **Tabla cerrada en T050.** Ningún test se borró; los que cambiaron conservan igualdades exactas o cambian solo su entrada.
 
@@ -435,8 +436,8 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 ## Fase 10: validación
 
-- [ ] T054 Q1 y Q2 del quickstart: ruff, la suite completa y `test_casos_escalamiento.py` en verde. Anotar aquí el número de tests (frente al de T002): **____**.
-- [ ] T055 [MANUAL] Q3, caso (a) con el modelo real (Opus 5.5, ≈ 0,15 a 0,30 USD). Anotar:
+- [X] T054 Q1 y Q2 del quickstart: ruff, la suite completa y `test_casos_escalamiento.py` en verde. Anotar aquí el número de tests (frente al de T002): **4388** (4153 en T002); formato y ruff limpios; `test_casos_escalamiento.py`, 8 de 8.
+- [X] T055 [MANUAL] Q3, caso (a) con el modelo real (Opus 5.5, ≈ 0,15 a 0,30 USD). Anotar:
   - `escalamiento_registrado` y su causa;
   - el informe `decide_cumplimiento` vigente;
   - si hubo `resumen_rechazado` y si el coordinador lo corrigió;
@@ -444,21 +445,42 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - turnos, coste y duración.
 
   **SC-005**: la analista lee solo ese archivo y responde las cinco preguntas de US2-6.
-- [ ] T056 [MANUAL] Q4, caso (b) con el modelo real. Anotar:
+
+  **Resultado (aprobado por la analista)**:
+  - `ESC-6871431f` («cubre: categoría de alto riesgo», evento 17) **antes** que `INF-1b5cc60c`, `decide_cumplimiento` vigente (evento 20).
+  - Sin resúmenes rechazados. «Caso completo: sí». 7 de 30 turnos, 0,1863 USD, 50,8 s.
+  - **SC-005**: la analista leyó solo el resumen guardado y respondió sin dudas las cinco preguntas de US2-6 (5 de 5). La acción recomendada es concreta y sirve sin la conversación.
+- [X] T056 [MANUAL] Q4, caso (b) con el modelo real. Anotar:
   - 0 escalamientos;
   - `habilitar` vigente;
   - «Caso completo: sí»;
   - si el modelo intentó escalar (`bloqueo_regla [V]`).
-- [ ] T057 [MANUAL] Q5, caso (d) en dos turnos con el modelo real. Anotar (FR-024):
+
+  **Resultado (aprobado por la analista)**: sin escalamientos, `INF-e4797cf6` `habilitar` vigente, caso completo. El modelo no intentó escalar: el rechazo de FR-002 queda probado por los tests y la mutación (fase 7). 6 de 30 turnos, 0,1080 USD, 40,5 s.
+- [X] T057 [MANUAL] Q5, caso (d) en dos turnos con el modelo real. Anotar (FR-024):
   - turno 1: que se pidió el identificador, la espera y 0 consultas de listas;
   - turno 2 (`CO-AM-0005`): que **se consultaron listas**, que se volvió a delegar noticias (N-0001) y el informe vigente;
   - turnos de cada consulta frente al presupuesto de 21, y coste.
-- [ ] T058 [MANUAL] Sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`, con g5 en el formato nuevo y g6 (`resume`).
-- [ ] T059 Commitear las anotaciones de T054 a T058 en este archivo. **Ningún commit después de la revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de T046 y las desviaciones D1, D2 y D3 del plan.
+
+  **Resultado (aprobado por la analista)**:
+  - **Turno 1**: `espera_analista` (evento 12), listas `sin_iniciar`, sin escalamiento ni informe, «Caso completo: no». 4 de 30 turnos.
+  - **Turno 2**, con «El identificador es CO-AM-0005.», en el mismo caso:
+    - el registro y noticias, vueltos a delegar «con otra entrada»;
+    - N-0001 en el informe;
+    - **listas consultadas** con `CO-AM-0005` y `PE-0005`;
+    - `INF-f7ba3dfe`, `habilitar` vigente, caso completo. 5 de 30 turnos.
+  - El coordinador advirtió al analista que `CO-AM-0005` es «Almacén Mirador Norte SAS» y ofreció rehacer el caso con `CO-AM-0004`, sin elegir por su cuenta. Coste ≈ 0,19 USD en total.
+- [X] T058 [MANUAL] Sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`, con g5 en el formato nuevo y g6 (`resume`).
+
+  **Resultado (aprobado por la analista)**: 23 coinciden, 0 difieren, 0 inconclusas. g5 y las tres de g6 coinciden. `$LASTEXITCODE` 0.
+- [X] T059 Commitear las anotaciones de T054 a T058 en este archivo. **Ningún commit después de la revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de T046 y las desviaciones D1, D2 y D3 del plan.
 
 ## Para otros tickets (no se corrige en el #10)
 
 - **#12, simulación de noticias**: sin un resultado asignado, el `EjecutorSimulado` da a noticias la fuente por defecto `FUENTE` («Registro Mercantil Ficticio del Sur»); la real es «Diario Ficticio del Sur». Por eso el resumen simulado del caso (a) cita el registro como fuente de noticias. Solo afecta a la simulación: la pasarela real usa su fuente y FR-004 compara con la fuente que devolvió cada consulta (observación de la analista en la parada B).
+- **#11, hora en UTC frente a la de Colombia** (observación de la analista en T056): las horas se guardan en UTC (#9, R10). En el caso (b), el coordinador le dijo al analista que el informe tenía fecha «un día después de hoy»: era la 01:06 UTC del 19, las 20:06 del 18 en Colombia. Para el #11:
+  - la interfaz muestra la hora de Colombia;
+  - el coordinador sabe que `registrado_en` está en UTC.
 
 ---
 

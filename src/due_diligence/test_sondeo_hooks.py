@@ -259,6 +259,25 @@ def test_el_hook_del_escalamiento_acepta_la_entrada_de_g5_y_pone_la_cobertura_de
     assert sustituida["hallazgos"] == sondeo_hooks.ENTRADA_ESCALAMIENTO["hallazgos"]
 
 
-def test_g6_espera_el_contexto_el_stop_reanudado_y_los_turnos_por_turno():
-    assert sondeo_hooks.CODIGO_DEL_SONDEO in sondeo_hooks.PRIMER_TURNO
-    assert sondeo_hooks.TURNOS_DEL_TURNO_REANUDADO == 2  # la herramienta y la respuesta final
+def test_g6_espera_el_contexto_el_stop_reanudado_y_los_turnos_por_turno(monkeypatch):
+    # Sin el modelo: las sesiones se sustituyen; se comprueba qué espera g6 y que el segundo turno
+    # reanuda la sesión del primero, sin repetirle el código (si no, no mediría el contexto).
+    import asyncio
+
+    codigo = sondeo_hooks.CODIGO_DEL_SONDEO
+    assert codigo in sondeo_hooks.PRIMER_TURNO and codigo not in sondeo_hooks.SEGUNDO_TURNO
+    reanudaciones = []
+
+    async def falsa(prompt, opciones):
+        reanudaciones.append(opciones.resume)
+        traza = sondeo_hooks.Traza(llamadas=["mcp__caso__anotar"], num_turns=2)
+        return sondeo_hooks._ConSesion(traza, "s-1")
+
+    monkeypatch.setattr(sondeo_hooks, "_correr_con_sesion", falsa)
+    mediciones = asyncio.run(sondeo_hooks._reanudacion())
+    assert [(m.clave, m.esperado) for m in mediciones] == [
+        ("g6_contexto", [codigo]),
+        ("g6_stop_reanudado", True),
+        ("g6_turnos_por_turno", 2),
+    ]
+    assert reanudaciones == [None, "s-1"]

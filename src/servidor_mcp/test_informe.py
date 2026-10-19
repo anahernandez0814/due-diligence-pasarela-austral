@@ -440,3 +440,16 @@ def test_una_entrada_que_no_es_un_objeto():
     from servidor_mcp.informe import validar_resumen
 
     assert validar_resumen(["no"]) == [Problema("", "La entrada debe ser un objeto.")]
+
+
+def test_el_comercio_y_los_conflictos_del_resumen_se_validan_por_dentro():
+    # T030 (barrido): no solo cuando faltan; un comercio o unos conflictos mal formados dan su ruta.
+    from servidor_mcp.informe import DEBE_SER_BOOL, DEBE_SER_LISTA, validar_resumen
+
+    resumen = _resumen()
+    resumen["comercio"] = {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"}
+    resumen["conflictos"] = {"resumen": "x", "lista": "y"}
+    assert validar_resumen(resumen) == [
+        Problema("comercio.verificado", DEBE_SER_BOOL),
+        Problema("conflictos.lista", DEBE_SER_LISTA),
+    ]

@@ -980,9 +980,14 @@ def test_r4_a_el_turno_2_que_registra_el_informe_deja_el_caso_completo():
 
 
 def test_r4_b_el_turno_2_que_no_hace_nada_vuelve_a_poner_la_marca():
-    caso, _ = _caso_por_turnos([[*DELEGACIONES_B, *AGOTAR], [*AGOTAR]], _resultados_b())
+    caso, coordinador = _caso_por_turnos([[*DELEGACIONES_B, *AGOTAR], [*AGOTAR]], _resultados_b())
     asyncio.run(caso.ejecutar(SOLICITUD_B))
     asyncio.run(caso.continuar("¿Y entonces?"))
+    # Sin el reinicio, el turno 2 dejaría cerrar en su primer intento (el contador seguiría lleno);
+    # con él, vuelve a devolver MAX veces y la marca la pone el turno 2.
+    maximo = configuracion.MAX_CIERRES_IMPEDIDOS
+    turno_2 = coordinador.resultados_de("terminar")[-(maximo + 1) :]
+    assert [r.termino for r in turno_2] == [False] * maximo + [True]
     assert caso.estado.cierre_sin_informe is True
     assert caso.estado.libro.cierres_impedidos == configuracion.MAX_CIERRES_IMPEDIDOS
     assert caso.completo is False

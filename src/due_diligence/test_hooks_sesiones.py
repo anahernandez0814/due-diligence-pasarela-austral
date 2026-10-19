@@ -515,11 +515,10 @@ def test_tras_identificar_listas_se_delega_y_consulta_al_comercio_y_al_represent
             consulta_listas("persona", identificador="PE-0005"),
         ],
     )
-    caso = CasoReal(
-        ejecutor=EjecutorSimulado(
-            resultados={Frente.REGISTRO: _registro_por_contexto, Frente.LISTAS: listas}
-        )
+    ejecutor = EjecutorSimulado(
+        resultados={Frente.REGISTRO: _registro_por_contexto, Frente.LISTAS: listas}
     )
+    caso = CasoReal(ejecutor=ejecutor)
     delegador = caso.delegador
     asyncio.run(delegador.delegar({"frente": "registro", "nombre": "Almacén Mirador SAS"}))
     rechazo = asyncio.run(delegador.delegar({"frente": "listas"}))
@@ -528,3 +527,7 @@ def test_tras_identificar_listas_se_delega_y_consulta_al_comercio_y_al_represent
     respuesta = asyncio.run(delegador.delegar({"frente": "listas"}))
     assert respuesta["situacion"] == "terminado"
     assert caso.estado.situacion(Frente.LISTAS) is Situacion.TERMINADO
+    # El subagente de listas se lanzó una sola vez (el primer pedido se rechazó sin lanzarlo) y
+    # recibió al comercio identificado y a su representante.
+    (llamada,) = ejecutor.llamadas_de(Frente.LISTAS)
+    assert "CO-AM-0005" in llamada.contexto and "PE-0005" in llamada.contexto

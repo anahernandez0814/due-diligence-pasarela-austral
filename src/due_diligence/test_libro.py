@@ -82,7 +82,7 @@ def test_el_escalamiento_guarda_sus_causas_y_su_comercio_y_es_inmutable():
     from due_diligence.libro import Escalamiento
 
     escalamiento = Escalamiento(
-        frozenset({"alto_riesgo"}), ("CO-TV-0001", "Tienda Verde SAS", True)
+        causas=frozenset({"alto_riesgo"}), comercio=("CO-TV-0001", "Tienda Verde SAS", True)
     )
     assert escalamiento.causas == frozenset({"alto_riesgo"})
     assert escalamiento.comercio == ("CO-TV-0001", "Tienda Verde SAS", True)
@@ -91,11 +91,10 @@ def test_el_escalamiento_guarda_sus_causas_y_su_comercio_y_es_inmutable():
         escalamiento.causas = frozenset()  # type: ignore[misc]
 
 
-def test_los_escalamientos_del_libro_son_una_lista_de_escalamiento():
+def test_los_escalamientos_del_libro_se_anotan_como_lista_de_escalamiento():
+    # Que el hook guarda un `Escalamiento` con su comercio lo fija test_hooks.py
+    # (`test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_evento`).
     from due_diligence.libro import Escalamiento
 
-    libro = LibroReglas()
-    libro.escalamientos.append(Escalamiento(frozenset({"alto_riesgo"}), None))
-    assert libro.escalamientos == [Escalamiento(frozenset({"alto_riesgo"}), None)]
     tipo = {f.name: f.type for f in fields(LibroReglas)}["escalamientos"]
-    assert "Escalamiento" in str(tipo)
+    assert tipo == list[Escalamiento]

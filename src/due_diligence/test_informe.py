@@ -391,6 +391,10 @@ def test_en_listas_cuentan_el_comercio_y_su_representante_y_no_el_comercio_anter
     assert fuentes_consultadas(estado, Frente.LISTAS) == []
     estado.agregar_consultas([consulta_listas("persona", identificador="PE-0005")])
     assert fuentes_consultadas(estado, Frente.LISTAS) == [LISTA]
+    # Y la del propio comercio identificado, sola.
+    del_comercio = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    del_comercio.agregar_consultas([consulta_listas("comercio", identificador="CO-AM-0005")])
+    assert fuentes_consultadas(del_comercio, Frente.LISTAS) == [LISTA]
 
 
 def test_sin_comercio_identificado_cuentan_todas_las_consultas_como_en_el_9():
@@ -422,6 +426,9 @@ def test_la_huella_cambia_al_pasar_noticias_a_no_cubierto():
     )
     antes = huella_actual(estado)
     assert calcular_cobertura(estado).frentes[Frente.NOTICIAS].cubierto is True
+    # T025 (barrido): un informe registrado con la huella de antes deja de estar vigente.
+    estado.informes.append(InformeRegistrado("INF-0001", "no_habilitar", False, antes))
+    assert informe_vigente(estado) is True
     estado.reiniciar_identificacion()
     parecidos = {c["identificador"]: c for c in comercios_parecidos()}
     estado.registrar_identificacion(respuesta_registro(parecidos["CO-AM-0005"]))
@@ -429,3 +436,24 @@ def test_la_huella_cambia_al_pasar_noticias_a_no_cubierto():
     # También cambian los conflictos (ya hay comercio que comparar) y el comercio; la cobertura
     # solo cambia por noticias, porque el registro estaba terminado antes y después.
     assert "la cobertura" in cambios(antes, huella_actual(estado))
+    assert informe_vigente(estado) is False
+
+
+def test_con_el_comercio_identificado_registro_y_categoria_siguen_contando_sus_fuentes():
+    # T025 (barrido): el filtro de FR-027 solo toca noticias y listas; registro y categoría no
+    # dependen del comercio consultado y sus fuentes valen aunque la consulta traiga otros datos.
+    from due_diligence.simulacion import respuesta_riesgo
+
+    estado = _identificado_como(EstadoCaso(), "CO-AM-0005")
+    estado.agregar_consultas(
+        [
+            consulta(Frente.REGISTRO, {"nombre": "Almacén Mirador SAS"}),
+            consulta(
+                Frente.CATEGORIA,
+                {"categoria": "ropa y accesorios"},
+                respuesta_riesgo("ropa y accesorios", "bajo"),
+            ),
+        ]
+    )
+    assert fuentes_consultadas(estado, Frente.REGISTRO) == [SUR]
+    assert fuentes_consultadas(estado, Frente.CATEGORIA) == ["Catálogo Ficticio de Categorías"]

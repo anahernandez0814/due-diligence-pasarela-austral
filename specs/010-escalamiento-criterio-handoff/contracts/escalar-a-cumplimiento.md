@@ -31,7 +31,7 @@ El coordinador puede enviar también `comercio`, `cobertura`, `causa_escalamient
 }
 ```
 
-Sin causas vigentes (FR-003), `causa_escalamiento` lleva una línea fija por cada motivo que se cumple (`MOTIVOS_SIN_CAUSA`: cobertura incompleta, categoría no determinada, mención en noticias, conflicto entre fuentes; research R5).
+Sin causas vigentes (FR-003), `causa_escalamiento` lleva una línea fija por cada motivo que se cumple (`MOTIVOS_SIN_CAUSA`: cobertura incompleta, categoría no determinada, mención en noticias, conflicto entre fuentes y comercio no identificado; research R5).
 
 ## Rechazos en el hook (`PreToolUse`, deny)
 

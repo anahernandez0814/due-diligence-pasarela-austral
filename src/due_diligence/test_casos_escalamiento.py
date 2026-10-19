@@ -22,7 +22,11 @@ from due_diligence.eventos import (
 )
 from due_diligence.frentes import Frente
 from due_diligence.informe import informe_vigente
-from due_diligence.reglas import MOTIVO_SIN_CAUSA, motivo_de_escalar
+from due_diligence.reglas import (
+    MOTIVO_SIN_CAUSA,
+    MOTIVO_VARIAS_COINCIDENCIAS,
+    motivo_de_escalar,
+)
 from due_diligence.simulacion import (
     FUENTE,
     CoordinadorSimulado,
@@ -216,7 +220,8 @@ TURNO_1_D = [
 def test_caso_d_primer_turno_pide_el_identificador_sin_listas_ni_escalar_ni_informar():
     caso, coordinador, ejecutor = _caso([TURNO_1_D], _resultados_d(), SOLICITUD_D)
     (listas,) = [r for t, r in coordinador.pasos if t == "delegar" and r.denegada]
-    assert listas.denegada
+    assert MOTIVO_VARIAS_COINCIDENCIAS in listas.texto
+    assert [e.regla for e in caso.eventos() if e.tipo == TIPO_BLOQUEO_REGLA] == ["I.1"]
     assert ejecutor.llamadas_de(Frente.LISTAS) == []
     assert coordinador.pasarela.escalamientos == [] and coordinador.pasarela.informes == []
     assert coordinador.resultados_de("terminar")[0].termino is True
@@ -269,6 +274,7 @@ def test_caso_d_con_alto_riesgo_el_primer_turno_espera_y_el_segundo_exige_escala
     caso, coordinador, _ = _caso([turno_1, turno_2], resultados, SOLICITUD_D_ALTO)
     primero = coordinador.resultados_de("terminar")[0]
     assert primero.termino is True and coordinador.pasarela.escalamientos == []
+    assert caso.espera.clase == "identificador" and TIPO_ESPERA_ANALISTA in _tipos(caso)
     asyncio.run(caso.continuar(NORTE))
     impedido, final = coordinador.resultados_de("terminar")[1:]
     assert impedido.termino is False
@@ -350,4 +356,5 @@ def test_los_motivos_eventos_y_cobertura_no_repiten_el_comercio_ni_su_representa
     textos += [r.motivo for r in coordinador.resultados_de("terminar") if r.motivo]
     textos += caso.cobertura.lineas()
     for texto in textos:
-        assert "Almacén Mirador Norte SAS" not in texto and "PE-0005" not in texto, texto
+        for dato in ("Almacén Mirador Norte SAS", NORTE, "PE-0005", "Gaspar Linares"):
+            assert dato not in texto, (dato, texto)

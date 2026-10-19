@@ -385,7 +385,8 @@ def test_con_espera_pregunta_y_continua_en_el_mismo_caso(monkeypatch, capsys):
     from due_diligence.reglas import MOTIVO_ESPERA_IDENTIFICADOR
 
     monkeypatch.setattr(configuracion, "cargar_entorno", lambda: True)
-    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado([]))
+    llamadas = []
+    monkeypatch.setattr(principal, "ejecutar_caso", _caso_d_simulado(llamadas))
     respuestas = iter(["CO-AM-0005", ""])
     preguntas = []
 
@@ -399,6 +400,7 @@ def test_con_espera_pregunta_y_continua_en_el_mismo_caso(monkeypatch, capsys):
     assert "Sin espera del analista" in salida  # tras la respuesta, en la segunda impresión
     assert preguntas == [principal.PREGUNTA_AL_ANALISTA]  # sin espera ya no vuelve a preguntar
     assert salida.count("Eventos del caso:") == 2
+    assert llamadas == ["ejecutar_caso"]  # un solo caso: la respuesta continúa, no crea otro
 
 
 @pytest.mark.parametrize("respuesta", ["", "   ", EOFError])

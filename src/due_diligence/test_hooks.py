@@ -917,6 +917,21 @@ def test_un_escalamiento_exitoso_guarda_la_instantanea_de_las_causas_y_deja_el_e
     assert "representante legal" in evento.detalle and "PE-0003" not in evento.detalle
 
 
+def test_sin_pendiente_el_evento_del_escalamiento_lleva_la_cobertura_y_las_afirmaciones():
+    # FR-021 (#10): también en el camino sin pendiente (un `PreToolUse` que falló y degradó), el
+    # evento dice el id, las causas, la cobertura (la fija «no calculada» que puso la degradación)
+    # y el número de afirmaciones del resumen que llegó a la pasarela.
+    estado, eventos, hooks = _caso_con_comercio()
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("suplementos dietarios", "alto"))
+    escalado = respuesta_de_decision("caso_escalado", "ESC-0009")
+    enviado = _escalamiento()  # una afirmación, en registro
+    _ejecutar(_hook(hooks.coordinador(), "PostToolUse"), _post_de(ESCALAR, escalado, enviado))
+    assert eventos.eventos()[-1].detalle == (
+        "Escalamiento ESC-0009 registrado; cubre: categoría de alto riesgo; cobertura no "
+        "calculada; 1 afirmaciones."
+    )
+
+
 def test_un_escalamiento_con_error_o_con_otro_resultado_no_cuenta():
     estado, eventos, hooks = _caso_con_comercio()
     error = error_estructurado("campos_obligatorios_ausentes", False)
@@ -2536,12 +2551,19 @@ def test_el_informe_se_rechaza_mientras_se_espera_el_identificador_o_el_nombre(p
 
 
 def test_en_la_espera_de_la_categoria_el_informe_sigue_las_reglas_de_siempre():
+    # Ni la espera lo rechaza ni lo deja pasar todo: un informe válido se acepta como siempre y
+    # `habilitar` con una coincidencia se rechaza con I.2, como siempre.
     estado, _, hooks = _caso_con_comercio()
     estado.categoria_bloqueada = True
     entrada = _informe_del_caso(estado, "no_habilitar")
     salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
-    assert not _es_denegacion(salida)
-    assert _sustituida(salida)["recomendacion"] == "no_habilitar"
+    _comprobar_informe_aceptado(salida, entrada, estado)
+    con_coincidencia, _, hooks_c = _caso_con_comercio()
+    con_coincidencia.categoria_bloqueada = True
+    con_coincidencia.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    habilitar = _informe_del_caso(con_coincidencia, "habilitar")
+    rechazo = _rechazo(_ejecutar(_hook_del_informe(hooks_c), _pre(INFORME, habilitar)))
+    assert {"regla": "I.2", "texto": MOTIVO_HABILITAR_CON_COINCIDENCIA} in rechazo["motivos"]
 
 
 def test_con_el_sello_y_la_espera_el_informe_minimo_sigue_exigiendo_escalar_antes():
@@ -2601,7 +2623,9 @@ def test_la_categoria_dada_en_un_mensaje_posterior_se_permite():
     assert _delegar(hooks, {"frente": "categoria", "categoria": "talleres"}) == permitir()
 
 
-def test_una_delegacion_de_categoria_sin_categoria_la_rechaza_el_delegador_no_el_hook():
+def test_una_delegacion_de_categoria_sin_categoria_no_la_bloquea_el_hook():
+    # La rechaza el `Delegador`, como desde el #6: lo fijan los tests de `test_delegacion.py` del
+    # frente sin su dato. Aquí solo se comprueba que el hook la deja pasar sin marcar el bloqueo.
     estado, eventos, hooks = _caso()
     assert _delegar(hooks, {"frente": "categoria"}) == permitir()
     assert estado.categoria_bloqueada is False and eventos.eventos() == []
@@ -3126,6 +3150,7 @@ def test_la_espera_va_antes_que_la_forma_y_el_bajo_riesgo_antes_que_la_forma():
         _ejecutar(_hook_del_escalamiento(hooks_b), _pre(ESCALAR, mal_formado))
     )
     assert rechazo["motivos"] == [{"regla": "V", "texto": MOTIVO_SIN_CAUSA}]
+    assert rechazo["problemas"] == []  # ni rastro de la forma: el criterio va antes
 
 
 def test_en_la_espera_de_la_categoria_el_escalamiento_se_admite():

@@ -673,3 +673,9 @@ def test_el_resumen_del_caso_es_valido_y_solo_cita_fuentes_admitidas():
         "conflictos",
     }
     assert validar_resumen(resumen) == []
+    from due_diligence.informe import fuentes_consultadas
+
+    assert resumen["hallazgos"]
+    for frente, afirmaciones in resumen["hallazgos"].items():
+        admitidas = fuentes_consultadas(estado, Frente(frente))
+        assert all(a["fuente"] in admitidas for a in afirmaciones), frente

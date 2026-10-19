@@ -665,7 +665,8 @@ def test_alto_riesgo_escalado_acepta_decide_cumplimiento_y_no_habilitar():
     estado = _estado_de_informe(libro)
     assert evaluar_informe(estado, _informe("decide_cumplimiento")) == []
     assert evaluar_informe(estado, _informe("no_habilitar")) == []
-    assert evaluar_informe(estado, _informe("habilitar"))  # escalar no habilita
+    # Escalar no habilita: el rechazo es el de I.3, el del alto riesgo.
+    assert [r.regla for r in evaluar_informe(estado, _informe("habilitar"))] == ["I.3"]
 
 
 def test_la_regla_de_un_rechazo_por_alto_riesgo_y_coincidencia_es_i2_i3():

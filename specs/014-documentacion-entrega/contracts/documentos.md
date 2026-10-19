@@ -8,7 +8,7 @@ historial crea un repositorio git temporal.
 | límite de páginas | `DECISIONES.md` | líneas impresas a 90 columnas (R1) ≤ 100 | FR-008, SC-002 |
 | once necesidades | `DECISIONES.md` | una fila de tabla que empieza por `\| N \|` para N = 1…11 | FR-009, SC-003 |
 | tickets trazados | `DECISIONES.md` | aparecen `#1`…`#13` y `#19` (con límite de palabra) | FR-009, SC-003 |
-| sección del Agent SDK | `DECISIONES.md` | entre 6 y 8 líneas no vacías bajo su encabezado | FR-010 |
+| sección del Agent SDK | `DECISIONES.md` | sus líneas no vacías ocupan entre 6 y 8 líneas impresas a 90 columnas (R1) | FR-010 |
 | enlaces al detalle | `DECISIONES.md` → `docs/decisiones-detalle.md` | cada `docs/decisiones-detalle.md#ancla` existe según los slugs de GitHub (R3); al menos uno por fila de la tabla | FR-012, SC-004 |
 | sin pérdida | `docs/decisiones-detalle.md` | las líneas no vacías de `git show f9e82d6:DECISIONES.md` son subsecuencia ordenada; se omite sin git o sin el commit | FR-013, SC-004 |
 | añadidos | `docs/decisiones-detalle.md` | aparecen `contexto_revision.py:160`, `revisor-codigo.md:67`, `T055`, `/pull/` y la nota de la espera de la categoría | FR-014 |

@@ -20,8 +20,10 @@ caso a un oficial de cumplimiento. Todos los datos son ficticios.
 
 Para correr el sistema y sus pruebas en menos de 5 minutos desde un clon recién hecho.
 Necesita `git`, [uv](https://docs.astral.sh/uv/getting-started/installation/) (instala Python y
-las dependencias del proyecto) y una clave de la API de Anthropic. Los comandos son iguales en
-PowerShell y en bash, salvo donde se indica.
+las dependencias del proyecto) y una clave de la API de Anthropic. Los comandos se ejecutan en la
+raíz del clon (`git clone https://github.com/anahernandez0814/due-diligence-pasarela-austral.git`
+y `cd due-diligence-pasarela-austral`) y son iguales en PowerShell y en bash, salvo donde se
+indica.
 
 1. **Python 3.12**: `uv python install 3.12`. Termina indicando que instaló Python 3.12 o que ya
    estaba instalado.
@@ -39,7 +41,9 @@ PowerShell y en bash, salvo donde se indica.
 
 4. **Pruebas de la aplicación**: `uv run pytest src`. Tardan unos 25 s y terminan todas en
    «passed». No usan la clave ni la red; las de punta a punta, que sí la usan, no se ejecutan
-   aquí (ver [Pruebas](#pruebas)).
+   aquí (ver [Pruebas](#pruebas)). Si falla con «Failed to spawn: pytest … Access is denied»,
+   un antivirus está bloqueando el lanzador recién creado: `uv run python -m pytest src` hace
+   lo mismo.
 5. **Chat**: `uv run streamlit run src/due_diligence/chat.py`. Se abre http://localhost:8501;
    escriba uno de los mensajes de [los siete casos](#interfaz-de-chat). Cada caso consume API:
    del orden de 0,15 a 0,30 USD con Opus 5.5.
@@ -51,8 +55,10 @@ PowerShell y en bash, salvo donde se indica.
 | `ANTHROPIC_API_KEY` | La aplicación: el chat, la línea de comandos y las pruebas de punta a punta | En `.env`, en la raíz (paso 3); git lo ignora |
 | `GITHUB_PAT` | El servidor MCP de GitHub de Claude Code, para leer y mover el backlog del Project | En el entorno del sistema, porque `.mcp.json` no lee `.env`; con los permisos `repo` y `project` |
 
-`GITHUB_PAT` solo hace falta para trabajar en el backlog con Claude Code, no para correr el
-sistema; cómo crearlo está en [Token de GitHub](#token-de-github-para-claude-code-github_pat).
+Un servidor MCP (Model Context Protocol) le da a Claude Code herramientas externas, como leer
+issues o mover tarjetas. `GITHUB_PAT` solo hace falta para trabajar en el backlog con Claude
+Code, no para correr el sistema; cómo crearlo está en
+[Token de GitHub](#token-de-github-para-claude-code-github_pat).
 
 ## Requisitos
 
@@ -90,7 +96,8 @@ ejecutan los siete casos con el modelo real y por eso consumen API: unos 1,14 US
 completa y unos 0,16 USD por caso.
 
 **El paso de verificación es `uv run pytest src`** (unos 25 s). La suite completa, `uv run
-pytest`, tarda de 4:43 a 6:12 en Windows (desviación D3 del #12) por los tests de las guardas
+pytest`, tarda de 4:43 a 6:12 en Windows (desviación D3 del #12; 6:23 en el barrido del #14,
+con el equipo ocupado) por los tests de las guardas
 de Claude Code (los hooks de `.claude/hooks/`, que bloquean acciones prohibidas antes de
 ejecutarlas), que crean repositorios git de prueba; no es el paso principal.
 

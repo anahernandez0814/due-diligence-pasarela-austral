@@ -9,7 +9,7 @@ tests comprueban.
 |---------|-----------|--------------|
 | Título e introducción | 2–3 líneas: qué es y que el detalle está en `docs/decisiones-detalle.md` | — |
 | Necesidades del ecosistema | Tabla: `N` · Necesidad · Mecanismo · Por qué · Descartado · Dónde (tickets y archivo principal, con enlace al detalle) | Filas 1 a 11; enlaces válidos |
-| Sistema con el Agent SDK | 6–8 líneas: coordinador y subagentes con herramientas restringidas, hooks del SDK, servidor MCP, fallas y cobertura, interfaz de chat | Entre 6 y 8 líneas no vacías |
+| Sistema con el Agent SDK | 6–8 líneas: coordinador y subagentes con herramientas restringidas, hooks del SDK, servidor MCP, fallas y cobertura, interfaz de chat | Entre 6 y 8 líneas impresas a 90 columnas |
 | Flujo de trabajo | Excepciones de arranque del #1; una rama por ticket con merge commit; workflows del Project con la corrección | — |
 | Límites conocidos | Lista corta, cada punto con enlace al detalle | Enlaces válidos |
 

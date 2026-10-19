@@ -139,7 +139,7 @@ Las horas de la interfaz están en hora de Colombia y lo dicen. El coordinador s
 
 ### Measurable Outcomes
 
-- **SC-001**: Los siete casos de prueba (a) a (g) se reproducen desde el chat con los mensajes documentados y muestran el resultado que describe la documentación (validación manual con el modelo real, con el coste anotado).
+- **SC-001**: Los siete casos de prueba (a) a (g) se reproducen desde el chat con los mensajes documentados y muestran el resultado que describe la documentación (validación manual con el modelo real, con el coste anotado; el chat no muestra el coste y se anota el del orden medido con la línea de comandos en el #7: desviación justificada D2 del plan).
 - **SC-002**: En el 100 % de las ejecuciones simuladas, cada delegación, bloqueo, informe registrado y escalamiento de la traza del caso tiene su indicador en la conversación, en el turno y el orden en que ocurrió.
 - **SC-003**: En el 100 % de los turnos simulados, la cobertura y los frentes que fallaron aparecen antes de la respuesta del coordinador, y ningún caso incompleto se muestra como completo.
 - **SC-004**: Sin la clave, la aplicación de chat y la línea de comandos muestran el mensaje con los pasos y hacen cero llamadas al modelo.
@@ -155,7 +155,7 @@ Las horas de la interfaz están en hora de Colombia y lo dicen. El coordinador s
 - **Decisión de la analista**: los modos de simulación se activan con las variables de entorno de siempre (`PASARELA_FALLA_NOTICIAS=1`, `PASARELA_MODO_DEMO_HOOKS=1`) al arrancar la aplicación, no con un control dentro del chat; la interfaz los muestra, y la documentación dice que para los casos (e) y (f) hay que reiniciar la aplicación con la variable. Un control en la interfaz queda como mejora futura.
 - **Decisión de la analista**: el formato único de fechas es `AAAA-MM-DD` (FR-008). Lo que escribe el coordinador lo guían sus instrucciones, no lo garantiza el código (principio II: es estilo, no una regla de negocio); lo que muestra la interfaz sí lo fija el código.
 - **Decisión de la analista** (US1-3, FR-001): un mensaje tras un caso **completo** inicia un caso nuevo y la conversación lo dice; tras un caso incompleto o en espera, continúa el mismo caso. Motivo: con D1 del #10, las coincidencias de un comercio anterior siguen siendo causas del caso, y quien evalúe dos casos de prueba seguidos sin pulsar «caso nuevo» vería un escalamiento ajeno. El botón «caso nuevo» se mantiene.
-- **Coste**: cada caso con el modelo real cuesta del orden de 0,15 a 0,30 USD con Opus 5.5; la validación manual de los siete casos se anota en el quickstart.
+- **Coste**: cada caso con el modelo real cuesta del orden de 0,15 a 0,30 USD con Opus 5.5; la validación manual de los siete casos se anota en el quickstart. Como el chat no muestra el coste, en la validación se anota ese orden de magnitud, medido con la línea de comandos en el #7 (desviación justificada D2 del plan).
 - **Datos**: los siete casos ya están en los datos ficticios (`test_datos_casos.py`); no hacen falta datos nuevos (principio VII).
 - **Fuera de alcance** (el plan los anota como pendientes para DECISIONES.md):
   - D7 del #9 (el comercio pedido pierde el nombre con el registro caído y la consulta solo por identificador);

@@ -24,8 +24,8 @@ modelo para este plan.
   (`caso.eventos()`) y lo guarda en el historial. Lo que queda en la conversación es siempre esa
   versión; la en vivo solo acompaña la espera.
 
-**Por qué**: un caso con Opus 5.5 tarda de uno a tres minutos por turno. Ver «Se delega el frente
-registro mercantil» o «Regla I.1 bloqueó…» mientras ocurre es lo que hace evidente la delegación
+**Por qué**: un caso con Opus 5.5 tarda de uno a tres minutos por turno. Ver «Delegación al
+subagente de registro mercantil» o «Bloqueado por la regla I.1…» mientras ocurre es lo que hace evidente la delegación
 (principio VI); un «trabajando» mudo durante dos minutos no lo es. El coste es bajo:
 
 - todos los eventos se registran en el bucle de `asyncio` del hilo que ejecuta el turno (no hay
@@ -74,7 +74,7 @@ cargan el entorno ni llaman al modelo).
 
 | Evento | Indicador | Texto |
 |--------|-----------|-------|
-| `delegacion` | delegación | «Delegación al subagente de {frente en palabras}» + el detalle (primera vez, reintento u otra entrada) |
+| `delegacion` | delegación | «Delegación al subagente de {frente en palabras}»; detalle solo si aporta: «Reintento con la misma entrada, tras un error que se puede reintentar.» o «Se vuelve a delegar con otra entrada.». La delegación normal va sin detalle, porque el de la traza repite el nombre interno del frente (validación manual) |
 | `bloqueo_regla` | bloqueo | «Bloqueado por la regla {regla}: {acción intentada}» + el motivo |
 | `informe_registrado` | informe | «Informe registrado» + el detalle (id, recomendación, cobertura, conflictos) |
 | `escalamiento_registrado` | escalamiento | «Caso escalado a cumplimiento» + el detalle (id y causas) |
@@ -96,7 +96,9 @@ intentada no lleva datos del comercio desde el #9 (FR-017). El indicador no aña
 indicadores → cobertura → estado del caso → respuesta del coordinador → turnos usados.
 
 - **Cobertura**: la de `caso.cobertura` (la misma que se registra), una fila por frente en
-  palabras, cubierto o no y el motivo.
+  palabras, cubierto o no y el motivo. En el motivo, los tipos de error conocidos van en palabras
+  (`ERRORES_EN_PALABRAS`: «el servicio no está disponible» en lugar de `servicio_no_disponible`), y
+  un tipo desconocido queda tal cual (validación manual). La cobertura registrada no cambia.
 - **Estado**, un único valor, evaluado en este orden:
   1. `fallo_de_hook` → «Incompleto: un control de las reglas falló».
   2. espera del analista → «Esperando al analista. {motivo}» (dos oraciones: el motivo ya lleva sus dos puntos; validación manual).
@@ -223,9 +225,11 @@ y el README.
   `tzdata` en Windows (`zoneinfo("America/Bogota")` falla sin ese paquete). La traza y los
   registros siguen en UTC (#9, R10).
 - El coordinador: una regla nueva `_REGLA_FECHAS` en sus instrucciones, en los dos modos:
-  «Escribe las fechas como AAAA-MM-DD. La fecha que devuelven `registrar_informe` y
-  `escalar_a_cumplimiento` está en UTC y puede ser la del día siguiente en Colombia: no la
-  presentes como una fecha posterior a hoy ni como una anomalía.» Un test fija el texto.
+  «Escribe todas las fechas como AAAA-MM-DD. La fecha que devuelve la pasarela al guardar un
+  informe o un caso para el oficial está en UTC y puede ser la del día siguiente en Colombia: no
+  la presentes como una fecha posterior a hoy ni como una anomalía.» Un test fija el texto. **No
+  nombra `escalar_a_cumplimiento`**: un test del #7 garantiza que el modo de demostración no lleva
+  ninguna mención a escalar, y la regla va en los dos modos.
 
 **Garantía**: es guía (principio II: comprensión y estilo, no una regla de negocio). Lo
 garantizado en código es lo que dibuja la interfaz. *(a medir)* El caso (b) de noche en el
@@ -301,15 +305,51 @@ del analyze), con su test, para los turnos por turno y el fallo del turno.
 
 `streamlit` se añade a las dependencias del proyecto con `uv add`: `streamlit>=1.66,<2` en `pyproject.toml`, 1.66.0 en `uv.lock` (T002).
 
+## R15. Configuración de Streamlit (validación manual)
+
+**Decisión**: `.streamlit/config.toml` en la raíz, con `browser.gatherUsageStats = false` y
+`server.showEmailPrompt = false`.
+
+**Por qué**: la primera ejecución de Streamlit en un equipo pregunta un correo en la terminal
+(«Welcome to Streamlit! … Email:») y no arranca hasta pulsar Enter; un evaluador puede creer que
+se colgó. **Medido** (Streamlit 1.66.0, `runtime/credentials.py`, `check_credentials`):
+`gatherUsageStats` no la quita; solo la omiten `server.headless` o `server.showEmailPrompt = false`.
+Se eligió `showEmailPrompt` porque `headless` además deja de abrir el navegador.
+
+Comprobado en un arranque real con un perfil de usuario sin credenciales de Streamlit: sin la
+configuración aparece la pregunta; con ella, no, y el navegador se abre solo. El README dice qué
+hacer si aun así aparece (dejar el correo vacío y pulsar Enter; la aplicación queda en
+http://localhost:8501).
+
+**Alternativa descartada**: `server.headless = true`, porque el analista tendría que abrir la
+dirección a mano.
+
+## R16. Una afirmación de listas por autoridad (validación manual)
+
+**Decisión**: `_REGLA_AFIRMACIONES`, en los dos modos, añade: «En listas restrictivas, escribe una
+afirmación por cada autoridad consultada, cada una con su propia fuente; no juntes varias
+autoridades en una sola afirmación.».
+
+**Por qué**: en 4 de los 7 casos de la validación, el hook (I.4) rechazó el primer informe por
+juntar varias autoridades en una afirmación con una sola fuente. Es guía de estilo (principio II):
+la garantía sigue siendo el hook. No menciona el escalamiento, así que puede ir en el modo de
+demostración.
+
 ## R14. Riesgos residuales
 
-1. **FR-007 y FR-008 en el texto del modelo** son guía, no garantía (R9, R10).
+1. **FR-007 y FR-008 en el texto del modelo** son guía, no garantía (R9, R10). El caso (b) de
+   noche (US5-2) **no se pudo observar** en la validación manual: fue después de medianoche, cuando
+   la fecha local y la UTC coinciden (T043). Solo lo fija el test del texto de `_REGLA_FECHAS`.
 2. **El observador en vivo** depende de que los eventos lleguen en el hilo del script (R1); si
    no, se pierde la vista en vivo, nunca el turno guardado.
 3. **La precedencia de credenciales** del CLI no se midió (R8).
 4. **Recargar la página pierde el caso** (estado en memoria; spec).
 5. **Un caso incompleto se continúa con el mensaje siguiente** (por ejemplo, tras el caso f): la
    conversación lo deja ver y el analista usa «Caso nuevo» (decisión de la analista).
+6. **El detalle de la delegación se decide por el texto de `delegacion.py`** («Se reintenta…»,
+   «…con otra entrada»): si ese texto cambia, lo detectan los tests con eventos reales del
+   `Delegador` (casos f y d), no el tipo del evento.
+7. **El coste por caso no se ve en el chat** (desviación D2 del plan).
 
 ## DECISIONES.md
 

@@ -1,7 +1,8 @@
 # Quickstart: Interfaz de chat (#11)
 
 Guía de validación. Q1 y Q2 no llaman al modelo; Q3 tampoco. Q4 a Q6 usan el modelo real
-(Opus 5.5, del orden de 0,15 a 0,30 USD por caso; se anota el coste de cada uno).
+(Opus 5.5, del orden de 0,15 a 0,30 USD por caso). El chat no muestra el coste: en Q4 se anota ese
+orden, medido con la línea de comandos en el #7, que sí lo imprime (desviación D2 del plan).
 
 ## Q1. Suite sin modelo
 

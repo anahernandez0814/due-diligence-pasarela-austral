@@ -22,16 +22,19 @@ uv run streamlit run src/due_diligence/chat.py
   - `IGNORAR`: no pasa nada;
   - `AVISO_ESPERA`: se muestra el aviso y no se llama al coordinador;
   - `NUEVO`: se descarta el caso anterior (si lo había) y se crea uno; si el anterior estaba
-    completo, el turno lleva `AVISO_CASO_NUEVO`;
+    completo, el turno lleva `AVISO_CASO_NUEVO`. El historial anterior no se dibuja y el aviso se
+    ve desde el principio del turno, antes de «trabajando»;
   - `CONTINUAR`: `Caso.continuar(texto)`.
 - Mientras un turno corre: la entrada y el botón «Caso nuevo» están deshabilitados y un
   contenedor «El coordinador está trabajando…» muestra los indicadores en vivo (R1, R7).
 - Un fallo del turno se muestra como la respuesta del coordinador con `MENSAJE_SIN_SESION` o
   `MENSAJE_FALLO_TURNO`, nunca como traza.
 - «Caso nuevo» vacía la conversación y descarta el caso.
-- Mientras el caso espera al analista, el texto de ayuda de la entrada dice qué espera. Si
-  `st.chat_input` no deja enviar un mensaje con solo espacios (plan B de FR-005, R6), además se
-  muestra fijo encima de la entrada `AVISO_ESPERA`; desaparece cuando el caso deja de esperar.
+- Mientras el caso espera al analista, el texto de ayuda de la entrada dice qué espera. El plan B
+  de FR-005 (un aviso fijo encima de la entrada) **no se aplica**: Streamlit 1.66 sí envía un
+  mensaje con solo espacios, que recibe `AVISO_ESPERA` (T033, R6).
+- Configuración (`.streamlit/config.toml`, R15): sin la pregunta del correo de la primera ejecución
+  y sin estadísticas de uso; la aplicación queda en http://localhost:8501.
 
 ## Funciones puras (`presentacion.py`)
 

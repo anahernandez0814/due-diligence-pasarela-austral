@@ -201,4 +201,9 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **Hora de Colombia en la interfaz, UTC en la traza y los registros.** El coordinador sabe que la fecha de registro está en UTC, y las fechas van en `AAAA-MM-DD`; es guía, no garantía (principio II).
 - **Un caso completo hace que el mensaje siguiente inicie otro** (decisión de la analista): con D1 del #10, un caso de prueba heredaría las causas del anterior.
 
+- **De la validación manual**:
+  - `.streamlit/config.toml` quita la pregunta del correo de la primera ejecución sin `headless`, y Streamlit no envía estadísticas de uso;
+  - las afirmaciones de listas van una por autoridad (guía; la garantía sigue en el hook I.4);
+  - el coste por caso no se ve en el chat (desviación D2).
+
 Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/plan.md` y `research.md`.

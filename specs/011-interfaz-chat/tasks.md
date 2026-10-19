@@ -165,7 +165,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## 🛑 PARADA DE REVISIÓN A
 
-- [ ] T022 **Parada A**: Claude se detiene y presenta a la analista:
+- [x] T022 **Parada A**: Claude se detiene y presenta a la analista:
   - el SHA;
   - los archivos del bloque A: `simulacion.py`, `eventos.py`, `coordinador.py`, `configuracion.py` y `presentacion.py`, con sus tests;
   - el número de tests frente a la línea base de T003;
@@ -307,7 +307,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## 🛑 PARADA DE REVISIÓN B
 
-- [ ] T045 **Parada B**: Claude se detiene y presenta a la analista:
+- [x] T045 **Parada B**: Claude se detiene y presenta a la analista:
   - el diff del bloque B;
   - la tabla de T032;
   - las mediciones de T033;
@@ -336,14 +336,14 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 | `test_main.py:424` `test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar` | terminaba sin continuar | lo mismo, y además `AVISO_D in salida` | FR-005. Se añade una aserción; no se quita ninguna. |
 | `test_sin_control_propio.py:136` `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada` | `llamadas == ["__main__.py"]` | `llamadas == ["__main__.py", "chat.py"]` | R8: el chat es el segundo punto de entrada. La lista sigue siendo **exacta** (indicación de la analista): cualquier otro módulo que cargue el entorno hace fallar el test. |
 
-Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado. Tras el bloque B (T040): 4706 en verde, ruff limpio (233 archivos formateados).
+Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado. Tras el bloque B (T040): 4706 en verde, ruff limpio (233 archivos formateados). Tras la validación manual (`23e71d9`): 4711.
 
 ## Resultados de la validación (T044)
 
 Validación manual de la analista, con el modelo real (Opus 5.5) y desde el chat, el 2026-10-19.
 
 - **T041, arranque sin clave (Q3)**: aprobado, en el chat y en la línea de comandos.
-- **T042, los siete casos (Q4)**: (a), (b), (c), (d), (e), (f) y (g) aprobados desde el chat. El coste por caso no se anotó en esta validación.
+- **T042, los siete casos (Q4)**: (a), (b), (c), (d), (e), (f) y (g) aprobados desde el chat. Coste: no visible en el chat; del orden de 0,15 a 0,30 USD por caso, medido con la línea de comandos en el #7 (desviación D2 del plan).
   - **C2**: los indicadores aparecen en vivo durante el turno, confirmado a mano.
   - **C1**: la entrada y «Caso nuevo» están deshabilitados durante el turno, confirmado a mano (J6 de la verificación por mutaciones; `AppTest` no lo puede ver, T033).
   - **SC-005**: aprobado por la analista con (a), (d) y (e).
@@ -360,6 +360,27 @@ Validación manual de la analista, con el modelo real (Opus 5.5) y desde el chat
 5. **«Esperando al analista: …: …»** llevaba dos «dos puntos» seguidos. Ahora son dos oraciones, en el estado y en el aviso de espera, y desaparece `_tras_dos_puntos`.
 6. **La cobertura del chat** mostraba códigos internos («servicio_no_disponible»). Los tipos de error conocidos se muestran en palabras y el código queda solo si no se conoce. La cobertura registrada no cambia.
 7. **I.4 rechazó el primer informe** en 4 de los 7 casos, por juntar varias autoridades de listas en una afirmación. `_REGLA_AFIRMACIONES` pide ahora una afirmación por autoridad, con su fuente, en los dos modos. Es guía; la garantía sigue en el hook.
+
+La analista verificó `23e71d9` con 8 mutaciones (J4, J8, caso nuevo sin historial y con el aviso al inicio, detalle de la delegación, reintento, errores traducidos y guía de una afirmación por autoridad): todas mueren. Parada B cerrada (T045).
+
+## Barrido previo a `/abrir-pr`
+
+- **Desviaciones**: las dos contradicciones con la spec están declaradas en `plan.md` como «Desviación justificada»:
+  - **D1**: el mensaje sin clave no nombra el archivo de entorno (US3-2 frente a la garantía R8 del #6);
+  - **D2**: el coste por caso no se anotó porque el chat no lo muestra (SC-001, T042).
+
+  Ninguna contradice la constitución. Las decisiones que cambiaron durante la construcción y la validación quedan en todos los documentos:
+  - spec: US3-2, FR-006, SC-001, SC-004 y supuestos;
+  - plan: decisiones 13–15, D1, D2 y riesgos;
+  - research: R1, R3, R4, R6, R8, R9, R13, R14, R15 y R16;
+  - data-model;
+  - contrato;
+  - quickstart: Q1, Q2, Q4 y Q5;
+  - README;
+  - DECISIONES.md (entrada 12).
+- **Tareas**: T001–T045 marcadas y completas; solo queda T046 (`/abrir-pr`).
+- **Tests**: un análisis AST de los 9 archivos de test que toca la rama (`test_chat`, `test_configuracion`, `test_coordinador`, `test_eventos_estado`, `test_hooks`, `test_main`, `test_presentacion`, `test_sesion_simulada` y `test_sin_control_propio`) no encuentra ningún test vacío, sin aserción ni con `skip` o `xfail`.
+- **Suite**: 4711 en verde, ruff limpio.
 
 ---
 

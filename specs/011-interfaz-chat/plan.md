@@ -58,8 +58,9 @@ indicadores en vivo cubren la espera.
 
 ## Constitution Check
 
-*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple, con una desviación justificada de
-la spec (D1), declarada durante la construcción del bloque A.**
+*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple, con dos desviaciones justificadas
+de la spec: D1, declarada durante la construcción del bloque A, y D2, en la validación manual.**
+Ninguna contradice la constitución.
 
 | Principio | Cómo se cumple |
 |-----------|----------------|
@@ -75,11 +76,15 @@ la spec (D1), declarada durante la construcción del bloque A.**
 | **X** | Tests junto al código (`test_presentacion.py`, `test_chat.py`) y ruff. La revisión y la auditoría van en `/abrir-pr`. Los casos (a), (d) y (f) se ejercitan también desde la interfaz simulada. |
 
 **Auditoría de `/abrir-pr`**: I.1–I.5 aplican, porque el diff toca `hooks.py`, `eventos.py` y
-`coordinador.py`. Los tests anteriores que cambian por FR-004, FR-005 o FR-009 van en una tabla del
-PR, adaptados con igualdades exactas.
+`coordinador.py`. Los tests anteriores que cambian por FR-004, FR-005, FR-006, FR-009 o R8 van en
+la tabla de T032, que va al PR, adaptados con igualdades exactas o con aserciones añadidas.
 
 **Re-evaluación tras el diseño**: sin cambios. Ninguna decisión de R1–R13 contradice un FR ni un
 principio. Lo que no se garantiza en código (R14.1–R14.3) está declarado.
+
+**Re-evaluación en el barrido previo a `/abrir-pr`**: R15 y R16, de la validación manual, tampoco
+contradicen un FR ni la constitución (R16 es guía de estilo, principio II). Las únicas
+contradicciones con la spec son D1 y D2, declaradas abajo.
 
 ## Decisiones (detalle en [research.md](research.md))
 
@@ -102,6 +107,8 @@ principio. Lo que no se garantiza en código (R14.1–R14.3) está declarado.
    - **Plan B de FR-005, decidido**: si `st.chat_input` no deja enviar un mensaje con solo
      espacios, el chat muestra un aviso fijo encima de la entrada mientras el caso espera («El
      coordinador espera su respuesta: …»), con su test en `AppTest`.
+   - **Resultado (T033)**: no se aplica. Streamlit 1.66 envía un mensaje con solo espacios, que
+     recibe `AVISO_ESPERA` sin llamar al coordinador.
 7. **R7, un turno a la vez**: mensaje pendiente y entrada deshabilitada mientras se trabaja.
 8. **R8, credencial**: una sola función, `configuracion.comprobar_credencial()`, que usan el chat
    y `__main__.py`.
@@ -115,6 +122,17 @@ principio. Lo que no se garantiza en código (R14.1–R14.3) está declarado.
 11. **R12, modos activos**: franja fija con los modos activos, leídos al arrancar.
 12. **R13, tests de la aplicación**: `AppTest` con el coordinador simulado y `Dependencias`
     inyectadas.
+13. **R15, configuración de Streamlit** (validación manual): `.streamlit/config.toml` con
+    `server.showEmailPrompt = false` y `browser.gatherUsageStats = false`, sin `headless`, para que
+    el navegador se siga abriendo.
+14. **R16, una afirmación de listas por autoridad** (validación manual): guía en
+    `_REGLA_AFIRMACIONES`, en los dos modos; la garantía sigue en el hook (I.4).
+15. **Textos de la validación manual** (R3, R4, R6, contrato):
+    - la delegación normal va sin detalle, porque el de la traza repite el nombre interno del
+      frente;
+    - los tipos de error conocidos van en palabras;
+    - el estado y el aviso de espera, en dos oraciones;
+    - un caso nuevo no dibuja el historial anterior y avisa desde el principio del turno.
 
 ## Project Structure
 
@@ -124,7 +142,7 @@ principio. Lo que no se garantiza en código (R14.1–R14.3) está declarado.
 specs/011-interfaz-chat/
 ├── spec.md
 ├── plan.md
-├── research.md          # R1–R14 y lo pendiente para DECISIONES.md
+├── research.md          # R1–R16 y lo pendiente fuera de alcance
 ├── data-model.md
 ├── quickstart.md        # Q1–Q6
 ├── contracts/
@@ -147,6 +165,7 @@ src/due_diligence/
 ├── hooks.py               # textos de cobertura_sustituida y datos_sustituidos (R11)
 ├── __main__.py            # credencial, turnos por turno, aviso de espera vacía (R5, R6, R8)
 └── test_*.py              # adaptaciones de FR-004, FR-005, FR-006 y FR-009
+.streamlit/config.toml     # sin la pregunta del correo ni estadísticas de uso (R15)
 README.md                  # sección «Interfaz de chat» y los siete casos (FR-010)
 DECISIONES.md              # solo una entrada corta del #11 (el #14 lo reescribe)
 pyproject.toml, uv.lock    # streamlit
@@ -172,12 +191,16 @@ módulo más, con su lógica separada en funciones puras.
 ## Riesgos residuales
 
 Detalle en R14 de [research.md](research.md):
-1. FR-007 y FR-008 en el texto del modelo son guía, no garantía.
+1. FR-007 y FR-008 en el texto del modelo son guía, no garantía. El caso (b) de noche (US5-2) no
+   se pudo observar en la validación manual (T043).
 2. La vista en vivo depende de que los eventos lleguen en el hilo del script; el turno guardado
    no.
 3. La precedencia de credenciales del CLI no se midió.
 4. Recargar la página pierde el caso.
 5. Un caso incompleto se continúa con el mensaje siguiente; el analista usa «Caso nuevo».
+6. El detalle de la delegación depende del texto de `delegacion.py`; lo vigilan tests con eventos
+   reales.
+7. El coste por caso no se ve en el chat (D2).
 
 ## Pendiente fuera de alcance
 
@@ -193,7 +216,7 @@ reescribe completo. Queda pendiente:
   - control de los modos dentro del chat;
   - diseño visual.
 
-## Desviación justificada
+## Desviaciones justificadas
 
 ### D1. El mensaje sin clave no nombra el archivo de entorno (US3-2)
 
@@ -215,6 +238,22 @@ reescribe completo. Queda pendiente:
   exactos.
 - **Documentos actualizados en el mismo commit**: spec (US3-2), este plan, `research.md` (R8) y
   `tasks.md` (reglas y T011).
+
+### D2. El coste de cada caso de la validación no se anotó (SC-001, T042)
+
+- **Qué dice la spec**: SC-001 pide la validación manual de los siete casos «con el coste
+  anotado», y los supuestos, que se anote en el quickstart.
+- **Qué pasó**: la validación se hizo desde el chat, que no muestra el coste. No hay un coste
+  medido de cada caso.
+- **Qué se anota**: del orden de 0,15 a 0,30 USD por caso con Opus 5.5, medido con la línea de
+  comandos en el #7 (T042).
+- **Por qué se acepta**: SC-001 se cumple en lo que mide, que los siete casos se reproducen desde
+  el chat con el resultado documentado. El coste es un dato de operación, no un criterio de la
+  interfaz, y mostrarlo en el chat es una funcionalidad que la spec no pide.
+- **Mitigación**: `python -m due_diligence "<solicitud>"` imprime el coste de cada caso en
+  «Números de la validación».
+- **Documentos actualizados en el mismo commit**: spec (SC-001 y supuestos), este plan,
+  `research.md` (R14.7), `quickstart.md` y `tasks.md` (T042).
 
 Relacionado, sin ser una desviación: `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada`
 del #6 fija `["__main__.py"]`. Con el chat como segundo punto de entrada (R8), en T035 pasa a

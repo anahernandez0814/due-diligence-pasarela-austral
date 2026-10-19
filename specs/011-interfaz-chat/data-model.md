@@ -34,7 +34,7 @@ Streamlit. Ninguna se guarda fuera de la sesión de la interfaz.
 |-------|------|-------|
 | `tipo` | `str` | `delegacion`, `bloqueo`, `informe`, `escalamiento` o `aviso` |
 | `titulo` | `str` | frase corta en español (R3) |
-| `detalle` | `str` | motivo o detalle del evento, sin datos añadidos |
+| `detalle` | `str` | motivo o detalle del evento, sin datos añadidos; en una delegación, solo si es un reintento u otra entrada (vacío si no) |
 | `hora` | `str` | `HH:MM:SS (hora de Colombia)` (R9) |
 | `secuencia` | `int` | la del evento: da el orden |
 
@@ -45,7 +45,7 @@ Se construye solo desde un `Evento` de la traza, nunca desde el texto del modelo
 |-------|------|-------|
 | `frente` | `str` | en palabras |
 | `cubierto` | `bool` | |
-| `motivo` | `str` | vacío si está cubierto |
+| `motivo` | `str` | vacío si está cubierto; los tipos de error conocidos en palabras (`ERRORES_EN_PALABRAS`) |
 
 ### `EstadoMostrado`
 | Campo | Tipo | Notas |
@@ -91,7 +91,9 @@ hay (`DecisionMensaje(accion, aviso)`).
 
 Transiciones: sin caso → (mensaje) → caso con turno 1 → (mensaje, caso incompleto o en espera) →
 turno 2 del mismo caso; (mensaje, caso completo) → caso nuevo con aviso; («Caso nuevo») → sin
-caso e historial vacío.
+caso e historial vacío. Con un `pendiente` de un caso nuevo, el historial se vacía **antes** de
+dibujarse y el aviso abre el turno en vivo: durante el turno no se ve el caso anterior
+(validación manual).
 
 ## Textos fijos nuevos (`presentacion.py`)
 
@@ -99,3 +101,6 @@ caso e historial vacío.
   tipo de error), `MENSAJE_SIN_SESION` (movido desde `__main__`).
 - Las tres líneas de modos activos (R12).
 - Los nombres de los frentes en palabras (R3).
+- `ERRORES_EN_PALABRAS`: los tipos de error conocidos en palabras, para el motivo de la cobertura
+  (R4, validación manual).
+- Los textos del detalle de una delegación que aporta algo: el reintento y la entrada nueva (R3).

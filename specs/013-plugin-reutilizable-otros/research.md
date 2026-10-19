@@ -189,6 +189,10 @@ con la ruta entre comillas por si la raíz tiene espacios:
 **Verificación**: Q4 del quickstart. La skill ejecutada en el repositorio de prueba tiene que
 mostrar la marca `CONTEXTO DE REVISIÓN` en el contexto del subagente.
 
+**Resultado de Q4 (2026-10-19)**: la sustitución funciona en la línea `!` y en `allowed-tools`. El
+revisor recibió la salida real del script y no quedó ningún `${CLAUDE_PLUGIN_ROOT}` sin sustituir.
+No hizo falta ninguna alternativa.
+
 **Alternativas, en este orden, si Q4 falla**:
 1. **`${CLAUDE_SKILL_DIR}`**, con el script dentro de la carpeta de la skill. Su sustitución está
    documentada en los mismos dos sitios, y la línea `!` tampoco se nombra.
@@ -276,7 +280,8 @@ Cambian:
 **Nombre del agente en la skill**: `agent: guardas-y-revision:revisor-codigo`.
 - Lo documentado: los agentes de plugin se llaman `<plugin>:<nombre>` (components), pero que
   `agent:` acepte el prefijo **no está documentado**.
-- Q4 lo comprueba. Si falla, se usa `agent: revisor-codigo`. En un repositorio que tenga un agente
+- Q4 lo comprueba. Si falla, se usa `agent: revisor-codigo`. **Resultado**: el prefijo funciona
+  (`subagent_type = guardas-y-revision:revisor-codigo`); no hizo falta la alternativa. En un repositorio que tenga un agente
   propio con ese nombre, ese ganaría (riesgo residual 3).
 
 ## R8. Prueba de instalación con la CLI (FR-010)
@@ -287,8 +292,9 @@ Cambian:
   sin interfaz (cli-reference: «Most plugins install without a prompt»).
 - **La confianza**: un plugin de proyecto o local «loads only after the same trust check …
   Trusting a parent folder or running with `-p` isn't enough» (loading). La carpeta de prueba,
-  recién creada, no es de confianza. Es probable que `claude -p` no cargue el plugin hasta que
-  alguien confíe en ella en la interfaz.
+  recién creada, no es de confianza. Se esperaba que `claude -p` no cargara el plugin hasta que
+  alguien confiara en ella en la interfaz. **Observado en Q3 (2026-10-19)**: el plugin instalado con
+  `--scope local` cargó en `claude -p` sin aceptar la confianza. Q6 no hizo falta.
 
 **Decisión**: tres niveles; el detalle y los comandos están en el quickstart.
 1. **Instalación sin interfaz** (Q2):

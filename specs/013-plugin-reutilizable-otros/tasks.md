@@ -121,9 +121,10 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - la skill tiene `fork`, el agente con prefijo, y la regla de `allowed-tools` es igual al comando de la línea `!`.
 - [x] T018 [US1] Ejecutar `claude plugin validate --strict .` y `claude plugin validate --strict plugins/guardas-y-revision`, y corregir hasta cero avisos. Ruff y `uv run pytest plugins` en verde. Commit.
   - **Resultado**: los dos `validate --strict` pasan, tras añadir `author` de equipo. El consejo «el README no tiene la línea de instalación» se atendió con un marcador genérico `<propietario>/<repositorio>`, porque el nombre real del repositorio es un término del proyecto (FR-004).
-- [ ] T019 [US1] **Q2**: instalación sin interfaz en una carpeta temporal fuera del repositorio, desde un clon limpio de la rama. Anotar aquí los comandos usados, el número de comandos de instalación y lo que dicen `list` y `details` (SC-001).
-- [ ] T020 [US1] **Q3**: la guarda en el repositorio de prueba, con `contar_bloqueos.py` en el scratchpad. Anotar solo conteos, con dos intentos como máximo si no es concluyente. Si el plugin no carga por la confianza, usar `--plugin-dir` y anotar Q6 para la analista.
-- [ ] T021 [US1] **Q4**: la skill y el subagente. Anotar la línea `RESUMEN`, si apareció la marca del contexto y `Ticket: no aplica`, y qué agente corrió.
+- [x] T019 [US1] **Q2**: instalación sin interfaz en una carpeta temporal fuera del repositorio, desde un clon limpio de la rama. Anotar aquí los comandos usados, el número de comandos de instalación y lo que dicen `list` y `details` (SC-001). **Resultado**: los comandos de Q2 del quickstart. La instalación toma dos comandos con código 0; `list` da `enabled: true` y `scope: local`, y `details` muestra la skill, el agente y el hook.
+- [x] T020 [US1] **Q3**: la guarda en el repositorio de prueba, con `contar_bloqueos.py` en el scratchpad. Anotar solo conteos, con dos intentos como máximo si no es concluyente. Si el plugin no carga por la confianza, usar `--plugin-dir` y anotar Q6 para la analista. **Resultado**: concluyente en el primer intento, con 1 `Write`, 1 resultado bloqueado y `[1]` `[guarda_datos]`; el control ficticio quedó permitido. El plugin cargó sin `--plugin-dir`.
+- [x] T021 [US1] **Q4**: la skill y el subagente. Anotar la línea `RESUMEN`, si apareció la marca del contexto y `Ticket: no aplica`, y qué agente corrió.
+  - **Resultado**: `RESUMEN: bloqueantes=0 sugerencias=2 cobertura=completa`. Llegó la salida real del script, `Ticket: no aplica`, y corrió el agente `guardas-y-revision:revisor-codigo`. R4 y R7, sin alternativas.
   - **Si falla R4 o R7**: aplicar la alternativa, declararla y actualizar spec, plan, research, contrato, quickstart y este archivo en el mismo commit.
 
 **Checkpoint**: las tres piezas funcionan fuera del repositorio, o lo que falte queda en Q6 con sus comandos.
@@ -159,16 +160,17 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - **Los dos registros, equivalentes**: el de `settings.json` y el de `hooks.json` tienen el mismo matcher, `type`, `command`, `timeout` y `onFailure`, y los mismos `args` salvo la raíz.
   - **Una sola fuente**: no existe `.claude/hooks/detector_datos.py`, y `.claude/hooks/guarda_datos.py` es solo el archivo de compatibilidad. Ya lo prueban los tests de `test_guarda_datos_repositorio.py`: sin lógica, no registrado y con fallo cerrado si falta el script, si no carga o si no decide.
   - **`base_guarda` equivale a `comun`**: `normalizar_ruta` (con los casos de `test_comun.py`), `raiz`, `cwd`, `bloquear` y `ejecutar` dan el mismo resultado en las dos implementaciones.
-- [ ] T024 [US3] **Q5, obligatoria**:
+- [x] T024 [US3] **Q5, obligatoria**:
   - en el clon limpio de la rama (sin `.env`, sin clave y sin `PYTHONUTF8`), `claude -p --model haiku --strict-mcp-config` con `Write` y el valor generado en disco;
   - anotar las llamadas a `Write`, los resultados bloqueados y los `[guarda_datos]` de cada uno: deben ser exactamente 1;
   - dos intentos como máximo si no es concluyente.
+  - **Resultado**: el intento 1 no fue concluyente, porque el modelo se negó a copiar y no hubo ningún `Write`. El intento 2, con un prompt neutro: 1 `Write`, 1 resultado bloqueado y `[1]` `[guarda_datos]`. El hook es el del plugin registrado en `settings.json`.
 
 ---
 
 ## Phase 6: User Story 4, instrucciones en el README (Priority: P2)
 
-- [ ] T025 [US4] Añadir al `README.md` la sección corta «Plugin para otros equipos» (FR-011, contrato §1):
+- [x] T025 [US4] Añadir al `README.md` la sección corta «Plugin para otros equipos» (FR-011, contrato §1):
   - las tres piezas, en una línea cada una;
   - los requisitos;
   - la instalación desde GitHub (tras el merge; el repositorio es privado) y desde una copia local;
@@ -181,7 +183,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 ## Phase 7: Polish
 
-- [ ] T026 Añadir a `DECISIONES.md` una entrada corta del #13:
+- [x] T026 Añadir a `DECISIONES.md` una entrada corta del #13:
   - la guarda como única fuente en el plugin;
   - la convivencia (opción B) y el riesgo de `settings.local.json`;
   - los cambios declarados en la guarda (R10 y R5);

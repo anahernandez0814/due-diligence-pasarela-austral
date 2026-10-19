@@ -187,8 +187,9 @@ declara como desviación:
 
 1. **El plugin habilitado en `settings.local.json` de este repositorio**: la guarda corre dos veces
    y el mensaje sale duplicado. No baja la protección. Es una configuración personal.
-2. **Lo no documentado** (la línea `!`, el prefijo en `agent:` y la confianza en `-p`): se comprueba
-   en Q3 y Q4, con las alternativas de R4, R7 y R8.
+2. **Lo no documentado** (la línea `!`, el prefijo en `agent:` y la confianza en `-p`): se comprobó
+   en Q3 y Q4 el 2026-10-19 con Claude Code 2.1.303 y funciona sin alternativas. Queda como riesgo
+   ante cambios de versión, porque la documentación no lo garantiza.
 3. **Un agente propio llamado `revisor-codigo` en el repositorio de otro equipo**: si hubiera que
    usar el nombre sin prefijo, ese agente ganaría.
 4. **Las versiones del plugin**: otro equipo recibe los cambios de la guarda solo cuando se sube la

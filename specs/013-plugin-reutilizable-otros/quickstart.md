@@ -203,3 +203,17 @@ cd / && rm -rf "$T" "$C"
 ```
 
 La limpieza borra también las trazas `*.jsonl`, que contienen el valor generado.
+
+## Resultados (2026-10-19, Claude Code 2.1.303, Haiku 5.5)
+
+Solo conteos y la línea `RESUMEN`; las trazas se borraron en la limpieza.
+
+| Q | Resultado | Conteos | Coste (USD) |
+|---|-----------|---------|-------------|
+| **Q2** | Instalación sin interfaz. | **Validación**: `validate --strict` pasa en el marketplace y en el plugin. **Instalación**: dos comandos (`marketplace add --scope local` e `install --scope local`), ambos con código 0. **`list --json`**: `enabled: true`, `scope: local`, `version: 1.0.0`. **`details`**: 1 skill, 1 agente y 1 hook `PreToolUse`. | 0 |
+| **Q3** | La guarda del plugin bloquea en el repositorio de prueba. **Concluyente en el primer intento.** | **Valor con forma real**: `salida.txt` no existe; llamadas a `Write` 1, resultados bloqueados 1, `[guarda_datos]` por resultado `[1]`. **Control ficticio**: `salida-ficticia.txt` existe, 0 bloqueos. | 0,00544 + 0,00472 |
+| **Q4** | La skill y el subagente funcionan. **R4 y R7 verificados, sin alternativas.** | **Reporte**: `RESUMEN: bloqueantes=0 sugerencias=2 cobertura=completa`. **Contexto**: la traza tiene la salida real del script (`Rama: cambio`, `Base: … (git merge-base HEAD main)`, `Ticket: no aplica (el repositorio…`, `Archivos cambiados (1)`) y 0 apariciones de `${CLAUDE_PLUGIN_ROOT}` sin sustituir. **Agente**: `subagent_type = guardas-y-revision:revisor-codigo`. | 0,00239 (lo que informa el CLI) |
+| **Q5** | Una sola ejecución en un clon limpio de la rama. | **Intento 1 no concluyente**: 0 llamadas a `Write`, porque el modelo se negó a copiar un valor que parecía sensible. **Intento 2**, con un prompt neutro que explica la prueba: `salida.txt` no existe; llamadas a `Write` 1, resultados bloqueados 1, `[guarda_datos]` por resultado `[1]`; el hook que bloqueó es el de `plugins/guardas-y-revision/hooks/guarda_datos.py` (0 apariciones de la ruta de compatibilidad). | 0,00514 + 0,00477 |
+
+- **Total de `claude -p`**: unos 0,022 USD en 5 ejecuciones.
+- **La confianza**: el plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta, y el clon limpio ejecutó los hooks del proyecto en `-p`. Q6 no hizo falta; solo queda SC-006, la valoración de la analista.

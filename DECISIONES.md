@@ -229,3 +229,18 @@ Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `
 - **La guarda tiene una sola fuente, dentro del plugin** (R2): un plugin instalado se copia a una caché y no llega a archivos de fuera, así que la guarda, el detector y lo que usaban de `comun` (`base_guarda.py`) se movieron al plugin. Este repositorio ejecuta ese mismo archivo desde `.claude/settings.json`.
 - **Archivo de compatibilidad** `.claude/hooks/guarda_datos.py`: sin lógica, ejecuta la guarda del plugin con `runpy` y, si no puede, sale con 2 (fallo cerrado). Sirve a las sesiones que conserven la ruta antigua. `settings.json` no lo registra.
 - **Claude Code 2.1.303 recarga `settings.json` en caliente**, observado al mover la guarda: un hook con `onFailure: block` que apunta a un archivo que todavía no carga bloquea `Bash`, `Write` y `Edit` de la sesión. Al mover o cambiar una guarda, el destino tiene que funcionar antes de cambiar la ruta.
+- **Convivencia, opción B** (R3): este repositorio registra la guarda y deshabilita el plugin con `enabledPlugins` a `false`.
+  - **Por qué**: Claude Code no deduplica el hook de un plugin con el de `settings.json`, y la opción A (usar el hook del plugin) dejaría sin protección un clon nuevo (principio II).
+  - **Instalado a nivel de usuario**, el `false` del proyecto gana y la guarda corre una vez.
+  - **Riesgo residual**: un `true` en `settings.local.json` lo duplicaría. Daría un mensaje doble, nunca menos protección.
+- **Cambios declarados en la guarda** (R5 y R10):
+  - el mensaje ya no cita el identificador ficticio del proyecto;
+  - el matcher es una expresión anclada que acepta las herramientas de publicación de cualquier servidor MCP, y la guarda revisa cualquier `mcp__…` que le llegue.
+- **Verificado con la CLI** (quickstart Q2–Q5, Haiku):
+  - la instalación sin interfaz en un repositorio temporal;
+  - el bloqueo de la guarda del plugin;
+  - la línea `!` y `allowed-tools` con `${CLAUDE_PLUGIN_ROOT}`, y el agente con prefijo en `agent:`;
+  - una sola ejecución de la guarda en un clon limpio de este repositorio.
+
+  El plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta.
+- **Pendiente**: que la analista valore la sección del README siguiéndola en un repositorio nuevo (SC-006). Otros equipos reciben los cambios al subir `version` en `plugin.json`.

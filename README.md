@@ -363,7 +363,8 @@ Claude Code trabaja con cuatro guardas y un hook de formato, registrados en
 - **`guarda_secretos`**: bloquea leer, buscar, editar o escribir `.env`, `.env.*` (salvo
   `.env.example`), `*.key` y `secrets/`, también desde la terminal y desde código en línea.
 - **`guarda_datos`**: bloquea escribir, ejecutar o publicar en GitHub tarjetas, NIT,
-  cédulas o credenciales con forma real.
+  cédulas o credenciales con forma real. Vive en el plugin (ver la sección siguiente), y
+  este repositorio ejecuta ese mismo archivo.
 - **`guarda_spec_previa`**: bloquea escribir, borrar o restaurar código protegido
   (`src/**/*.py`, `.claude/hooks/`, `.claude/settings.json`, `.claude/settings.local.json`,
   `.mcp.json` y el plugin) si la rama no es de un ticket o le faltan la spec, el plan o
@@ -379,6 +380,41 @@ activarse también al guardar `settings.json`; ante la duda, reinicie la sesión
 - Ejecute `uv sync` antes de abrir Claude Code.
 - Con las guardas activas, no cambie a una rama sin `.claude/hooks/`; si ocurre, reinicie
   la sesión.
+
+## Plugin para otros equipos
+
+El plugin `guardas-y-revision` ([plugins/guardas-y-revision/](plugins/guardas-y-revision/))
+lleva tres piezas reutilizables a otro repositorio:
+
+- **Guarda de datos con forma real** (hook `PreToolUse`): la misma `guarda_datos` de arriba.
+- **Subagente `guardas-y-revision:revisor-codigo`**: revisor independiente de solo lectura.
+- **Skill `/guardas-y-revision:revisar-codigo`**: prepara el contexto del cambio y lanza el
+  revisor; usa la spec del ticket si el repositorio sigue Spec Kit.
+
+**Requisitos**: Claude Code 2.1.295 o posterior, `uv` en el `PATH` y `git`.
+
+**Instalar**, desde la raíz del otro repositorio:
+
+```bash
+# Desde GitHub (rama main; el repositorio es privado y pide acceso)
+claude plugin marketplace add anahernandez0814/due-diligence-pasarela-austral
+# o desde una copia local
+claude plugin marketplace add <ruta de la copia>
+
+claude plugin install guardas-y-revision@piezas-reutilizables --scope project
+```
+
+Con `--scope project`, la instalación queda en el `.claude/settings.json` del otro
+repositorio, para todo el equipo; `--scope user` la deja en todos sus proyectos y
+`--scope local`, solo en ese repositorio y solo para usted.
+
+**Desinstalar**:
+`claude plugin uninstall guardas-y-revision@piezas-reutilizables --scope project`.
+
+**En este repositorio el plugin está deshabilitado a propósito**
+(`"enabledPlugins": {"guardas-y-revision@piezas-reutilizables": false}`): la guarda ya está
+registrada en `.claude/settings.json`, y así no se ejecuta dos veces aunque instale el
+plugin a nivel de usuario. Detalle en la entrada 14 de [DECISIONES.md](DECISIONES.md).
 
 ## Cómo se trabaja
 

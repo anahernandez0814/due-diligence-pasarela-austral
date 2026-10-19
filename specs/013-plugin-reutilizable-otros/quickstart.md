@@ -217,3 +217,28 @@ Solo conteos y la línea `RESUMEN`; las trazas se borraron en la limpieza.
 
 - **Total de `claude -p`**: unos 0,022 USD en 5 ejecuciones.
 - **La confianza**: el plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta, y el clon limpio ejecutó los hooks del proyecto en `-p`. Q6 no hizo falta; solo queda SC-006, la valoración de la analista.
+
+### Q2 con los comandos del README (`--scope project`, sin modelo, 2026-10-19)
+
+Q2 se había probado con `--scope local`, y el README instala con `--scope project`. Se repitió con
+los comandos exactos del README en un repositorio git nuevo, en una carpeta temporal, con el
+marketplace desde una copia local (clon de la rama).
+
+| Comando | Código de salida |
+|---------|------------------|
+| `claude plugin marketplace add <copia local>` | 0 |
+| `claude plugin install guardas-y-revision@piezas-reutilizables --scope project` | 0 |
+| `claude plugin list --json` | 0: `scope: project`, `enabled: true`, `version: 1.0.0` |
+| `claude plugin details guardas-y-revision@piezas-reutilizables` | 0: 1 skill, 1 agente y 1 hook `PreToolUse` |
+| `claude plugin uninstall guardas-y-revision@piezas-reutilizables --scope project` | 0 |
+| `claude plugin marketplace remove piezas-reutilizables` | 0 (después, 0 apariciones en `marketplace list`) |
+
+**El `.claude/settings.json` del repositorio de prueba**:
+- **Antes**: no existía.
+- **Tras `install`**: queda con `"enabledPlugins": {"guardas-y-revision@piezas-reutilizables": true}`.
+- **Tras `uninstall`**: queda limpio, con `"enabledPlugins": {}`.
+- No se creó `.claude/settings.local.json`.
+
+**Observación**: `marketplace add` sin `--scope` declara el marketplace en los ajustes del usuario,
+no en el `.claude/settings.json` del repositorio. Ese archivo solo recibe `enabledPlugins`.
+Ningún comando del README falló, así que el README no cambia por esto. Se lo señalo a la analista.

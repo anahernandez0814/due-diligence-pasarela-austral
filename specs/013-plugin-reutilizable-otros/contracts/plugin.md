@@ -13,6 +13,7 @@ claude plugin install guardas-y-revision@piezas-reutilizables --scope project
 
 # Desinstalar
 claude plugin uninstall guardas-y-revision@piezas-reutilizables --scope project
+claude plugin marketplace remove piezas-reutilizables
 ```
 
 **Requisitos**: Claude Code 2.1.295 o posterior, `uv` en el `PATH` y `git`.

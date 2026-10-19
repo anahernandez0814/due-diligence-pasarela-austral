@@ -409,7 +409,11 @@ repositorio, para todo el equipo; `--scope user` la deja en todos sus proyectos 
 `--scope local`, solo en ese repositorio y solo para usted.
 
 **Desinstalar**:
-`claude plugin uninstall guardas-y-revision@piezas-reutilizables --scope project`.
+
+```bash
+claude plugin uninstall guardas-y-revision@piezas-reutilizables --scope project
+claude plugin marketplace remove piezas-reutilizables
+```
 
 **En este repositorio el plugin está deshabilitado a propósito**
 (`"enabledPlugins": {"guardas-y-revision@piezas-reutilizables": false}`): la guarda ya está

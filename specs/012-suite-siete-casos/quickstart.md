@@ -68,6 +68,8 @@ Si se omite, lo cubren los tests deterministas de R9; se anota como no ejecutado
 | 1 | Después del bloqueo de I.1 | El turno ya había terminado solo: no hubo nada que cortar. |
 | 2 | Después del bloqueo de I.1 | Igual que la 1: el turno terminó solo. |
 | 3 | **Antes** del bloqueo de I.1 | El turno **se cortó** (el bloqueo no llegó a dibujarse), pero al pulsar «Rerun» **el mismo turno arrancó otra vez**, con delegaciones nuevas, y volvió a gastar. **Defecto real, corregido** en `chat.py` (R9, «Lo que encontró la Q4»). |
+| 4, prueba A (código de `2646dc0`) | Justo después de las delegaciones (05:26:08) | El corte llegó en el siguiente evento, el bloqueo de I.1, a las 05:26:20 (desviación D1). Tras el «Rerun», el turno quedó como «Turno interrumpido por el analista…» y no se repitió. El mensaje siguiente («Hola») mostró «El turno anterior se interrumpió; se inició un caso nuevo.» y abrió un caso nuevo (opción A). **Aprobada.** |
+| 4, prueba B (código de `2646dc0`) | Justo después del bloqueo de I.1 (05:28:26) | Tras el «Rerun», el turno quedó con la respuesta completa del coordinador (5 de 30 turnos) y no se repitió. **Aprobada.** |
 
 **Lo esperado tras la corrección**, con «Stop» pulsado antes del bloqueo (desviación D1):
 - el turno se corta en el siguiente evento, no al instante;
@@ -77,7 +79,12 @@ Si se omite, lo cubren los tests deterministas de R9; se anota como no ejecutado
 - el siguiente mensaje abre un caso nuevo, con el aviso «El turno anterior se interrumpió; se inició
   un caso nuevo.» (opción A).
 
-La analista repite la Q4 después de esta corrección.
+La analista repitió la Q4 después de la corrección (cuarta ejecución, pruebas A y B): **Q4 aprobada**
+con el código de `2646dc0`.
+
+**Observación menor, que no se corrige**: tras la interrupción, el texto de ayuda de la entrada
+sigue diciendo «El coordinador espera su respuesta…», aunque el siguiente mensaje abre un caso nuevo.
+Se anota en DECISIONES.md, entrada 13.
 
 ## Q5. Correcciones
 

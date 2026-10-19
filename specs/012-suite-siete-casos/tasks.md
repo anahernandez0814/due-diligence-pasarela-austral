@@ -240,7 +240,13 @@ description: "Lista de tareas del ticket #12, suite de los siete casos de prueba
   - `test_veredicto.py`: `cli_con_el_commit_de_head_aprueba_como_siempre` 2,62 s.
 
   El margen sigue siendo poco, unos 20 s: es un riesgo para los próximos tickets.
-- [ ] T032 **Detenerse** y entregar a la analista el resumen del barrido. `/abrir-pr` lo lanza ella. Ofrecerle como opcional la comprobación manual Q4 (interrupción con «Stop», con el coste de un caso) (G1 del analyze).
+- [x] T032 **Detenerse** y entregar a la analista el resumen del barrido. `/abrir-pr` lo lanza ella. Ofrecerle como opcional la comprobación manual Q4 (interrupción con «Stop», con el coste de un caso) (G1 del analyze).
+  **Resultado**: la analista hizo la Q4 cuatro veces (detalle en el quickstart).
+  - La tercera destapó el turno que se repetía tras el «Rerun», corregido en `5b9154e`.
+  - La revisión de esa corrección destapó el turno terminado que no se guardaba, corregido en `2646dc0`.
+  - **La cuarta ejecución quedó aprobada** con el código de `2646dc0`. Prueba A, «Stop» tras las delegaciones: corte en el siguiente evento, turno interrumpido sin repetirse y caso nuevo con aviso. Prueba B, «Stop» tras el bloqueo: turno con su respuesta completa, sin repetirse.
+  - La observación menor del texto de ayuda va a DECISIONES.md.
+  - `/abrir-pr` se abre en una sesión nueva.
 
 ---
 

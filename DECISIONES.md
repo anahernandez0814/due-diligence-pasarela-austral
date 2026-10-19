@@ -212,9 +212,10 @@ Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/
 
 - **Los casos (a)–(g) de punta a punta con el modelo real** (`test_e2e_casos.py`), con la marca `e2e`, excluida de `uv run pytest`. Corren en paralelo en un solo bucle de eventos y solo los seleccionados (`-k caso_d` cuesta un caso); sin la clave se omiten con el motivo. Cada uno con su entorno y su carpeta de registros.
 - **Solo eventos y llamadas, nunca el texto**: los tests reciben una `Observacion` sin texto del modelo, y un test determinista lo fija con campos cerrados y un guarda AST.
-- **«Stop» o recarga durante un hook** (R9): la excepción de control de Streamlit se guarda en el registro de eventos, el hook decide y su denegación sale (I.1, I.2), y en cuanto devuelve se corta el turno y se relanza la misma excepción. `CancelledError` sigue propagándose. Tras un turno interrumpido, el siguiente mensaje abre un caso nuevo (opción A).
+- **«Stop» o recarga durante un hook** (R9): la excepción de control de Streamlit se guarda en el registro de eventos, el hook decide y su denegación sale (I.1, I.2), y en cuanto devuelve se corta el turno y se relanza la misma excepción. `CancelledError` sigue propagándose. Tras un turno interrumpido, el siguiente mensaje abre un caso nuevo (opción A). Desviación D1: Streamlit solo entrega «Stop» en un punto de cesión, así que el corte llega en el siguiente evento y el contenedor «trabajando» queda congelado hasta el «Rerun». El turno nunca se repite: la Q4 lo aprobó.
 - Las noticias simuladas llevan la fuente del diario. Fuera de alcance: US3-9 del #10 y las sugerencias pendientes de los PR #26 y #27.
 
+- **Observación menor de la Q4, sin corregir**: tras una interrupción, el texto de ayuda de la entrada sigue diciendo «El coordinador espera su respuesta…», aunque el siguiente mensaje abre un caso nuevo.
 - **Tiempo de la suite**: la completa tarda unos 4 min 50 s, casi todo en `.claude/hooks/`, y la de la aplicación (`uv run pytest src`), unos 25 s. Queda como sugerencia acelerar los tests de `.claude/hooks/` con un repositorio git de prueba compartido.
 
 Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.

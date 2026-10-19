@@ -330,6 +330,63 @@ herramienta.
   aviso. En `test_presentacion.py`, `decidir_mensaje` con un caso interrumpido devuelve
   `Decision.NUEVO` con el aviso.
 
+### Lo que encontró la Q4 (tercera ejecución, defecto real)
+
+**Lo observado**: la analista pulsó «Stop» **antes** del bloqueo de I.1. El turno sí se cortó (el
+bloqueo no llegó a dibujarse), pero al pulsar «Rerun» **el mismo turno volvió a arrancar**, con
+delegaciones nuevas, y volvió a gastar.
+
+**Causa** (verificada en Streamlit 1.66): `st.session_state` es un `SafeSessionState` cuyo
+`__getitem__` y `__delitem__` llaman a `_maybe_handle_execution_control_request`
+(`safe_session_state.py:120-133`). Con STOP, `on_scriptrunner_yield` deja el ejecutor detenido
+(«remain stopped», `script_requests.py:452`), así que **cada acceso vuelve a lanzar
+`StopException`**. En `_ejecutar_turno`, la primera línea del `except ScriptControlException`
+(`st.session_state["historial"]`) relanzaba la detención: el historial no se guardaba, el pendiente
+no se borraba y la siguiente ejecución repetía el turno.
+
+**Corrección** (`chat.py`, `_ejecutar_turno`):
+1. Antes de `asyncio.run`, toma la referencia al historial y **consume el pendiente**. Durante y
+   después del turno, el chat ya no depende de `st.session_state`.
+2. En el `except ScriptControlException`, solo `historial.append(...)` y `raise`, sin ningún acceso
+   a `st.*` ni a `st.session_state`.
+3. En el camino normal, `historial.append(...)` y `st.rerun()`; el pendiente ya se consumió.
+
+El estado interrumpido vive en el propio `Caso` (`caso.interrumpido`), que se modifica en el lugar,
+así que `decidir_mensaje` lo sigue viendo y aplica la opción A.
+
+**Lección**: un `StopException` simulado **debe dejar a Streamlit detenido**. Los primeros tests
+lanzaban la excepción sin pedir STOP, y Streamlit seguía en `CONTINUE`: cualquier acceso a
+`st.session_state` funcionaba, cosa que no pasa con un «Stop» real. El test nuevo
+(`test_con_streamlit_detenido_de_verdad_el_turno_no_se_repite_en_la_siguiente_ejecucion`) llama a
+`get_script_run_ctx().script_requests.request_stop()` antes de lanzar la excepción. Comprueba que no
+queda pendiente, que el historial tiene el turno interrumpido y que una segunda ejecución del
+script no vuelve a llamar al turno.
+- Falló con el código anterior, antes de corregirlo.
+- Mata las mutaciones K14 (quitar el consumo del pendiente) y K16 (quitar el `append` del
+  historial), aplicadas a mano.
+
+### Desviación justificada D1: el corte llega en el siguiente evento y el círculo queda congelado
+
+**Contradice**: US3-1 y FR-008 («la interrupción DEBE relanzarse en cuanto el hook devuelve su
+decisión, para que el analista no espere ni pague minutos de trabajo»). Se cumple cuando «Stop» llega
+durante un hook o un evento, pero no en general.
+
+**Lo que pasa**:
+- Streamlit solo entrega «Stop» en un punto de cesión del hilo del script: una llamada `st.*` o un
+  acceso a `st.session_state`. Durante el turno, el único que hay es el observador, que dibuja cada
+  evento. Si el analista pulsa «Stop» mientras el modelo piensa, entre dos eventos, el corte llega
+  con el **siguiente evento**, no al instante.
+- Después del corte, el contenedor «El coordinador está trabajando…» queda **congelado**, con su
+  círculo girando, hasta que el analista pulsa «Rerun»: Streamlit no vuelve a dibujar un script
+  detenido. Con el «Rerun», el turno aparece en el historial como interrumpido y no se repite.
+- Tras el «Rerun», el siguiente mensaje abre un caso nuevo con aviso (opción A).
+
+**Por qué se acepta**: entregar «Stop» entre eventos exigiría vigilar las peticiones de Streamlit
+desde otra tarea, o desde otro hilo, con su propia sincronización con el script. Es una pieza más en
+un camino auditado (I.1, I.2) para un caso raro. Lo que sí está garantizado se mantiene: la
+denegación sale, la acción prohibida no se ejecuta, el turno no se repite ni vuelve a gastar, y el
+gasto entre el «Stop» y el siguiente evento es el de un paso del modelo.
+
 ## R10. La fuente por defecto de noticias en el `EjecutorSimulado` (FR-009)
 
 Medido: sin un resultado asignado, `EjecutorSimulado._resultado` construye la consulta de noticias

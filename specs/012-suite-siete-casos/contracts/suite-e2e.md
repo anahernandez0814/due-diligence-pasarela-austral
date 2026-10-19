@@ -44,6 +44,7 @@ implementación). Si falta una garantía del sistema, es un error del producto.
 | `ScriptControlException` desde el cuerpo de un hook | En `PreToolUse`, deniega con el motivo genérico, sin sello. En los demás tipos, permite. Después se relanza. |
 | `Exception` del observador | Se ignora (#11). |
 | `CancelledError`, `KeyboardInterrupt` o `SystemExit` | Se propagan, sin cambios. |
-| En el chat, la interrupción relanzada | El turno queda en el historial como interrumpido, se quita el mensaje pendiente y Streamlit para o recarga. |
+| En el chat, antes del turno | El historial se toma y el mensaje pendiente se consume antes de `asyncio.run`. Con Streamlit detenido, cada acceso a `st.session_state` vuelve a lanzar la detención (Q4). |
+| En el chat, la interrupción relanzada | El turno queda en el historial como interrumpido, sin tocar `st.*` ni `st.session_state`, y Streamlit para o recarga. Con «Stop» entre dos eventos, el corte llega en el siguiente evento y el contenedor «trabajando» queda congelado hasta el «Rerun» (desviación D1). |
 | En el chat, el mensaje siguiente a un turno interrumpido | Abre un caso nuevo con el aviso «El turno anterior se interrumpió; se inició un caso nuevo.». Nunca reanuda la sesión cortada (opción A). |
 | En la línea de comandos | Sin cambios: no declara interrupciones. |

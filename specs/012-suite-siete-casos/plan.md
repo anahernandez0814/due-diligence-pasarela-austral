@@ -58,7 +58,9 @@ dependencia nueva**: sin `pytest-xdist` ni `pytest-asyncio` (R1).
 
 ## Constitution Check
 
-*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple, sin desviaciones.**
+*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple la constitución. Tiene una desviación
+justificada de la spec, D1, declarada tras la Q4**: el corte llega en el siguiente evento y el
+círculo queda congelado hasta el «Rerun». Va abajo y en R9.
 
 | Principio | Cómo se cumple |
 |-----------|----------------|
@@ -79,6 +81,23 @@ dependencia nueva**: sin `pytest-xdist` ni `pytest-asyncio` (R1).
 **Re-evaluación tras el diseño**: sin cambios. Lo que se apoya en lectura y no en medición (el
 orden de escritura del SDK en R9 y el comportamiento de `-m` en R4) está declarado y tiene su test o
 su comprobación en la implementación.
+
+**Re-evaluación tras la Q4 de la analista**:
+- **Defecto real, corregido**: con «Stop» antes del bloqueo, el turno se repetía al pulsar «Rerun».
+  Con Streamlit detenido, cada acceso a `st.session_state` vuelve a lanzar la detención, y el `except`
+  del chat no llegaba a guardar el historial ni a borrar el pendiente. Ahora `_ejecutar_turno` toma
+  el historial y consume el pendiente antes del turno. El test reproduce el «Stop» real
+  (`request_stop()`), falló antes de la corrección y mata las mutaciones K14 y K16 (R9).
+- **Desviación justificada D1**:
+  - **Contradice**: US3-1 y FR-008, en «en cuanto el hook devuelve su decisión».
+  - **Qué pasa**: Streamlit solo entrega «Stop» en un punto de cesión; durante el turno, ese punto
+    es el observador. Con «Stop» entre dos eventos, el corte llega en el **siguiente evento**, y el
+    contenedor «trabajando» queda **congelado** hasta el «Rerun».
+  - **Por qué se acepta**: forzarlo antes exigiría vigilar las peticiones de Streamlit desde otra
+    tarea o hilo, en un camino auditado y para un caso raro.
+  - **Se mantiene**: la denegación sale, el turno no se repite ni vuelve a gastar, y el siguiente
+    mensaje abre un caso nuevo (opción A).
+  - **Riesgo residual**: el gasto entre el «Stop» y el siguiente evento.
 
 ## Decisiones (detalle en [research.md](research.md))
 

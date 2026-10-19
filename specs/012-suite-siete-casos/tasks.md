@@ -264,7 +264,24 @@ La analista revisó en un clon de la rama, sin archivo de entorno ni clave, y ob
 | `test_coordinador.py::test_una_interrupcion_antes_de_la_consulta_corta_el_turno_sin_esperar_a_un_hook` (nuevo, mutación K13) | Nada: quitar `self._eventos.interrumpir()` antes del `try` de `_turno` dejaba todo en verde | Con la interrupción en el primer evento (`caso_iniciado`), el turno se corta en menos de 2 s sin que corra ningún hook; la consulta falsa terminaría sola a los 3 s | Sin `asyncio.timeout`: su cancelación, con la interrupción ya guardada, también se convierte en la interrupción y el test pasaba tarde con el mutante (primer intento, corregido). Mutación aplicada a mano: el test la mata. |
 | `test_coordinador.py::test_la_interrupcion_corta_el_turno_al_decidir_el_hook_y_la_denegacion_sale` (mutación K9) | La interrupción, atrapada fuera de `asyncio.run` | La interrupción, atrapada en la misma tarea, y además `asyncio.current_task().cancelling() == 0` | Sin `tarea.uncancel()`, la tarea quedaría marcada como cancelada. Todas las aserciones anteriores siguen. Mutación aplicada a mano: el test la mata. |
 
-**Mutaciones de la analista sobre la interrupción (R9)**: 18 en total, en una copia nueva. Murieron 15. Las 3 que sobrevivían (K9, K13 y K15) quedan cubiertas por las tres filas de arriba, sin tocar el código de producción.
+| `test_chat.py::test_con_streamlit_detenido_de_verdad_el_turno_no_se_repite_en_la_siguiente_ejecucion` (nuevo, Q4; mutaciones K14 y K16) | Nada: los tests simulaban `StopException` sin poner a Streamlit en STOP, y con STOP real el `except` del chat no podía tocar `st.session_state` | Con `request_stop()` antes de la excepción: no queda pendiente, el historial tiene el turno interrumpido y una segunda ejecución del script no vuelve a llamar al turno | Falló con el código anterior, antes de corregirlo. Mata K14 (quitar el consumo del pendiente: 14 tests fallan, y el turno se repite en bucle hasta el tiempo límite) y K16 (quitar el `append` del historial: 2 tests fallan), aplicadas a mano. |
+
+**Mutaciones de la analista sobre la interrupción (R9)**: 18 en total, en una copia nueva. Murieron 15. Las 3 que sobrevivían (K9, K13 y K15) quedan cubiertas por las tres filas de arriba, sin tocar el código de producción. Después, la Q4 destapó un defecto que ninguna mutación veía; lo cubre la fila siguiente, con K14 y K16.
+
+**Copia limpia tras las tres mutaciones** (commit `0b2cd21`, sin archivo de entorno, sin clave ni `PYTHONUTF8`): 4783 en verde, en **355,2 s y 355,7 s (5:55)** en dos ejecuciones. **Pasa de 5 minutos**. Los tests más lentos tardaron, uno a uno, 1,5 veces lo de antes (3,8 s frente a 2,6 s en `.claude/hooks/`), con la máquina ocupada por la Q4 de la analista en paralelo. Se vuelve a medir tras la corrección de la Q4, abajo.
+
+## Corrección tras la Q4 de la analista (tercera ejecución)
+
+- **Defecto**: con «Stop» antes del bloqueo de I.1, el turno se cortaba, pero al pulsar «Rerun» se repetía y volvía a gastar. Con Streamlit detenido, cada acceso a `st.session_state` vuelve a lanzar `StopException`, y el `except` de `_ejecutar_turno` no llegaba a guardar el historial ni a borrar el pendiente (R9, «Lo que encontró la Q4»).
+- **Corrección**: `_ejecutar_turno` toma el historial y consume el pendiente antes de `asyncio.run`. En el `except`, solo `historial.append` y `raise`; en el camino normal, `historial.append` y `st.rerun()`.
+- **Test**: el de la fila de arriba. Reproduce el «Stop» real con `request_stop()`.
+- **Desviación justificada D1**, declarada en spec, plan, R9, contrato y quickstart: el corte llega en el siguiente evento, y el contenedor «trabajando» queda congelado hasta el «Rerun».
+- **Quickstart Q4**: con las tres ejecuciones de la analista. Ella repite la Q4 después de esta corrección.
+- **Copia limpia tras la corrección** (commit `6bfd519`, sin archivo de entorno, sin clave ni `PYTHONUTF8`): **4784 en verde y 7 deseleccionados, en 291,4 s (4:51)**, por debajo de 5 minutos, pero solo con 9 s de margen.
+  - El test más lento fue `test_configuracion_pytest.py::test_pedidos_sin_una_credencial_valida_los_siete_se_omiten_con_el_motivo`, con 8,2 s: es el subproceso de pytest.
+  - Siguen los tests de `.claude/hooks/` que crean repositorios git, de 2,6 a 3,3 s.
+  - Los 2872 tests de `src/` tardan unos 22 s; el resto del tiempo es de `.claude/hooks/`.
+  - Con la máquina ocupada, la suite pasó de 5 minutos (5:55, arriba): **es un riesgo abierto** para la entrega.
 
 ## Ejecuciones e2e
 

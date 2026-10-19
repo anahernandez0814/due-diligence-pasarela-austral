@@ -362,3 +362,52 @@ def test_tras_un_turno_interrumpido_el_siguiente_mensaje_abre_un_caso_nuevo_con_
     ((_, asistente),) = _turnos(at)  # el historial es el del caso nuevo
     assert _textos(asistente)[0] == presentacion.AVISO_TURNO_INTERRUMPIDO
     assert fabrica.casos[1].completo
+
+
+def _crear_caso_que_para_streamlit(llamadas):
+    """Un caso cuyo turno hace lo que hace «Stop» de verdad (Q4, tercera ejecución).
+
+    Pone al ejecutor de Streamlit en STOP y lanza `StopException`. Con STOP, Streamlit «remain
+    stopped» (`script_requests.py:452`): cada llamada `st.*` y cada acceso a `st.session_state`
+    (`safe_session_state.py:120-133`) vuelve a lanzar la detención. Un `StopException` simulado
+    sin la petición de STOP no lo reproduce: ese fue el hueco de los primeros tests.
+    """
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        ScriptControlException,
+        StopException,
+    )
+    from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
+    from due_diligence.coordinador import Caso
+    from due_diligence.simulacion import EjecutorSimulado
+
+    def crear(observador):
+        async def consulta(*, prompt, options=None):
+            llamadas.append(prompt)
+            get_script_run_ctx().script_requests.request_stop()
+            raise StopException()
+            yield  # pragma: no cover
+
+        return Caso(
+            ejecutor=EjecutorSimulado(),
+            consulta=consulta,
+            observador=observador,
+            interrupciones=(ScriptControlException,),
+        )
+
+    return crear
+
+
+def test_con_streamlit_detenido_de_verdad_el_turno_no_se_repite_en_la_siguiente_ejecucion():
+    llamadas = []
+    at = _enviar(_app(_crear_caso_que_para_streamlit(llamadas)), SOLICITUD_A)
+    assert llamadas == [SOLICITUD_A]
+    assert "pendiente" not in at.session_state, (
+        "el pendiente sigue: la siguiente ejecución lo repite"
+    )
+    (historial,) = at.session_state["historial"]
+    assert historial.respuesta == presentacion.MENSAJE_TURNO_INTERRUMPIDO
+    assert at.session_state["caso"].interrumpido is True
+    # «Rerun»: la siguiente ejecución del script no vuelve a llamar al turno ni a gastar.
+    at = at.run()
+    assert llamadas == [SOLICITUD_A], "el mismo turno arrancó otra vez tras el «Rerun»"

@@ -61,6 +61,24 @@ Resultado esperado:
 
 Si se omite, lo cubren los tests deterministas de R9; se anota como no ejecutado.
 
+**Ejecuciones de la analista** (2026-10-19):
+
+| Ejecución | Cuándo pulsó «Stop» | Resultado |
+|-----------|---------------------|-----------|
+| 1 | Después del bloqueo de I.1 | El turno ya había terminado solo: no hubo nada que cortar. |
+| 2 | Después del bloqueo de I.1 | Igual que la 1: el turno terminó solo. |
+| 3 | **Antes** del bloqueo de I.1 | El turno **se cortó** (el bloqueo no llegó a dibujarse), pero al pulsar «Rerun» **el mismo turno arrancó otra vez**, con delegaciones nuevas, y volvió a gastar. **Defecto real, corregido** en `chat.py` (R9, «Lo que encontró la Q4»). |
+
+**Lo esperado tras la corrección**, con «Stop» pulsado antes del bloqueo (desviación D1):
+- el turno se corta en el siguiente evento, no al instante;
+- el contenedor «El coordinador está trabajando…» queda congelado hasta pulsar «Rerun»;
+- tras el «Rerun», el turno aparece en el historial como interrumpido y **no se repite**: no hay
+  delegaciones nuevas;
+- el siguiente mensaje abre un caso nuevo, con el aviso «El turno anterior se interrumpió; se inició
+  un caso nuevo.» (opción A).
+
+La analista repite la Q4 después de esta corrección.
+
 ## Q5. Correcciones
 
 - `uv run pytest src/due_diligence/test_sesion_simulada.py -k fuente`: las noticias simuladas por

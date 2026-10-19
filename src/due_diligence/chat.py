@@ -102,31 +102,33 @@ def _ejecutar_turno(
             if decision is Decision.NUEVO:
                 st.session_state["caso"] = dependencias.crear_caso(_mostrar_en_vivo)
             caso: Caso = st.session_state["caso"]
+            # El historial y el pendiente se toman ANTES del turno (#12, R9, Q4): con «Stop»,
+            # Streamlit queda detenido y cada acceso a `st.session_state` vuelve a lanzar la
+            # detención (`safe_session_state.py`), así que tras la interrupción ya no se podría
+            # guardar nada. El pendiente se consume aquí: el turno no se repite al volver a
+            # ejecutar el script, termine como termine.
+            historial = st.session_state["historial"]
+            del st.session_state["pendiente"]
             numero = len(caso.estado.mensajes) + 1
             respuesta = None
             turno = caso.ejecutar(texto) if decision is Decision.NUEVO else caso.continuar(texto)
             try:
                 asyncio.run(turno)
             except ScriptControlException:
-                # «Stop» o recarga (#12, R9): el turno queda en el historial como interrumpido y
-                # sin pendiente, para que la siguiente ejecución del script no lo repita ni vuelva
-                # a gastar; después se relanza para que Streamlit pare o recargue.
-                st.session_state["historial"].append(
+                # «Stop» o recarga: el turno queda en el historial como interrumpido, sin tocar
+                # `st.*` ni `st.session_state`, y se relanza para que Streamlit pare o recargue.
+                historial.append(
                     presentacion.resumen_del_turno(
                         caso, numero, texto, aviso, presentacion.MENSAJE_TURNO_INTERRUMPIDO
                     )
                 )
-                del st.session_state["pendiente"]
                 raise
             except CasoSinSesion:
                 respuesta = presentacion.MENSAJE_SIN_SESION
             except Exception as error:  # el `Caso` ya clasificó el turno como anómalo
                 respuesta = presentacion.mensaje_fallo_turno(error)
             trabajando.update(label="Turno terminado", state="complete", expanded=False)
-    st.session_state["historial"].append(
-        presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta)
-    )
-    del st.session_state["pendiente"]
+    historial.append(presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta))
     st.rerun()
 
 

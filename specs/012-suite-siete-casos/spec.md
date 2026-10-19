@@ -129,6 +129,8 @@ El ejecutor simulado de los tests da a las noticias la fuente de un diario, no l
 
 ## Assumptions
 
+- **Desviación justificada D1 del plan** (tras la Q4): FR-008 y US3-1 piden relanzar la interrupción en cuanto el hook decide. Streamlit solo entrega «Stop» en un punto de cesión del script, que durante el turno es el dibujo de cada evento. Con «Stop» entre dos eventos, el turno se corta en el **siguiente evento**, y el contenedor «trabajando» queda congelado hasta el «Rerun». Se mantiene lo garantizado: la denegación sale, el turno no se repite ni vuelve a gastar, y el siguiente mensaje abre un caso nuevo (opción A).
+
 - **Modelo y coste**: el grupo de punta a punta usa los modelos configurados de la aplicación (Opus 5.5 desde el #7). Cada caso cuesta del orden de 0,15 a 0,30 USD (medido en el #7), así que una ejecución completa cuesta del orden de 1 a 2,5 USD; el presupuesto de este ticket son como máximo dos ejecuciones.
 - **Tiempo**: cada caso tarda de uno a tres minutos con el modelo real; para que el grupo termine en menos de 5 minutos, el plan decide cómo se ejecutan los casos (por ejemplo, en paralelo).
 - **Datos**: los siete casos ya están en los datos ficticios del #5 (`test_datos_casos.py`); no hacen falta datos nuevos (principio VII).

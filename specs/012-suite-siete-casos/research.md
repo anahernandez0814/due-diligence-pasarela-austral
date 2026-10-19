@@ -290,6 +290,11 @@ Cambian `eventos.py`, `hooks.py` (`fallar_cerrado`), `coordinador.py` (`_turno`)
     interrupción, devuelve **la denegación de I.1** (no la genérica) y avisa después de decidir;
   - lo mismo con el `PreToolUse` del informe con `habilitar` en un caso con coincidencia (I.2);
   - si el cuerpo del hook lanza la interrupción, se deniega con el motivo genérico y sin sello;
+  - US3-2, añadido tras la puerta de `a7f853e`: el observador lanza la interrupción y después el
+    cuerpo lanza una `ValueError`. Sale la denegación genérica con el fallo registrado, y se avisa
+    una vez, después de decidir;
+  - con la interrupción, el escalamiento sale igual que sin ella y avisa al decidir
+    (`degradar_escalamiento`, mismo patrón que `fallar_cerrado`);
   - una `CancelledError` del cuerpo se propaga.
 - **`test_coordinador.py`**: un `Caso` con una `consulta` falsa que, como el SDK, ejecuta el hook de
   `delegar_frente` (listas) **en una tarea suelta** y escribe la decisión **a través de un
@@ -298,7 +303,9 @@ Cambian `eventos.py`, `hooks.py` (`fallar_cerrado`), `coordinador.py` (`_turno`)
   - `ejecutar` lanza la interrupción en menos de 2 s;
   - la decisión guardada es la denegación de I.1;
   - el turno queda `ANOMALA` (`interrumpido por la interfaz`) y el caso no está completo;
-  - sin interrupción, una cancelación externa sigue siendo `CancelledError`.
+  - sin interrupción, una cancelación externa sigue siendo `CancelledError`;
+  - al terminar el turno, `al_interrumpir` vuelve a `None`: una interrupción en un evento entre
+    turnos queda guardada sin programar la cancelación en el bucle cerrado del turno anterior.
 - **`test_chat.py`**:
   - con un `Caso` simulado cuyo turno lanza `StopException`, la ejecución de `AppTest` termina, no
     queda el mensaje pendiente y el historial guarda el turno como interrumpido;
@@ -386,6 +393,32 @@ desde otra tarea, o desde otro hilo, con su propia sincronización con el script
 un camino auditado (I.1, I.2) para un caso raro. Lo que sí está garantizado se mantiene: la
 denegación sale, la acción prohibida no se ejecuta, el turno no se repite ni vuelve a gastar, y el
 gasto entre el «Stop» y el siguiente evento es el de un paso del modelo.
+
+### Desviación justificada D2: un caso cortado en el cierre o el escalamiento puede quedar sin escalar
+
+Declarada tras la puerta de `/abrir-pr` en `a7f853e`.
+
+**Contradice**: I.2 («DEBE escalar el caso») en un caso cortado.
+
+**Lo que pasa**: un «Stop» durante el cierre o durante el escalamiento puede dejar un caso con una
+coincidencia sin escalar.
+- **En el cierre**: si la interrupción sale del propio hook `Stop`, `fallar_cerrado` devuelve
+  `permitir()` (`hooks.py:470`). No bloquea el cierre y no deja la marca `cierre_sin_escalar`.
+- **En el escalamiento**: la decisión del hook sale antes del aviso, porque `degradar_escalamiento`
+  aplaza el corte. Aun así, el turno se puede cortar antes de que el modelo llegue a escalar.
+
+**Por qué se acepta**: el caso nunca queda habilitado (I.3 se cumple). Queda incompleto
+(`ANOMALA`) y sin informe, y el siguiente mensaje abre un caso nuevo (`presentacion.py:339`), así
+que el analista debe repetirlo.
+
+**Sugerencia**: registrar en la traza las causas pendientes del caso abandonado.
+
+**Limitaciones**:
+- **El `Caso` permite `continuar` tras una interrupción** (`coordinador.py:345`). Lo impide la
+  interfaz, y la línea de comandos no declara interrupciones.
+- **`uncancel()` también deshace un `asyncio.timeout`**: con una interrupción guardada, su
+  cancelación (`coordinador.py:405`) se toma por la de la interrupción. El turno termina con la
+  interrupción, no con `TimeoutError`.
 
 ## R10. La fuente por defecto de noticias en el `EjecutorSimulado` (FR-009)
 

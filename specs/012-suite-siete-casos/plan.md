@@ -58,9 +58,14 @@ dependencia nueva**: sin `pytest-xdist` ni `pytest-asyncio` (R1).
 
 ## Constitution Check
 
-*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple la constitución. Tiene una desviación
-justificada de la spec, D1, declarada tras la Q4**: el corte llega en el siguiente evento y el
-círculo queda congelado hasta el «Rerun». Va abajo y en R9.
+*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple la constitución. Tiene dos
+desviaciones justificadas**:
+- **D1**, declarada tras la Q4: el corte llega en el siguiente evento y el círculo queda congelado
+  hasta el «Rerun».
+- **D2**, declarada tras la puerta de `/abrir-pr` en `a7f853e`: un «Stop» durante el cierre o el
+  escalamiento puede dejar sin escalar un caso con una coincidencia.
+
+Las dos van abajo y en R9.
 
 | Principio | Cómo se cumple |
 |-----------|----------------|
@@ -98,6 +103,36 @@ su comprobación en la implementación.
   - **Se mantiene**: la denegación sale, el turno no se repite ni vuelve a gastar, y el siguiente
     mensaje abre un caso nuevo (opción A).
   - **Riesgo residual**: el gasto entre el «Stop» y el siguiente evento.
+
+**Re-evaluación tras la puerta de `/abrir-pr` en `a7f853e`** (veredicto con un bloqueante):
+- **Bloqueante, corregido**: faltaba el test de US3-2. Un hook falla por un error propio después
+  de que el observador lanzó la interrupción, y sale la denegación genérica. El test mata la
+  mutación «el `except Exception` de `_decidir` devuelve `permitir()`», y T013 lista los dos
+  escenarios.
+- **Corregido también**:
+  - el turno pone `al_interrumpir = None` en su `finally`, así que un evento entre turnos no
+    programa la cancelación en un bucle cerrado;
+  - `degradar_escalamiento` marca `DENTRO_DE_HOOK` y aplaza el aviso, como `fallar_cerrado`.
+- **Desviación justificada D2**:
+  - **Contradice**: I.2 («DEBE escalar el caso») en un caso cortado.
+  - **Qué pasa**: un «Stop» durante el cierre o durante el escalamiento puede dejar un caso con una
+    coincidencia sin escalar. En el cierre, el hook `Stop` falla cerrado devolviendo `permitir()`
+    (`hooks.py:470`) y no deja la marca `cierre_sin_escalar`. En el escalamiento, el turno se puede
+    cortar antes de que el modelo llegue a escalar.
+  - **Por qué se acepta**: el caso nunca queda habilitado (I.3 se cumple), queda incompleto y sin
+    informe, y el siguiente mensaje abre un caso nuevo (`presentacion.py:339`), así que el analista
+    debe repetirlo.
+  - **Sugerencia**: registrar en la traza las causas pendientes del caso abandonado.
+- **Limitaciones**:
+  - El `Caso` permite `continuar` tras una interrupción (`coordinador.py:345`). Lo impide la
+    interfaz, y la línea de comandos no declara interrupciones.
+  - Con una interrupción guardada, `uncancel()` también deshace la cancelación de un
+    `asyncio.timeout` (`coordinador.py:405`): el turno termina con la interrupción, no con
+    `TimeoutError`.
+- **Sugerencias sin aplicar** (no se cambian los tests e2e sin poder ejecutarlos):
+  - filtrar por `c.valida` las consultas a listas en `_comunes`;
+  - comparar las consultas de persona con el representante de `CO-AM-0005` en el caso (d);
+  - tests deterministas de `_ejecutar_casos` y `_ejecutar_uno`.
 
 ## Decisiones (detalle en [research.md](research.md))
 

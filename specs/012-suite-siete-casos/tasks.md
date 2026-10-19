@@ -244,6 +244,15 @@ description: "Lista de tareas del ticket #12, suite de los siete casos de prueba
 
 ---
 
+## Corrección tras la revisión de la analista en una copia limpia
+
+La analista revisó en un clon de la rama, sin archivo de entorno ni clave, y obtuvo 1 fallo en 4781: `test_configuracion_pytest.py::test_pedidos_sin_una_credencial_valida_los_siete_se_omiten_con_el_motivo`. Las dos causas no se veían en este repositorio, porque aquí existe el archivo de entorno y la terminal define `PYTHONUTF8` y `PYTHONIOENCODING`:
+
+1. **Codificación**: sin `PYTHONUTF8`, el hijo escribía en cp1252, la «á» del motivo rompía la lectura y `stdout` quedaba en `None`. Ahora `_pytest` fija `PYTHONIOENCODING=utf-8` en el entorno del hijo, en las dos llamadas.
+2. **Dependencia del archivo de entorno**: sin él, el motivo era `MENSAJE_SIN_CLAVE`. Ahora el hijo lleva una clave ficticia y un token ficticio: el motivo es siempre `MENSAJE_OTRA_CREDENCIAL` y nunca se llama al modelo.
+
+**Comprobado en una copia limpia** (2026-10-19): `git clone` de la rama en una carpeta temporal y `uv run pytest`, sin archivo de entorno y sin `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `PYTHONUTF8` ni `PYTHONIOENCODING`. Resultado: **4781 en verde y 7 deseleccionados, en 279,8 s (4:39)**.
+
 ## Tests adaptados
 
 | Test | Fijaba | Fija ahora | Por qué no se debilita |

@@ -3,8 +3,13 @@
 `uv run pytest` no selecciona los casos de punta a punta, tenga o no la clave; pedidos sin la clave,
 se omiten con el motivo y sin crear ningún caso. Como máximo dos subprocesos de pytest, porque la
 suite determinista ya ronda los cinco minutos (P1 del analyze), y ninguno puede llamar al modelo:
-el segundo define una credencial alternativa ficticia que `comprobar_credencial` rechaza siempre,
-aunque exista el archivo de entorno con la clave (H1 del analyze).
+el segundo define una clave ficticia y una credencial alternativa ficticia, que
+`comprobar_credencial` rechaza siempre con `MENSAJE_OTRA_CREDENCIAL`. Así el motivo es el mismo
+con o sin el archivo de entorno (que no pisa variables ya definidas) y con o sin una clave en el
+entorno de quien ejecuta (H1 del analyze; corrección de la revisión en una copia limpia).
+
+El hijo escribe en UTF-8 (`PYTHONIOENCODING`): en Windows, sin `PYTHONUTF8`, escribiría en cp1252
+y la «á» del motivo rompería la lectura de su salida.
 """
 
 import os
@@ -20,10 +25,13 @@ E2E = Path(__file__).with_name("test_e2e_casos.py")
 
 
 def _pytest(*argumentos, entorno=None):
+    hijo = dict(os.environ if entorno is None else entorno)
+    hijo["PYTHONIOENCODING"] = "utf-8"
+    hijo["COLUMNS"] = "300"  # el motivo de la omisión, en una sola línea del resumen
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *argumentos, str(E2E)],
         cwd=RAIZ,
-        env=entorno,
+        env=hijo,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -57,7 +65,8 @@ def test_sin_la_credencial_no_se_crea_ningun_caso():
 
 
 def test_pedidos_sin_una_credencial_valida_los_siete_se_omiten_con_el_motivo():
-    entorno = {k: v for k, v in os.environ.items() if k != configuracion.VARIABLE_CLAVE}
+    entorno = dict(os.environ)
+    entorno[configuracion.VARIABLE_CLAVE] = "clave-ficticia-de-prueba"
     entorno["ANTHROPIC_AUTH_TOKEN"] = "token-ficticio-de-prueba"
     salida = _pytest("-m", "e2e", "-rs", entorno=entorno)
     assert "7 skipped" in salida.stdout, salida.stdout + salida.stderr

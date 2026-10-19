@@ -411,3 +411,39 @@ def test_con_streamlit_detenido_de_verdad_el_turno_no_se_repite_en_la_siguiente_
     # «Rerun»: la siguiente ejecución del script no vuelve a llamar al turno ni a gastar.
     at = at.run()
     assert llamadas == [SOLICITUD_A], "el mismo turno arrancó otra vez tras el «Rerun»"
+
+
+def test_con_stop_despues_del_ultimo_evento_el_turno_terminado_queda_con_su_respuesta():
+    # Q4, ejecuciones 1 y 2: «Stop» cuando el turno ya terminaba. El turno acaba con normalidad,
+    # pero Streamlit queda detenido: la siguiente llamada `st.*` (cerrar el «trabajando») relanza
+    # la detención, y el turno terminado tiene que estar ya en el historial con su respuesta.
+    from claude_agent_sdk import AssistantMessage, TextBlock
+    from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
+    from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
+    from due_diligence.coordinador import Caso
+    from due_diligence.simulacion import EjecutorSimulado, mensaje_de_resultado
+
+    llamadas = []
+    respuesta = "Resumen del coordinador para el analista."
+
+    def crear(observador):
+        async def consulta(*, prompt, options=None):
+            llamadas.append(prompt)
+            get_script_run_ctx().script_requests.request_stop()
+            yield AssistantMessage(content=[TextBlock(respuesta)], model="simulado")
+            yield mensaje_de_resultado()
+
+        return Caso(
+            ejecutor=EjecutorSimulado(),
+            consulta=consulta,
+            observador=observador,
+            interrupciones=(ScriptControlException,),
+        )
+
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert "pendiente" not in at.session_state
+    (turno,) = at.session_state["historial"]
+    assert turno.respuesta == respuesta, "el turno terminado no se guardó con su respuesta"
+    at = at.run()
+    assert llamadas == [SOLICITUD_A]

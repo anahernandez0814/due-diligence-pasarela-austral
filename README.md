@@ -45,14 +45,19 @@ Hay dos grupos, que se corren por separado (#12).
 
 | Grupo | Comando | Clave | Coste | Tiempo medido |
 |-------|---------|-------|-------|---------------|
-| Deterministas | `uv run pytest` | no | 0 | ≈ 4 min 37 s (4781 tests) |
+| Deterministas, completas | `uv run pytest` | no | 0 | ≈ 4 min 50 s |
+| Deterministas, solo la aplicación | `uv run pytest src` | no | 0 | ≈ 25 s |
 | De punta a punta, los casos (a)–(g) con el modelo real | `uv run pytest -m e2e -rs` | sí | ≈ 1,10 USD por ejecución completa | ≈ 1 min 25 s (los 7 a la vez) |
 
-- **Deterministas**: todos los tests de `src/` y `.claude/hooks/`, sin el modelo ni la red. El tiempo
-  está cerca del límite de 5 minutos: lo más lento son los tests de las guardas que crean
-  repositorios git de prueba. No necesitan
-  `ANTHROPIC_API_KEY` y nunca ejecutan los de punta a punta, aunque la clave esté definida: la marca
-  `e2e` está excluida en `pyproject.toml`.
+Tiempos medidos en el equipo de la analista.
+
+- **Deterministas**: todos los tests de `src/` y `.claude/hooks/`, sin el modelo ni la red. No
+  necesitan `ANTHROPIC_API_KEY` y nunca ejecutan los de punta a punta, aunque la clave esté
+  definida: la marca `e2e` está excluida en `pyproject.toml`.
+  - La suite completa queda cerca del límite de 5 minutos. Casi todo el tiempo es de `.claude/hooks/`
+    (las guardas del entorno de Claude Code), cuyos tests crean repositorios git de prueba.
+  - Los tests de la aplicación (`uv run pytest src`) tardan unos 25 s y son los que conviene correr
+    mientras se trabaja en `src/`.
 - **De punta a punta** (`src/due_diligence/test_e2e_casos.py`): un test por caso obligatorio, con el
   coordinador y los subagentes reales, la pasarela con datos ficticios y todos los hooks. Toman la
   clave del archivo de entorno, como el chat (ver «Interfaz de chat»). Los siete corren en paralelo y

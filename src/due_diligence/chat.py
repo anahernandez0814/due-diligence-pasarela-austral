@@ -127,8 +127,11 @@ def _ejecutar_turno(
                 respuesta = presentacion.MENSAJE_SIN_SESION
             except Exception as error:  # el `Caso` ya clasificó el turno como anómalo
                 respuesta = presentacion.mensaje_fallo_turno(error)
+            # Se guarda antes de cualquier llamada `st.*` (Q4, ejecuciones 1 y 2): si «Stop» llegó
+            # después del último evento, el `update` relanza la detención, y el turno terminado
+            # ya tiene que estar en el historial con su respuesta.
+            historial.append(presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta))
             trabajando.update(label="Turno terminado", state="complete", expanded=False)
-    historial.append(presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta))
     st.rerun()
 
 

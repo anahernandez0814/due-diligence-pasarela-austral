@@ -282,6 +282,11 @@ La analista revisó en un clon de la rama, sin archivo de entorno ni clave, y ob
   - Siguen los tests de `.claude/hooks/` que crean repositorios git, de 2,6 a 3,3 s.
   - Los 2872 tests de `src/` tardan unos 22 s; el resto del tiempo es de `.claude/hooks/`.
   - Con la máquina ocupada, la suite pasó de 5 minutos (5:55, arriba): **es un riesgo abierto** para la entrega.
+- **Hueco del mismo tipo, corregido después** (revisión de `5b9154e`): al final de `_ejecutar_turno`, `trabajando.update(...)` iba antes de `historial.append(...)`. Si «Stop» llega después del último evento, como en las ejecuciones 1 y 2 de la Q4, el `update` relanza la detención y el turno terminado no se guardaba: la respuesta del coordinador desaparecía de la pantalla aunque el caso avanzó.
+  - **Corrección**: el `append` va justo después del `try`/`except`, antes de cualquier llamada `st.*`.
+  - **Test**: `test_con_stop_despues_del_ultimo_evento_el_turno_terminado_queda_con_su_respuesta`, con `request_stop()` durante un turno que termina con normalidad. Comprueba que el historial tiene el turno con su respuesta, que no queda pendiente y que una segunda ejecución no repite el turno. Falló con el orden anterior.
+  - Se corrieron solo `test_chat.py` y `test_presentacion.py` (74 en verde), como pidió la analista.
+  - README («Pruebas») con los tiempos reales: unos 4 min 50 s la suite completa y unos 25 s la de `uv run pytest src`. DECISIONES.md, entrada 13, con la sugerencia del repositorio compartido para `.claude/hooks/`.
 
 ## Ejecuciones e2e
 

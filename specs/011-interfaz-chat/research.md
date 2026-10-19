@@ -148,6 +148,14 @@ aviso está presente; tras el turno 2, ya no. Si la medición muestra que sí se
 se usa la decisión `AVISO_ESPERA` de la tabla y el aviso fijo sobra. La función pura se prueba
 igual en los dos casos. La línea de comandos mantiene el aviso ante la línea vacía.
 
+**Medido (T033, Streamlit 1.66.0): sí se envían espacios, así que el plan B no se aplica.** En el
+frontend (`static/static/js/ChatInput.*.js`), el envío se habilita con `J = … D!=="" || …`, sin
+`trim()`, y la función de envío (`St`) solo comprueba `!J`; manda el valor tal cual. Un texto vacío
+no se puede enviar, pero «   » sí, y llega así al script (comprobado con `AppTest`). El chat usa la
+rama `AVISO_ESPERA` de `decidir_mensaje`; además, el texto de ayuda de la entrada dice qué espera
+el coordinador. El test que queda es el de T034: «   » con la espera abierta muestra el aviso y no
+llama a `continuar`.
+
 **Fallos**: `CasoSinSesion` → el mensaje `MENSAJE_SIN_SESION` del #10 (se mueve a
 `presentacion.py` y `__main__` lo importa). Otra excepción del turno (el `Caso` ya la clasifica
 como anómala y la relanza) → «El turno falló por un error del sistema ({tipo}). El caso queda
@@ -276,6 +284,17 @@ FR-005). Lo demás se anota aquí, sin test:
   en las funciones puras;
 - si `AppTest` procesa un `pendiente` sembrado en la misma ejecución. Si lo procesa, la entrada
   deshabilitada (R7) se comprueba a mano en Q4.
+
+**Medido (T033, con una app de prueba fuera del repositorio)**:
+- `AppTest` expone `chat_input` (con `disabled`), `chat_message` (con `name`: `user` o
+  `assistant`), `status`, `info`, `error`, `caption`, `button` (con `disabled`) y `markdown`. Los
+  hijos de un `chat_message` se recorren en orden (`children`), así que el orden cobertura →
+  respuesta se comprueba por posición.
+- Con un `pendiente` sembrado en una app que no lo procesa, la entrada y el botón salen
+  deshabilitados. En `chat.py` el pendiente se procesa en la misma ejecución, que termina con
+  `st.rerun()`, y `AppTest` solo deja ver el estado final, ya habilitado: la entrada deshabilitada
+  **durante** el turno no se puede comprobar con `AppTest` y queda como comprobación manual en Q4
+  (C1 del analyze).
 
 `CoordinadorSimulado` se amplía con `num_turns` por guion y un paso `("lanzar", excepcion)` (U1
 del analyze), con su test, para los turnos por turno y el fallo del turno.

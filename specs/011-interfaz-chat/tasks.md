@@ -232,10 +232,10 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 **Independent Test**: con `AppTest` y el coordinador simulado, el caso (d) en dos turnos, el (a), el (f), la parada sin clave y el caso nuevo se ven como dice el contrato.
 
-- [ ] T033 [US1] Medición con `AppTest` (R6, R13; U2 y C1 del analyze):
+- [x] T033 [US1] Medición con `AppTest` (R6, R13; U2 y C1 del analyze):
   - **queda como test** en `src/due_diligence/test_chat.py` solo el envío de espacios: si `st.chat_input` deja enviar `"   "`. Ese resultado decide la rama de FR-005 en T034 y T035; si no deja enviarlos, se aplica el **plan B de FR-005** (aviso fijo encima de la entrada), ya decidido por la analista: no es una desviación;
   - **se anota en `research.md`** (R13), sin test: qué colecciones de `AppTest` dan acceso a `st.chat_message`, `st.status`, `st.error` y `st.info`, y si `AppTest` procesa un `pendiente` sembrado en la misma ejecución. Si lo procesa, el test de C1 de T034 no se puede escribir: se anota aquí y queda como comprobación manual en Q4.
-- [ ] T034 [P] [US1] Tests de `AppTest` en `src/due_diligence/test_chat.py` (R13, contrato). Cada uno inyecta `session_state["dependencias"]` antes de `run()`:
+- [x] T034 [P] [US1] Tests de `AppTest` en `src/due_diligence/test_chat.py` (R13, contrato). Cada uno inyecta `session_state["dependencias"]` antes de `run()`:
   - `cargar_entorno`, que no hace nada;
   - `entorno: Mapping[str, str]` con la clave ficticia (I2);
   - `crear_caso(observador)`, que construye un `Caso` con `CoordinadorSimulado(guiones=...)`, `EjecutorSimulado` y el observador, y asigna `coordinador.caso`.
@@ -255,7 +255,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
     - si no: enviar `"   "` con la espera abierta muestra `AVISO_ESPERA` y no llama a `continuar`;
   - **fallo del turno**: con el paso `("lanzar", RuntimeError(...))` de T005, la respuesta es `MENSAJE_FALLO_TURNO` sin traza y el estado «Incompleto»;
   - **pendiente sembrado (C1)**: con un mensaje en `session_state["pendiente"]` antes de `run()`, la entrada del chat y el botón «Caso nuevo» aparecen deshabilitados. Solo si T033 muestra que `AppTest` lo permite; si no, queda como comprobación manual en Q4.
-- [ ] T035 [US1] Implementar `src/due_diligence/chat.py` (nuevo) según el contrato y R1, R2, R7, R8 y R12:
+- [x] T035 [US1] Implementar `src/due_diligence/chat.py` (nuevo) según el contrato y R1, R2, R7, R8 y R12:
   - `Dependencias` (dataclass, con `entorno: Mapping[str, str]`) con los valores de producción por defecto, leída de `st.session_state.get("dependencias")`;
   - arranque:
     - `cargar_entorno()` y `comprobar_credencial(entorno)`;
@@ -273,7 +273,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
   - sin `while`.
 
   Adaptar `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada` (`test_sin_control_propio.py`) a `["__main__.py", "chat.py"]`, los dos puntos de entrada de R8, y anotarlo en T032. T034 en verde.
-- [ ] T036 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «aplicación de chat (#11)».
+- [x] T036 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «aplicación de chat (#11)».
 
 ---
 
@@ -334,6 +334,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 | `test_main.py:131` `test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador` | `"turnos del coordinador: 1 de 30"` | `"turnos del coordinador en este turno: 1 de 30"` | FR-004 cambia la etiqueta. El valor y la comparación por subcadena no cambian; la suma frente al turno la prueba aparte `test_los_turnos_se_muestran_por_turno_y_nunca_la_suma`. |
 | `test_main.py:249` `test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra` | `"turnos del coordinador: sin dato"` | `"turnos del coordinador en este turno: sin dato"` | FR-004, solo la etiqueta. |
 | `test_main.py:424` `test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar` | terminaba sin continuar | lo mismo, y además `AVISO_D in salida` | FR-005. Se añade una aserción; no se quita ninguna. |
+| `test_sin_control_propio.py:136` `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada` | `llamadas == ["__main__.py"]` | `llamadas == ["__main__.py", "chat.py"]` | R8: el chat es el segundo punto de entrada. La lista sigue siendo **exacta** (indicación de la analista): cualquier otro módulo que cargue el entorno hace fallar el test. |
 
 Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado.
 

@@ -31,6 +31,7 @@ from due_diligence.conflictos import SIN_COMPARAR, calcular_conflictos, no_calcu
 from due_diligence.ejecutor import interpretar_resultado
 from due_diligence.estado import EstadoCaso
 from due_diligence.eventos import (
+    DENTRO_DE_HOOK,
     TIPO_BLOQUEO_REGLA,
     TIPO_CIERRE_IMPEDIDO,
     TIPO_CIERRE_SIN_ESCALAR,
@@ -444,11 +445,29 @@ def fallar_cerrado(
     El evento del fallo va con `frente` o, si se da `frente_de`, con el frente que lea de la
     entrada (#10: el de la delegación pedida), y con `frente` si no lo puede leer. Atrapa
     `Exception`, no `BaseException`: una cancelación del frente se propaga.
+
+    #12 (R9): la única `BaseException` que atrapa es una interrupción que declaró el punto de
+    entrada (`eventos.interrupciones`, en el chat la de Streamlit). Mientras corre el hook marca
+    `DENTRO_DE_HOOK`, para que una interrupción del observador no corte el turno antes de que el
+    hook decida; al devolver la decisión avisa (`eventos.interrumpir`) y el turno se corta. Si la
+    interrupción sale del propio hook, falla cerrado sin sellar: no es un fallo de las reglas.
     """
 
     async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        token = DENTRO_DE_HOOK.set(True)
+        try:
+            return await _decidir(entrada, tool_use_id, contexto)
+        finally:
+            DENTRO_DE_HOOK.reset(token)
+            eventos.interrumpir()
+
+    async def _decidir(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
         try:
             return await hook(entrada, tool_use_id, contexto)
+        except eventos.interrupciones as interrupcion:
+            if eventos.interrupcion is None:
+                eventos.interrupcion = interrupcion
+            return denegar(MOTIVO_FALLO_DE_HOOK) if tipo == "PreToolUse" else permitir()
         except Exception as error:
             atribuido = _frente_del_fallo(entrada, frente, frente_de)
             _registrar_fallo(tipo, error, estado, eventos, atribuido)
@@ -511,9 +530,21 @@ def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEvent
     escalamiento con los textos fijos de `resumen_sellado`; si la entrada no es un objeto, la deja
     pasar sin cambios y la pasarela la rechaza por su cuenta. Desde el #10 el hook sí deniega en
     los casos que comprueba (R5): esos no son excepciones.
+
+    #12 (R9): como `fallar_cerrado`, marca `DENTRO_DE_HOOK` mientras corre y avisa de la
+    interrupción (`eventos.interrumpir`) al devolver su decisión, para que «Stop» no corte el turno
+    antes de que el escalamiento salga.
     """
 
     async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        token = DENTRO_DE_HOOK.set(True)
+        try:
+            return await _decidir(entrada, tool_use_id, contexto)
+        finally:
+            DENTRO_DE_HOOK.reset(token)
+            eventos.interrumpir()
+
+    async def _decidir(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
         try:
             return await hook(entrada, tool_use_id, contexto)
         except Exception as error:

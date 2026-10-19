@@ -32,4 +32,9 @@ select = ["E", "F", "I", "UP", "B"]
 testpaths = ["src", ".claude/hooks"]
 pythonpath = [".claude/hooks"]
 python_files = ["test_*.py"]
-addopts = ["--import-mode=importlib"]
+# #12 (R4): los casos (a)–(g) de punta a punta llaman al modelo real; `uv run pytest` los excluye
+# y se piden con `uv run pytest -m e2e -rs` (el último `-m` sustituye a este).
+addopts = ["--import-mode=importlib", "-m", "not e2e"]
+markers = [
+    "e2e: casos (a)–(g) de punta a punta con el modelo real; consume API (uv run pytest -m e2e -rs)",
+]

@@ -10,6 +10,7 @@ herramienta y el modelo recibe el motivo; una excepción en un hook **deja pasar
 import asyncio
 import json
 
+import pytest
 from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
 
 from due_diligence.hooks import bloquear_cierre, denegar, permitir, reemplazar_entrada
@@ -652,6 +653,30 @@ def test_el_ejecutor_simulado_consulta_noticias_con_su_contexto_y_encuentra_n_00
     )
     assert ambiguo.consultas[0].argumentos == {"nombre": "Almacén Mirador SAS"}
     assert ambiguo.consultas[0].resultado["resultado"] == "sin_coincidencias"
+
+
+@pytest.mark.parametrize(
+    "contexto",
+    [
+        "Consulta con el nombre «Almacén Mirador SAS».",
+        "Consulta con el identificador «CO-TA-0002».",
+        "Sin dato del comercio.",
+    ],
+)
+def test_las_noticias_simuladas_sin_mencion_llevan_la_fuente_del_diario(contexto):
+    # #12 (T021, R10, FR-009): antes llevaban la del registro mercantil, «Registro Mercantil
+    # Ficticio del Sur», que podía ocultar un error de procedencia (I.4) en los tests.
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import FECHA, FUENTE_NOTICIAS, EjecutorSimulado
+
+    assert FUENTE_NOTICIAS == "Diario Ficticio del Sur"
+    resultado = asyncio.run(EjecutorSimulado()(Frente.NOTICIAS, contexto, _opciones(None)))
+    (consulta,) = resultado.consultas
+    assert consulta.resultado == {
+        "resultado": "sin_coincidencias",
+        "hechos": [],
+        "metadatos": {"fuentes": [FUENTE_NOTICIAS], "fecha": FECHA},
+    }
 
 
 def test_el_resumen_del_caso_es_valido_y_solo_cita_fuentes_admitidas():

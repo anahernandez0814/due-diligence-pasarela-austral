@@ -5,6 +5,7 @@ el cableado (herramientas, delegación, estado, terminación), no lo que decidir
 """
 
 import asyncio
+import time
 
 import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
@@ -27,6 +28,7 @@ from due_diligence.eventos import (
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
     TIPO_INFORME_REGISTRADO,
+    TIPO_MENSAJE_ANALISTA,
     TIPO_TERMINACION,
 )
 from due_diligence.frentes import FRENTES, Frente
@@ -1238,3 +1240,192 @@ def test_las_afirmaciones_de_listas_van_una_por_autoridad_en_los_dos_modos():
     ) in _REGLA_AFIRMACIONES
     for demo in (False, True):
         assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
+
+
+# ------------------------------- #12: la interrupción de la interfaz durante un hook (T014, R9)
+
+
+class Interrupcion(BaseException):
+    """Como `ScriptControlException` de Streamlit: hereda de `BaseException`, no de `Exception`."""
+
+
+def _coordinador_con_hook_suelto(escritas):
+    """Un `query()` que, como el SDK 0.2.168, ejecuta el `PreToolUse` en una tarea suelta.
+
+    - `query.py:380`: el hook corre en `spawn_task` (`loop.create_task`), no en la tarea del turno.
+    - `subprocess_cli.py:253`: la respuesta se escribe dentro de un `anyio.Lock()` sin
+      `fast_acquire`, cuyo `acquire` cede una vez; aquí también, para fijar el orden real.
+    - `query.close()` cancela las tareas en curso al cerrar: si el turno se cortara antes de que la
+      respuesta saliera, la decisión se perdería y el test lo vería.
+    """
+    caso_ref = {}
+
+    async def consulta(*, prompt, options=None):
+        import anyio
+
+        candado = anyio.Lock()
+        hook = caso_ref["caso"].hooks.coordinador()["PreToolUse"][0].hooks[0]
+        entrada = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "mcp__delegacion__delegar_frente",
+            "tool_input": {"frente": "listas"},
+            "tool_use_id": "t1",
+        }
+
+        async def manejar():
+            decision = await hook(entrada, "t1", {"signal": None})
+            async with candado:
+                escritas.append(decision)
+
+        tarea = asyncio.get_running_loop().create_task(manejar())
+        try:
+            await asyncio.sleep(60)  # el CLI seguiría trabajando: el turno no termina solo
+            yield AssistantMessage(content=[TextBlock("no debe llegar")], model="simulado")
+        finally:
+            tarea.cancel()
+
+    return consulta, caso_ref
+
+
+def _observador_que_interrumpe_en_bloqueos(evento):
+    if evento.regla is not None:
+        raise Interrupcion("Stop")
+
+
+def test_la_interrupcion_corta_el_turno_al_decidir_el_hook_y_la_denegacion_sale():
+    from due_diligence.reglas import MOTIVO_REGISTRO_PRIMERO
+
+    escritas = []
+    consulta, caso_ref = _coordinador_con_hook_suelto(escritas)
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=_observador_que_interrumpe_en_bloqueos,
+        interrupciones=(Interrupcion,),
+    )
+    caso_ref["caso"] = caso
+
+    async def probar():
+        # Se mide, sin `asyncio.timeout`: con la interrupción ya guardada, su cancelación también
+        # se convertiría en la interrupción y el test pasaría tarde (como en K13).
+        inicio = time.monotonic()
+        with pytest.raises(Interrupcion) as lanzada:
+            await caso.ejecutar(SOLICITUD)
+        duracion = time.monotonic() - inicio
+        # Mutación K9: sin `uncancel()`, la tarea seguiría marcada como cancelada y la siguiente
+        # espera de quien llamó (el chat, `asyncio.run`) se cortaría sola.
+        return lanzada.value, asyncio.current_task().cancelling(), duracion
+
+    interrupcion, cancelando, duracion = asyncio.run(probar())
+    assert duracion < 2  # el turno no espera los 60 s del CLI simulado (FR-008)
+    assert cancelando == 0
+    # El mismo objeto que lanzó el observador: Streamlit entrega una recarga una sola vez.
+    assert interrupcion is caso._eventos.interrupcion
+    (decision,) = escritas
+    especifica = decision["hookSpecificOutput"]
+    assert especifica["permissionDecision"] == "deny"
+    assert especifica["permissionDecisionReason"] == MOTIVO_REGISTRO_PRIMERO
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+    assert "interrumpido por la interfaz" in caso.terminacion.detalle
+    assert caso.interrumpido is True and caso.completo is False
+    assert caso.eventos()[-1].tipo == TIPO_TERMINACION
+
+
+def test_sin_interrupcion_una_cancelacion_externa_sigue_siendo_cancelacion():
+    consulta, caso_ref = _coordinador_con_hook_suelto([])
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=consulta, interrupciones=(Interrupcion,))
+    caso_ref["caso"] = caso
+
+    async def probar():
+        tarea = asyncio.create_task(caso.ejecutar(SOLICITUD))
+        await asyncio.sleep(0.05)
+        tarea.cancel()
+        await tarea
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(probar())
+    assert caso.interrumpido is False
+
+
+def test_un_caso_sin_turnos_no_esta_interrumpido():
+    assert Caso(ejecutor=EjecutorSimulado()).interrumpido is False
+
+
+def test_una_interrupcion_que_sale_de_la_consulta_tambien_marca_el_turno_interrumpido():
+    interrupcion = Interrupcion("Stop")
+
+    async def consulta(*, prompt, options=None):
+        raise interrupcion
+        yield  # pragma: no cover
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=consulta, interrupciones=(Interrupcion,))
+    with pytest.raises(Interrupcion) as lanzada:
+        asyncio.run(caso.ejecutar(SOLICITUD))
+    assert lanzada.value is interrupcion
+    assert caso.interrumpido is True
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+
+
+def test_una_interrupcion_antes_de_la_consulta_corta_el_turno_sin_esperar_a_un_hook():
+    # Mutación K13: la interrupción del primer evento (`caso_iniciado`, antes de que el turno ponga
+    # su aviso) queda guardada; el turno la avisa al empezar, sin que ningún hook llegue a correr.
+    vistos = []
+
+    def observador(evento):
+        vistos.append(evento.tipo)
+        raise Interrupcion("Stop")
+
+    iniciadas = []
+
+    async def consulta(*, prompt, options=None):
+        iniciadas.append(prompt)
+        # Sin el aviso, el turno esperaría aquí y terminaría con normalidad, sin la interrupción.
+        # No se usa `asyncio.timeout`: su cancelación, con la interrupción ya guardada, también
+        # se convertiría en la interrupción y el test pasaría tarde.
+        await asyncio.sleep(3)
+        yield AssistantMessage(content=[TextBlock("no debe llegar")], model="simulado")
+
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=observador,
+        interrupciones=(Interrupcion,),
+    )
+
+    async def probar():
+        inicio = asyncio.get_running_loop().time()
+        with pytest.raises(Interrupcion):
+            await caso.ejecutar(SOLICITUD)
+        return asyncio.get_running_loop().time() - inicio
+
+    assert asyncio.run(probar()) < 2
+    assert vistos == [TIPO_CASO_INICIADO]  # el observador se apagó en el primer evento
+    assert caso.interrumpido is True
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+
+
+def test_fuera_del_turno_un_evento_no_programa_la_cancelacion_en_un_bucle_cerrado():
+    # Revisión de a7f853e: el `mensaje_analista` de `continuar` se registra antes de que el turno
+    # ponga su aviso. Con el aviso del turno anterior, `call_soon` iría a un bucle ya cerrado (el
+    # chat corre cada turno en su propio `asyncio.run`) y lanzaría `RuntimeError`.
+    interrumpir = {"activo": False}
+
+    def observador(evento):
+        if interrumpir["activo"]:
+            raise Interrupcion("Stop")
+
+    async def consulta(*, prompt, options=None):
+        yield _fin()
+
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=observador,
+        interrupciones=(Interrupcion,),
+    )
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso._eventos.al_interrumpir is None
+    interrumpir["activo"] = True
+    caso._eventos.registrar(TIPO_MENSAJE_ANALISTA, None, "Mensaje 2 del analista.")
+    # La interrupción queda guardada para el turno siguiente, que la avisa al empezar.
+    assert isinstance(caso._eventos.interrupcion, Interrupcion)

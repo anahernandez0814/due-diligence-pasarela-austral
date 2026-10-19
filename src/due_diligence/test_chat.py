@@ -40,9 +40,12 @@ class Fabrica:
     resultados: Any  # función sin argumentos: unos resultados nuevos para cada caso
     num_turns: list[int] | None = None
     casos: list[Any] = field(default_factory=list)
+    interrupciones: tuple[type[BaseException], ...] = ()
 
     def __call__(self, observador):
-        caso = construir(self.guiones, self.resultados(), self.num_turns, observador)
+        caso = construir(
+            self.guiones, self.resultados(), self.num_turns, observador, self.interrupciones
+        )
         self.casos.append(caso)
         return caso
 
@@ -280,3 +283,167 @@ def test_un_caso_nuevo_no_dibuja_el_historial_anterior_y_avisa_desde_el_principi
     ((usuario, asistente),) = _turnos(at)  # ningún turno del caso anterior
     assert _textos(usuario) == ["Otro comercio, por favor."]
     assert _textos(asistente)[0] == presentacion.AVISO_CASO_NUEVO
+
+
+# ------------------------------------- #12: la interrupción de Streamlit (T016, R9, opción A)
+
+
+def test_las_excepciones_de_control_de_streamlit_heredan_de_baseexception():
+    # Fija la ruta y la jerarquía en las que se apoya R9: si Streamlit las cambia, este test falla.
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        RerunException,
+        ScriptControlException,
+        StopException,
+    )
+
+    assert issubclass(StopException, ScriptControlException)
+    assert issubclass(RerunException, ScriptControlException)
+    assert issubclass(ScriptControlException, BaseException)
+    assert not issubclass(ScriptControlException, Exception)
+
+
+def test_el_chat_declara_la_interrupcion_de_streamlit_al_crear_el_caso():
+    from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
+
+    from due_diligence import chat
+
+    caso = chat._caso_real(None)
+    assert caso._eventos.interrupciones == (ScriptControlException,)
+
+
+def _fabrica_interrumpida():
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        ScriptControlException,
+        StopException,
+    )
+
+    # El primer caso se corta con «Stop»; el segundo es el del caso (a), que termina.
+    guiones = iter([[[("lanzar", StopException())]], [GUION_A]])
+    fabrica = Fabrica([], resultados_a, interrupciones=(ScriptControlException,))
+    original = fabrica.__call__
+
+    def crear(observador):
+        fabrica.guiones = next(guiones)
+        return original(observador)
+
+    return fabrica, crear
+
+
+def test_un_turno_interrumpido_queda_en_el_historial_sin_pendiente():
+    fabrica, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert not at.exception
+    assert "pendiente" not in at.session_state
+    (historial,) = at.session_state["historial"]
+    assert historial.respuesta == presentacion.MENSAJE_TURNO_INTERRUMPIDO
+    (caso,) = fabrica.casos
+    assert caso.interrumpido and not caso.completo
+
+
+def test_el_turno_interrumpido_relanza_la_interrupcion_y_el_script_se_detiene():
+    # Mutación K15: si `_ejecutar_turno` no relanzara la interrupción, el script seguiría y
+    # dibujaría la entrada; con una recarga, Streamlit no la volvería a entregar y se perdería.
+    _, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert not at.exception
+    # La entrada se dibuja después del turno: si aparece, el script siguió tras la interrupción.
+    assert len(at.chat_input) == 0, "el script siguió después de la interrupción: no se relanzó"
+
+
+def test_tras_un_turno_interrumpido_el_siguiente_mensaje_abre_un_caso_nuevo_con_aviso():
+    fabrica, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    # Tras «Stop» el script quedó parado a mitad; la siguiente ejecución (la próxima interacción
+    # del analista) dibuja la entrada otra vez y no repite el turno interrumpido.
+    at = at.run()
+    assert len(fabrica.casos) == 1
+    at = _enviar(at, SOLICITUD_A)
+    assert len(fabrica.casos) == 2  # nunca se reanuda la sesión cortada
+    ((_, asistente),) = _turnos(at)  # el historial es el del caso nuevo
+    assert _textos(asistente)[0] == presentacion.AVISO_TURNO_INTERRUMPIDO
+    assert fabrica.casos[1].completo
+
+
+def _crear_caso_que_para_streamlit(llamadas):
+    """Un caso cuyo turno hace lo que hace «Stop» de verdad (Q4, tercera ejecución).
+
+    Pone al ejecutor de Streamlit en STOP y lanza `StopException`. Con STOP, Streamlit «remain
+    stopped» (`script_requests.py:452`): cada llamada `st.*` y cada acceso a `st.session_state`
+    (`safe_session_state.py:120-133`) vuelve a lanzar la detención. Un `StopException` simulado
+    sin la petición de STOP no lo reproduce: ese fue el hueco de los primeros tests.
+    """
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        ScriptControlException,
+        StopException,
+    )
+    from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
+    from due_diligence.coordinador import Caso
+    from due_diligence.simulacion import EjecutorSimulado
+
+    def crear(observador):
+        async def consulta(*, prompt, options=None):
+            llamadas.append(prompt)
+            get_script_run_ctx().script_requests.request_stop()
+            raise StopException()
+            yield  # pragma: no cover
+
+        return Caso(
+            ejecutor=EjecutorSimulado(),
+            consulta=consulta,
+            observador=observador,
+            interrupciones=(ScriptControlException,),
+        )
+
+    return crear
+
+
+def test_con_streamlit_detenido_de_verdad_el_turno_no_se_repite_en_la_siguiente_ejecucion():
+    llamadas = []
+    at = _enviar(_app(_crear_caso_que_para_streamlit(llamadas)), SOLICITUD_A)
+    assert llamadas == [SOLICITUD_A]
+    assert "pendiente" not in at.session_state, (
+        "el pendiente sigue: la siguiente ejecución lo repite"
+    )
+    (historial,) = at.session_state["historial"]
+    assert historial.respuesta == presentacion.MENSAJE_TURNO_INTERRUMPIDO
+    assert at.session_state["caso"].interrumpido is True
+    # «Rerun»: la siguiente ejecución del script no vuelve a llamar al turno ni a gastar.
+    at = at.run()
+    assert llamadas == [SOLICITUD_A], "el mismo turno arrancó otra vez tras el «Rerun»"
+
+
+def test_con_stop_despues_del_ultimo_evento_el_turno_terminado_queda_con_su_respuesta():
+    # Q4, ejecuciones 1 y 2: «Stop» cuando el turno ya terminaba. El turno acaba con normalidad,
+    # pero Streamlit queda detenido: la siguiente llamada `st.*` (cerrar el «trabajando») relanza
+    # la detención, y el turno terminado tiene que estar ya en el historial con su respuesta.
+    from claude_agent_sdk import AssistantMessage, TextBlock
+    from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
+    from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
+    from due_diligence.coordinador import Caso
+    from due_diligence.simulacion import EjecutorSimulado, mensaje_de_resultado
+
+    llamadas = []
+    respuesta = "Resumen del coordinador para el analista."
+
+    def crear(observador):
+        async def consulta(*, prompt, options=None):
+            llamadas.append(prompt)
+            get_script_run_ctx().script_requests.request_stop()
+            yield AssistantMessage(content=[TextBlock(respuesta)], model="simulado")
+            yield mensaje_de_resultado()
+
+        return Caso(
+            ejecutor=EjecutorSimulado(),
+            consulta=consulta,
+            observador=observador,
+            interrupciones=(ScriptControlException,),
+        )
+
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert "pendiente" not in at.session_state
+    (turno,) = at.session_state["historial"]
+    assert turno.respuesta == respuesta, "el turno terminado no se guardó con su respuesta"
+    at = at.run()
+    assert llamadas == [SOLICITUD_A]

@@ -5,6 +5,7 @@ agéntico del coordinador lo ejecuta el SDK: aquí solo se consume el flujo con 
 clasifica cómo terminó, sin contadores ni comparación de texto (FR-010).
 """
 
+import asyncio
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
@@ -230,11 +231,14 @@ class Caso:
         reloj: Callable[[], datetime] | None = None,
         entorno: Mapping[str, str] | None = None,
         observador: Callable[[Evento], None] | None = None,
+        interrupciones: tuple[type[BaseException], ...] = (),
     ) -> None:
         self.estado = EstadoCaso()
         # `observador` recibe cada evento ya guardado (#11, R1): la interfaz de chat muestra con él
         # los indicadores en vivo. No puede afectar al caso: `RegistroEventos` ignora su excepción.
-        self._eventos = RegistroEventos(reloj, observador)
+        # `interrupciones` (#12, R9): las excepciones con las que el punto de entrada corta el turno
+        # (en el chat, la de Streamlit al pulsar «Stop»); el turno se corta cuando el hook decide.
+        self._eventos = RegistroEventos(reloj, observador, interrupciones)
         # Los hooks de las reglas (#7, R5) cierran sobre el estado y los eventos de este caso y se
         # reparten por agente. No se pueden desactivar desde fuera: no hay parámetro `hooks`.
         self.hooks = HooksDelCaso(self.estado, self._eventos, entorno)
@@ -258,6 +262,7 @@ class Caso:
         # reanuda) y la clasificación de cada turno, en orden; `terminacion` es la del último.
         self.session_id: str | None = None
         self.turnos_del_caso: list[Clasificacion] = []
+        self._interrumpido = False
 
     def eventos(self) -> list[Evento]:
         return self._eventos.eventos()
@@ -275,6 +280,11 @@ class Caso:
     def conflictos(self) -> ConflictosCaso:
         """Los conflictos entre fuentes que calcula el código (#9, R6, FR-010): los del informe."""
         return calcular_conflictos(self.estado)
+
+    @property
+    def interrumpido(self) -> bool:
+        """Si el último turno lo cortó una interrupción de la interfaz (#12, R9, opción A)."""
+        return self._interrumpido
 
     @property
     def espera(self) -> Espera | None:
@@ -361,37 +371,77 @@ class Caso:
         self.respuesta = ""
         clasificacion: Clasificacion | None = None
         turnos_del_turno: int | None = None
+        # #12 (R9): una interrupción de la interfaz corta este turno cancelando su tarea con
+        # `call_soon`, después de que el hook que la recibió devolvió su decisión. Si llegó antes
+        # (por ejemplo, al registrar el inicio del caso), se avisa ya.
+        tarea = asyncio.current_task()
+        bucle = asyncio.get_running_loop()
         try:
-            async for mensaje_sdk in self._consulta(
-                prompt=mensaje, options=self.opciones_coordinador(resume)
-            ):
-                if isinstance(mensaje_sdk, AssistantMessage):
-                    for bloque in mensaje_sdk.content:
-                        if isinstance(bloque, TextBlock):
-                            self.respuesta = bloque.text
-                elif isinstance(mensaje_sdk, ResultMessage):
-                    clasificacion = clasificar_resultado(mensaje_sdk)
-                    # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
-                    if mensaje_sdk.total_cost_usd is not None:
-                        self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
-                    self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
-                    turnos_del_turno = mensaje_sdk.num_turns
-                    self.session_id = mensaje_sdk.session_id or self.session_id
-        except ResultError as error:
-            # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
+            if tarea is not None:
+                self._eventos.al_interrumpir = lambda: bucle.call_soon(tarea.cancel)
+                self._eventos.interrumpir()
+            try:
+                async for mensaje_sdk in self._consulta(
+                    prompt=mensaje, options=self.opciones_coordinador(resume)
+                ):
+                    if isinstance(mensaje_sdk, AssistantMessage):
+                        for bloque in mensaje_sdk.content:
+                            if isinstance(bloque, TextBlock):
+                                self.respuesta = bloque.text
+                    elif isinstance(mensaje_sdk, ResultMessage):
+                        clasificacion = clasificar_resultado(mensaje_sdk)
+                        # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
+                        if mensaje_sdk.total_cost_usd is not None:
+                            self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
+                        self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
+                        turnos_del_turno = mensaje_sdk.num_turns
+                        self.session_id = mensaje_sdk.session_id or self.session_id
+            except asyncio.CancelledError:
+                interrupcion = self._eventos.interrupcion
+                if interrupcion is None or tarea is None:
+                    raise
+                # La cancelación es la de la interrupción: se deshace y se relanza el mismo objeto,
+                # que el chat entrega a Streamlit (una recarga solo se entrega una vez).
+                tarea.uncancel()
+                self._interrumpido = True
+                self._terminar(
+                    Clasificacion(
+                        Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
+                    ),
+                    turnos_del_turno,
+                )
+                raise interrupcion from None
+            except self._eventos.interrupciones as interrupcion:
+                # La misma interrupción, si llegara desde la propia `query()` y no desde un hook.
+                if self._eventos.interrupcion is None:
+                    self._eventos.interrupcion = interrupcion
+                self._interrumpido = True
+                self._terminar(
+                    Clasificacion(
+                        Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
+                    ),
+                    turnos_del_turno,
+                )
+                raise
+            except ResultError as error:
+                # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
+                if clasificacion is None:
+                    clasificacion = clasificar_error(error)
+            except Exception as error:
+                # Otro fallo del SDK (conexión, proceso): queda constancia del corte y se relanza.
+                clasificacion = Clasificacion(
+                    Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
+                )
+                self._terminar(clasificacion, turnos_del_turno)
+                raise
             if clasificacion is None:
-                clasificacion = clasificar_error(error)
-        except Exception as error:
-            # Otro fallo del SDK (conexión, proceso): queda constancia del corte y se relanza.
-            clasificacion = Clasificacion(
-                Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
-            )
+                clasificacion = sin_resultado()
             self._terminar(clasificacion, turnos_del_turno)
-            raise
-        if clasificacion is None:
-            clasificacion = sin_resultado()
-        self._terminar(clasificacion, turnos_del_turno)
-        return self.respuesta
+            return self.respuesta
+        finally:
+            # Fuera del turno no hay tarea que cortar (#12): un evento registrado entre turnos (el
+            # `mensaje_analista` del siguiente) no programa la cancelación en un bucle ya cerrado.
+            self._eventos.al_interrumpir = None
 
     def _terminar(self, clasificacion: Clasificacion, turnos: int | None) -> None:
         self.estado.terminacion = clasificacion

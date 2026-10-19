@@ -207,3 +207,18 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
   - el coste por caso no se ve en el chat (desviación D2).
 
 Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/plan.md` y `research.md`.
+
+## 13. Suite de los siete casos
+
+- **Los casos (a)–(g) de punta a punta con el modelo real** (`test_e2e_casos.py`), con la marca `e2e`, excluida de `uv run pytest`. Corren en paralelo en un solo bucle de eventos y solo los seleccionados (`-k caso_d` cuesta un caso); sin la clave se omiten con el motivo. Cada uno con su entorno y su carpeta de registros.
+- **Solo eventos y llamadas, nunca el texto**: los tests reciben una `Observacion` sin texto del modelo, y un test determinista lo fija con campos cerrados y un guarda AST.
+- **«Stop» o recarga durante un hook** (R9): la excepción de control de Streamlit se guarda en el registro de eventos, el hook decide y su denegación sale (I.1, I.2), y en cuanto devuelve se corta el turno y se relanza la misma excepción. `CancelledError` sigue propagándose. Tras un turno interrumpido, el siguiente mensaje abre un caso nuevo (opción A). Desviación D1: Streamlit solo entrega «Stop» en un punto de cesión, así que el corte llega en el siguiente evento y el contenedor «trabajando» queda congelado hasta el «Rerun». El turno nunca se repite: la Q4 lo aprobó.
+- Las noticias simuladas llevan la fuente del diario. Fuera de alcance: US3-9 del #10.
+- **Pendiente**: las sugerencias de los PR #26 y #27, D7 del #9, `RESUMEN_REGISTRO_CAIDO`, el evento de espera con el registro sin delegar y el caso (b) de noche (T043 del #11).
+- **Tras la puerta de `a7f853e`** (detalle en el plan): desviación D2 (un «Stop» en el cierre o el escalamiento puede dejar sin escalar un caso con coincidencia, que nunca queda habilitado y se repite en un caso nuevo); limitaciones (el `Caso` admite `continuar` tras una interrupción, y `uncancel` también deshace un `asyncio.timeout`), y sugerencias de los tests e2e sin aplicar, porque no se pueden ejecutar.
+- **Tras la puerta de `fd75bd0`, sin cambiar código**: el aislamiento de la caída de noticias depende de que el CLI pase a cada servidor MCP su propio entorno, y ningún test lo cubre (`conftest.py:131`); el caso (e) determinista no usa el modo de demostración, que sí usa el e2e (`test_observacion.py:123`, `conftest.py:96`); y la ejecución en paralelo de la suite e2e no tiene tests deterministas (`conftest.py:163`).
+
+- **Observación menor de la Q4, sin corregir**: tras una interrupción, el texto de ayuda de la entrada sigue diciendo «El coordinador espera su respuesta…», aunque el siguiente mensaje abre un caso nuevo.
+- **Desviación D3, tiempo de la suite**: en Windows, `uv run pytest` puede pasar de 5 minutos (4:43 en frío, 5:55 y 6:12) por las guardas de `.claude/hooks/`, no por el producto: la aplicación (`uv run pytest src`) tarda unos 25 s y la e2e unos 80 s. Sugerencia: un repositorio git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, aislando el test de tiempo de `test_guarda_pr.py`).
+
+Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.

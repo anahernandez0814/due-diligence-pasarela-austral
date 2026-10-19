@@ -319,7 +319,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## Fase 11: Cierre
 
-- [ ] T046 `/abrir-pr`: revisión independiente y auditoría de cumplimiento (I.1–I.5 aplican porque el diff toca `hooks.py`, `eventos.py` y `coordinador.py`), PR hacia `main` con `Closes #11` y la tabla de T032. Ningún commit después de la revisión.
+- [x] T046 `/abrir-pr`: revisión independiente y auditoría de cumplimiento (I.1–I.5 aplican porque el diff toca `hooks.py`, `eventos.py` y `coordinador.py`), PR hacia `main` con `Closes #11` y la tabla de T032. Ningún commit después de la revisión. Hecha: PR #27 abierto y fusionado el 2026-10-19 (marcada en el #12, T023).
 
 ---
 

@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 import streamlit as st
+from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
 
 from due_diligence import configuracion, presentacion
 from due_diligence.coordinador import Caso, CasoSinSesion
@@ -32,7 +33,9 @@ ICONOS = {
 
 
 def _caso_real(observador: Callable[[Evento], None] | None) -> Caso:
-    return Caso(observador=observador)
+    # #12 (R9): «Stop» o una recarga durante el turno llegan como `ScriptControlException` desde
+    # el observador. El caso deja que el hook decida y corta el turno en cuanto devuelve.
+    return Caso(observador=observador, interrupciones=(ScriptControlException,))
 
 
 @dataclass(frozen=True)
@@ -99,20 +102,36 @@ def _ejecutar_turno(
             if decision is Decision.NUEVO:
                 st.session_state["caso"] = dependencias.crear_caso(_mostrar_en_vivo)
             caso: Caso = st.session_state["caso"]
+            # El historial y el pendiente se toman ANTES del turno (#12, R9, Q4): con «Stop»,
+            # Streamlit queda detenido y cada acceso a `st.session_state` vuelve a lanzar la
+            # detención (`safe_session_state.py`), así que tras la interrupción ya no se podría
+            # guardar nada. El pendiente se consume aquí: el turno no se repite al volver a
+            # ejecutar el script, termine como termine.
+            historial = st.session_state["historial"]
+            del st.session_state["pendiente"]
             numero = len(caso.estado.mensajes) + 1
             respuesta = None
             turno = caso.ejecutar(texto) if decision is Decision.NUEVO else caso.continuar(texto)
             try:
                 asyncio.run(turno)
+            except ScriptControlException:
+                # «Stop» o recarga: el turno queda en el historial como interrumpido, sin tocar
+                # `st.*` ni `st.session_state`, y se relanza para que Streamlit pare o recargue.
+                historial.append(
+                    presentacion.resumen_del_turno(
+                        caso, numero, texto, aviso, presentacion.MENSAJE_TURNO_INTERRUMPIDO
+                    )
+                )
+                raise
             except CasoSinSesion:
                 respuesta = presentacion.MENSAJE_SIN_SESION
             except Exception as error:  # el `Caso` ya clasificó el turno como anómalo
                 respuesta = presentacion.mensaje_fallo_turno(error)
+            # Se guarda antes de cualquier llamada `st.*` (Q4, ejecuciones 1 y 2): si «Stop» llegó
+            # después del último evento, el `update` relanza la detención, y el turno terminado
+            # ya tiene que estar en el historial con su respuesta.
+            historial.append(presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta))
             trabajando.update(label="Turno terminado", state="complete", expanded=False)
-    st.session_state["historial"].append(
-        presentacion.resumen_del_turno(caso, numero, texto, aviso, respuesta)
-    )
-    del st.session_state["pendiente"]
     st.rerun()
 
 

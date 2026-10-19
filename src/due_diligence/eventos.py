@@ -5,10 +5,16 @@ da un orden estable aunque dos marcas coincidan. El reloj se inyecta para los te
 
 Desde el #11 (R1) acepta un `observador` opcional que recibe cada evento ya guardado: la interfaz de
 chat lo usa para mostrar los indicadores en vivo. La traza sigue siendo la única fuente de verdad.
+
+Desde el #12 (R9) acepta también `interrupciones`: las excepciones de control con las que el punto
+de entrada corta el turno (en el chat, la `ScriptControlException` de Streamlit al pulsar «Stop» o
+recargar). Si el observador lanza una, se guarda la primera y el evento se devuelve con normalidad:
+el hook que registraba sigue y decide, y la interrupción se relanza en cuanto devuelve su decisión.
 """
 
 import threading
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -101,16 +107,28 @@ def _ahora() -> datetime:
     return datetime.now(UTC)
 
 
+# La pone `hooks.fallar_cerrado` mientras corre un hook (#12, R9): dentro de un hook, la
+# interrupción no se avisa al registrarla sino cuando el hook ya devolvió su decisión.
+DENTRO_DE_HOOK: ContextVar[bool] = ContextVar("DENTRO_DE_HOOK", default=False)
+
+
 class RegistroEventos:
     def __init__(
         self,
         reloj: Callable[[], datetime] | None = None,
         observador: Callable[[Evento], None] | None = None,
+        interrupciones: tuple[type[BaseException], ...] = (),
     ) -> None:
         self._reloj = reloj or _ahora
         self._eventos: list[Evento] = []
         self._candado = threading.Lock()
         self._observador = observador
+        self.interrupciones = interrupciones
+        # La primera interrupción que lanzó el observador (#12, R9) y el aviso que corta el turno;
+        # lo pone el `Caso` al empezar cada turno. `interrumpir` lo llama una sola vez.
+        self.interrupcion: BaseException | None = None
+        self.al_interrumpir: Callable[[], None] | None = None
+        self._avisado = False
 
     def registrar(
         self,
@@ -130,12 +148,30 @@ class RegistroEventos:
         # Fuera del `with`: `_candado` no es reentrante, y un observador que registre otro evento o
         # lea la traza bloquearía el hilo para siempre. Su excepción se ignora porque quien registra
         # suele ser un hook: si fallara, `fallar_cerrado` sellaría el caso por un fallo de la vista.
+        # Una interrupción declarada se guarda y apaga el observador: con «Stop», cada llamada a
+        # Streamlit volvería a lanzarla, y una recarga solo se entrega una vez, así que hay que
+        # relanzar este mismo objeto (#12, R9). `asyncio.CancelledError`, `KeyboardInterrupt` y
+        # `SystemExit` no se tocan: son la cancelación de las tareas y el fin del proceso, y quien
+        # cancela no espera ninguna decisión que entregar.
         if self._observador is not None:
             try:
                 self._observador(evento)
+            except self.interrupciones as interrupcion:
+                self._observador = None
+                if self.interrupcion is None:
+                    self.interrupcion = interrupcion
+                if not DENTRO_DE_HOOK.get():
+                    self.interrumpir()
             except Exception:
                 pass
         return evento
+
+    def interrumpir(self) -> None:
+        """Avisa al `Caso` para que corte el turno, una sola vez y solo si hay una interrupción."""
+        if self.interrupcion is None or self._avisado or self.al_interrumpir is None:
+            return
+        self._avisado = True
+        self.al_interrumpir()
 
     def eventos(self) -> list[Evento]:
         with self._candado:

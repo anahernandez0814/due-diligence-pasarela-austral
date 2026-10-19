@@ -3503,3 +3503,160 @@ def test_ninguna_sustitucion_dice_que_era_distinto_ni_pone_mayuscula_tras_punto_
         assert not re.search(MAYUSCULA_TRAS_PUNTO_Y_COMA, evento.detalle), evento.detalle
     (cobertura,) = _eventos_de(eventos, TIPO_COBERTURA_SUSTITUIDA)
     assert cobertura.detalle.endswith(SUSTITUIDA)
+
+
+# ------------------------------- #12: la interrupción de la interfaz durante un hook (T013, R9)
+
+
+class Interrupcion(BaseException):
+    """Como `ScriptControlException` de Streamlit: hereda de `BaseException`, no de `Exception`."""
+
+
+def _eventos_que_interrumpen(avisos):
+    """Un registro cuyo observador lanza la interrupción, como el chat al pulsar «Stop»."""
+
+    def observador(evento):
+        raise Interrupcion("Stop")
+
+    eventos = RegistroEventos(observador=observador, interrupciones=(Interrupcion,))
+    eventos.al_interrumpir = lambda: avisos.append(len(eventos.eventos()))
+    return eventos
+
+
+def test_con_la_interrupcion_el_hook_de_delegar_listas_devuelve_la_denegacion_de_i1():
+    avisos = []
+    estado = EstadoCaso("solicitud")
+    eventos = _eventos_que_interrumpen(avisos)
+    hooks = HooksDelCaso(estado, eventos)
+    salida = _delegar(hooks, {"frente": "listas"})
+    # La decisión es la de I.1, no la genérica de un fallo: la interrupción no corta el hook.
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_REGISTRO_PRIMERO
+    (evento,) = eventos.eventos()
+    assert evento.tipo == TIPO_BLOQUEO_REGLA and evento.regla == "I.1"
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    # Se avisa una vez, al devolver la decisión (con el bloqueo ya en la traza), no al registrarlo.
+    assert avisos == [1]
+    assert estado.libro.fallo_de_hook is None
+
+
+def test_con_la_interrupcion_el_hook_del_informe_devuelve_la_denegacion_de_i2():
+    avisos = []
+    estado, _, _ = _caso_con_comercio()
+    estado.libro.coincidencias.append(Coincidencia("persona", "L", "F", "2026-09-30"))
+    estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    eventos = _eventos_que_interrumpen(avisos)
+    hooks = HooksDelCaso(estado, eventos)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, _informe_de("habilitar")))
+    assert _es_denegacion(salida)
+    assert {"regla": "I.2", "texto": MOTIVO_HABILITAR_CON_COINCIDENCIA} in _rechazo(salida)[
+        "motivos"
+    ]
+    assert [e.regla for e in eventos.eventos()] == ["I.2"]
+    assert avisos == [1] and estado.libro.fallo_de_hook is None
+
+
+@pytest.mark.parametrize(
+    ("tipo", "esperada"),
+    [
+        ("PreToolUse", denegar(modulo_hooks.MOTIVO_FALLO_DE_HOOK)),
+        ("PostToolUse", {}),
+        ("Stop", {}),
+    ],
+)
+def test_una_interrupcion_desde_el_cuerpo_del_hook_falla_cerrado_sin_sellar(tipo, esperada):
+    estado = EstadoCaso("solicitud")
+    avisos = []
+    eventos = RegistroEventos(interrupciones=(Interrupcion,))
+    eventos.al_interrumpir = lambda: avisos.append("cancelar turno")
+
+    async def interrumpido(entrada, tool_use_id, contexto):
+        raise Interrupcion("Stop")
+
+    salida = asyncio.run(_envuelto(tipo, interrumpido, estado, eventos)({}, "t1", None))
+    assert salida == esperada
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    assert avisos == ["cancelar turno"]
+    # No es un fallo de las reglas: ni sello ni evento de fallo.
+    assert estado.libro.fallo_de_hook is None and eventos.eventos() == []
+
+
+def test_con_la_interrupcion_del_observador_un_hook_que_falla_devuelve_la_denegacion_generica():
+    # US3-2 (FR-008): el observador lanza la interrupción al registrar un evento y después el
+    # cuerpo del hook falla por un error propio. Sale la denegación genérica, como sin «Stop».
+    estado = EstadoCaso("solicitud")
+    avisos = []
+    eventos = _eventos_que_interrumpen(avisos)
+
+    async def registra_y_falla(entrada, tool_use_id, contexto):
+        eventos.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "Bloqueo antes del fallo.", "I.1")
+        raise ValueError(TEXTO_INTERNO)
+
+    salida = asyncio.run(_envuelto("PreToolUse", registra_y_falla, estado, eventos)({}, "t1", None))
+    assert salida == denegar(modulo_hooks.MOTIVO_FALLO_DE_HOOK)
+    # El fallo se registra como siempre: sello y evento, sin el texto interno.
+    assert estado.libro.fallo_de_hook == "PreToolUse: ValueError"
+    bloqueo, fallo = eventos.eventos()
+    assert bloqueo.tipo == TIPO_BLOQUEO_REGLA
+    assert fallo.tipo == TIPO_FALLO_DE_HOOK and fallo.frente is Frente.LISTAS
+    assert TEXTO_INTERNO not in fallo.detalle
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    # Una sola vez y después de decidir: con el fallo ya en la traza, no al registrar el bloqueo.
+    assert avisos == [2]
+
+
+def test_sin_interrupciones_declaradas_la_del_cuerpo_del_hook_se_propaga():
+    estado, eventos, _ = _caso()
+
+    async def interrumpido(entrada, tool_use_id, contexto):
+        raise Interrupcion("Stop")
+
+    with pytest.raises(Interrupcion):
+        asyncio.run(_envuelto("PreToolUse", interrumpido, estado, eventos)({}, "t1", None))
+    assert estado.libro.fallo_de_hook is None
+
+
+def test_con_interrupciones_declaradas_la_cancelacion_del_cuerpo_se_propaga():
+    estado = EstadoCaso("solicitud")
+    eventos = RegistroEventos(interrupciones=(Interrupcion,))
+
+    async def cancelado(entrada, tool_use_id, contexto):
+        raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_envuelto("PreToolUse", cancelado, estado, eventos)({}, "t1", None))
+    assert eventos.interrupcion is None and estado.libro.fallo_de_hook is None
+
+
+def test_fuera_de_la_interrupcion_el_hook_no_marca_que_esta_dentro():
+    from due_diligence.eventos import DENTRO_DE_HOOK
+
+    estado, eventos, _ = _caso()
+    vistos = []
+
+    async def mira(entrada, tool_use_id, contexto):
+        vistos.append(DENTRO_DE_HOOK.get())
+        return permitir()
+
+    asyncio.run(_envuelto("PreToolUse", mira, estado, eventos)({}, "t1", None))
+    assert vistos == [True] and DENTRO_DE_HOOK.get() is False
+
+
+def test_con_la_interrupcion_el_escalamiento_sale_igual_y_avisa_al_decidir():
+    # Revisión de a7f853e: `degradar_escalamiento` marca `DENTRO_DE_HOOK` y aplaza el aviso, como
+    # `fallar_cerrado`. Sin eso, «Stop» al registrar la primera sustitución avisaría antes de que
+    # el escalamiento saliera, y el SDK podría cancelar la tarea suelta del hook.
+    entrada = _escalamiento()
+    del entrada["comercio"]
+    estado, eventos, hooks = _caso_con_comercio()
+    sin_interrupcion = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+
+    avisos = []
+    estado, _, _ = _caso_con_comercio()
+    eventos = _eventos_que_interrumpen(avisos)
+    hooks = HooksDelCaso(estado, eventos)
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+    assert not _es_denegacion(salida) and salida == sin_interrupcion
+    assert len(eventos.eventos()) == 2
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    # Una sola vez y al devolver la decisión, con las dos sustituciones ya en la traza.
+    assert avisos == [2] and estado.libro.fallo_de_hook is None

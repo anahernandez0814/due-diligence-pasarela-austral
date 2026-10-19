@@ -389,7 +389,7 @@ CUENTAN = [
     ".claude/commands/",
     "`test_*.py`",
 ]
-REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", ".claude/rules/", "uv.lock"]
+REFERENCIA = ["specs/NNN-*/", "README.md", "DECISIONES.md", "docs/", ".claude/rules/", "uv.lock"]
 PASOS_DE_LECTURA = [
     "1. La lista de archivos",
     "2. El código y la configuración",
@@ -587,6 +587,20 @@ def test_uv_lock_es_referencia_y_no_cuenta_para_la_cobertura(nombre, cuerpo):
     cuentan, referencia = viñetas_de_cobertura(cuerpo, nombre)
     assert "uv.lock" in referencia, f"{nombre}: uv.lock debe figurar entre la referencia"
     assert "uv.lock" not in cuentan, f"{nombre}: uv.lock no debe figurar entre los que cuentan"
+
+
+# --- docs/ es referencia y no cuenta para la cobertura (#14: FR-015; R6) -------------------
+
+
+@pytest.mark.parametrize(
+    ("nombre", "cuerpo"),
+    instrucciones_de_cobertura(),
+    ids=IDS_DE_COBERTURA,
+)
+def test_docs_es_referencia_y_no_cuenta_para_la_cobertura(nombre, cuerpo):
+    cuentan, referencia = viñetas_de_cobertura(cuerpo, nombre)
+    assert "`docs/`" in referencia, f"{nombre}: docs/ debe figurar entre la referencia"
+    assert "docs/" not in cuentan, f"{nombre}: docs/ no debe figurar entre los que cuentan"
 
 
 @pytest.mark.parametrize(

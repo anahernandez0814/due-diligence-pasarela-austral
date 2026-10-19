@@ -29,7 +29,7 @@ extend-exclude = [".specify"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["src", ".claude/hooks", "plugins"]
+testpaths = ["src", ".claude/hooks", "plugins", "test_documentacion.py"]
 # #13: las carpetas del plugin van primero, porque `.claude/hooks/guarda_datos.py` es solo el
 # archivo de compatibilidad y `import guarda_datos` debe llegar a la guarda del plugin.
 pythonpath = [

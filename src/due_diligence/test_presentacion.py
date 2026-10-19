@@ -497,3 +497,25 @@ def test_el_modo_de_demostracion_coincide_con_el_de_la_configuracion():
         entorno = {DEMO: valor}
         activo = any("demostración" in m for m in presentacion.modos_activos(entorno))
         assert activo is configuracion.modo_demostracion(entorno)
+
+
+# ------------------------------------------ minúscula tras los dos puntos (revisión, parada A)
+
+
+@pytest.mark.parametrize(
+    ("frase", "esperada"),
+    [
+        (
+            "El registro devolvió varias coincidencias.",
+            "el registro devolvió varias coincidencias.",
+        ),
+        ("La categoría no aparece.", "la categoría no aparece."),
+        ("I.3 bloquea habilitar.", "I.3 bloquea habilitar."),  # una regla
+        ("CO-AM-0004 no está.", "CO-AM-0004 no está."),  # un identificador
+        ("NIT ficticio.", "NIT ficticio."),  # una sigla
+        ("A", "A"),  # una sola letra: no hay segunda que mirar
+        ("", ""),
+    ],
+)
+def test_tras_dos_puntos_solo_baja_la_inicial_de_una_palabra_normal(frase, esperada):
+    assert presentacion._tras_dos_puntos(frase) == esperada

@@ -1422,7 +1422,8 @@ def test_el_informe_aceptado_sustituye_la_cobertura_y_lo_dice_sin_decir_registra
     assert datos.tipo == TIPO_DATOS_SUSTITUIDOS
     assert evento.tipo == TIPO_COBERTURA_SUSTITUIDA and evento.frente is None
     assert "registrar_informe" in evento.detalle
-    assert "distinta" in evento.detalle  # el modelo declaró «completa»
+    # #11 (FR-009): el modelo declaró «completa»; el texto es neutro, sin «era distinta».
+    assert evento.detalle.endswith(". Se sustituyó por la calculada.")
     assert "registrad" not in evento.detalle  # se emite antes de que la pasarela acepte
     for dato in ("CO-TV-0001", "Tienda Verde"):
         assert dato not in evento.detalle
@@ -1740,7 +1741,8 @@ def test_el_comercio_declarado_distinto_se_sustituye_y_el_evento_lo_dice_sin_dat
     datos = eventos.eventos()[-1]
     assert datos.tipo == TIPO_DATOS_SUSTITUIDOS
     assert "comercio verificado" in datos.detalle
-    assert "distinto" in datos.detalle and "comercio" in datos.detalle
+    # #11 (FR-009): texto neutro con los campos sustituidos (los conflictos declarados difieren).
+    assert datos.detalle.endswith(". Se sustituyeron por los calculados: comercio, conflictos.")
     for dato in ("CO-TV-0001", "Tienda Verde", "CO-XX-9999", "Otro"):
         assert dato not in datos.detalle
 
@@ -1753,7 +1755,7 @@ def test_el_comercio_y_los_conflictos_declarados_iguales_el_evento_dice_que_coin
     _comprobar_informe_aceptado(salida, entrada, estado)
     (datos,) = [e for e in eventos.eventos() if e.tipo == TIPO_DATOS_SUSTITUIDOS]
     assert datos.detalle == (
-        "Datos del código puestos en registrar_informe: comercio verificado; Sin conflictos "
+        "Datos del código puestos en registrar_informe: comercio verificado. Sin conflictos "
         "entre las fuentes registrales. Coincide con lo declarado por el coordinador."
     )
 
@@ -3432,3 +3434,72 @@ def test_un_bajo_riesgo_con_una_mencion_en_noticias_se_puede_escalar():
     assert _sustituida(salida)["causa_escalamiento"] == [
         "Sin causa de escalamiento vigente: hay menciones en noticias."
     ]
+
+
+# ----------------------------- #11: textos neutros en las sustituciones (T023, R11, FR-009)
+
+SUSTITUIDA = "Se sustituyó por la calculada."
+SUSTITUIDOS = "Se sustituyeron por los calculados: {campos}."
+MAYUSCULA_TRAS_PUNTO_Y_COMA = r";\s+[A-ZÁÉÍÓÚÑ]"
+
+
+def _eventos_de(eventos, tipo):
+    return [e for e in eventos.eventos() if e.tipo == tipo]
+
+
+@pytest.mark.parametrize("cobertura", ["omitida", "distinta"])
+def test_la_cobertura_omitida_o_distinta_se_sustituye_con_un_texto_neutro(cobertura):
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = _informe_de("no_habilitar")
+    if cobertura == "omitida":
+        del entrada["cobertura"]
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    (evento,) = _eventos_de(eventos, TIPO_COBERTURA_SUSTITUIDA)
+    assert evento.detalle.endswith(f". {SUSTITUIDA}")
+    assert "distint" not in evento.detalle
+
+
+def test_la_cobertura_igual_dice_que_coincide():
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = {**_informe_de("no_habilitar"), "cobertura": calcular_cobertura(estado).lineas()}
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    (evento,) = _eventos_de(eventos, TIPO_COBERTURA_SUSTITUIDA)
+    assert evento.detalle.endswith(". Coincide con la declarada por el coordinador.")
+
+
+def test_el_comercio_y_los_conflictos_omitidos_se_sustituyen_con_un_texto_neutro():
+    estado, eventos, hooks = _caso_con_comercio()
+    entrada = _informe_de("no_habilitar")
+    del entrada["comercio"], entrada["conflictos"]
+    _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    (datos,) = _eventos_de(eventos, TIPO_DATOS_SUSTITUIDOS)
+    assert datos.detalle == (
+        "Datos del código puestos en registrar_informe: comercio verificado. Sin conflictos "
+        "entre las fuentes registrales. " + SUSTITUIDOS.format(campos="comercio, conflictos")
+    )
+
+
+@pytest.mark.parametrize("herramienta", ["informe", "escalamiento"])
+def test_ninguna_sustitucion_dice_que_era_distinto_ni_pone_mayuscula_tras_punto_y_coma(
+    herramienta,
+):
+    import re
+
+    estado, eventos, hooks = _caso_con_comercio()
+    if herramienta == "informe":
+        entrada = _informe_de("no_habilitar")
+        del entrada["cobertura"], entrada["comercio"]
+        _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    else:
+        entrada = _escalamiento()
+        del entrada["comercio"]
+        _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+    sustituciones = _eventos_de(eventos, TIPO_COBERTURA_SUSTITUIDA) + _eventos_de(
+        eventos, TIPO_DATOS_SUSTITUIDOS
+    )
+    assert len(sustituciones) == 2
+    for evento in sustituciones:
+        assert "era distint" not in evento.detalle
+        assert not re.search(MAYUSCULA_TRAS_PUNTO_Y_COMA, evento.detalle), evento.detalle
+    (cobertura,) = _eventos_de(eventos, TIPO_COBERTURA_SUSTITUIDA)
+    assert cobertura.detalle.endswith(SUSTITUIDA)

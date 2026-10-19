@@ -148,9 +148,22 @@ _REGLA_AFIRMACIONES = (
 # demostración la quita con `_REGLA_ESCALAR`. La garantía es el hook de `registrar_informe`.
 _REGLA_INFORME_TRAS_ESCALAR = "Si hay que escalar, registra el informe después de escalar."
 
+# #11 (R4): la cobertura va antes que la recomendación. Lo garantiza la interfaz, que la muestra
+# antes de la respuesta; esta guía hace que el texto del modelo siga el mismo orden.
 _REGLA_RESUMEN = (
-    "Al terminar, resume al analista, frente por frente, lo que se obtuvo con su fuente y su "
-    "fecha, y qué frentes no se pudieron cubrir y por qué."
+    "Al terminar, empieza por la cobertura: qué frentes no se pudieron cubrir y por qué. Después "
+    "resume al analista, frente por frente, lo que se obtuvo con su fuente y su fecha, y por "
+    "último la recomendación."
+)
+
+# #11 (R9, R10, FR-007, FR-008): guía de estilo y comprensión, no una regla de negocio
+# (principio II), por eso va también en el modo de demostración, y sin nombrar el escalamiento,
+# que ese modo quita (#7). La pasarela guarda la fecha de registro en UTC (#9, R10), que de noche
+# en Colombia ya es la del día siguiente.
+_REGLA_FECHAS = (
+    "Escribe todas las fechas como AAAA-MM-DD. La fecha que devuelve la pasarela al guardar un "
+    "informe o un caso para el oficial está en UTC y puede ser la del día siguiente en Colombia: "
+    "no la presentes como una fecha posterior a hoy ni como una anomalía."
 )
 
 
@@ -172,6 +185,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             _REGLA_INFORME,
             _REGLA_AFIRMACIONES,
             _REGLA_RESUMEN_OFICIAL,
+            _REGLA_FECHAS,
             _REGLA_RESUMEN,
         ]
     else:
@@ -184,6 +198,7 @@ def instrucciones_coordinador(demo: bool = False) -> str:
             f"{_REGLA_ESCALAR} {_REGLA_INFORME} {_REGLA_CUANDO_USAR_CADA_RECOMENDACION}",
             f"{_REGLA_AFIRMACIONES} {_REGLA_INFORME_TRAS_ESCALAR}",
             _REGLA_RESUMEN_OFICIAL,
+            _REGLA_FECHAS,
             _REGLA_RESUMEN,
         ]
     numeradas = "\n".join(f"{numero}. {texto}" for numero, texto in enumerate(reglas, start=1))

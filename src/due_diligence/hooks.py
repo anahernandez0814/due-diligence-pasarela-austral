@@ -1029,19 +1029,24 @@ class HooksDelCaso:
         completa: dict[str, Any],
         herramienta: str = "registrar_informe",
     ) -> None:
-        """`datos_sustituidos`: lo que el código puso, sin datos del comercio (#9, R5)."""
+        """`datos_sustituidos`: lo que el código puso, sin datos del comercio (#9, R5).
+
+        Desde el #11 (R11, FR-009) el texto es neutro: no dice que lo declarado «era distinto»,
+        porque el coordinador pudo solo omitir los campos. El resumen de los conflictos es una
+        frase con mayúscula, así que va tras un punto, no tras un punto y coma.
+        """
         comercio, conflictos = completa["comercio"], completa["conflictos"]
         verificado = "comercio verificado" if comercio["verificado"] else "comercio sin verificar"
         distintos = [p for p in ("comercio", "conflictos") if argumentos.get(p) != completa[p]]
         declarado = (
-            f"Lo declarado por el coordinador era distinto en: {', '.join(distintos)}."
+            f"Se sustituyeron por los calculados: {', '.join(distintos)}."
             if distintos
             else "Coincide con lo declarado por el coordinador."
         )
         self.eventos.registrar(
             TIPO_DATOS_SUSTITUIDOS,
             None,
-            f"Datos del código puestos en {herramienta}: {verificado}; "
+            f"Datos del código puestos en {herramienta}: {verificado}. "
             f"{conflictos['resumen']} {declarado}",
         )
 
@@ -1135,8 +1140,9 @@ class HooksDelCaso:
     ) -> None:
         """`cobertura_sustituida` (#8): se emite antes de que la pasarela acepte la llamada.
 
-        Dice qué cobertura se puso en ella y si la que declaró el coordinador era distinta, nunca
-        que quedó registrada.
+        Dice qué cobertura se puso en ella y si se sustituyó la que declaró el coordinador, nunca
+        que quedó registrada. Desde el #11 (R11, FR-009) el texto es neutro: «se sustituyó» vale
+        tanto si la declarada era distinta como si faltaba.
         """
         lineas = cobertura.lineas()
         faltan = [f.value for f, c in cobertura.frentes.items() if not c.cubierto]
@@ -1144,7 +1150,7 @@ class HooksDelCaso:
         if not cobertura.completa:
             resumen += f" (falta {', '.join(faltan)})"
         declarada = (
-            "La declarada por el coordinador era distinta y se sustituyó por la calculada."
+            "Se sustituyó por la calculada."
             if argumentos.get("cobertura") != lineas
             else "Coincide con la declarada por el coordinador."
         )

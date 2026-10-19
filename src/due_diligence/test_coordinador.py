@@ -1198,3 +1198,30 @@ def test_un_turno_sin_mensaje_de_resultado_guarda_turnos_sin_dato():
     caso = Caso(ejecutor=EjecutorSimulado(), consulta=sin_resultado)
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.turnos_por_turno == [None]
+
+
+# ------------------------------------- #11: fechas y orden del resumen (T025, R9, R10, R4)
+
+
+def test_la_regla_de_fechas_esta_en_los_dos_modos():
+    from due_diligence.coordinador import _REGLA_FECHAS, instrucciones_coordinador
+
+    for fragmento in (
+        "AAAA-MM-DD",
+        "al guardar un informe o un caso para el oficial",
+        "está en UTC",
+        "puede ser la del día siguiente en Colombia",
+        "no la presentes como una fecha posterior a hoy ni como una anomalía",
+    ):
+        assert fragmento in _REGLA_FECHAS, fragmento
+    for demo in (False, True):  # es guía de estilo, no una regla de negocio: va en los dos
+        assert _REGLA_FECHAS in instrucciones_coordinador(demo=demo)
+
+
+def test_el_resumen_al_analista_empieza_por_la_cobertura():
+    from due_diligence.coordinador import _REGLA_RESUMEN
+
+    assert _REGLA_RESUMEN.startswith(
+        "Al terminar, empieza por la cobertura: qué frentes no se pudieron cubrir y por qué"
+    )
+    assert "frente por frente" in _REGLA_RESUMEN and "fuente y su fecha" in _REGLA_RESUMEN

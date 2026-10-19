@@ -2,10 +2,11 @@
 
     uv run python -m due_diligence "<solicitud del analista>"
 
-Es el ÚNICO lugar que carga el entorno (`configuracion.cargar_entorno`): ni el paquete, ni
-`ejecutar_caso`, ni los tests lo hacen. Imprime los eventos en orden, la situación de cada frente y
-los números que se anotan en la validación (duración de cada frente, solape y coste). La interfaz
-de chat es del ticket #11.
+Es uno de los dos puntos de entrada que cargan el entorno (`configuracion.cargar_entorno`); el otro
+es la interfaz de chat (`chat.py`, #11). Ni el paquete, ni `ejecutar_caso`, ni los tests lo hacen.
+Tras cargarlo comprueba la credencial con la misma función que el chat (#11, R8). Imprime los
+eventos en orden, la situación de cada frente y los números que se anotan en la validación
+(duración de cada frente, solape y coste).
 """
 
 import asyncio
@@ -25,7 +26,7 @@ from due_diligence.frentes import Frente
 from due_diligence.informe import informe_vigente
 
 # El mismo texto que el chat (#11, R6): vive en `presentacion` y se sigue exponiendo aquí.
-from due_diligence.presentacion import MENSAJE_SIN_SESION
+from due_diligence.presentacion import MENSAJE_SIN_SESION, aviso_espera
 from due_diligence.terminacion import Terminacion
 
 USO = 'Uso: uv run python -m due_diligence [--sin-continuar] "<solicitud del analista>"'
@@ -152,7 +153,9 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
         escribir(f"  coste de {nombre}: {'sin dato' if coste is None else f'{coste:.4f} USD'}")
     conocidos = [c for c in costes.values() if c is not None]
     escribir(f"  coste total: {sum(conocidos):.4f} USD")
-    escribir(f"  turnos del coordinador: {configuracion.turnos_usados(caso.turnos)}")
+    # Los del último turno frente al límite, que es por turno (#11, FR-004); nunca la suma del caso.
+    ultimo = caso.turnos_por_turno[-1] if caso.turnos_por_turno else None
+    escribir(f"  turnos del coordinador en este turno: {configuracion.turnos_usados(ultimo)}")
     escribir("")
     if caso.terminacion:
         escribir(f"Terminación del caso: {caso.terminacion.terminacion.value}")
@@ -171,18 +174,21 @@ def imprimir_caso(caso: Caso, escribir: Callable[[str], None] = print) -> None:
 def _conversar(caso: Caso, leer: Callable[[str], str]) -> bool:
     """Mientras el caso espera al analista, pregunta y continúa en el mismo caso (#10, FR-019).
 
-    Termina con una línea vacía o con el fin de la entrada. Es recursiva y no un `while`, como el
-    resto del ciclo (FR-010 del #6): cada vuelta es un turno más que termina por su razón de parada.
-    Devuelve `False` si el caso no se pudo continuar por falta de sesión: el analista ve
+    Termina con una línea vacía o con el fin de la entrada, y antes avisa de que el coordinador
+    sigue esperando (#11, FR-005), en lugar de terminar en silencio. Es recursiva y no un `while`,
+    como el resto del ciclo (FR-010 del #6): cada vuelta es un turno más que termina por su razón
+    de parada. Devuelve `False` si el caso no se pudo continuar por falta de sesión: el analista ve
     `MENSAJE_SIN_SESION`, no una traza.
     """
-    if caso.espera is None:
+    espera = caso.espera
+    if espera is None:
         return True
     try:
         respuesta = leer(PREGUNTA_AL_ANALISTA).strip()
     except EOFError:
-        return True
+        respuesta = ""
     if not respuesta:
+        print(aviso_espera(espera))
         return True
     try:
         asyncio.run(caso.continuar(respuesta))
@@ -203,6 +209,10 @@ def main(argumentos: list[str] | None = None, leer: Callable[[str], str] = input
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     configuracion.cargar_entorno()
+    problema = configuracion.comprobar_credencial()
+    if problema is not None:
+        print(problema, file=sys.stderr)
+        return 2
     caso = asyncio.run(ejecutar_caso(solicitud))
     imprimir_caso(caso)
     continuado = _conversar(caso, leer) if continuar else True

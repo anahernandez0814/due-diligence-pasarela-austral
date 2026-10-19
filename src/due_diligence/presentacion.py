@@ -123,8 +123,14 @@ def frente_en_palabras(frente: Frente) -> str:
 
 
 def _tras_dos_puntos(frase: str) -> str:
-    """Una frase completa puesta después de dos puntos: con minúscula inicial."""
-    return frase[:1].lower() + frase[1:]
+    """Una frase completa puesta después de dos puntos: con minúscula inicial.
+
+    Solo si la segunda letra ya es minúscula, para no estropear una sigla, una regla o un
+    identificador al principio («I.3», «CO-AM-0004», «NIT»).
+    """
+    if len(frase) < 2 or not frase[1].islower():
+        return frase
+    return frase[0].lower() + frase[1:]
 
 
 def aviso_espera(espera: "Espera") -> str:

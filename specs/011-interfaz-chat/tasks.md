@@ -183,7 +183,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 **Independent Test**: los eventos de sustitución salen neutros, y las instrucciones del coordinador llevan la regla de fechas en los dos modos.
 
-- [ ] T023 [P] [US5] Tests de los textos en `src/due_diligence/test_hooks.py` (R11, FR-009):
+- [x] T023 [P] [US5] Tests de los textos en `src/due_diligence/test_hooks.py` (R11, FR-009):
   - informe con la cobertura **omitida** → `cobertura_sustituida` termina en «Se sustituyó por la calculada.»;
   - informe con una cobertura distinta → el mismo texto;
   - cobertura igual a la calculada → «Coincide con la declarada por el coordinador.»;
@@ -193,36 +193,36 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
   - el mismo test para `escalar_a_cumplimiento`.
 
   Adaptar con igualdades exactas `test_hooks.py:1757` y cualquier otro test que fije los textos anteriores (`grep -rn "era distint\|Coincide con l" src`), y anotarlos en T032.
-- [ ] T024 [US5] Cambiar los textos en `src/due_diligence/hooks.py`, en `_evento_cobertura` y `_evento_datos`, como en R11 y el contrato: punto en vez de punto y coma, y «Se sustituyó por la calculada.» o «Se sustituyeron por los calculados: {campos}.». Sin cambios de comportamiento. T023 en verde.
-- [ ] T025 [P] [US5] Tests de las instrucciones en `src/due_diligence/test_coordinador.py` (R9, R10, R4):
+- [x] T024 [US5] Cambiar los textos en `src/due_diligence/hooks.py`, en `_evento_cobertura` y `_evento_datos`, como en R11 y el contrato: punto en vez de punto y coma, y «Se sustituyó por la calculada.» o «Se sustituyeron por los calculados: {campos}.». Sin cambios de comportamiento. T023 en verde.
+- [x] T025 [P] [US5] Tests de las instrucciones en `src/due_diligence/test_coordinador.py` (R9, R10, R4):
   - `instrucciones_coordinador(demo=False)` y `demo=True` contienen `_REGLA_FECHAS` completa (AAAA-MM-DD y la fecha de registro en UTC, «no la presentes como una fecha posterior a hoy»);
   - `_REGLA_RESUMEN` pide empezar por la cobertura y los frentes que fallaron;
   - adaptar los tests que fijan la lista o el número de reglas, y anotarlos en T032.
-- [ ] T026 [US5] Añadir `_REGLA_FECHAS` a las dos listas de `instrucciones_coordinador` y ajustar `_REGLA_RESUMEN` en `src/due_diligence/coordinador.py` (R9, R4). T025 en verde.
+- [x] T026 [US5] Añadir `_REGLA_FECHAS` a las dos listas de `instrucciones_coordinador` y ajustar `_REGLA_RESUMEN` en `src/due_diligence/coordinador.py` (R9, R4). T025 en verde.
 
 ---
 
 ## Fase 7: User Stories 1, 2 y 3 en la línea de comandos (Priority: P1)
 
-- [ ] T027 [P] [US3] Tests en `src/due_diligence/test_main.py` (R8, FR-006):
+- [x] T027 [P] [US3] Tests en `src/due_diligence/test_main.py` (R8, FR-006):
   - sin `ANTHROPIC_API_KEY`, `main([...])` devuelve 2, imprime `MENSAJE_SIN_CLAVE` en la salida de error y **no llama** a `ejecutar_caso` (parcheado con un contador);
   - lo mismo con `ANTHROPIC_AUTH_TOKEN` y `MENSAJE_OTRA_CREDENCIAL`;
   - la comprobación va después de `cargar_entorno` (orden registrado);
   - **adaptación**: un fixture `autouse` del módulo fija la clave ficticia y quita las variables alternativas con `monkeypatch`, para que los tests existentes sigan llegando a `ejecutar_caso`. Anotarlo en T032.
-- [ ] T028 [P] [US2] Tests en `src/due_diligence/test_main.py` (R5, FR-004): con `CoordinadorSimulado(num_turns=[3, 4])` en dos turnos (T005), la salida del segundo dice «turnos del coordinador en este turno: 4 de 30» y nunca «7 de 30». Adaptar `test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador` y anotarlo en T032.
-- [ ] T029 [P] [US1] Tests en `src/due_diligence/test_main.py` (R6, FR-005):
+- [x] T028 [P] [US2] Tests en `src/due_diligence/test_main.py` (R5, FR-004): con `CoordinadorSimulado(num_turns=[3, 4])` en dos turnos (T005), la salida del segundo dice «turnos del coordinador en este turno: 4 de 30» y nunca «7 de 30». Adaptar `test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador` y anotarlo en T032.
+- [x] T029 [P] [US1] Tests en `src/due_diligence/test_main.py` (R6, FR-005):
   - con espera abierta, una línea vacía, una con solo espacios y el fin de la entrada imprimen `AVISO_ESPERA` con el motivo antes de terminar;
   - sin espera no se imprime;
   - el código de salida es el mismo que antes del cambio.
-- [ ] T030 [US1] Cambiar `src/due_diligence/__main__.py`:
+- [x] T030 [US1] Cambiar `src/due_diligence/__main__.py`:
   - `comprobar_credencial()` justo después de `configuracion.cargar_entorno()`: con un problema, el mensaje a stderr y `return 2`;
   - «turnos del coordinador en este turno: …» con el último valor de `turnos_por_turno`;
   - `AVISO_ESPERA` en `_conversar` ante la línea vacía o el fin de la entrada con espera;
   - el docstring ya no dice que es «el ÚNICO lugar que carga el entorno»: son los dos puntos de entrada.
 
   T027 a T029 en verde.
-- [ ] T031 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «textos neutros, fechas y línea de comandos (#11)».
-- [ ] T032 Tabla de tests adaptados en este archivo, bajo «Tests adaptados». Una fila por test: archivo:línea, qué fijaba, qué fija ahora y por qué no se debilita. Va al PR.
+- [x] T031 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «textos neutros, fechas y línea de comandos (#11)».
+- [x] T032 Tabla de tests adaptados en este archivo, bajo «Tests adaptados». Una fila por test: archivo:línea, qué fijaba, qué fija ahora y por qué no se debilita. Va al PR.
 
 ---
 
@@ -327,7 +327,13 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 | Test | Fijaba | Fija ahora | Por qué no se debilita |
 |------|--------|-----------|------------------------|
-| _(se completa en T023, T025, T027 y T028)_ | | | |
+| `test_hooks.py:1415` `test_el_informe_aceptado_sustituye_la_cobertura_y_lo_dice_sin_decir_registrada` | `"distinta" in evento.detalle` | `evento.detalle.endswith(". Se sustituyó por la calculada.")` | FR-009 cambia el texto. Pasa de una subcadena a la frase final exacta, y el resto de las aserciones (sin «registrad», sin datos del comercio) sigue igual. |
+| `test_hooks.py:1735` `test_el_comercio_declarado_distinto_se_sustituye_y_el_evento_lo_dice_sin_datos` | `"distinto" in datos.detalle and "comercio" in datos.detalle` | `datos.detalle.endswith(". Se sustituyeron por los calculados: comercio, conflictos.")` | FR-009. Más estricto: fija los dos campos sustituidos y su orden; sigue comprobando que no hay datos del comercio. |
+| `test_hooks.py:1750` `test_el_comercio_y_los_conflictos_declarados_iguales_el_evento_dice_que_coinciden` | igualdad exacta con «comercio verificado; Sin conflictos…» | la misma igualdad exacta con «comercio verificado. Sin conflictos…» | FR-009 (mayúscula tras punto y coma). Sigue siendo una igualdad exacta. |
+| `test_main.py:39` fixture `_con_clave_ficticia` (nueva, `autouse`) | — | fija `ANTHROPIC_API_KEY` ficticia y quita las credenciales alternativas | FR-006: `main` comprueba la credencial antes de crear el caso. Sin el fixture, los tests existentes se detendrían en la credencial y dejarían de probar lo suyo. Los de la credencial la quitan explícitamente. |
+| `test_main.py:131` `test_la_salida_muestra_la_cobertura_y_los_turnos_del_coordinador` | `"turnos del coordinador: 1 de 30"` | `"turnos del coordinador en este turno: 1 de 30"` | FR-004 cambia la etiqueta. El valor y la comparación por subcadena no cambian; la suma frente al turno la prueba aparte `test_los_turnos_se_muestran_por_turno_y_nunca_la_suma`. |
+| `test_main.py:249` `test_sin_terminacion_los_turnos_no_tienen_dato_y_la_cobertura_se_muestra` | `"turnos del coordinador: sin dato"` | `"turnos del coordinador en este turno: sin dato"` | FR-004, solo la etiqueta. |
+| `test_main.py:424` `test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar` | terminaba sin continuar | lo mismo, y además `AVISO_D in salida` | FR-005. Se añade una aserción; no se quita ninguna. |
 
 Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado.
 

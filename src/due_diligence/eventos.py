@@ -2,6 +2,9 @@
 
 Cada caso tiene su propio `RegistroEventos`. `secuencia` es un entero creciente, único por caso:
 da un orden estable aunque dos marcas coincidan. El reloj se inyecta para los tests.
+
+Desde el #11 (R1) acepta un `observador` opcional que recibe cada evento ya guardado: la interfaz de
+chat lo usa para mostrar los indicadores en vivo. La traza sigue siendo la única fuente de verdad.
 """
 
 import threading
@@ -99,10 +102,15 @@ def _ahora() -> datetime:
 
 
 class RegistroEventos:
-    def __init__(self, reloj: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self,
+        reloj: Callable[[], datetime] | None = None,
+        observador: Callable[[Evento], None] | None = None,
+    ) -> None:
         self._reloj = reloj or _ahora
         self._eventos: list[Evento] = []
         self._candado = threading.Lock()
+        self._observador = observador
 
     def registrar(
         self,
@@ -119,6 +127,14 @@ class RegistroEventos:
                 len(self._eventos) + 1, self._reloj(), tipo, frente, detalle, regla, accion
             )
             self._eventos.append(evento)
+        # Fuera del `with`: `_candado` no es reentrante, y un observador que registre otro evento o
+        # lea la traza bloquearía el hilo para siempre. Su excepción se ignora porque quien registra
+        # suele ser un hook: si fallara, `fallar_cerrado` sellaría el caso por un fallo de la vista.
+        if self._observador is not None:
+            try:
+                self._observador(evento)
+            except Exception:
+                pass
         return evento
 
     def eventos(self) -> list[Evento]:

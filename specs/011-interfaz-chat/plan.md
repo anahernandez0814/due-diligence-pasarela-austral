@@ -58,7 +58,8 @@ indicadores en vivo cubren la espera.
 
 ## Constitution Check
 
-*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple, sin desviaciones.**
+*GATE: antes de la fase 0 y otra vez tras el diseño.* **Cumple, con una desviación justificada de
+la spec (D1), declarada durante la construcción del bloque A.**
 
 | Principio | Cómo se cumple |
 |-----------|----------------|
@@ -191,6 +192,33 @@ reescribe completo. Queda pendiente:
   - persistencia de los casos;
   - control de los modos dentro del chat;
   - diseño visual.
+
+## Desviación justificada
+
+### D1. El mensaje sin clave no nombra el archivo de entorno (US3-2)
+
+- **Qué dice la spec**: US3-2 pedía que el mensaje dijera «en qué archivo ponerla (a partir de
+  `.env.example`)».
+- **Con qué choca**: la garantía R8 del #6, que fija `test_sin_control_propio.py`
+  (`test_ningun_modulo_nombra_el_archivo_de_entorno_ni_escribe_una_clave`). Ningún módulo de
+  `src/due_diligence/` contiene el nombre literal del archivo de entorno, tampoco dentro del de la
+  plantilla. Se descubrió al cerrar la fase 2 (T012), con la suite.
+- **Qué se hace**: `MENSAJE_SIN_CLAVE` describe el archivo sin nombrarlo y remite al README, que
+  sí lo nombra paso a paso:
+  - copiar la plantilla de variables de entorno de la raíz (la que termina en «.example») como
+    archivo de entorno local, sin esa terminación;
+  - poner la clave en `ANTHROPIC_API_KEY`;
+  - reiniciar.
+- **Por qué no se adapta el test**: excluir los mensajes de ese test lo debilitaría, y la garantía
+  del #6 vale más que nombrar el archivo en el mensaje.
+- **Mitigación**: la sección «Interfaz de chat» del README (T037) da los pasos con los nombres
+  exactos.
+- **Documentos actualizados en el mismo commit**: spec (US3-2), este plan, `research.md` (R8) y
+  `tasks.md` (reglas y T011).
+
+Relacionado, sin ser una desviación: `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada`
+del #6 fija `["__main__.py"]`. Con el chat como segundo punto de entrada (R8), en T035 pasa a
+`["__main__.py", "chat.py"]`, y se anota en la tabla de T032.
 
 ## Complexity Tracking
 

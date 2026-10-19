@@ -177,8 +177,11 @@ arrancar, `chat.py` llama a `dependencias.cargar_entorno()` (por defecto
 `configuracion.comprobar_credencial(entorno=None) -> str | None` (con `None` lee `os.environ`,
 como `modo_demostracion`):
 
-- `ANTHROPIC_API_KEY` ausente o vacía → mensaje con los pasos: copiar `.env.example` a `.env`,
-  poner la clave en `ANTHROPIC_API_KEY`, reiniciar la aplicación.
+- `ANTHROPIC_API_KEY` ausente o vacía → mensaje con los pasos: copiar la plantilla de variables
+  de entorno de la raíz como archivo de entorno local, poner la clave en `ANTHROPIC_API_KEY` y
+  reiniciar la aplicación. **El mensaje no nombra el archivo** (desviación D1 del plan): ningún
+  módulo lo nombra, por la garantía R8 del #6 que fija `test_sin_control_propio.py`. Remite al
+  README, que da los nombres.
 - definida alguna variable que el CLI de Claude Code usa **antes** que `ANTHROPIC_API_KEY`
   (`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`) → mensaje que pide
   quitarla, porque la aplicación solo usa `ANTHROPIC_API_KEY`.
@@ -277,7 +280,7 @@ FR-005). Lo demás se anota aquí, sin test:
 `CoordinadorSimulado` se amplía con `num_turns` por guion y un paso `("lanzar", excepcion)` (U1
 del analyze), con su test, para los turnos por turno y el fallo del turno.
 
-`streamlit` se añade a las dependencias del proyecto con `uv add` (versión fijada en `uv.lock`).
+`streamlit` se añade a las dependencias del proyecto con `uv add`: `streamlit>=1.66,<2` en `pyproject.toml`, 1.66.0 en `uv.lock` (T002).
 
 ## R14. Riesgos residuales
 

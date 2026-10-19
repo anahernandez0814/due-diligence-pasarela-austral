@@ -679,3 +679,70 @@ def test_el_resumen_del_caso_es_valido_y_solo_cita_fuentes_admitidas():
     for frente, afirmaciones in resumen["hallazgos"].items():
         admitidas = fuentes_consultadas(estado, Frente(frente))
         assert all(a["fuente"] in admitidas for a in afirmaciones), frente
+
+
+# ------------------------------- #11: turnos por guion y un paso que lanza (T004, U1 del analyze)
+
+
+def _resultado(mensajes):
+    from claude_agent_sdk import ResultMessage
+
+    (resultado,) = [m for m in mensajes if isinstance(m, ResultMessage)]
+    return resultado
+
+
+def test_el_coordinador_simulado_devuelve_los_turnos_de_cada_guion():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=[[], []], num_turns=[3, 4])
+    primero = _consumir_con(coordinador, ClaudeAgentOptions())
+    segundo = _consumir_con(coordinador, ClaudeAgentOptions(resume="sesion-de-prueba"))
+    assert (_resultado(primero).num_turns, _resultado(segundo).num_turns) == (3, 4)
+
+
+def test_sin_turnos_por_guion_cada_turno_sigue_valiendo_uno():
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    coordinador = CoordinadorSimulado(guiones=[[], []])
+    for resume in (None, "sesion-de-prueba"):
+        assert (
+            _resultado(_consumir_con(coordinador, ClaudeAgentOptions(resume=resume))).num_turns == 1
+        )
+
+
+def test_el_paso_lanzar_ejecuta_lo_anterior_y_lanza_sin_resultado():
+    import pytest
+
+    from due_diligence.simulacion import CoordinadorSimulado
+
+    entrada = _informe_valido()
+    error = RuntimeError("fallo simulado del SDK")
+    coordinador = CoordinadorSimulado([("informe_con", entrada), ("lanzar", error)])
+    mensajes = []
+
+    async def consumir():
+        async for mensaje in coordinador(prompt="p", options=ClaudeAgentOptions()):
+            mensajes.append(mensaje)
+
+    with pytest.raises(RuntimeError) as lanzada:
+        asyncio.run(consumir())
+    assert lanzada.value is error
+    # El paso anterior se ejecutó; no llegó ningún mensaje, tampoco el `ResultMessage`.
+    assert coordinador.pasarela.informes == [entrada]
+    assert mensajes == []
+
+
+def test_un_caso_con_el_paso_lanzar_termina_el_turno_como_anomalo_y_relanza():
+    import pytest
+
+    from due_diligence.coordinador import Caso
+    from due_diligence.simulacion import CoordinadorSimulado, EjecutorSimulado
+    from due_diligence.terminacion import Terminacion
+
+    coordinador = CoordinadorSimulado([("lanzar", RuntimeError("fallo simulado del SDK"))])
+    caso = Caso(ejecutor=EjecutorSimulado(resultados={}), consulta=coordinador)
+    coordinador.caso = caso
+    with pytest.raises(RuntimeError):
+        asyncio.run(caso.ejecutar("Necesito el due diligence de Taller Aurora SAS."))
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+    assert caso.terminacion.terminal_reason == "excepción RuntimeError"

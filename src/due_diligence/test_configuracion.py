@@ -374,3 +374,54 @@ def test_el_coordinador_acepta_el_resume_y_los_subagentes_no():
     assert _opciones_coordinador(resume="s-2").resume == "s-2"
     with pytest.raises(TypeError):
         _opciones_subagente(Frente.REGISTRO, resume="s-2")  # los subagentes no reanudan
+
+
+# ------------------------------------------- #11: la credencial de los dos puntos de entrada (R8)
+
+CLAVE_FICTICIA = "clave-ficticia-de-prueba"
+ALTERNATIVAS = ("ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+
+
+@pytest.mark.parametrize("entorno", [{}, {"ANTHROPIC_API_KEY": ""}, {"ANTHROPIC_API_KEY": "   "}])
+def test_sin_clave_la_credencial_pide_configurarla(entorno):
+    assert configuracion.comprobar_credencial(entorno) == configuracion.MENSAJE_SIN_CLAVE
+
+
+def test_el_mensaje_sin_clave_explica_como_configurarla():
+    mensaje = configuracion.MENSAJE_SIN_CLAVE
+    # Describe el archivo sin nombrarlo (desviación D1, R8 del #6) y remite al README.
+    for parte in ("ANTHROPIC_API_KEY", "plantilla", "«.example»", "reinicie", "README"):
+        assert parte in mensaje
+
+
+def test_con_la_clave_y_sin_alternativas_no_hay_problema():
+    assert configuracion.comprobar_credencial({"ANTHROPIC_API_KEY": CLAVE_FICTICIA}) is None
+
+
+@pytest.mark.parametrize("variable", ALTERNATIVAS)
+def test_una_credencial_alternativa_detiene_aunque_este_la_clave(variable):
+    entorno = {"ANTHROPIC_API_KEY": CLAVE_FICTICIA, variable: "1"}
+    mensaje = configuracion.comprobar_credencial(entorno)
+    assert mensaje == configuracion.MENSAJE_OTRA_CREDENCIAL.format(variable=variable)
+    assert variable in mensaje and "ANTHROPIC_API_KEY" in mensaje
+
+
+@pytest.mark.parametrize(
+    "entorno",
+    [
+        {},
+        {"ANTHROPIC_API_KEY": CLAVE_FICTICIA, "ANTHROPIC_AUTH_TOKEN": "otra-ficticia"},
+    ],
+)
+def test_ningun_mensaje_muestra_el_valor_de_una_credencial(entorno):
+    mensaje = configuracion.comprobar_credencial(entorno)
+    assert CLAVE_FICTICIA not in mensaje and "otra-ficticia" not in mensaje
+
+
+def test_sin_entorno_explicito_la_credencial_lee_el_del_proceso(monkeypatch):
+    for variable in ALTERNATIVAS:
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert configuracion.comprobar_credencial() == configuracion.MENSAJE_SIN_CLAVE
+    monkeypatch.setenv("ANTHROPIC_API_KEY", CLAVE_FICTICIA)
+    assert configuracion.comprobar_credencial() is None

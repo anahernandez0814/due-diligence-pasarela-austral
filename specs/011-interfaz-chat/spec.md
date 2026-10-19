@@ -60,7 +60,7 @@ Quien ejecuta la aplicación pone su clave de Anthropic en el archivo de entorno
 **Acceptance Scenarios**:
 
 1. **Given** la clave en el archivo de entorno local, **When** se arranca la aplicación, **Then** se carga sin pisar una variable ya definida en el sistema y el chat queda listo.
-2. **Given** ninguna clave (ni en el sistema ni en el archivo) o una clave vacía, **When** se arranca la aplicación, **Then** se detiene con un mensaje en español que dice qué falta, en qué archivo ponerla (a partir de `.env.example`) y que hay que reiniciar la aplicación; no se puede enviar ningún mensaje.
+2. **Given** ninguna clave (ni en el sistema ni en el archivo) o una clave vacía, **When** se arranca la aplicación, **Then** se detiene con un mensaje en español que dice qué falta, en qué archivo ponerla (descrito sin nombrarlo, a partir de la plantilla de la raíz, y con remisión al README que da los nombres; desviación justificada D1 del plan, por la garantía R8 del #6) y que hay que reiniciar la aplicación; no se puede enviar ningún mensaje.
 3. **Given** cualquier configuración, **When** la aplicación arranca o ejecuta un caso, **Then** no recurre a ninguna otra credencial ni muestra el valor de la clave en la interfaz ni en los registros.
 
 ---

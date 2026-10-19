@@ -39,7 +39,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 - **Lo que se muestra sale de la traza y del estado del caso** (`caso.eventos()`, `caso.cobertura`, `caso.completo`, `caso.espera`), nunca del texto del modelo (R3, R4).
 - **`presentacion.py` no importa Streamlit**, no llama al modelo y no lee el entorno por su cuenta (R2). `chat.py` no contiene lógica que no esté en `presentacion.py` o en `configuracion.py`.
 - **El observador se llama después de salir del `with self._candado`, nunca dentro** (R1). Su excepción se ignora dentro de `registrar`.
-- **Archivo de entorno**: lo cargan solo los dos puntos de entrada, `__main__.py` y `chat.py`, con `configuracion.cargar_entorno()`, que no nombra el archivo (R8 del #6). Los mensajes de ayuda de la credencial sí lo nombran para el analista: son texto, no una lectura. Ningún test lo carga; `test_chat.py` inyecta `Dependencias` y `test_main.py` parchea `cargar_entorno`.
+- **Archivo de entorno**: lo cargan solo los dos puntos de entrada, `__main__.py` y `chat.py`, con `configuracion.cargar_entorno()`, que no nombra el archivo (R8 del #6). **Ningún módulo nombra el archivo, tampoco los mensajes de ayuda** (`test_sin_control_propio.py`, garantía R8 del #6; desviación D1 del plan): el mensaje lo describe y remite al README, que sí lo nombra. Ningún test lo carga; `test_chat.py` inyecta `Dependencias` y `test_main.py` parchea `cargar_entorno`.
 - **El código no controla el ciclo** (FR-010 del #6): `test_sin_control_propio.py` sigue en verde. Sin `while` en `chat.py` ni en `presentacion.py`.
 - **Tests de los tickets anteriores que cambian** (T032): se adaptan **sin debilitarse**, con igualdades exactas. Cada uno se cambia solo si falla por el diseño del #11, y se anota en la tabla de T032 con su justificación, que va en el PR. Ninguno se borra.
 - **Commits** por partes lógicas en la rama `011-interfaz-chat`, nunca en `main`, sin `git commit --amend`. **Ningún commit va después de la revisión** de `/abrir-pr`.
@@ -53,9 +53,9 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## Fase 1: Setup
 
-- [ ] T001 Commitear `specs/011-interfaz-chat/tasks.md` en la rama `011-interfaz-chat`, junto con las correcciones del analyze en `spec.md` (I1: FR-006, SC-004 y los supuestos incluyen la línea de comandos), `data-model.md` (I2) y `quickstart.md` (C2, A1).
-- [ ] T002 Añadir `streamlit` a las dependencias con `uv add streamlit` (`pyproject.toml` y `uv.lock`) y comprobar con `uv run python -c "from streamlit.testing.v1 import AppTest"` que `AppTest` está disponible (R13). Anotar en `research.md` (R13) la versión instalada.
-- [ ] T003 Línea base: `uv run pytest` en verde y anotar el número de tests en la sección «Tests adaptados» de este archivo.
+- [x] T001 Commitear `specs/011-interfaz-chat/tasks.md` en la rama `011-interfaz-chat`, junto con las correcciones del analyze en `spec.md` (I1: FR-006, SC-004 y los supuestos incluyen la línea de comandos), `data-model.md` (I2) y `quickstart.md` (C2, A1).
+- [x] T002 Añadir `streamlit` a las dependencias con `uv add streamlit` (`pyproject.toml` y `uv.lock`) y comprobar con `uv run python -c "from streamlit.testing.v1 import AppTest"` que `AppTest` está disponible (R13). Anotar en `research.md` (R13) la versión instalada.
+- [x] T003 Línea base: `uv run pytest` en verde y anotar el número de tests en la sección «Tests adaptados» de este archivo.
 
 ---
 
@@ -63,41 +63,41 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 **Purpose**: lo que necesitan la interfaz y la línea de comandos. Bloquea las fases siguientes.
 
-- [ ] T004 [P] Tests de la ampliación de `CoordinadorSimulado` en `src/due_diligence/test_sesion_simulada.py` (U1 del analyze):
+- [x] T004 [P] Tests de la ampliación de `CoordinadorSimulado` en `src/due_diligence/test_sesion_simulada.py` (U1 del analyze):
   - con `num_turns=[3, 4]` y dos guiones, el `ResultMessage` del primer turno lleva `num_turns == 3` y el del segundo `4`;
   - sin `num_turns`, cada turno sigue llevando 1, como hasta ahora;
   - el paso `("lanzar", excepcion)` ejecuta los pasos anteriores del guion y lanza esa excepción desde la `query()`, sin `ResultMessage`;
   - un `Caso` con ese guion termina el turno con `Terminacion.ANOMALA` y relanza la excepción, como hace con un fallo real del SDK.
-- [ ] T005 Implementar en `src/due_diligence/simulacion.py`, en `CoordinadorSimulado`:
+- [x] T005 Implementar en `src/due_diligence/simulacion.py`, en `CoordinadorSimulado`:
   - el parámetro `num_turns: list[int] | None = None`, un valor por guion, que se pasa a `mensaje_de_resultado(num_turns=…)`;
   - el paso `("lanzar", excepcion)`, documentado en el docstring con los demás pasos.
 
   T004 en verde.
-- [ ] T006 [P] Tests del observador en `src/due_diligence/test_eventos_estado.py` (R1):
+- [x] T006 [P] Tests del observador en `src/due_diligence/test_eventos_estado.py` (R1):
   - el observador recibe cada evento, en orden y después de guardarlo: dentro de la llamada, `eventos()` ya incluye ese evento;
   - sin observador, `registrar` se comporta igual que antes;
   - una excepción del observador no sale de `registrar` y el evento queda guardado;
   - **sin bloqueo**: un observador que llama a `registrar` con otro evento dentro de su llamada, una sola vez, no bloquea, y la traza tiene los dos eventos en orden, el del observador con la secuencia siguiente. El registro corre en un `threading.Thread` con `join(timeout=5)` y una aserción de que el hilo terminó (`not hilo.is_alive()`), para que un bloqueo haga fallar el test en lugar de colgar la suite;
   - lo mismo con un observador que llama a `eventos()`.
-- [ ] T007 Implementar el observador en `src/due_diligence/eventos.py` (R1, data-model): `RegistroEventos(reloj=None, observador=None)`. `registrar` crea y guarda el evento dentro del `with self._candado` y, **ya fuera del `with`**, llama a `observador(evento)` dentro de `try/except Exception: pass`. Un comentario explica por qué va fuera (el `Lock` no es reentrante) y por qué se ignora la excepción (un hook que registra no debe fallar). T006 en verde.
-- [ ] T008 Tests de `Caso` en `src/due_diligence/test_coordinador.py` (R1, R5, FR-004), con la simulación de T005:
+- [x] T007 Implementar el observador en `src/due_diligence/eventos.py` (R1, data-model): `RegistroEventos(reloj=None, observador=None)`. `registrar` crea y guarda el evento dentro del `with self._candado` y, **ya fuera del `with`**, llama a `observador(evento)` dentro de `try/except Exception: pass`. Un comentario explica por qué va fuera (el `Lock` no es reentrante) y por qué se ignora la excepción (un hook que registra no debe fallar). T006 en verde.
+- [x] T008 Tests de `Caso` en `src/due_diligence/test_coordinador.py` (R1, R5, FR-004), con la simulación de T005:
   - `Caso(observador=f)` entrega a `f` los mismos eventos que `caso.eventos()`, en orden;
   - el caso (a) simulado (guion de `test_casos_escalamiento.py`) con un observador que lanza en cada evento termina igual que sin observador: sin `fallo_de_hook`, con el escalamiento y el informe, y con el mismo `caso.completo`;
   - dos turnos con `CoordinadorSimulado(num_turns=[3, 4])` dan `caso.turnos_por_turno == [3, 4]` y `caso.turnos == 7`;
   - un turno con el paso `("lanzar", RuntimeError(...))` añade `None` a `turnos_por_turno`.
-- [ ] T009 Implementar en `src/due_diligence/coordinador.py`: el parámetro `observador` de `Caso` (lo pasa a `RegistroEventos`) y `turnos_por_turno: list[int | None]`, con un valor por turno (el `num_turns` del `ResultMessage`, o `None` si no lo hubo), añadido una sola vez por turno en `_terminar`. `Caso.turnos` sigue siendo la suma (R5). T008 en verde.
-- [ ] T010 [P] Tests de `comprobar_credencial` en `src/due_diligence/test_configuracion.py` (R8, FR-006):
+- [x] T009 Implementar en `src/due_diligence/coordinador.py`: el parámetro `observador` de `Caso` (lo pasa a `RegistroEventos`) y `turnos_por_turno: list[int | None]`, con un valor por turno (el `num_turns` del `ResultMessage`, o `None` si no lo hubo), añadido una sola vez por turno en `_terminar`. `Caso.turnos` sigue siendo la suma (R5). T008 en verde.
+- [x] T010 [P] Tests de `comprobar_credencial` en `src/due_diligence/test_configuracion.py` (R8, FR-006):
   - devuelve `MENSAJE_SIN_CLAVE` sin `ANTHROPIC_API_KEY`, con valor vacío y con solo espacios;
   - devuelve `None` con la clave ficticia y sin alternativas;
   - devuelve `MENSAJE_OTRA_CREDENCIAL` con cada una de `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` y `CLAUDE_CODE_USE_VERTEX`, aunque la clave esté;
   - ningún mensaje contiene el valor de la clave;
   - con `entorno=None` lee `os.environ` (con `monkeypatch`).
-- [ ] T011 Implementar `comprobar_credencial(entorno=None) -> str | None`, `MENSAJE_SIN_CLAVE` y `MENSAJE_OTRA_CREDENCIAL` en `src/due_diligence/configuracion.py` (R8).
-  - `MENSAJE_SIN_CLAVE` explica que hay que copiar `.env.example` como archivo de entorno en la raíz, poner la clave en `ANTHROPIC_API_KEY` y reiniciar.
+- [x] T011 Implementar `comprobar_credencial(entorno=None) -> str | None`, `MENSAJE_SIN_CLAVE` y `MENSAJE_OTRA_CREDENCIAL` en `src/due_diligence/configuracion.py` (R8).
+  - `MENSAJE_SIN_CLAVE` explica que hay que copiar la plantilla de variables de entorno de la raíz (la que termina en «.example») como archivo de entorno local, poner la clave en `ANTHROPIC_API_KEY` y reiniciar, y remite al README. **No nombra el archivo** (desviación D1 del plan).
   - `MENSAJE_OTRA_CREDENCIAL` nombra la variable alternativa encontrada y pide quitarla, porque la aplicación solo usa `ANTHROPIC_API_KEY`.
 
   T010 en verde.
-- [ ] T012 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «simulación, observador, turnos por turno y credencial (#11)».
+- [x] T012 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «simulación, observador, turnos por turno y credencial (#11)».
 
 **Checkpoint**: la base está lista. Ningún comportamiento visible ha cambiado todavía.
 
@@ -272,7 +272,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
     - el turno se guarda con `resumen_del_turno`, se borra el `pendiente` y `st.rerun()`;
   - sin `while`.
 
-  T034 en verde.
+  Adaptar `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada` (`test_sin_control_propio.py`) a `["__main__.py", "chat.py"]`, los dos puntos de entrada de R8, y anotarlo en T032. T034 en verde.
 - [ ] T036 `uv run ruff format .`, `uv run ruff check .` y `uv run pytest`; commit «aplicación de chat (#11)».
 
 ---
@@ -329,7 +329,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 |------|--------|-----------|------------------------|
 | _(se completa en T023, T025, T027 y T028)_ | | | |
 
-Línea base (T003): _pendiente_.
+Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado.
 
 ## Resultados de la validación (T044)
 

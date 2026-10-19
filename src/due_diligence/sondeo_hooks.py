@@ -3,7 +3,8 @@
 Repite lo que `research.md` del #7 y del #8 midió con el SDK 0.2.168 y comprueba que los hooks
 del caso (`HooksDelCaso`) funcionan en una sesión real. Desde el #8 mide también `updatedInput`
 (e), los turnos de un reintento (f) y la cobertura que los hooks del caso ponen en
-`registrar_informe` y `escalar_a_cumplimiento` (g4 y g5):
+`registrar_informe` y `escalar_a_cumplimiento` (g4 y g5). Desde el #10 mide la continuación del
+coordinador con `resume` (g6: contexto, `Stop` reanudado y turnos por turno):
 
     uv run python -m due_diligence.sondeo_hooks
 
@@ -411,12 +412,17 @@ ENTRADA_INFORME = {
     "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
     "cobertura": "completa",
 }
+# El resumen al oficial en el formato del #10 (R6): las afirmaciones del #9 y los conflictos; el
+# comercio, la cobertura, la causa y los conflictos los sustituye el hook.
 ENTRADA_ESCALAMIENTO = {
-    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS"},
-    "hallazgos": {"registro": {"contenido": "Existe", "fuente": "Registro ficticio"}},
+    "comercio": {"identificador": "CO-TV-0001", "nombre": "Tienda Verde SAS", "verificado": True},
+    "hallazgos": {
+        "registro": [{"texto": "Existe.", "fuente": FUENTE_DEL_SONDEO, "fecha": "2026-09-30"}]
+    },
     "cobertura": "completa",
     "causa_escalamiento": "sondeo",
     "accion_recomendada": "ninguna, es un sondeo",
+    "conflictos": {"resumen": "Sin conflictos entre las fuentes registrales.", "lista": []},
 }
 
 
@@ -596,6 +602,92 @@ async def _cobertura_del_caso() -> list[Medicion]:
     return mediciones
 
 
+# ------------------------------------------------------- continuación con resume (#10, R1)
+
+CODIGO_DEL_SONDEO = "ZETA-41"
+PRIMER_TURNO = f"Recuerda el código {CODIGO_DEL_SONDEO}. Responde solo «ok»."
+SEGUNDO_TURNO = (
+    "¿Qué código te di antes? Llama a la herramienta anotar con ese código y después responde "
+    "con el código."
+)
+TURNOS_DEL_TURNO_REANUDADO = 2
+
+
+async def _reanudacion() -> list[Medicion]:
+    """(g6) Una segunda `query()` con `resume` continúa la sesión del coordinador (R1 del #10).
+
+    Mide que conserva el contexto, que el `Stop` y la herramienta en proceso (de un servidor creado
+    de nuevo) se ejecutan en el turno reanudado y que `num_turns` es del turno, no acumulado.
+    """
+    anotados: list[str] = []
+    paradas: list[int] = []
+
+    def servidor():
+        @tool("anotar", "Anota un código en el caso.", {"codigo": str})
+        async def anotar(args: dict[str, Any]) -> dict[str, Any]:
+            anotados.append(str(args.get("codigo")))
+            return {"content": [{"type": "text", "text": "anotado"}]}
+
+        return {"caso": create_sdk_mcp_server("caso", tools=[anotar])}
+
+    async def parada(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        paradas.append(len(anotados))
+        return permitir()
+
+    def opciones(resume: str | None):
+        hooks = {"Stop": [HookMatcher(hooks=[parada])]}
+        base = _opciones(["mcp__caso__anotar"], servidor(), hooks)
+        return dataclasses.replace(base, resume=resume)
+
+    primera = await _correr_con_sesion(PRIMER_TURNO, opciones(None))
+    paradas_del_primero = len(paradas)
+    segunda = await _correr_con_sesion(SEGUNDO_TURNO, opciones(primera.session_id))
+    concluyente = bool(primera.session_id) and bool(segunda.traza.llamadas)
+    return [
+        Medicion(
+            "g6_contexto",
+            "la query reanudada conserva el contexto del primer turno",
+            [CODIGO_DEL_SONDEO],
+            anotados if concluyente else NO_CONCLUYENTE,
+        ),
+        Medicion(
+            "g6_stop_reanudado",
+            "el Stop se ejecuta en el turno reanudado",
+            True,
+            len(paradas) > paradas_del_primero if concluyente else NO_CONCLUYENTE,
+        ),
+        Medicion(
+            "g6_turnos_por_turno",
+            "num_turns del turno reanudado es del turno, no acumulado",
+            TURNOS_DEL_TURNO_REANUDADO,
+            segunda.traza.num_turns if concluyente else NO_CONCLUYENTE,
+        ),
+    ]
+
+
+@dataclass
+class _ConSesion:
+    traza: Traza
+    session_id: str | None
+
+
+async def _correr_con_sesion(prompt: str, opciones: Any) -> _ConSesion:
+    """Como `_correr`, guardando además el `session_id` del `ResultMessage`."""
+    traza = Traza()
+    session_id = None
+    try:
+        async for mensaje in query(prompt=prompt, options=opciones):
+            if isinstance(mensaje, AssistantMessage):
+                traza.llamadas += [b.name for b in mensaje.content if isinstance(b, ToolUseBlock)]
+            elif isinstance(mensaje, ResultMessage):
+                traza.subtype = mensaje.subtype
+                traza.num_turns = mensaje.num_turns
+                session_id = mensaje.session_id
+    except ResultError as error:
+        traza.excepcion = type(error).__name__
+    return _ConSesion(traza, session_id)
+
+
 # ------------------------------------------------------------------ punto de entrada
 
 EXPERIMENTOS = (
@@ -607,6 +699,7 @@ EXPERIMENTOS = (
     _updated_input,
     _turnos_de_reintento,
     _cobertura_del_caso,
+    _reanudacion,
 )
 
 

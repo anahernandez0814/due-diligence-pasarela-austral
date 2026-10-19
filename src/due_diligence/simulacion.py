@@ -192,9 +192,45 @@ class EjecutorSimulado:
             return resultado_listas()
         if frente is Frente.NOTICIAS:
             # Como el subagente real, consulta con el dato que recibe en su contexto (#10, FR-027:
-            # la cobertura de noticias distingue el comercio consultado).
-            return resultado_frente(frente, [consulta(frente, _argumentos_del_contexto(contexto))])
+            # la cobertura de noticias distingue el comercio consultado), y encuentra N-0001.
+            argumentos = _argumentos_del_contexto(contexto)
+            return resultado_frente(
+                frente, [consulta(frente, argumentos, respuesta_noticias(argumentos))]
+            )
         return resultado_frente(frente)
+
+
+# La noticia N-0001 de los datos ficticios del #5: solo menciona a `CO-AM-0005` (caso d, US3-6).
+NOTICIA_N_0001 = {
+    "id": "N-0001",
+    "titular": "Almacén Mirador Norte inaugura una sucursal en la zona industrial",
+    "url": "https://diario.example/noticias/n-0001",
+}
+_MENCIONADO_EN_N_0001 = {"identificador": "CO-AM-0005", "nombre": "Almacén Mirador Norte SAS"}
+
+
+def respuesta_noticias(argumentos: Mapping[str, Any]) -> dict[str, Any] | None:
+    """La respuesta de noticias con N-0001 si se busca al comercio que menciona; si no, `None`.
+
+    Como la pasarela real: por identificador o por nombre completo normalizado, nunca parcial.
+    """
+    identificador, nombre = argumentos.get("identificador"), argumentos.get("nombre")
+    menciona = (
+        isinstance(identificador, str)
+        and igual_identificador(identificador, _MENCIONADO_EN_N_0001["identificador"])
+    ) or (isinstance(nombre, str) and igual(nombre, _MENCIONADO_EN_N_0001["nombre"]))
+    if not menciona:
+        return None
+    return {
+        "resultado": "coincidencias",
+        "hechos": [
+            {
+                "contenido": dict(NOTICIA_N_0001),
+                "metadatos": {"fuente": "Diario Ficticio del Sur", "fecha": "2026-03-18"},
+            }
+        ],
+        "metadatos": {"fuentes": ["Diario Ficticio del Sur"], "fecha": "2026-09-30"},
+    }
 
 
 def _argumentos_del_contexto(contexto: str) -> dict[str, str]:
@@ -538,7 +574,9 @@ class PasarelaSimulada:
 
     def _noticias(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.consultas_a_fuentes.append(("noticias", dict(entrada)))
-        return respuesta_del_contrato("sin_coincidencias", [], [], fuente="Noticias Ficticias")
+        return respuesta_noticias(entrada) or respuesta_del_contrato(
+            "sin_coincidencias", [], [], fuente="Noticias Ficticias"
+        )
 
     def _riesgo(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.consultas_a_fuentes.append(("riesgo", dict(entrada)))

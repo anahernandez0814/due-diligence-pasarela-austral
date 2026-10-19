@@ -159,6 +159,7 @@ def test_los_experimentos_del_8_se_ejecutan_despues_de_los_del_7():
         "_updated_input",
         "_turnos_de_reintento",
         "_cobertura_del_caso",
+        "_reanudacion",  # g6, #10 (R1): `resume` continúa la sesión del coordinador
     ]
 
 
@@ -227,3 +228,37 @@ def test_el_tipo_esperado_de_la_entrada_parcial_es_el_que_da_la_pasarela():
 def test_los_turnos_esperados_son_un_reintento_y_dos_devoluciones():
     # Primer intento, reintento, tres respuestas finales (dos devueltas por el Stop): R2 del #8.
     assert sondeo_hooks.TURNOS_REINTENTO_Y_DOS_DEVOLUCIONES == 5
+
+
+# ---------------------------------------------------------- #10: g5 en el formato nuevo y g6 (T049)
+
+
+def test_la_entrada_de_g5_tiene_la_forma_del_resumen_al_oficial():
+    from servidor_mcp.informe import validar_resumen
+
+    assert validar_resumen(sondeo_hooks.ENTRADA_ESCALAMIENTO) == []
+
+
+def test_el_hook_del_escalamiento_acepta_la_entrada_de_g5_y_pone_la_cobertura_del_codigo():
+    # Sin el modelo: si el hook la rechazara, g5 mediría «no concluyente» en vez de la cobertura.
+    import asyncio
+
+    from due_diligence.cobertura import calcular_cobertura
+
+    estado, hooks = sondeo_hooks.caso_del_sondeo_de_cobertura()
+    (matcher,) = [m for m in hooks.coordinador()["PreToolUse"] if m.matcher == sondeo_hooks.ESCALAR]
+    entrada = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": sondeo_hooks.ESCALAR,
+        "tool_input": sondeo_hooks.ENTRADA_ESCALAMIENTO,
+        "tool_use_id": "t1",
+    }
+    salida = asyncio.run(matcher.hooks[0](entrada, "t1", None))
+    sustituida = salida["hookSpecificOutput"]["updatedInput"]
+    assert sustituida["cobertura"] == calcular_cobertura(estado).lineas()
+    assert sustituida["hallazgos"] == sondeo_hooks.ENTRADA_ESCALAMIENTO["hallazgos"]
+
+
+def test_g6_espera_el_contexto_el_stop_reanudado_y_los_turnos_por_turno():
+    assert sondeo_hooks.CODIGO_DEL_SONDEO in sondeo_hooks.PRIMER_TURNO
+    assert sondeo_hooks.TURNOS_DEL_TURNO_REANUDADO == 2  # la herramienta y la respuesta final

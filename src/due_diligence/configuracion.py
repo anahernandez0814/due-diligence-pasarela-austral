@@ -62,8 +62,11 @@ MAX_REINTENTOS_POR_FRENTE = 1
 # Presupuesto de turnos del peor caso razonable del coordinador (#8, R2, medido: cada reintento y
 # cada devolución del `Stop` gastan un turno). Los pasos fijos son las filas de la tabla de R2 que
 # no dependen de otras constantes: tres frentes juntos, listas, categoría con otra entrada, listas
-# rechazada por la carrera, escalar, informe rechazado, informe aceptado y respuesta final.
-PASOS_FIJOS_PEOR_CASO = 8
+# rechazada por la carrera, escalar, informe rechazado, informe aceptado y respuesta final. El #10
+# (R10) añade dos: el escalamiento rechazado por la forma y corregido, y noticias vuelto a delegar
+# con el comercio identificado (FR-027). El presupuesto es **por turno**: cada mensaje del analista
+# es una `query()` y su `num_turns` no se acumula (#10, R1, medido).
+PASOS_FIJOS_PEOR_CASO = 10
 
 
 def presupuesto_turnos_peor_caso(max_reintentos: int, max_cierres: int) -> int:

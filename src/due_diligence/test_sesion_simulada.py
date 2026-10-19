@@ -619,3 +619,57 @@ def test_el_mensaje_de_resultado_acepta_otro_session_id():
 
     assert mensaje_de_resultado().session_id == "sesion-de-prueba"
     assert mensaje_de_resultado(session_id="otra").session_id == "otra"
+
+
+# ---------------------------------------------- #10: noticias N-0001 y el resumen (T044, R12)
+
+
+def test_la_pasarela_simulada_devuelve_n_0001_solo_para_el_comercio_que_menciona():
+    pasarela = _pasarela()
+    for entrada in ({"identificador": "CO-AM-0005"}, {"nombre": "Almacén Mirador Norte SAS"}):
+        respuesta = _llamar(pasarela, "buscar_noticias", entrada)
+        assert respuesta["resultado"] == "coincidencias"
+        (hecho,) = respuesta["hechos"]
+        assert hecho["contenido"]["id"] == "N-0001"
+        assert hecho["metadatos"] == {"fuente": "Diario Ficticio del Sur", "fecha": "2026-03-18"}
+    for entrada in ({"nombre": "Almacén Mirador SAS"}, {"identificador": "CO-AM-0004"}):
+        assert _llamar(pasarela, "buscar_noticias", entrada)["resultado"] == "sin_coincidencias"
+
+
+def test_el_ejecutor_simulado_consulta_noticias_con_su_contexto_y_encuentra_n_0001():
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import EjecutorSimulado
+
+    ejecutor = EjecutorSimulado()
+    norte = asyncio.run(
+        ejecutor(Frente.NOTICIAS, "Consulta con el identificador «CO-AM-0005».", _opciones(None))
+    )
+    (consulta,) = norte.consultas
+    assert consulta.argumentos == {"identificador": "CO-AM-0005"}
+    assert consulta.resultado["hechos"][0]["contenido"]["id"] == "N-0001"
+    ambiguo = asyncio.run(
+        ejecutor(Frente.NOTICIAS, "Consulta con el nombre «Almacén Mirador SAS».", _opciones(None))
+    )
+    assert ambiguo.consultas[0].argumentos == {"nombre": "Almacén Mirador SAS"}
+    assert ambiguo.consultas[0].resultado["resultado"] == "sin_coincidencias"
+
+
+def test_el_resumen_del_caso_es_valido_y_solo_cita_fuentes_admitidas():
+    from due_diligence.estado import EstadoCaso
+    from due_diligence.frentes import Frente
+    from due_diligence.simulacion import consulta, resumen_del_caso
+    from servidor_mcp.informe import validar_resumen
+
+    estado = EstadoCaso()
+    estado.agregar_consultas([consulta(Frente.REGISTRO)])
+    resumen = resumen_del_caso(estado, "Revisar.")
+    assert resumen["accion_recomendada"] == "Revisar."
+    assert set(resumen) == {
+        "comercio",
+        "hallazgos",
+        "cobertura",
+        "causa_escalamiento",
+        "accion_recomendada",
+        "conflictos",
+    }
+    assert validar_resumen(resumen) == []

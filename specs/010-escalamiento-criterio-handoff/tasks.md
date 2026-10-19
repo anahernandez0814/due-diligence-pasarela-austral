@@ -341,12 +341,12 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 **Objetivo**: los casos (a), (b) y (d) de extremo a extremo, la línea de comandos con la continuación y el presupuesto de turnos.
 
-- [ ] T044 [P] Simulación (R12) en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py`:
+- [X] T044 [P] Simulación (R12) en `src/due_diligence/simulacion.py`, con sus tests en `test_sesion_simulada.py`:
   - `resumen_del_caso(estado, accion)`, el par de `informe_del_caso`: una afirmación por consulta válida **del comercio** (R7);
   - `("escalar",)` arma un resumen válido y `("escalar_con", entrada)` envía la entrada tal cual;
   - `PasarelaSimulada._escalar` valida con `validar_resumen`;
   - `_noticias` devuelve N-0001 (con su fuente y fecha ficticias) para `CO-AM-0005` o «Almacén Mirador Norte SAS» y `sin_coincidencias` para lo demás.
-- [ ] T045 Casos de extremo a extremo en `src/due_diligence/test_casos_escalamiento.py` (nuevo; FR-023, SC-001, SC-003), con el `CoordinadorSimulado` y la `PasarelaSimulada`:
+- [X] T045 Casos de extremo a extremo en `src/due_diligence/test_casos_escalamiento.py` (nuevo; FR-023, SC-001, SC-003), con el `CoordinadorSimulado` y la `PasarelaSimulada`:
   - **(a)** `CO-TV-0001` con «suplementos dietarios»: escalado con la causa «categoría de alto riesgo», informe `decide_cumplimiento` vigente y `escalamiento_registrado` antes de `informe_registrado`.
   - **(b)** `CO-TA-0002` con «tecnología y software»:
     - el guion intenta escalar, y se rechaza con `MOTIVO_SIN_CAUSA`;
@@ -360,7 +360,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - **(d) eligiendo `CO-AM-0004`**: noticias se conserva cubierto sin volver a delegar.
   - **FR-027 de extremo a extremo**: en el turno 2, con `CO-AM-0005`, un informe que cita la consulta de noticias del turno 1 se rechaza por I.4.
   - **Ninguna salida** (eventos, motivos y cobertura) contiene «Almacén Mirador Norte SAS» ni `PE-0005`.
-- [ ] T046 **Tests del #5 al #9 que cambian**, una tarea continua desde la fase 2 que se cierra aquí. Tabla con cada test, por qué cambia y cómo se adapta sin debilitarse (igualdades exactas):
+- [X] T046 **Tests del #5 al #9 que cambian**, una tarea continua desde la fase 2 que se cierra aquí. Tabla con cada test, por qué cambia y cómo se adapta sin debilitarse (igualdades exactas):
 
   | Test | Por qué cambia | Cómo se adapta |
   |------|----------------|----------------|
@@ -383,7 +383,10 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   | `test_reglas.py`: `_libro_con` y las ayudas con escalamientos | `escalamiento_cubre` cuenta solo el comercio actual (R8) y estos estados tienen `CO-TV-0001` identificado. | Los escalamientos llevan `CLAVE_TV`, la clave de su comercio; las aserciones no cambian. |
   | `test_reglas.py::test_sin_causas_una_recomendacion_que_no_habilita_se_acepta_sin_escalar`, ahora `…no_habilitar_se_acepta_sin_escalar_y_decide_cumplimiento_exige_escalar` | FR-004: `decide_cumplimiento` exige un escalamiento del comercio actual (D5 del #9). | `no_habilitar` sigue aceptándose igual; `decide_cumplimiento` pasa de `[]` al rechazo exacto, y con el escalamiento vuelve a `[]`. |
   | `test_hooks.py`: 11 tests del #8 y del #9 sobre cobertura, forma, fuentes y comercio del informe (las 625 combinaciones, los frentes cubiertos sin afirmación, el comercio pedido, los eventos de datos, etc.) | Usaban `decide_cumplimiento` como recomendación de relleno, sin escalar: FR-004 la rechaza. | Cambia solo la **entrada** a `no_habilitar`; lo que prueban (cobertura, forma, fuentes, comercio) no depende de la recomendación. |
-  | (el resto se rellena al implementar) | | |
+  | `test_configuracion.py`: `PASOS_FIJOS_PEOR_CASO`, el parametrizado del presupuesto y el valor actual | R10: dos pasos fijos más. | `8 → 10`; `(1, 3, 19) → 21`, `(0, 0, 8) → 10`, `(3, 5, 37) → 39`, `(2, 3, 27) → 29`; `== 21  # 19 hasta el #9`. La comparación con `MAX_TURNOS_SEGURIDAD` sigue. |
+  | `test_sondeo_hooks.py::test_los_experimentos_del_8_se_ejecutan_despues_de_los_del_7` | g6 (`_reanudacion`) se añade al final. | La lista exacta añade `_reanudacion`. |
+
+  **Tabla cerrada en T050.** Ningún test se borró; los que cambiaron conservan igualdades exactas o cambian solo su entrada.
 
   Se esperan, como mínimo:
   - los de `escalar_a_cumplimiento` con la forma vieja: `test_decisiones.py`, `test_servidor.py`, `test_hooks.py`, `test_casos_reglas.py`, `test_casos_cobertura.py`, `test_casos_informe.py` y `test_sesion_simulada.py`;
@@ -392,16 +395,22 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - el presupuesto de 19 a 21 en `test_configuracion.py`;
   - la limitación del #9 (T024);
   - las instrucciones en `test_coordinador.py` y `test_modo_demo.py`.
-- [ ] T047 Presupuesto (R10) en `src/due_diligence/configuracion.py`: `PASOS_FIJOS_PEOR_CASO = 10`, con el comentario de las dos filas nuevas (escalamiento rechazado y corregido, y noticias de nuevo). El test parametrizado de `test_configuracion.py` pasa a `(1, 3, 21), (0, 0, 10), (3, 5, 39), (2, 3, 29)`, y el del valor actual, a `== 21  # 19 hasta el #9`. El comentario dice que el presupuesto es por turno (R1, medido).
-- [ ] T048 [P] Línea de comandos (R12, FR-019, contrato) en `src/due_diligence/__main__.py`, con sus tests en `test_main.py`:
+- [X] T047 Presupuesto (R10) en `src/due_diligence/configuracion.py`: `PASOS_FIJOS_PEOR_CASO = 10`, con el comentario de las dos filas nuevas (escalamiento rechazado y corregido, y noticias de nuevo). El test parametrizado de `test_configuracion.py` pasa a `(1, 3, 21), (0, 0, 10), (3, 5, 39), (2, 3, 29)`, y el del valor actual, a `== 21  # 19 hasta el #9`. El comentario dice que el presupuesto es por turno (R1, medido).
+- [X] T048 [P] Línea de comandos (R12, FR-019, contrato) en `src/due_diligence/__main__.py`, con sus tests en `test_main.py`:
   - imprime «Esperando al analista: <motivo>» o «Sin espera del analista», y los escalamientos registrados con su id y sus causas (etiquetas fijas);
   - con espera y sin `--sin-continuar`, pregunta por la entrada estándar; con un texto, llama a `caso.continuar` y vuelve a imprimir; con una línea vacía o fin de entrada, termina;
   - con `--sin-continuar`, no pregunta;
   - los tests inyectan la entrada (función `leer`) y no usan la consola real.
-- [ ] T049 [P] Sondeo repetible en `src/due_diligence/sondeo_hooks.py`, con sus tests en `test_sondeo_hooks.py`:
+- [X] T049 [P] Sondeo repetible en `src/due_diligence/sondeo_hooks.py`, con sus tests en `test_sondeo_hooks.py`:
   - g5 (`ENTRADA_ESCALAMIENTO`) pasa al formato nuevo (afirmaciones, `accion_recomendada` y `conflictos`);
   - se añade g6, `resume`: dos `query()` con Haiku. La segunda reanuda la primera, ejecuta su `Stop` y `num_turns` es del turno. Es la medición de R1, repetible.
-- [ ] T050 Fase 8: ruff, la suite completa y la tabla de T046 cerrada. Commit «casos (a), (b) y (d), línea de comandos y presupuesto (#10)». **PARADA DE REVISIÓN B**:
+  **Notas de la fase 8**:
+  - T044: N-0001 sale de `respuesta_noticias`, compartida por la `PasarelaSimulada` y el `EjecutorSimulado` (las noticias de los casos de extremo a extremo vienen del ejecutor, no de la pasarela simulada).
+  - T045: los 8 casos pasaron al escribirlos (prueban piezas ya construidas). Con la mutación que quita la espera del `Stop` fallan 2; sin FR-027 en la cobertura, 1.
+  - T045, «ninguna salida contiene el nombre ni `PE-0005`»: los eventos `frente_inicio` del #6 llevan a propósito el contexto entregado al subagente. La comprobación cubre los eventos de reglas y de decisiones, los motivos del cierre y la cobertura.
+  - T048: `main(argumentos, leer=input)`; la conversación es recursiva (`_conversar`), sin `while`.
+  - T049: g6 (`_reanudacion`) repite la medición de R1; g5 usa el resumen del #10.
+- [X] T050 Fase 8: ruff, la suite completa y la tabla de T046 cerrada. Commit «casos (a), (b) y (d), línea de comandos y presupuesto (#10)». **PARADA DE REVISIÓN B**:
   - Claude se detiene y resume a la analista el bloque B (escalamiento con criterio, resumen al oficial, casos de extremo a extremo y línea de comandos), con la tabla de T046;
   - no sigue hasta su visto bueno.
 

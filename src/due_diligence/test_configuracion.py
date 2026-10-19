@@ -275,17 +275,19 @@ def test_el_limite_de_devoluciones_del_cierre_es_tres_y_menor_que_el_de_turnos()
 
 def test_un_reintento_por_frente_y_ocho_pasos_fijos():
     assert configuracion.MAX_REINTENTOS_POR_FRENTE == 1
-    assert configuracion.PASOS_FIJOS_PEOR_CASO == 8
+    # 10 desde el #10 (R10): escalamiento rechazado por la forma y corregido, y noticias de nuevo.
+    assert configuracion.PASOS_FIJOS_PEOR_CASO == 10
 
 
 @pytest.mark.parametrize(
-    ("reintentos", "cierres", "esperado"), [(1, 3, 19), (0, 0, 8), (3, 5, 37), (2, 3, 27)]
+    ("reintentos", "cierres", "esperado"), [(1, 3, 21), (0, 0, 10), (3, 5, 39), (2, 3, 29)]
 )
 def test_el_presupuesto_se_calcula_con_los_reintentos_y_las_devoluciones(
     reintentos, cierres, esperado
 ):
-    # 8 pasos fijos + un reintento por frente (4 frentes) + un informe nuevo por cada reintento
-    # posible (#9, R8: un reintento con éxito invalida el informe) + devoluciones del Stop (R2).
+    # 10 pasos fijos (8 hasta el #9) + un reintento por frente (4 frentes) + un informe nuevo por
+    # cada reintento posible (#9, R8: un reintento con éxito invalida el informe) + devoluciones
+    # del Stop (R2).
     assert configuracion.presupuesto_turnos_peor_caso(reintentos, cierres) == esperado
 
 
@@ -293,7 +295,7 @@ def test_el_presupuesto_actual_sale_de_las_constantes_y_cabe_en_max_turns():
     esperado = configuracion.presupuesto_turnos_peor_caso(
         configuracion.MAX_REINTENTOS_POR_FRENTE, configuracion.MAX_CIERRES_IMPEDIDOS
     )
-    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO == esperado == 19  # 15 hasta el #8
+    assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO == esperado == 21  # 19 hasta el #9
     assert configuracion.PRESUPUESTO_TURNOS_PEOR_CASO <= configuracion.MAX_TURNOS_SEGURIDAD
 
 

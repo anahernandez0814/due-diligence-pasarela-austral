@@ -79,8 +79,9 @@ claude plugin marketplace remove piezas-reutilizables
 - **Base de fusión**: la primera referencia que exista entre `origin/HEAD` (su rama),
   `origin/main`, `origin/master`, `main` y `master`. Si no hay ninguna: `CONTEXTO INCOMPLETO`.
 - **Spec Kit**:
-  - si existe `specs/`, la regla del #4 (rama `NNN-nombre` y una sola carpeta `specs/NNN-*`), y su
-    fallo es `CONTEXTO INCOMPLETO`;
+  - si existe `specs/`, una rama `NNN-nombre` con una sola carpeta `specs/NNN-*` es el ticket;
+    fuera de esa convención, con constitución es `CONTEXTO INCOMPLETO` (la regla del #4) y sin
+    ella `Ticket: no aplica (sin constitución, <motivo>)`;
   - si no existe, `Ticket: no aplica`.
 
 ## 6. Este repositorio

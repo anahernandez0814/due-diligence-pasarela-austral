@@ -99,12 +99,15 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - base `main` sin remoto;
   - `origin/HEAD`;
   - sin `specs/` (`Ticket: no aplica`, sin `CONTEXTO INCOMPLETO`);
-  - con `specs/` y rama `NNN-nombre`;
-  - con `specs/` y la rama sin el patrón (incompleto);
-  - con y sin constitución;
+  - con `specs/`, con y sin constitución, rama con y sin el patrón `NNN-nombre`, y cero, una y dos carpetas `specs/NNN-*`:
+    - una rama `NNN-nombre` con una sola carpeta es el ticket, haya o no constitución;
+    - fuera de esa convención, con constitución es `CONTEXTO INCOMPLETO`, y sin ella `Ticket: no aplica (sin constitución, <motivo>)`, que no es incompleto (FR-006);
+  - `specs/` usada para otra cosa, sin constitución y con una rama `NNN-título`: `Ticket: no aplica` y sin `CONTEXTO INCOMPLETO`;
   - lista agrupada y diff omitido por el umbral;
   - error inesperado: código 0 con `CONTEXTO INCOMPLETO`;
   - no importa `veredicto` ni `comun` (FR-002 y FR-006).
+
+  **Corrección tras la revisión del PR**: la primera versión trataba cualquier `specs/` como Spec Kit y daba `CONTEXTO INCOMPLETO` sin constitución, en contra de FR-006 y US1-5.
 - [x] T013 [US1] Crear `plugins/guardas-y-revision/scripts/contexto_revision.py` según R6 y el data-model, y dejar T012 en verde.
 - [x] T014 [P] [US1] Crear `plugins/guardas-y-revision/agents/revisor-codigo.md`, la versión genérica del agente del #4 (R7, contrato §4). Herramientas `Read`, `Grep` y `Glob`, y la misma línea `RESUMEN`.
 - [x] T015 [P] [US1] Crear `plugins/guardas-y-revision/skills/revisar-codigo/SKILL.md` (R4 y R7, contrato §3):

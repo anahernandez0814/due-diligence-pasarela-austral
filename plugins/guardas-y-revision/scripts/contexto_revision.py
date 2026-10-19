@@ -151,18 +151,28 @@ def _agrupada(archivos: list) -> list[str]:
 
 
 def _ticket(raiz: Path, rama: str) -> tuple[str | None, str | None, str | None]:
-    """`(carpeta, línea, motivo de incompleto)` del ticket según la convención de Spec Kit."""
+    """`(carpeta, línea, motivo de incompleto)` del ticket según la convención de Spec Kit.
+
+    Una rama `NNN-nombre` con una sola carpeta `specs/NNN-*` es el ticket. Si no la hay, solo
+    deja el contexto incompleto cuando el repositorio tiene constitución: sin ella, `specs/`
+    puede servir para otra cosa, el ticket no aplica y la cobertura no baja.
+    """
     if not (raiz / "specs").is_dir():
         return None, "Ticket: no aplica (el repositorio no usa una carpeta specs/)", None
     coincidencia = _RAMA_DE_TICKET.fullmatch(rama)
+    carpetas: list[Path] = []
     if coincidencia is None:
-        return None, None, f"la rama «{rama or '(ninguna)'}» no sigue el patrón NNN-nombre"
-    numero = coincidencia.group(1)
-    carpetas = sorted(p for p in (raiz / "specs").glob(f"{numero}-*") if p.is_dir())
-    if len(carpetas) != 1:
-        return None, None, f"no hay exactamente una carpeta specs/{numero}-* del ticket"
-    carpeta = f"specs/{carpetas[0].name}/"
-    return carpeta, f"Ticket: {carpeta}", None
+        motivo = f"la rama «{rama or '(ninguna)'}» no sigue el patrón NNN-nombre"
+    else:
+        numero = coincidencia.group(1)
+        carpetas = sorted(p for p in (raiz / "specs").glob(f"{numero}-*") if p.is_dir())
+        motivo = f"no hay exactamente una carpeta specs/{numero}-* del ticket"
+    if len(carpetas) == 1:
+        carpeta = f"specs/{carpetas[0].name}/"
+        return carpeta, f"Ticket: {carpeta}", None
+    if (raiz / CONSTITUCION).is_file():
+        return None, None, motivo
+    return None, f"Ticket: no aplica (sin constitución, {motivo})", None
 
 
 def _diffs_de_movidos(raiz: Path, base: str, archivos: list, salida: str, umbral: int) -> str:

@@ -202,38 +202,71 @@ def test_sin_carpeta_specs_el_ticket_no_aplica_y_no_es_incompleto(tmp_path):
     assert "CONTEXTO INCOMPLETO" not in salida
 
 
-def test_con_specs_y_rama_de_ticket(tmp_path):
-    repo = repositorio(tmp_path, rama="123-demo")
-    for nombre in ("spec.md", "plan.md", "tasks.md"):
-        escribir(repo, f"specs/123-demo/{nombre}", f"# {nombre}\n")
-    escribir(repo, ".specify/memory/constitution.md", "# Constitución\n")
+NUMERO = "123"
+TICKET = f"{NUMERO}-demo"
+CONSTITUCION = ".specify/memory/constitution.md"
+SIN_PATRON = "la rama «cambio» no sigue el patrón NNN-nombre"
+SIN_CARPETA = f"no hay exactamente una carpeta specs/{NUMERO}-* del ticket"
+# (rama, carpetas specs/…, motivo) de los casos que no siguen la convención.
+FUERA_DE_LA_CONVENCION = [
+    pytest.param("cambio", [TICKET], SIN_PATRON, id="rama-sin-patron"),
+    pytest.param(TICKET, [], SIN_CARPETA, id="ninguna-carpeta"),
+    pytest.param(TICKET, [f"{NUMERO}-uno", f"{NUMERO}-dos"], SIN_CARPETA, id="dos-carpetas"),
+]
+
+
+def con_specs(tmp_path: Path, rama: str, carpetas: list[str], constitucion: bool) -> Path:
+    """Repositorio con `specs/` (siempre con la carpeta de otro ticket) y las `carpetas` dadas."""
+    repo = repositorio(tmp_path, rama=rama)
+    escribir(repo, "specs/999-otro/spec.md", "# spec\n")
+    for carpeta in carpetas:
+        for nombre in ("spec.md", "plan.md", "tasks.md"):
+            escribir(repo, f"specs/{carpeta}/{nombre}", f"# {nombre}\n")
+    if constitucion:
+        escribir(repo, CONSTITUCION, "# Constitución\n")
     confirmar(repo, "documentos")
-    salida = contexto_revision.construir(repo)
-    assert "Ticket: specs/123-demo/" in salida
-    assert "  - specs/123-demo/spec.md" in salida
-    assert "Constitución: .specify/memory/constitution.md" in salida
-    assert "specs/123-demo/plan.md [referencia]" in salida
+    return repo
+
+
+@pytest.mark.parametrize(
+    "constitucion", [True, False], ids=["con-constitucion", "sin-constitucion"]
+)
+def test_rama_de_ticket_con_una_carpeta_usa_el_ticket(tmp_path, constitucion):
+    salida = contexto_revision.construir(con_specs(tmp_path, TICKET, [TICKET], constitucion))
+    assert f"Ticket: specs/{TICKET}/" in salida
+    assert f"  - specs/{TICKET}/spec.md" in salida
+    assert f"specs/{TICKET}/plan.md [referencia]" in salida
+    esperada = f"Constitución: {CONSTITUCION}" if constitucion else "Constitución: no aplica"
+    assert esperada in salida
     assert "CONTEXTO INCOMPLETO" not in salida
 
 
-def test_con_specs_y_rama_sin_el_patron_es_incompleto(tmp_path):
-    repo = repositorio(tmp_path, rama="cambio")
-    escribir(repo, "specs/123-demo/spec.md", "# spec\n")
-    confirmar(repo, "documentos")
-    salida = contexto_revision.construir(repo)
-    assert lineas(salida, "CONTEXTO INCOMPLETO: la rama «cambio» no sigue el patrón NNN-nombre")
-
-
-@pytest.mark.parametrize("carpetas", [[], ["123-uno", "123-dos"]], ids=["ninguna", "dos"])
-def test_sin_exactamente_una_carpeta_del_ticket_es_incompleto(tmp_path, carpetas):
-    repo = repositorio(tmp_path, rama="123-demo")
-    escribir(repo, "specs/999-otro/spec.md", "# spec\n")
-    for carpeta in carpetas:
-        escribir(repo, f"specs/{carpeta}/spec.md", "# spec\n")
-    confirmar(repo, "documentos")
-    salida = contexto_revision.construir(repo)
-    assert lineas(salida, "CONTEXTO INCOMPLETO: no hay exactamente una carpeta specs/123-*")
+@pytest.mark.parametrize(("rama", "carpetas", "motivo"), FUERA_DE_LA_CONVENCION)
+def test_con_constitucion_fuera_de_la_convencion_es_incompleto(tmp_path, rama, carpetas, motivo):
+    salida = contexto_revision.construir(con_specs(tmp_path, rama, carpetas, constitucion=True))
+    assert lineas(salida, "CONTEXTO INCOMPLETO:") == [f"CONTEXTO INCOMPLETO: {motivo}"]
     assert not lineas(salida, "Ticket:")
+
+
+@pytest.mark.parametrize(("rama", "carpetas", "motivo"), FUERA_DE_LA_CONVENCION)
+def test_sin_constitucion_fuera_de_la_convencion_el_ticket_no_aplica(
+    tmp_path, rama, carpetas, motivo
+):
+    salida = contexto_revision.construir(con_specs(tmp_path, rama, carpetas, constitucion=False))
+    assert lineas(salida, "Ticket:") == [f"Ticket: no aplica (sin constitución, {motivo})"]
+    assert "CONTEXTO INCOMPLETO" not in salida
+
+
+def test_specs_para_otra_cosa_sin_constitucion_no_reduce_la_cobertura(tmp_path):
+    # Otro equipo usa specs/ para sus tests, y GitHub crea la rama NNN-título desde el issue.
+    repo = repositorio(tmp_path, rama=f"{NUMERO}-arreglar-el-login")
+    escribir(repo, "specs/test_login.py", "def test_login():\n    assert True\n")
+    escribir(repo, "specs/datos/usuarios.json", "[]\n")
+    confirmar(repo, "tests")
+    salida = contexto_revision.construir(repo)
+    assert lineas(salida, "Ticket:") == [f"Ticket: no aplica (sin constitución, {SIN_CARPETA})"]
+    assert "Constitución: no aplica" in salida
+    assert "CONTEXTO INCOMPLETO" not in salida
 
 
 # --- Umbral -------------------------------------------------------------------------------

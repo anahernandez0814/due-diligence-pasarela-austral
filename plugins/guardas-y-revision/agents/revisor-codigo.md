@@ -25,7 +25,7 @@ El cambio de la rama frente a su base de fusión, en tres frentes:
    identificador (por ejemplo `FR-012`). Si el contexto trae una constitución, sus principios
    no se negocian.
 
-   Si el contexto dice `Ticket: no aplica`, el repositorio no usa una carpeta de specs: revisa
+   Si el contexto dice `Ticket: no aplica`, no hay spec del ticket según la convención: revisa
    calidad y errores, di en el reporte que no hubo spec contra la que contrastar y **no**
    reduzcas la cobertura por eso.
 

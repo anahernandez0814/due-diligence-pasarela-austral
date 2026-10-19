@@ -250,8 +250,13 @@ Se imprime `Base: <sha> (git merge-base HEAD <referencia>)`. Si no hay ninguna, 
 `CONTEXTO INCOMPLETO`.
 
 **Spec Kit, opcional**:
-- **Si existe `specs/`**: se aplica la regla del #4 (rama `NNN-nombre` y una sola carpeta
-  `specs/NNN-*`), y su fallo es `CONTEXTO INCOMPLETO`.
+- **Si existe `specs/`**: una rama `NNN-nombre` con una sola carpeta `specs/NNN-*` es el ticket.
+  Fuera de esa convención:
+  - **con constitución**, se aplica la regla del #4 y su fallo es `CONTEXTO INCOMPLETO`;
+  - **sin constitución**, `Ticket: no aplica (sin constitución, <motivo>)`, que no es incompleto
+    (FR-006): otro equipo puede usar `specs/` para otra cosa, y GitHub crea ramas `NNN-título`
+    desde los issues. Corregido tras la revisión del PR: la primera versión daba `CONTEXTO
+    INCOMPLETO` con solo la carpeta.
 - **Si no existe**: `Ticket: no aplica (el repositorio no usa una carpeta specs/)`, que no es
   incompleto (FR-006).
 - **La constitución**: `.specify/memory/constitution.md` si existe; si no, `Constitución: no aplica`.

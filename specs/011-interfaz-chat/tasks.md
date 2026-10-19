@@ -297,7 +297,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## Fase 10: Validación
 
-- [ ] T040 Q1 de [quickstart.md](quickstart.md): `uv run ruff format --check .`, `uv run ruff check .` y `uv run pytest`, en verde, con el número de tests anotado junto a la línea base de T003.
+- [x] T040 Q1 de [quickstart.md](quickstart.md): `uv run ruff format --check .`, `uv run ruff check .` y `uv run pytest`, en verde, con el número de tests anotado junto a la línea base de T003.
 - [ ] T041 [MANUAL] Q3: arranque sin clave en el chat y en la línea de comandos (Q6, último punto). Sin modelo.
 - [ ] T042 [MANUAL] Q4: los siete casos desde el chat con el modelo real, con el coste de cada uno. Se observan los indicadores **en vivo** durante el turno (C2) y, si T033 no lo pudo probar, la entrada deshabilitada (C1). La analista valora SC-005 con (a), (d) y (e).
 - [ ] T043 [MANUAL] Q5 y Q6: la hora de Colombia en los indicadores; la línea de comandos con los turnos de este turno y el aviso ante la línea vacía. **Condicional (A1)**: el caso (b) sin «un día después de hoy» solo se comprueba si la prueba cae después de las 19:00 de Colombia; si no, se anota como no ejecutado.
@@ -336,7 +336,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 | `test_main.py:424` `test_una_linea_vacia_o_el_fin_de_la_entrada_terminan_sin_continuar` | terminaba sin continuar | lo mismo, y además `AVISO_D in salida` | FR-005. Se añade una aserción; no se quita ninguna. |
 | `test_sin_control_propio.py:136` `test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada` | `llamadas == ["__main__.py"]` | `llamadas == ["__main__.py", "chat.py"]` | R8: el chat es el segundo punto de entrada. La lista sigue siendo **exacta** (indicación de la analista): cualquier otro módulo que cargue el entorno hace fallar el test. |
 
-Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado.
+Línea base (T003): 4606 tests en verde, en `c60a722` con `streamlit` 1.66.0 instalado. Tras el bloque B (T040): 4706 en verde, ruff limpio (233 archivos formateados).
 
 ## Resultados de la validación (T044)
 

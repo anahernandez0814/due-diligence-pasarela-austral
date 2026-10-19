@@ -23,9 +23,9 @@ GUARDA = (
 )
 
 if __name__ == "__main__":
-    # Sin PYTHONUTF8, Windows escribe stderr en cp1252 y el mensaje llegaría roto.
-    sys.stderr.reconfigure(encoding="utf-8")
     try:
+        # Sin PYTHONUTF8, Windows escribe stderr en cp1252 y el mensaje llegaría roto.
+        sys.stderr.reconfigure(encoding="utf-8")
         sys.path.insert(0, str(GUARDA.parent))
         runpy.run_path(str(GUARDA), run_name="__main__")
     except SystemExit:

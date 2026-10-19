@@ -255,11 +255,11 @@ def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
 
 
 def main() -> int:
-    for flujo in (sys.stdout, sys.stderr):
-        reconfigurar = getattr(flujo, "reconfigure", None)
-        if reconfigurar is not None:
-            reconfigurar(encoding="utf-8")
     try:
+        for flujo in (sys.stdout, sys.stderr):
+            reconfigurar = getattr(flujo, "reconfigure", None)
+            if reconfigurar is not None:
+                reconfigurar(encoding="utf-8")
         print(construir(raiz()), end="")
     except Exception as error:  # noqa: BLE001 - siempre sale con 0
         print(f"{MARCA}\nCONTEXTO INCOMPLETO: error inesperado ({type(error).__name__})")

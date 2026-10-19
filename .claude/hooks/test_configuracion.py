@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+from test_plugin_repositorio import acepta
 
 RAIZ = Path(__file__).resolve().parents[2]
 CONFIGURACION = json.loads((RAIZ / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -113,9 +114,9 @@ def test_cada_script_existe(evento):
 
 
 def test_powershell_esta_en_los_matchers_de_respaldo():
-    por_script = {script(h): m.split("|") for m, h in entradas("PreToolUse")}
+    por_script = {script(h): m for m, h in entradas("PreToolUse")}
     for guarda in ("guarda_secretos.py", "guarda_datos.py", "guarda_spec_previa.py"):
-        assert "PowerShell" in por_script[guarda]
+        assert acepta(por_script[guarda], "PowerShell"), guarda
 
 
 # --- Denegaciones ---------------------------------------------------------------------

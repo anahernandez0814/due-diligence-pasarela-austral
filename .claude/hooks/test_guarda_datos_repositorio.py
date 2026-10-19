@@ -7,9 +7,11 @@ También el archivo de compatibilidad `.claude/hooks/guarda_datos.py`.
 """
 
 import ast
+import io
 import json
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import sys
@@ -150,6 +152,20 @@ def test_compatibilidad_falla_cerrado_si_la_guarda_no_carga(tmp_path):
     resultado = ejecutar(copia, datos, tmp_path)
     assert resultado.returncode == 2
     assert "No se pudo ejecutar la guarda del plugin (ModuleNotFoundError)" in resultado.stderr
+
+
+def test_compatibilidad_falla_cerrado_si_no_puede_reconfigurar_stderr(monkeypatch):
+    class StderrQueFalla(io.StringIO):
+        def reconfigure(self, **_):
+            raise OSError("sin reconfigurar")
+
+    stderr = StderrQueFalla()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    with pytest.raises(SystemExit) as salida:
+        runpy.run_path(str(COMPATIBILIDAD), run_name="__main__")
+    assert salida.value.code == 2
+    assert "No se pudo ejecutar la guarda del plugin (OSError)" in stderr.getvalue()
 
 
 def test_compatibilidad_falla_cerrado_si_la_guarda_no_decide(tmp_path):

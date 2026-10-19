@@ -1,6 +1,7 @@
 """Pruebas de contexto_revision.py: el contexto que la skill inyecta antes del revisor."""
 
 import ast
+import io
 import os
 import subprocess
 import sys
@@ -223,6 +224,18 @@ def test_con_specs_y_rama_sin_el_patron_es_incompleto(tmp_path):
     assert lineas(salida, "CONTEXTO INCOMPLETO: la rama «cambio» no sigue el patrón NNN-nombre")
 
 
+@pytest.mark.parametrize("carpetas", [[], ["123-uno", "123-dos"]], ids=["ninguna", "dos"])
+def test_sin_exactamente_una_carpeta_del_ticket_es_incompleto(tmp_path, carpetas):
+    repo = repositorio(tmp_path, rama="123-demo")
+    escribir(repo, "specs/999-otro/spec.md", "# spec\n")
+    for carpeta in carpetas:
+        escribir(repo, f"specs/{carpeta}/spec.md", "# spec\n")
+    confirmar(repo, "documentos")
+    salida = contexto_revision.construir(repo)
+    assert lineas(salida, "CONTEXTO INCOMPLETO: no hay exactamente una carpeta specs/123-*")
+    assert not lineas(salida, "Ticket:")
+
+
 # --- Umbral -------------------------------------------------------------------------------
 
 
@@ -275,6 +288,19 @@ def test_error_inesperado_sale_con_0_y_contexto_incompleto(monkeypatch, capsys):
     assert capsys.readouterr().out.splitlines() == [
         MARCA,
         "CONTEXTO INCOMPLETO: error inesperado (RuntimeError)",
+    ]
+
+
+def test_si_no_puede_reconfigurar_los_flujos_sale_con_0_y_contexto_incompleto(monkeypatch, capsys):
+    class StderrQueFalla(io.StringIO):
+        def reconfigure(self, **_):
+            raise OSError("sin reconfigurar")
+
+    monkeypatch.setattr(sys, "stderr", StderrQueFalla())
+    assert contexto_revision.main() == 0
+    assert capsys.readouterr().out.splitlines() == [
+        MARCA,
+        "CONTEXTO INCOMPLETO: error inesperado (OSError)",
     ]
 
 

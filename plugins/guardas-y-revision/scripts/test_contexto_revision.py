@@ -124,6 +124,73 @@ def test_fuera_de_un_repositorio_git(tmp_path):
     ]
 
 
+# --- Archivos movidos -------------------------------------------------------------------
+
+CONTENIDO_MOVIDO = "".join(f"linea_{i} = {i}\n" for i in range(10))
+
+
+@pytest.fixture
+def movidos(tmp_path):
+    """La rama mueve `igual.py` tal cual a `lib/`, mueve y cambia `cambia.py` y borra `viejo.py`."""
+    repo = repositorio(tmp_path)
+    git(repo, "switch", "-q", "main")
+    for nombre in ("igual.py", "cambia.py", "viejo.py"):
+        escribir(repo, nombre, CONTENIDO_MOVIDO if nombre != "viejo.py" else "a = 1\n")
+    confirmar(repo, "archivos que se moverán")
+    git(repo, "switch", "-q", "cambio")
+    git(repo, "merge", "-q", "--no-edit", "main")
+    (repo / "lib").mkdir()
+    (repo / "igual.py").rename(repo / "lib" / "igual.py")
+    (repo / "cambia.py").unlink()
+    (repo / "viejo.py").unlink()
+    escribir(repo, "lib/cambia.py", CONTENIDO_MOVIDO.replace("linea_5 = 5", "linea_5 = 50"))
+    confirmar(repo, "mueve y borra")
+    return repo
+
+
+def fila(salida: str, ruta: str) -> str:
+    coincidencias = [x for x in salida.splitlines() if f"  {ruta}" in x and "+" in x]
+    assert coincidencias, f"{ruta} no aparece en la lista"
+    return coincidencias[0]
+
+
+def test_un_movido_sin_cambios_aparece_en_su_ruta_nueva(movidos):
+    salida = contexto_revision.construir(movidos)
+    assert fila(salida, "lib/igual.py") == (
+        "R  +0 -0  lib/igual.py [movido desde igual.py, similitud 100 %]"
+    )
+    assert "Diff de lib/igual.py" not in salida
+
+
+def test_un_movido_con_cambios_trae_su_diff(movidos):
+    salida = contexto_revision.construir(movidos)
+    linea = fila(salida, "lib/cambia.py")
+    assert linea.startswith("R  +1 -1  lib/cambia.py [movido desde cambia.py, similitud ")
+    assert "Diff completo:" in salida
+    assert "+linea_5 = 50" in salida
+
+
+def test_un_eliminado_de_verdad_sigue_marcado_y_los_movidos_no(movidos):
+    salida = contexto_revision.construir(movidos)
+    assert [x for x in salida.splitlines() if "[eliminado]" in x] == [
+        "D  +0 -1  viejo.py [eliminado]"
+    ]
+
+
+def test_si_el_diff_completo_no_cabe_va_el_de_cada_movido_con_cambios(movidos):
+    escribir(movidos, "app/grande.py", "x = 1\n" * 3000)
+    confirmar(movidos, "grande")
+    salida = contexto_revision.construir(movidos)
+    assert "Diff omitido" in salida
+    assert "Diff de lib/cambia.py (movido desde cambia.py):" in salida
+    assert "+linea_5 = 50" in salida
+    assert "Diff de lib/igual.py" not in salida
+    justo = len(salida[: salida.index("Diff de lib/cambia.py")].encode("utf-8")) + 10
+    salida = contexto_revision.construir(movidos, umbral=justo)
+    assert "Diff de lib/cambia.py (movido desde cambia.py) omitido: no cabe en el umbral" in salida
+    assert "+linea_5 = 50" not in salida
+
+
 # --- Spec Kit, opcional ---------------------------------------------------------------
 
 

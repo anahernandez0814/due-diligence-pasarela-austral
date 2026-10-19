@@ -66,6 +66,69 @@ def test_los_eliminados_van_marcados(repo):
     assert "[eliminado]" not in linea(salida, "src/a.py")
 
 
+# --- Archivos movidos -------------------------------------------------------------------
+
+CONTENIDO_MOVIDO = "".join(f"linea_{i} = {i}\n" for i in range(10))
+
+
+@pytest.fixture
+def movidos(repo):
+    """`repo` con `igual.py` movido tal cual a `lib/` y `cambia.py` movido y con un cambio."""
+    git(repo, "switch", "-q", "main")
+    escribir(repo, "igual.py", CONTENIDO_MOVIDO)
+    escribir(repo, "cambia.py", CONTENIDO_MOVIDO)
+    confirmar(repo, "añade los archivos que se moverán")
+    git(repo, "push", "-q", "origin", "main")
+    git(repo, "switch", "-q", "004-demo")
+    git(repo, "merge", "-q", "main")
+    (repo / "lib").mkdir()
+    (repo / "igual.py").rename(repo / "lib" / "igual.py")
+    (repo / "cambia.py").unlink()
+    escribir(repo, "lib/cambia.py", CONTENIDO_MOVIDO.replace("linea_5 = 5", "linea_5 = 50"))
+    confirmar(repo, "mueve los archivos")
+    return repo
+
+
+def test_un_movido_sin_cambios_aparece_en_su_ruta_nueva_y_no_como_eliminado(movidos):
+    salida = preparar_revision.construir(movidos)
+    fila = linea(salida, "lib/igual.py")
+    assert fila.startswith("R  +0 -0  lib/igual.py")
+    assert "[movido desde igual.py, similitud 100 %]" in fila
+    assert "Diff de lib/igual.py" not in salida
+    assert [x for x in salida.splitlines() if "[eliminado]" in x] == [linea(salida, "viejo.py")]
+
+
+def test_un_movido_con_cambios_trae_su_diff(movidos):
+    salida = preparar_revision.construir(movidos)
+    fila = linea(salida, "lib/cambia.py")
+    assert fila.startswith("R  +1 -1  lib/cambia.py [movido desde cambia.py, similitud ")
+    assert "+linea_5 = 50" in salida
+    assert "[eliminado]" not in fila
+
+
+def test_si_el_diff_completo_no_cabe_va_el_de_cada_movido_con_cambios(movidos):
+    escribir(movidos, "src/grande.py", "".join(f"valor_{i} = {i}\n" for i in range(2000)))
+    confirmar(movidos, "archivo grande")
+    salida = preparar_revision.construir(movidos, 6_000)
+    assert "Diff omitido" in salida
+    assert "valor_1999" not in salida
+    assert "Diff de lib/cambia.py (movido desde cambia.py):" in salida
+    assert "+linea_5 = 50" in salida
+    assert "Diff de lib/igual.py" not in salida
+    assert len(salida.encode("utf-8")) <= 6_000
+
+
+def test_si_el_diff_del_movido_no_cabe_lo_dice(movidos):
+    escribir(movidos, "src/grande.py", "".join(f"valor_{i} = {i}\n" for i in range(2000)))
+    confirmar(movidos, "archivo grande")
+    salida = preparar_revision.construir(movidos, 6_000)
+    justo = len(salida[: salida.index("Diff de lib/cambia.py")].encode("utf-8")) + 10
+    salida = preparar_revision.construir(movidos, justo)
+    assert "Diff de lib/cambia.py (movido desde cambia.py) omitido: no cabe en el umbral" in salida
+    assert "+linea_5 = 50" not in salida
+    assert "[movido desde cambia.py" in linea(salida, "lib/cambia.py")
+
+
 def test_los_documentos_del_ticket_van_como_referencia(repo):
     salida = preparar_revision.construir(repo)
     assert "[referencia]" in linea(salida, "specs/004-demo/spec.md")

@@ -103,6 +103,10 @@ una tarjeta, un NIT o una cédula reales, di el tipo y la ubicación y no repita
 - **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`,
   `.claude/rules/` y los archivos generados por herramientas (`uv.lock`). Léelos por secciones
   o con `Grep` para contrastar; leerlos a medias no reduce la cobertura.
+- **Un archivo movido** aparece en su ruta nueva con la marca
+  `[movido desde <ruta anterior>, similitud N %]`. Léelo en la ruta nueva: cuenta como
+  cualquier otro y, si se movió con cambios, el contexto trae su diff o dice que no cabe. La
+  ruta anterior ya no existe y no cuenta como archivo sin leer.
 - **No ejecutar tests nunca reduce la cobertura**: no tienes Bash. No lo reportes como falta
   ni como hallazgo.
 - **Un archivo que cuenta y que leíste a medias** lo nombras en el reporte, con

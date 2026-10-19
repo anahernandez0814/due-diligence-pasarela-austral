@@ -35,7 +35,8 @@ lo generó: no ves su conversación, y todo lo que necesitas está aquí o lo le
      contra la que contrastar; eso **no** reduce la cobertura.
 3. **Revisa el cambio.** Si la salida trae el diff completo, revísalo. Si dice que el diff se
    omitió por tamaño, lee con `Read` y `Grep` los archivos de la lista, empezando por los de
-   código y configuración. Sigue el plan de lectura y las reglas de cobertura de tu rol.
+   código y configuración. Sigue el plan de lectura y las reglas de cobertura de tu rol. Un
+   archivo marcado `[movido desde …]` se lee en su ruta nueva; la anterior no se busca.
 4. **Reporta** en español, con el formato de tu rol: cada hallazgo en una línea con su
    severidad (`BLOQUEANTE` o `SUGERENCIA`), su ubicación `archivo:línea` y su razón. No
    corrijas ni propongas parches. No repitas valores sensibles: di el tipo y la ubicación.

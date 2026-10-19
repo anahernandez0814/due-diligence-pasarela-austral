@@ -227,3 +227,36 @@ def test_la_franja_muestra_los_modos_activos():
 
 def test_sin_modos_no_hay_franja():
     assert [w.value for w in _app(fabrica_a()).warning] == []
+
+
+# ------------------------------------------- revisión de la parada B (mutaciones J4 y J8)
+
+
+def test_un_caso_incompleto_nunca_se_pinta_como_completo_y_uno_completo_si():
+    # J4, I.5: tampoco en color. El caso (f) va en `st.warning` y sin ningún `st.success`.
+    guion, resultados, solicitud = guion_y_resultados_f()
+    at = _enviar(_app(Fabrica([guion], lambda: resultados)), solicitud)
+    assert [s.value for s in at.success] == []
+    (estado,) = [w.value for w in at.warning if "Estado del caso" in w.value]
+    assert "Incompleto" in estado
+
+    fabrica = fabrica_a()
+    at = _enviar(_app(fabrica), SOLICITUD_A)
+    assert fabrica.casos[0].completo
+    assert [s.value for s in at.success] == ["**Estado del caso**: Completo."]
+    assert not [w.value for w in at.warning if "Estado del caso" in w.value]
+
+
+def test_sin_sesion_que_continuar_la_conversacion_lo_explica_sin_traza():
+    # J8: el turno anterior no dejó `session_id`; `continuar` lanza `CasoSinSesion`.
+    fabrica = fabrica_d()
+    at = _enviar(_app(fabrica), SOLICITUD_D)
+    (caso,) = fabrica.casos
+    caso.session_id = None
+    at = _enviar(at, "CO-AM-0004")
+    (_, primero), (_, segundo) = _turnos(at)
+    textos = _textos(segundo)
+    assert _contiene(textos, presentacion.MENSAJE_SIN_SESION)
+    assert not _contiene(textos, "Traceback") and not _contiene(textos, "CasoSinSesion")
+    assert caso.estado.mensajes == [SOLICITUD_D]  # no llegó a empezar el turno
+    assert len(fabrica.casos) == 1

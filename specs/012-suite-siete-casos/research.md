@@ -14,16 +14,17 @@ error con el que terminó.
 
 - **Concurrencia**: un `asyncio.Semaphore` con `PASARELA_E2E_PARALELO`, por defecto 7: todos a la
   vez. Con 7, en el peor momento conviven unos 28 procesos del CLI (el coordinador y hasta tres
-  subagentes por caso, porque listas espera al registro) *(a medir: memoria y tiempo en la primera
-  ejecución)*.
+  subagentes por caso, porque listas espera al registro) (medido en T027: sin problemas de memoria
+  y 85 s).
 - **Tiempo límite por caso**: `asyncio.timeout(240)`, en segundos. Un caso colgado falla con
   «tiempo agotado» sin retener a los demás, y el grupo termina por debajo de 5 minutos aunque un
   caso no responda. El caso (d) cuenta sus dos turnos dentro del mismo límite.
 - **Independencia**: `gather(..., return_exceptions=True)`. El fallo de un caso no cancela a los
   otros; su test falla con el error y los demás se evalúan.
 - **Tiempo esperado**: el del caso más lento (de 1 a 3 minutos por turno con Opus 5.5; el caso (d)
-  tiene dos turnos) más el arranque. *(a medir: la primera ejecución completa fija el número del
-  README.)*
+  tiene dos turnos) más el arranque.
+- **Medido (T027, 2026-10-19)**: con los 7 a la vez, el grupo tardó **85 s** y el caso más lento,
+  el (d) con sus dos turnos, 82 s. No hubo problemas de memoria, de límite de tasa ni reintentos.
 
 **Por qué**: siete casos seguidos tardarían de 7 a 21 minutos. En un solo bucle no hace falta
 ninguna dependencia nueva, el coste se suma en un solo sitio (R8) y la selección por `-k` funciona
@@ -38,7 +39,7 @@ sin más (R3).
 ## R2. Si el servicio limita la tasa
 
 **Decisión**: la suite **no reintenta**. El CLI ya reintenta los 429 y 529 con espera exponencial
-antes de rendirse *(a medir: si en la primera ejecución aparece algún reintento, se anota)*. Si se
+antes de rendirse (en T027 no apareció ningún límite de tasa ni reintento). Si se
 agotan:
 
 - el `ResultMessage` del turno llega con error, o el SDK lanza la excepción, y el `Caso` clasifica
@@ -147,8 +148,11 @@ Dos tests deterministas en `test_observacion.py`:
    - solo importa `pytest` y `due_diligence.observacion`;
    - no nombra `Caso`, `respuesta`, `detalle`, `resumen`, `hallazgos`, `accion_recomendada`,
      `texto` ni `mensajes`, ni como atributo ni como cadena;
-   - no usa `in`, `startswith` ni expresiones regulares sobre cadenas que no sean constantes del
-     código importadas de `observacion` (por ejemplo, `MOTIVO_ESPERA_IDENTIFICADOR`).
+   - no usa `startswith`, `endswith`, `find`, `split`, `lower` ni `upper`, ni importa `re`;
+   - no busca una cadena con `in`, salvo para comprobar que pertenece a una colección escrita en
+     el propio test (una lista, una tupla, un conjunto o una comprensión).
+
+   El guarda tiene su test de mutación: cada forma prohibida, en un fragmento, lo hace fallar.
 
 Si alguien añade una verificación sobre el texto, falla `uv run pytest`, sin la clave.
 
@@ -162,6 +166,8 @@ Si alguien añade una verificación sobre el texto, falla `uv run pytest`, sin l
   frente. Un frente delegado dos veces cuenta solo su última ejecución. Se declara en el README.
 - Los números de las (como máximo) dos ejecuciones completas se anotan en `tasks.md`, en el
   quickstart (Q3) y, redondeados, en el README.
+- **Medido (T027)**: 1,10 USD en total; por caso, de 0,09 USD (e) a 0,24 USD (d, dos turnos). Una
+  sola ejecución completa: pasó entera, así que la segunda del presupuesto no se usó.
 
 ## R9. La interrupción de la interfaz durante un hook (FR-008)
 
@@ -231,6 +237,9 @@ Si alguien añade una verificación sobre el texto, falla `uv run pytest`, sin l
      como siempre.
    - Al cerrar la `query()`, el SDK cancela sus tareas, incluidos los subagentes en curso, y cierra
      el CLI. Ninguna acción pendiente llega a ejecutarse.
+   - Si la interrupción llegara desde la propia `query()` y no desde un hook, `_turno` la trata
+     igual: turno `ANOMALA`, `interrumpido` y la misma excepción (añadido en la implementación,
+     con su test).
    - `asyncio.run` relanza la interrupción en el hilo del script. En `chat.py`, `_ejecutar_turno`
      la atrapa solo para:
      - guardar el turno en el historial como interrumpido;
@@ -335,8 +344,14 @@ N-0001, `respuesta_noticias` devuelve `None`, y `consulta` usa `respuesta_del_co
 - `consulta()` sigue con su valor por defecto para los demás frentes;
 - un test nuevo fija la fuente en el hecho y en los metadatos;
 - los tests que dependían de la fuente anterior se adaptan con igualdades exactas y se listan en
-  `tasks.md` *(a buscar en la implementación: un primer barrido no encontró ninguno que compare la
-  fuente de noticias)*.
+  `tasks.md`.
+
+**Resultado (T022)**:
+- un test del caso (g) citaba las noticias con la fuente del registro mercantil y solo pasaba por
+  el error del simulador: es el tipo de error de procedencia (I.4) que FR-009 quería destapar. Se
+  adaptó con la fuente del diario;
+- `PasarelaSimulada._noticias` usa la misma `respuesta_noticias`, en vez de su fuente propia
+  «Noticias Ficticias», con la forma del contrato real.
 
 ## R11. Tiempo de la suite determinista
 
@@ -345,6 +360,8 @@ Medido el 2026-10-19 en el equipo de la analista: **4711 tests en 264 s (4:24)**
 `--durations=25`, tardó 278 s (4:38). Los más lentos son los tests de las guardas de
 `.claude/hooks/` que crean repositorios git de prueba: 1 a 3 s cada uno, unos 45 s entre los 25. El
 resto del tiempo se reparte entre los miles de tests rápidos.
+
+**Resultado (T031)**: 4781 tests en 277,8 s (4:37), por debajo de 4:45; no se tocó ningún test. Lo más lento sigue siendo `.claude/hooks/`.
 
 **Decisión**: medir con `--durations` después de la implementación. Si el grupo pasa de 4:45, se
 aceleran los tests más lentos sin quitar aserciones, o se declara la desviación. El README da el

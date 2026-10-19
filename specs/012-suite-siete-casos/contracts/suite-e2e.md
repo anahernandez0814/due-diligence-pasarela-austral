@@ -5,7 +5,7 @@
 | Grupo | Comando | Clave | Coste | Tiempo |
 |-------|---------|-------|-------|--------|
 | Determinista | `uv run pytest` | no | 0 | < 5 min (4:24 medido antes del ticket, R11) |
-| Punta a punta | `uv run pytest -m e2e -rs` | sí | ≈ 1 a 2,5 USD *(a medir)* | < 5 min *(a medir)* |
+| Punta a punta | `uv run pytest -m e2e -rs` | sí | 1,10 USD medido (T027) | 85 s medido (T027) |
 | Un caso | `uv run pytest -m e2e -rs -k caso_d` | sí | el de un caso | el de un caso |
 
 - `uv run pytest` **nunca** selecciona un test `e2e`, tenga o no la clave (R4).

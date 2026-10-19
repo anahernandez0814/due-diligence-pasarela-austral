@@ -48,8 +48,12 @@ escalamientos)`, con los documentos que aceptó la pasarela:
 - **FrenteObservado**: `cubierto: bool` y `causa: str | None`, un valor de `Causa`.
 - **EsperaObservada**: `clase: str` (`identificador`, `nombre` o `categoria`) y `motivo: str`, que
   es una constante de `reglas.py`.
-- **ComercioObservado**: `identificador: str | None` y `nombre: str | None`.
+- **ComercioObservado**: `identificador: str | None`, `nombre: str | None` y `verificado: bool` (si quedó identificado de forma unívoca en el registro).
 - **Metricas**: `coste_usd: float | None`, `turnos: tuple[int | None, ...]` y `duracion_s: float`.
+
+### Reexportaciones
+
+`observacion.py` reexporta lo que los tests e2e necesitan comparar, para que no importen nada más: `MOTIVO_ESPERA_*`, las etiquetas de causa (`CAUSA_*`), `TIPO_BLOQUEO_REGLA` y dos comparadores de datos ficticios normalizados, `mismo_nombre` y `mismo_identificador` (los de `servidor_mcp.normalizar`).
 
 ### Reglas
 
@@ -63,7 +67,7 @@ escalamientos)`, con los documentos que aceptó la pasarela:
 
 ## CasoE2E
 
-La definición de un caso de punta a punta, en `test_e2e_casos.py`.
+La definición de un caso de punta a punta, en `conftest.py` (`CASOS`), junto a la fixture que lo ejecuta: así `test_e2e_casos.py` solo importa `pytest` y `observacion` (R7).
 
 | Campo | Tipo | Ejemplo |
 |-------|------|---------|

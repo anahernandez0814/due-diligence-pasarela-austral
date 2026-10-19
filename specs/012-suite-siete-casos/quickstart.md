@@ -39,6 +39,7 @@ uv run pytest -m e2e -rs
 - Si un caso falla, se repite solo ese caso (no cuenta como ejecución completa):
   `uv run pytest -m e2e -rs -k caso_e`.
 - Si el servicio limita la tasa, se repite con `PASARELA_E2E_PARALELO=3` y se anota.
+- **Resultado (T027, 2026-10-19)**: 7 de 7 en 85 s y 1,10 USD, en la primera ejecución.
 - `resultados/` no cambia: `git status` limpio tras la ejecución.
 
 ## Q4. Interrupción de la interfaz (FR-008), opcional y con el modelo

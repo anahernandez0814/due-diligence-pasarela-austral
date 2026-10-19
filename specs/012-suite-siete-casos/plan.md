@@ -43,7 +43,8 @@ dependencia nueva**: sin `pytest-xdist` ni `pytest-asyncio` (R1).
 
 **Performance Goals**: cada grupo en menos de 5 minutos.
 - Determinista: 4:24 y 4:38 en dos mediciones antes del ticket, con poco margen (R11).
-- e2e: el caso más lento más el arranque *(a medir)*.
+- e2e: el caso más lento más el arranque. **Medido**: 85 s y 1,10 USD con los 7 a la vez (T027).
+- Determinista al final: 4:37 con 4781 tests (T031).
 
 **Constraints**:
 - **Presupuesto**: como máximo dos ejecuciones e2e completas, de ≈ 1 a 2,5 USD cada una.
@@ -88,7 +89,7 @@ su comprobación en la implementación.
    - `return_exceptions=True`: un fallo no tumba a los demás.
    - **Trade-off**: una fixture propia en vez de `pytest-xdist`, a cambio de no añadir dependencias
      y de sumar el coste en un solo sitio. Con 7 casos a la vez conviven unos 28 procesos del CLI
-     *(memoria a medir en la primera ejecución)*.
+     (en T027 no hubo problemas de memoria: 85 s).
 2. **R2, límite de tasa**: la suite no reintenta, porque ya reintenta el CLI. Si se agota, el turno
    queda `ANOMALA` y el test falla con la clasificación, el coste y el `-k` para repetirlo. Si se
    repite, se baja a `PASARELA_E2E_PARALELO=3`; el README advierte que así puede pasar de 5
@@ -185,7 +186,7 @@ su comprobación en la implementación.
    pero no con el transporte real. Si la escritura se cortara, el CLI se cierra en el mismo
    momento, ninguna acción llega a ejecutarse y el bloqueo ya está en la traza.
 4. **Memoria con 7 casos a la vez**: si no alcanza, se baja `PASARELA_E2E_PARALELO` y el tiempo
-   puede pasar de 5 minutos. Se mide y se anota.
+   puede pasar de 5 minutos. En T027 no hubo problemas, con 85 s.
 5. **Coste aproximado**: un frente delegado dos veces cuenta su última ejecución.
 6. **El tiempo determinista**, cerca de 5 minutos (R11).
 

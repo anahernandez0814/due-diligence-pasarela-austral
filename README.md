@@ -167,8 +167,11 @@ representante legal tal como los devolvió el registro. Las decisiones están en
   #7); `PASARELA_MODELO_COORDINADOR` y `PASARELA_MODELO_SUBAGENTES` permiten cambiarlo, por ejemplo a
   `claude-sonnet-5-5`. El límite de 30 turnos es solo una protección de seguridad: el ciclo termina
   por la razón de parada del modelo.
-- **Credenciales**: el modelo se autentica con las variables de entorno que carga `__main__` desde el
-  archivo de entorno local con python-dotenv. Los tests no lo cargan ni llaman al modelo.
+- **Credenciales**: el modelo se autentica con `ANTHROPIC_API_KEY`, que cargan desde `.env` (con
+  python-dotenv, sin pisar el entorno) los dos puntos de entrada: `__main__` y la interfaz de chat.
+  Los dos la comprueban con la misma función (`comprobar_credencial`, desde el #11) y se detienen
+  con un mensaje si falta o si hay otra credencial que se usaría en su lugar; la línea de comandos
+  sale entonces con 2. Los tests no cargan el archivo ni llaman al modelo.
 - **Sondeo de aislamiento** (manual, gasta tokens): `uv run python -m due_diligence.sondeo_aislamiento`
   comprueba que ni `CLAUDE.md` ni los hooks del repositorio llegan a los agentes;
   `--herramientas` lista las herramientas iniciales de cada agente y `--limite` provoca el límite de turnos.
@@ -216,7 +219,8 @@ representante legal tal como los devolvió el registro. Las decisiones están en
     valores, cada uno con su fuente y su fecha, sin elegir.
   - Todo caso con comercio identificado, o con el registro caído, termina con un informe vigente
     registrado; si hay que escalar, el informe va después del escalamiento.
-  - `python -m due_diligence` muestra la hora de los eventos en UTC, la acción intentada de cada
+  - `python -m due_diligence` muestra la hora de los eventos en UTC (la traza y los registros
+    siguen en UTC; desde el #11 la interfaz de chat las muestra en hora de Colombia), la acción intentada de cada
     bloqueo, el bloque **Conflictos** (el resumen y una línea por dato con cada valor, su fuente y
     su fecha) y los **Informes registrados**, con su recomendación y si siguen vigentes.
   - Para ver el registro caído: `PASARELA_FALLA_REGISTRO=1 uv run python -m due_diligence
@@ -238,7 +242,73 @@ representante legal tal como los devolvió el registro. Las decisiones están en
     línea vacía, termina. `--sin-continuar` no pregunta:
     `uv run python -m due_diligence --sin-continuar "<solicitud>"`.
   - **La salida** muestra si el caso espera al analista y los **Escalamientos registrados**, con
-    su id y sus causas.
+    su id y sus causas. Desde el #11, los turnos del coordinador son los del último turno frente
+    al límite de 30, y una línea vacía con la espera abierta avisa de que el coordinador sigue
+    esperando antes de terminar.
+
+## Interfaz de chat
+
+La forma normal de usar el sistema (ticket #11,
+[specs/011-interfaz-chat/](specs/011-interfaz-chat/)). Se ven los mensajes del analista y las
+respuestas del coordinador, turno a turno, y lo que hizo el sistema en cada turno.
+
+**Arrancar.** Copie `.env.example` como `.env` en la raíz y ponga su clave en `ANTHROPIC_API_KEY`
+(solo en `.env`, que git ignora). Después:
+
+```bash
+uv run streamlit run src/due_diligence/chat.py
+```
+
+Sin la clave, o con una credencial alternativa definida (`ANTHROPIC_AUTH_TOKEN`,
+`CLAUDE_CODE_USE_BEDROCK` o `CLAUDE_CODE_USE_VERTEX`), la aplicación se detiene con un mensaje
+que explica qué hacer; reiníciela después de corregirlo. Cada caso gasta tokens: del orden de 0,15
+a 0,30 USD con Opus 5.5.
+
+**Qué se ve en cada turno**, en este orden:
+1. El mensaje del analista.
+2. Los **indicadores**, a medida que ocurren dentro de «El coordinador está trabajando…»:
+   - ➡️ cada delegación en un subagente, con su frente;
+   - ⛔ cada bloqueo de una regla, con la regla, la acción intentada y el motivo;
+   - 📝 cada informe registrado;
+   - 🚩 cada escalamiento a cumplimiento;
+   - ⚠️ el fallo de un control de las reglas.
+
+   Salen de la traza del caso, no del texto del modelo, con la hora de Colombia.
+3. La **cobertura** de los cuatro frentes calculada por el sistema, con el motivo de los que no
+   se cubrieron, y el **estado del caso** (completo, incompleto o esperando al analista), siempre
+   **antes** de la respuesta del coordinador.
+4. La respuesta del coordinador y los turnos que usó en ese turno, frente al límite de 30.
+
+**Varios turnos.** Si el caso espera al analista (el identificador, un nombre válido o la
+categoría) o quedó incompleto, el mensaje siguiente continúa el mismo caso. Si el caso quedó
+**completo**, el mensaje siguiente inicia uno nuevo y la conversación lo dice. «Caso nuevo»
+empieza otro en cualquier momento. Un mensaje con solo espacios mientras el coordinador espera se
+avisa y no se envía. Recargar la página pierde el caso.
+
+**Modos de simulación.** Se activan con una variable de entorno **al arrancar**; para cambiarlos
+hay que detener la aplicación y arrancarla de nuevo. Cuando hay uno activo, una franja lo indica
+arriba de la conversación.
+
+| Modo | PowerShell | bash |
+|------|-----------|------|
+| Caída de noticias (caso f) | `$env:PASARELA_FALLA_NOTICIAS="1"; uv run streamlit run src/due_diligence/chat.py` | `PASARELA_FALLA_NOTICIAS=1 uv run streamlit run src/due_diligence/chat.py` |
+| Demostración de hooks (caso e) | `$env:PASARELA_MODO_DEMO_HOOKS="1"; uv run streamlit run src/due_diligence/chat.py` | `PASARELA_MODO_DEMO_HOOKS=1 uv run streamlit run src/due_diligence/chat.py` |
+
+En PowerShell la variable queda en la sesión: quítela con `Remove-Item Env:PASARELA_FALLA_NOTICIAS`
+(o `Env:PASARELA_MODO_DEMO_HOOKS`) antes de volver al arranque normal. El modo de demostración
+quita las reglas de las instrucciones del coordinador, pero **no desactiva ningún hook**.
+
+**Los siete casos de prueba desde el chat.** Pulse «Caso nuevo» entre uno y otro.
+
+| Caso | Arranque | Mensaje(s) | Lo que se debe ver |
+|------|----------|-----------|--------------------|
+| (a) alto riesgo | normal | «Necesito el due diligence de Tienda Verde SAS, identificador ficticio CO-TV-0001. Quieren procesar ventas en línea de suplementos dietarios. ¿Lo podemos habilitar esta semana?» | Delegaciones a los cuatro subagentes, «Caso escalado a cumplimiento» por categoría de alto riesgo, informe `decide_cumplimiento`, estado «Completo». |
+| (b) bajo riesgo sin hallazgos | normal | «Necesito el due diligence de Taller Aurora SAS, identificador ficticio CO-TA-0002, categoría ropa y accesorios.» | Cuatro frentes cubiertos, informe `habilitar`, ningún escalamiento, estado «Completo». |
+| (c) representante en listas | normal | «Necesito el due diligence de Panadería Luna Nueva SAS, identificador ficticio CO-PL-0003, categoría restaurantes y alimentos preparados.» | Escalamiento por la coincidencia del representante legal en listas; el informe no recomienda `habilitar`. |
+| (d) nombres casi idénticos | normal | 1) «Necesito el due diligence de Almacén Mirador SAS, categoría ropa y accesorios.» 2) «CO-AM-0004» | Turno 1: sin delegación a listas, estado «Esperando al analista» (identificador). Turno 2: delegación a listas e informe registrado. |
+| (e) listas sin identificación | demostración de hooks | el mensaje 1) del caso (d) | Franja del modo de demostración; si el coordinador intenta consultar listas, «Bloqueado por la regla I.1»; estado «Esperando al analista». |
+| (f) noticias caído | caída de noticias | el mensaje del caso (b) | Franja de la caída; la cobertura dice «noticias: no cubierto» con el motivo, antes de la respuesta; estado «Incompleto». |
+| (g) fechas distintas | normal | «Necesito el due diligence de Ferretería Río Fino SAS, identificador ficticio CO-RF-0006, categoría electrodomésticos.» | Informe con el conflicto de la fecha de constitución: las dos fechas, cada una con su fuente, sin elegir. |
 
 ## Guardas del entorno
 

@@ -279,7 +279,7 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
 
 ## Fase 9: User Story 4, documentación (Priority: P2)
 
-- [ ] T037 [P] [US4] Sección «Interfaz de chat» en `README.md` (FR-010):
+- [x] T037 [P] [US4] Sección «Interfaz de chat» en `README.md` (FR-010):
   - cómo arrancar (`uv run streamlit run src/due_diligence/chat.py`);
   - qué hacer sin clave, en el chat y en la línea de comandos;
   - qué se ve en cada turno (indicadores en vivo, cobertura antes de la respuesta, estado y turnos);
@@ -290,8 +290,8 @@ description: "Lista de tareas del ticket #11, interfaz de chat"
   Actualizar también:
   - el punto «Credenciales» de «Coordinador y subagentes»: dos puntos de entrada y `comprobar_credencial`;
   - la mención de la hora en UTC: la traza en UTC y el chat en hora de Colombia.
-- [ ] T038 [P] Entrada corta del #11 en `DECISIONES.md`, de unas pocas líneas: observador en vivo con la traza como verdad, `comprobar_credencial` común, hora de Colombia en la interfaz y UTC en la traza, caso nuevo tras un caso completo, y lo pendiente en `specs/011-interfaz-chat/plan.md`.
-- [ ] T039 Commit «documentación de la interfaz de chat (#11)».
+- [x] T038 [P] Entrada corta del #11 en `DECISIONES.md`, de unas pocas líneas: observador en vivo con la traza como verdad, `comprobar_credencial` común, hora de Colombia en la interfaz y UTC en la traza, caso nuevo tras un caso completo, y lo pendiente en `specs/011-interfaz-chat/plan.md`.
+- [x] T039 Commit «documentación de la interfaz de chat (#11)».
 
 ---
 

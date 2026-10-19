@@ -100,7 +100,7 @@ una tarjeta, un NIT o una cédula reales, di el tipo y la ubicación y no repita
   `.claude/settings.json`, `.mcp.json`, `.claude/agents/`, `.claude/skills/` y
   `.claude/commands/`) y los tests (`test_*.py`). Se leen enteros; los tests, por secciones si
   hace falta. Cualquier otro archivo de la lista que no sea referencia también cuenta.
-- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`,
+- **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`, `docs/`,
   `.claude/rules/` y los archivos generados por herramientas (`uv.lock`). Léelos por secciones
   o con `Grep` para contrastar; leerlos a medias no reduce la cobertura.
 - **Un archivo movido** aparece en su ruta nueva con la marca

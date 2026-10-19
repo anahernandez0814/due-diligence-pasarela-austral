@@ -83,7 +83,7 @@ declara como desviación:
    - `plugins/guardas-y-revision/` con el manifiesto, el agente, la skill, `hooks/hooks.json`, los
      scripts y sus tests;
    - `.claude-plugin/marketplace.json` en la raíz, con `"source": "./plugins/guardas-y-revision"`;
-   - nombres genéricos y sin `author`.
+   - nombres genéricos y `author` de equipo (`Equipo de plataforma`), sin datos personales: `validate --strict` lo exige (R1).
 2. **FR-007, una sola fuente con el plugin en caché (R2)**:
    - `guarda_datos.py` y `detector_datos.py` se mueven al plugin con `git mv`;
    - lo que usaban de `comun` pasa a `base_guarda.py`, dentro del plugin;

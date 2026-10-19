@@ -1,0 +1,16 @@
+{
+  "name": "piezas-reutilizables",
+  "owner": {
+    "name": "Equipo de plataforma"
+  },
+  "metadata": {
+    "description": "Piezas reutilizables de Claude Code para los equipos."
+  },
+  "plugins": [
+    {
+      "name": "guardas-y-revision",
+      "source": "./plugins/guardas-y-revision",
+      "description": "Guarda que bloquea datos con forma real (tarjetas, NIT, cédulas y credenciales) antes de escribirlos, ejecutarlos o publicarlos, y un revisor de código independiente y de solo lectura con su skill."
+    }
+  ]
+}

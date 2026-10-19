@@ -86,14 +86,14 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 **Independent Test**: Q2, Q3 y Q4 del quickstart.
 
-- [ ] T010 [P] [US1] Crear `plugins/guardas-y-revision/.claude-plugin/plugin.json` con `name` `guardas-y-revision`, `version` `1.0.0` y `description` en español, sin `author` (FR-001). Crear `.claude-plugin/marketplace.json` con:
+- [x] T010 [P] [US1] Crear `plugins/guardas-y-revision/.claude-plugin/plugin.json` con `name` `guardas-y-revision`, `version` `1.0.0`, `description` en español y `author` `{"name": "Equipo de plataforma"}`, sin datos personales (FR-001). **Cambio**: se planeó sin `author`, pero `validate --strict` lo exige (R1). Crear `.claude-plugin/marketplace.json` con:
   - `name`: `piezas-reutilizables`;
   - `owner.name`: un nombre de equipo genérico;
   - `plugins`: `[{name, source: "./plugins/guardas-y-revision", description}]`.
 
   Sin `homepage` (R1 y R11).
-- [ ] T011 [P] [US1] Crear `plugins/guardas-y-revision/hooks/hooks.json` con `PreToolUse`, el matcher de R5, `"type": "command"`, `"command": "uv"`, `args` `["run","--no-project","--python","3.12","--quiet","${CLAUDE_PLUGIN_ROOT}/hooks/guarda_datos.py"]`, `"timeout": 10` y `"onFailure": "block"` (R9).
-- [ ] T012 [P] [US1] Crear `plugins/guardas-y-revision/scripts/test_contexto_revision.py`, que debe fallar primero, con repositorios git temporales:
+- [x] T011 [P] [US1] Crear `plugins/guardas-y-revision/hooks/hooks.json` con `PreToolUse`, el matcher de R5, `"type": "command"`, `"command": "uv"`, `args` `["run","--no-project","--python","3.12","--quiet","${CLAUDE_PLUGIN_ROOT}/hooks/guarda_datos.py"]`, `"timeout": 10` y `"onFailure": "block"` (R9).
+- [x] T012 [P] [US1] Crear `plugins/guardas-y-revision/scripts/test_contexto_revision.py`, que debe fallar primero, con repositorios git temporales:
   - el repositorio no es git;
   - sin base de fusión;
   - base `main` sin remoto;
@@ -105,21 +105,22 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
   - lista agrupada y diff omitido por el umbral;
   - error inesperado: código 0 con `CONTEXTO INCOMPLETO`;
   - no importa `veredicto` ni `comun` (FR-002 y FR-006).
-- [ ] T013 [US1] Crear `plugins/guardas-y-revision/scripts/contexto_revision.py` según R6 y el data-model, y dejar T012 en verde.
-- [ ] T014 [P] [US1] Crear `plugins/guardas-y-revision/agents/revisor-codigo.md`, la versión genérica del agente del #4 (R7, contrato §4). Herramientas `Read`, `Grep` y `Glob`, y la misma línea `RESUMEN`.
-- [ ] T015 [P] [US1] Crear `plugins/guardas-y-revision/skills/revisar-codigo/SKILL.md` (R4 y R7, contrato §3):
+- [x] T013 [US1] Crear `plugins/guardas-y-revision/scripts/contexto_revision.py` según R6 y el data-model, y dejar T012 en verde.
+- [x] T014 [P] [US1] Crear `plugins/guardas-y-revision/agents/revisor-codigo.md`, la versión genérica del agente del #4 (R7, contrato §4). Herramientas `Read`, `Grep` y `Glob`, y la misma línea `RESUMEN`.
+- [x] T015 [P] [US1] Crear `plugins/guardas-y-revision/skills/revisar-codigo/SKILL.md` (R4 y R7, contrato §3):
   - `context: fork`;
   - `agent: guardas-y-revision:revisor-codigo`;
   - `allowed-tools` con la regla exacta de la línea `!`;
   - la línea `!` con `"${CLAUDE_PLUGIN_ROOT}/scripts/contexto_revision.py"`;
   - los pasos genéricos, incluido «sin ticket no reduce la cobertura».
-- [ ] T016 [P] [US1] Crear `plugins/guardas-y-revision/README.md`: qué trae, los requisitos (R9) y que los cambios llegan al subir la `version`. Genérico, sin términos del proyecto.
-- [ ] T017 [US1] Crear `plugins/guardas-y-revision/test_plugin.py`:
+- [x] T016 [P] [US1] Crear `plugins/guardas-y-revision/README.md`: qué trae, los requisitos (R9) y que los cambios llegan al subir la `version`. Genérico, sin términos del proyecto.
+- [x] T017 [US1] Crear `plugins/guardas-y-revision/test_plugin.py`:
   - el manifiesto y el marketplace válidos y coherentes (mismo nombre y descripción);
   - `hooks.json` usa solo `${CLAUDE_PLUGIN_ROOT}`, con `onFailure` `block` y el matcher que acepta las 13 herramientas;
   - el agente tiene exactamente `Read, Grep, Glob`;
   - la skill tiene `fork`, el agente con prefijo, y la regla de `allowed-tools` es igual al comando de la línea `!`.
-- [ ] T018 [US1] Ejecutar `claude plugin validate --strict .` y `claude plugin validate --strict plugins/guardas-y-revision`, y corregir hasta cero avisos. Ruff y `uv run pytest plugins` en verde. Commit.
+- [x] T018 [US1] Ejecutar `claude plugin validate --strict .` y `claude plugin validate --strict plugins/guardas-y-revision`, y corregir hasta cero avisos. Ruff y `uv run pytest plugins` en verde. Commit.
+  - **Resultado**: los dos `validate --strict` pasan, tras añadir `author` de equipo. El consejo «el README no tiene la línea de instalación» se atendió con un marcador genérico `<propietario>/<repositorio>`, porque el nombre real del repositorio es un término del proyecto (FR-004).
 - [ ] T019 [US1] **Q2**: instalación sin interfaz en una carpeta temporal fuera del repositorio, desde un clon limpio de la rama. Anotar aquí los comandos usados, el número de comandos de instalación y lo que dicen `list` y `details` (SC-001).
 - [ ] T020 [US1] **Q3**: la guarda en el repositorio de prueba, con `contar_bloqueos.py` en el scratchpad. Anotar solo conteos, con dos intentos como máximo si no es concluyente. Si el plugin no carga por la confianza, usar `--plugin-dir` y anotar Q6 para la analista.
 - [ ] T021 [US1] **Q4**: la skill y el subagente. Anotar la línea `RESUMEN`, si apareció la marca del contexto y `Ticket: no aplica`, y qué agente corrió.
@@ -135,13 +136,14 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 **Independent Test**: `uv run pytest .claude/hooks/test_plugin_repositorio.py -k terminos`.
 
-- [ ] T022 [US2] Crear `.claude/hooks/test_plugin_repositorio.py` con:
+- [x] T022 [US2] Crear `.claude/hooks/test_plugin_repositorio.py` con:
   - la lista de patrones de R11, que recorre `git ls-files plugins/` y `.claude-plugin/marketplace.json` e informa `archivo:línea:término`;
   - `CLAUDE_PROJECT_DIR` prohibido solo en `hooks.json` y en `SKILL.md`;
   - un segundo test que comprueba que cada patrón detecta su muestra;
   - un tercero que comprueba que `hooks.json` y el `SKILL.md` solo construyen rutas con `${CLAUDE_PLUGIN_ROOT}` (US2-2).
 
   Corregir lo que aparezca.
+  - **Resultado**: la lista marcó `specs/007-demo` en `test_contexto_revision.py`; la muestra pasó a `specs/123-demo`, sin aflojar el patrón.
 
 ---
 
@@ -151,7 +153,7 @@ description: "Lista de tareas del ticket #13, plugin reutilizable para otros equ
 
 **Independent Test**: `uv run pytest .claude/hooks/test_plugin_repositorio.py` y Q5.
 
-- [ ] T023 [US3] En `.claude/hooks/test_plugin_repositorio.py`:
+- [x] T023 [US3] En `.claude/hooks/test_plugin_repositorio.py`:
   - **Una ejecución por herramienta**: para cada una de las 13 herramientas (las 5 del sistema y las 8 de publicación con el servidor `github` y con otro nombre), exactamente una entrada de `PreToolUse` de `.claude/settings.json` cuyo matcher la acepta ejecuta `guarda_datos.py` (SC-003).
   - **El plugin, deshabilitado**: `enabledPlugins` lo tiene a `false` y no hay `extraKnownMarketplaces` que lo traiga.
   - **Los dos registros, equivalentes**: el de `settings.json` y el de `hooks.json` tienen el mismo matcher, `type`, `command`, `timeout` y `onFailure`, y los mismos `args` salvo la raíz.

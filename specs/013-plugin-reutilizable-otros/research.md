@@ -29,7 +29,7 @@ plugins/guardas-y-revision/
 - **Nombre del plugin**: `guardas-y-revision`. Dice lo que trae y no nombra el proyecto (FR-001).
 - **Nombre del marketplace**: `piezas-reutilizables`.
 - **Versión**: `1.0.0`.
-- **Manifiesto**: sin `author` (FR-001, sin datos personales). El marketplace exige `owner.name`
+- **Manifiesto**: `author` con un nombre de equipo genérico, `Equipo de plataforma`, sin correo ni URL (FR-001, sin datos personales). Se planeó sin `author`, pero `claude plugin validate --strict` lo da como aviso y falla. El marketplace exige `owner.name`
   (create-marketplace: «The file requires a `name`, an `owner`, and a `plugins` array»): se pone
   un nombre de equipo genérico, no una persona.
 - **Fuente**: `"source": "./plugins/guardas-y-revision"`, que se resuelve desde la raíz del

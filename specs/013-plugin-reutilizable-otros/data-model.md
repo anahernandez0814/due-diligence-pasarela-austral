@@ -20,7 +20,7 @@ salidas de los scripts. Los formatos exactos están en [contracts/plugin.md](con
 | `name` | `guardas-y-revision` | Da el prefijo de la skill y del agente (`guardas-y-revision:…`). |
 | `version` | `1.0.0` | Se sube cuando cambia una pieza; sin eso, `claude plugin update` no la trae. |
 | `description` | En español | Sin términos del proyecto. |
-| `author` | Ausente | FR-001: sin datos personales. |
+| `author` | `{"name": "Equipo de plataforma"}` | FR-001: un equipo, sin datos personales (ni persona, ni correo, ni URL). `claude plugin validate --strict` falla sin `author`. |
 
 Los componentes se descubren por convención (`agents/`, `skills/` y `hooks/hooks.json`).
 

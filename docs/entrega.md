@@ -31,13 +31,15 @@ ejecutan **después del merge del último PR**, desde `main` en GitHub. Ninguno 
 
 En una carpeta vacía fuera del repositorio de trabajo. **Windows (PowerShell)**, con el
 `tar.exe` del sistema (Windows 10 o posterior), que con `-a` elige el formato zip por la
-extensión:
+extensión. Se llama por su ruta completa: si el `PATH` tiene las herramientas Unix de Git, un
+`tar.exe` a secas puede ser el GNU tar de Git, que no genera zip.
 
 ```powershell
 $destino = Join-Path $env:TEMP "entrega-pasarela"
 New-Item -ItemType Directory $destino | Out-Null
 git clone https://github.com/anahernandez0814/due-diligence-pasarela-austral.git "$destino\due-diligence-pasarela-austral"
-tar.exe -a -c -f "$destino\due-diligence-pasarela-austral.zip" -C $destino due-diligence-pasarela-austral
+$tar = Join-Path $env:SystemRoot "System32\tar.exe"
+& $tar -a -c -f "$destino\due-diligence-pasarela-austral.zip" -C $destino due-diligence-pasarela-austral
 ```
 
 **macOS o Linux (bash)**:
@@ -52,7 +54,7 @@ git clone https://github.com/anahernandez0814/due-diligence-pasarela-austral.git
 
 ```powershell
 $zip = "$destino\due-diligence-pasarela-austral.zip"
-$lista = tar.exe -t -f $zip
+$lista = & $tar -t -f $zip
 foreach ($r in "/.git/", "/specs/", "/.specify/memory/") { "$r " + [bool]($lista -match [regex]::Escape($r)) }
 $lista | Select-String -Pattern '/\.venv/|/\.env$|CLAUDE\.local\.md|settings\.local\.json|bitacora-decisiones|/resultados/'
 "{0:N1} MB" -f ((Get-Item $zip).Length / 1MB)
@@ -118,8 +120,8 @@ print(f"Hallazgos: {hallazgos}")
 PY
 ```
 
-Esperado: «Sin coincidencias.» y «Hallazgos: 0». En el repositorio, el 2026-10-19 (356
-commits y 2468 objetos), los dos dieron 0 en unos 36 y 80 s.
+Esperado: «Sin coincidencias.» y «Hallazgos: 0». El 2026-10-19, en un clon limpio de la rama
+del #14 (361 commits), los dos dieron 0, en unos 16 y 82 s.
 
 **Con un hallazgo**, no se reescribe el historial (el enunciado lo prohíbe):
 

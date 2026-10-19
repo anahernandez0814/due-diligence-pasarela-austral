@@ -108,6 +108,9 @@ Cada decisión con su motivo y la alternativa descartada. Las sondas se hicieron
   versionado; el `tar` de Git Bash es GNU y no hace zip.
 - **Descartado**: `Compress-Archive` (omite archivos ocultos con comodines) y `git archive`
   (no incluye `.git`).
+- **Corrección en T017**: en una consola cuyo `PATH` tiene las herramientas Unix de Git,
+  `tar.exe` a secas resolvió al GNU tar de Git («Cannot connect to C: resolve failed») y no
+  generó el zip. El documento llama a `$env:SystemRoot\System32\tar.exe` por su ruta completa.
 
 ## R10. Revisión de credenciales en el historial
 

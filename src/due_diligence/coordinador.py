@@ -376,67 +376,72 @@ class Caso:
         # (por ejemplo, al registrar el inicio del caso), se avisa ya.
         tarea = asyncio.current_task()
         bucle = asyncio.get_running_loop()
-        if tarea is not None:
-            self._eventos.al_interrumpir = lambda: bucle.call_soon(tarea.cancel)
-            self._eventos.interrumpir()
         try:
-            async for mensaje_sdk in self._consulta(
-                prompt=mensaje, options=self.opciones_coordinador(resume)
-            ):
-                if isinstance(mensaje_sdk, AssistantMessage):
-                    for bloque in mensaje_sdk.content:
-                        if isinstance(bloque, TextBlock):
-                            self.respuesta = bloque.text
-                elif isinstance(mensaje_sdk, ResultMessage):
-                    clasificacion = clasificar_resultado(mensaje_sdk)
-                    # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
-                    if mensaje_sdk.total_cost_usd is not None:
-                        self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
-                    self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
-                    turnos_del_turno = mensaje_sdk.num_turns
-                    self.session_id = mensaje_sdk.session_id or self.session_id
-        except asyncio.CancelledError:
-            interrupcion = self._eventos.interrupcion
-            if interrupcion is None or tarea is None:
+            if tarea is not None:
+                self._eventos.al_interrumpir = lambda: bucle.call_soon(tarea.cancel)
+                self._eventos.interrumpir()
+            try:
+                async for mensaje_sdk in self._consulta(
+                    prompt=mensaje, options=self.opciones_coordinador(resume)
+                ):
+                    if isinstance(mensaje_sdk, AssistantMessage):
+                        for bloque in mensaje_sdk.content:
+                            if isinstance(bloque, TextBlock):
+                                self.respuesta = bloque.text
+                    elif isinstance(mensaje_sdk, ResultMessage):
+                        clasificacion = clasificar_resultado(mensaje_sdk)
+                        # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
+                        if mensaje_sdk.total_cost_usd is not None:
+                            self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
+                        self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
+                        turnos_del_turno = mensaje_sdk.num_turns
+                        self.session_id = mensaje_sdk.session_id or self.session_id
+            except asyncio.CancelledError:
+                interrupcion = self._eventos.interrupcion
+                if interrupcion is None or tarea is None:
+                    raise
+                # La cancelación es la de la interrupción: se deshace y se relanza el mismo objeto, que
+                # el chat entrega a Streamlit (una recarga solo se entrega una vez).
+                tarea.uncancel()
+                self._interrumpido = True
+                self._terminar(
+                    Clasificacion(
+                        Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
+                    ),
+                    turnos_del_turno,
+                )
+                raise interrupcion from None
+            except self._eventos.interrupciones as interrupcion:
+                # La misma interrupción, si llegara desde la propia `query()` y no desde un hook.
+                if self._eventos.interrupcion is None:
+                    self._eventos.interrupcion = interrupcion
+                self._interrumpido = True
+                self._terminar(
+                    Clasificacion(
+                        Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
+                    ),
+                    turnos_del_turno,
+                )
                 raise
-            # La cancelación es la de la interrupción: se deshace y se relanza el mismo objeto, que
-            # el chat entrega a Streamlit (una recarga solo se entrega una vez).
-            tarea.uncancel()
-            self._interrumpido = True
-            self._terminar(
-                Clasificacion(
-                    Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
-                ),
-                turnos_del_turno,
-            )
-            raise interrupcion from None
-        except self._eventos.interrupciones as interrupcion:
-            # La misma interrupción, si llegara desde la propia `query()` y no desde un hook.
-            if self._eventos.interrupcion is None:
-                self._eventos.interrupcion = interrupcion
-            self._interrumpido = True
-            self._terminar(
-                Clasificacion(
-                    Terminacion.ANOMALA, None, None, "interrumpido por la interfaz", True
-                ),
-                turnos_del_turno,
-            )
-            raise
-        except ResultError as error:
-            # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
+            except ResultError as error:
+                # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.
+                if clasificacion is None:
+                    clasificacion = clasificar_error(error)
+            except Exception as error:
+                # Otro fallo del SDK (conexión, proceso): queda constancia del corte y se relanza.
+                clasificacion = Clasificacion(
+                    Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
+                )
+                self._terminar(clasificacion, turnos_del_turno)
+                raise
             if clasificacion is None:
-                clasificacion = clasificar_error(error)
-        except Exception as error:
-            # Otro fallo del SDK (conexión, proceso): queda constancia del corte y se relanza.
-            clasificacion = Clasificacion(
-                Terminacion.ANOMALA, None, None, f"excepción {type(error).__name__}", True
-            )
+                clasificacion = sin_resultado()
             self._terminar(clasificacion, turnos_del_turno)
-            raise
-        if clasificacion is None:
-            clasificacion = sin_resultado()
-        self._terminar(clasificacion, turnos_del_turno)
-        return self.respuesta
+            return self.respuesta
+        finally:
+            # Fuera del turno no hay tarea que cortar (#12): un evento registrado entre turnos (el
+            # `mensaje_analista` del siguiente) no programa la cancelación en un bucle ya cerrado.
+            self._eventos.al_interrumpir = None
 
     def _terminar(self, clasificacion: Clasificacion, turnos: int | None) -> None:
         self.estado.terminacion = clasificacion

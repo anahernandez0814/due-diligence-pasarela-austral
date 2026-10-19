@@ -27,6 +27,7 @@ from due_diligence.eventos import (
     TIPO_FRENTE_FIN,
     TIPO_FRENTE_INICIO,
     TIPO_INFORME_REGISTRADO,
+    TIPO_MENSAJE_ANALISTA,
     TIPO_TERMINACION,
 )
 from due_diligence.frentes import FRENTES, Frente
@@ -1396,3 +1397,30 @@ def test_una_interrupcion_antes_de_la_consulta_corta_el_turno_sin_esperar_a_un_h
     assert vistos == [TIPO_CASO_INICIADO]  # el observador se apagó en el primer evento
     assert caso.interrumpido is True
     assert caso.terminacion.terminacion is Terminacion.ANOMALA
+
+
+def test_fuera_del_turno_un_evento_no_programa_la_cancelacion_en_un_bucle_cerrado():
+    # Revisión de a7f853e: el `mensaje_analista` de `continuar` se registra antes de que el turno
+    # ponga su aviso. Con el aviso del turno anterior, `call_soon` iría a un bucle ya cerrado (el
+    # chat corre cada turno en su propio `asyncio.run`) y lanzaría `RuntimeError`.
+    interrumpir = {"activo": False}
+
+    def observador(evento):
+        if interrumpir["activo"]:
+            raise Interrupcion("Stop")
+
+    async def consulta(*, prompt, options=None):
+        yield _fin()
+
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=observador,
+        interrupciones=(Interrupcion,),
+    )
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert caso._eventos.al_interrumpir is None
+    interrumpir["activo"] = True
+    caso._eventos.registrar(TIPO_MENSAJE_ANALISTA, None, "Mensaje 2 del analista.")
+    # La interrupción queda guardada para el turno siguiente, que la avisa al empezar.
+    assert isinstance(caso._eventos.interrupcion, Interrupcion)

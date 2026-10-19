@@ -34,8 +34,9 @@ TERMINOS = {
     "due diligence": r"due[\s-]diligence",
     "identificador ficticio del proyecto": r"\bCO-[A-Z]{2}-\d{4}\b",
     "ruta de código": r"(?<![\w/])src/",
-    "carpeta de specs de un ticket": r"specs/0\d\d",
-    "documento de decisiones": r"DECISIONES",
+    "carpeta de specs de un ticket": r"specs/\d{3}-",
+    # Con mayúsculas exactas: «decisiones» es una palabra común en un texto genérico.
+    "documento de decisiones": r"(?-i:DECISIONES)\.md",
     "guardas del repositorio": r"\.claude/hooks",
     "enunciado": r"docs/enunciado",
     "configuración MCP del proyecto": r"\.mcp\.json",

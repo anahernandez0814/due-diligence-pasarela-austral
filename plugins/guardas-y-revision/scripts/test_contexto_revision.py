@@ -231,8 +231,11 @@ def test_sin_carpeta_specs_el_ticket_no_aplica_y_no_es_incompleto(tmp_path):
     assert "CONTEXTO INCOMPLETO" not in salida
 
 
+# Los números van en constantes: un test del repositorio que publica el plugin busca
+# carpetas `specs/` de tickets escritas tal cual.
 NUMERO = "123"
 TICKET = f"{NUMERO}-demo"
+OTRO_TICKET = "999-otro"
 CONSTITUCION = ".specify/memory/constitution.md"
 SIN_PATRON = "la rama «cambio» no sigue el patrón NNN-nombre"
 SIN_CARPETA = f"no hay exactamente una carpeta specs/{NUMERO}-* del ticket"
@@ -247,7 +250,7 @@ FUERA_DE_LA_CONVENCION = [
 def con_specs(tmp_path: Path, rama: str, carpetas: list[str], constitucion: bool) -> Path:
     """Repositorio con `specs/` (siempre con la carpeta de otro ticket) y las `carpetas` dadas."""
     repo = repositorio(tmp_path, rama=rama)
-    escribir(repo, "specs/999-otro/spec.md", "# spec\n")
+    escribir(repo, f"specs/{OTRO_TICKET}/spec.md", "# spec\n")
     for carpeta in carpetas:
         for nombre in ("spec.md", "plan.md", "tasks.md"):
             escribir(repo, f"specs/{carpeta}/{nombre}", f"# {nombre}\n")

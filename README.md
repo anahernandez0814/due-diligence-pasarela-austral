@@ -158,7 +158,7 @@ noticias y categoría corren en paralelo; listas espera al registro y consulta a
 representante legal tal como los devolvió el registro. Las decisiones están en
 [specs/006-coordinador-subagentes-agent/](specs/006-coordinador-subagentes-agent/).
 
-- **Ejecutar un caso con el modelo real** (gasta tokens):
+- **Ejecutar un caso con el modelo real** (gasta tokens; desde el #10, `--sin-continuar` para no preguntar al analista):
   `uv run python -m due_diligence "<solicitud del analista>"`. Imprime los eventos con su hora, la
   situación de cada frente, la duración de cada uno, si hubo solape, el coste y la respuesta del
   coordinador. **Coste**: en la validación real del #6, un caso completo con Sonnet 5.5 en los cinco agentes costó unos 0,06 USD, sin
@@ -221,6 +221,24 @@ representante legal tal como los devolvió el registro. Las decisiones están en
     su fecha) y los **Informes registrados**, con su recomendación y si siguen vigentes.
   - Para ver el registro caído: `PASARELA_FALLA_REGISTRO=1 uv run python -m due_diligence
     "<solicitud>"`. El informe lleva el comercio pedido con `verificado: false`.
+- **Escalamiento con criterio, resumen al oficial y ambigüedad** (ticket #10,
+  [specs/010-escalamiento-criterio-handoff/](specs/010-escalamiento-criterio-handoff/)):
+  - **Cuándo se escala**: se escala por una coincidencia en listas o por una categoría de alto
+    riesgo. Escalar un comercio de bajo riesgo sin ningún hallazgo se rechaza, y
+    `decide_cumplimiento` exige haber escalado antes.
+  - **El resumen al oficial**: lleva el comercio, las afirmaciones de cada frente con su fuente y
+    su fecha, la cobertura, la causa, la acción recomendada y los conflictos. Se valida como el
+    informe. El comercio, la cobertura, la causa y los conflictos los pone el sistema; el oficial
+    no ve la conversación.
+  - **Varios comercios parecidos**: el coordinador pide el identificador y termina su turno sin
+    escalar ni registrar el informe. Lo mismo si no hay ninguno, o si la categoría que intentó no
+    la dio el analista. La categoría delegada tiene que aparecer en los mensajes del analista.
+  - **Continuar la conversación**: cuando el caso espera al analista, `python -m due_diligence`
+    lo pregunta en la consola. Con una respuesta, el caso continúa en el mismo estado; con una
+    línea vacía, termina. `--sin-continuar` no pregunta:
+    `uv run python -m due_diligence --sin-continuar "<solicitud>"`.
+  - **La salida** muestra si el caso espera al analista y los **Escalamientos registrados**, con
+    su id y sus causas.
 
 ## Guardas del entorno
 

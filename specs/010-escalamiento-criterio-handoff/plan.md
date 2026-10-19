@@ -115,6 +115,12 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1,
 - **6, el texto que pide el identificador lo redacta el modelo**: lo garantizado son las acciones (sin listas, sin escalamiento y sin informe). La spec no exige el texto.
 - **7, la acción recomendada no se contrasta**: es texto del coordinador para el oficial (FR-011).
 
+**Decisiones de la implementación que no son desviaciones** (anotadas en las notas de las fases 6 a 8 de [tasks.md](tasks.md)). Ninguna contradice un FR, un escenario de la spec ni un principio:
+- **El quinto motivo sin causa** («el comercio no está identificado de forma unívoca»). Precisa FR-009, que pide decir por qué se lleva al oficial un caso sin causas; sin él, ese caso daba una causa vacía, que la propia forma rechaza. Los cuatro motivos de R5 se conservan.
+- **La confirmación sin pendiente**: el `PostToolUse` registra el escalamiento con las causas de ese momento si su `PreToolUse` falló y lo dejó pasar. Es lo que exigen FR-012 (escalar nunca se deniega por un fallo) y R8 (el escalamiento que el oficial recibió cuenta); sin pendiente, no hay otras causas que usar.
+- **El escalamiento con el sello lleva la cobertura y los conflictos «no calculados»**. Es R5 paso 1 y FR-012 aplicados tal cual, como el informe mínimo del #9 (D4 del #9): tras un fallo de hook cualquier cálculo puede estar mal. El test del #8 que esperaba la cobertura calculada con el sello cambió a sabiendas (tabla de T046).
+- **La simulación adelantada de T044 a la fase 6** (`resumen_del_caso`, el paso `escalar` válido y la `PasarelaSimulada` que valida el resumen). Es un cambio de orden de las tareas, no de lo especificado: sin él la fase 6 no cerraba en verde.
+
 ## Decisiones del plan
 
 1. **Continuación (R1)**: `Caso.continuar(mensaje)` con `resume=<session_id>`, sobre el mismo estado, hooks y `Delegador`. Medido con el SDK real:

@@ -418,7 +418,7 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
 
 ## Fase 9: documentación
 
-- [ ] T051 [P] `DECISIONES.md`, que solo se amplía (decisión 13 del plan):
+- [X] T051 [P] `DECISIONES.md`, que solo se amplía (decisión 13 del plan):
   - el escalamiento que se puede denegar, como cambio respecto al #8;
   - `decide_cumplimiento` con escalamiento;
   - las tres esperas y D3 del #9 fuera de ellas;
@@ -428,8 +428,8 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - el presupuesto de 21;
   - D1, D2 y D3;
   - el rechazo del informe durante la espera (cambio respecto al #9).
-- [ ] T052 [P] `README.md`: la continuación del caso en la línea de comandos (`--sin-continuar`) y el resumen al oficial.
-- [ ] T053 Fase 9: commit «documentación del #10».
+- [X] T052 [P] `README.md`: la continuación del caso en la línea de comandos (`--sin-continuar`) y el resumen al oficial.
+- [X] T053 Fase 9: commit «documentación del #10».
 
 ---
 
@@ -455,6 +455,10 @@ Las historias P1 US1 y US2 van en el bloque B porque dependen de la base: la esp
   - turnos de cada consulta frente al presupuesto de 21, y coste.
 - [ ] T058 [MANUAL] Sondeo repetible (Haiku, ≈ 0,02 USD): todas las mediciones `coinciden`, con g5 en el formato nuevo y g6 (`resume`).
 - [ ] T059 Commitear las anotaciones de T054 a T058 en este archivo. **Ningún commit después de la revisión de `/abrir-pr`.** Después, `/abrir-pr`. La descripción del PR incluye la tabla de T046 y las desviaciones D1, D2 y D3 del plan.
+
+## Para otros tickets (no se corrige en el #10)
+
+- **#12, simulación de noticias**: sin un resultado asignado, el `EjecutorSimulado` da a noticias la fuente por defecto `FUENTE` («Registro Mercantil Ficticio del Sur»); la real es «Diario Ficticio del Sur». Por eso el resumen simulado del caso (a) cita el registro como fuente de noticias. Solo afecta a la simulación: la pasarela real usa su fuente y FR-004 compara con la fuente que devolvió cada consulta (observación de la analista en la parada B).
 
 ---
 

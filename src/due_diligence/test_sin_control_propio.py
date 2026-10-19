@@ -135,8 +135,9 @@ def test_max_turns_esta_documentado_como_proteccion_de_seguridad():
 
 def test_cargar_entorno_solo_se_llama_desde_el_punto_de_entrada():
     llamadas = [ruta.name for ruta in _modulos() if llama_a(_arbol(ruta), "cargar_entorno")]
-    # #11 (R8): la interfaz de chat es el segundo punto de entrada; la lista es exacta.
-    assert llamadas == ["__main__.py", "chat.py"]
+    # #11 (R8): la interfaz de chat es el segundo punto de entrada; #12 (R5): la suite de punta a
+    # punta (`conftest.py`), el tercero, solo cuando se piden los tests `e2e`. La lista es exacta.
+    assert llamadas == ["__main__.py", "chat.py", "conftest.py"]
 
 
 def test_ningun_modulo_nombra_el_archivo_de_entorno_ni_escribe_una_clave():

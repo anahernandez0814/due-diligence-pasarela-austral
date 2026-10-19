@@ -30,6 +30,10 @@ lo generó: no ves su conversación, y todo lo que necesitas está aquí o lo le
 - **Son referencia y no cuentan**: `specs/NNN-*/`, `README.md`, `DECISIONES.md`,
   `.claude/rules/` y los archivos generados por herramientas (`uv.lock`). Léelos por secciones
   o con `Grep` para contrastar; leerlos a medias no reduce la cobertura.
+- **Un archivo movido** aparece en su ruta nueva con la marca
+  `[movido desde <ruta anterior>, similitud N %]`. Léelo en la ruta nueva: cuenta como
+  cualquier otro y, si se movió con cambios, el contexto trae su diff o dice que no cabe. La
+  ruta anterior ya no existe y no cuenta como archivo sin leer.
 - **No ejecutar tests nunca reduce la cobertura**: no tienes Bash. No lo reportes como falta
   ni como hallazgo.
 - **Un archivo que cuenta y que leíste a medias** lo nombras en el reporte, con
@@ -63,6 +67,7 @@ En este orden, y no reportes antes de terminarlo:
    código y configuración.
    - Sigue el plan de lectura y las reglas de cobertura de arriba: los archivos de
      `specs/NNN-*/` van marcados como **referencia** en la lista y no cuentan.
+   - Un archivo marcado `[movido desde …]` se lee en su ruta nueva; la anterior no se busca.
 4. **Reporta** en español, con el formato de tu rol: cada hallazgo en una línea con su
    severidad (`BLOQUEANTE` o `SUGERENCIA`), su ubicación `archivo:línea` y su razón. No
    corrijas ni propongas parches. No repitas valores sensibles: di el tipo y la ubicación.

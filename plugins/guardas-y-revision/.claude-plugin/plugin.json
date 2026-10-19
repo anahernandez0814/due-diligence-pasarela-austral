@@ -1,0 +1,9 @@
+{
+  "name": "guardas-y-revision",
+  "version": "1.0.0",
+  "description": "Guarda que bloquea datos con forma real (tarjetas, NIT, cédulas y credenciales) antes de escribirlos, ejecutarlos o publicarlos, y un revisor de código independiente y de solo lectura con su skill.",
+  "author": {
+    "name": "Equipo de plataforma"
+  },
+  "keywords":["guarda", "datos", "revision", "codigo", "hooks"]
+}

@@ -1,0 +1,20 @@
+{
+  "description": "Guarda de datos con forma real: bloquea antes de escribir, ejecutar o publicar un texto con una tarjeta, un NIT, una cédula o una credencial.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|PowerShell|mcp__.+__(add_issue_comment|update_issue_comment|create_pull_request|update_pull_request|issue_write|add_reply_to_pull_request_comment|pull_request_review_write|add_comment_to_pending_review))$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--python", "3.12", "--quiet",
+                     "${CLAUDE_PLUGIN_ROOT}/hooks/guarda_datos.py"],
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

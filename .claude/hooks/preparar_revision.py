@@ -1,8 +1,9 @@
 """Contexto de las skills de revisión: lo que se inyecta antes de crear el subagente (R2, R4, R6).
 
 Imprime, en este orden: la marca `CONTEXTO DE REVISIÓN`, la rama, la base de fusión, las rutas
-del ticket y de la constitución, la lista de archivos cambiados con estadísticas y, solo si
-toda la salida cabe en `UMBRAL_SALIDA`, el diff completo.
+del ticket y de la constitución, la lista de archivos cambiados con estadísticas (los movidos,
+en su ruta nueva y con la anterior) y, solo si toda la salida cabe en `UMBRAL_SALIDA`, el diff
+completo; si no cabe, el diff de cada archivo movido con cambios que quepa.
 
 Siempre sale con 0: un comando inyectado que falla aborta toda la invocación de la skill y
 el revisor nunca vería nada. Lo que no se puede calcular se dice con
@@ -16,6 +17,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import NamedTuple
 
 import comun
 import veredicto
@@ -37,30 +39,54 @@ def _bytes(texto: str) -> int:
     return len(texto.encode("utf-8"))
 
 
-def _archivos(raiz: Path, base: str) -> list[tuple[str, int | None, int | None, str]]:
-    """`(estado, añadidas, borradas, ruta)` por archivo; None en los binarios."""
-    _, estados = veredicto.git(
-        raiz, "-c", "core.quotepath=false", "diff", "--no-renames", "--name-status", base, "HEAD"
-    )
-    _, numeros = veredicto.git(
-        raiz, "-c", "core.quotepath=false", "diff", "--no-renames", "--numstat", base, "HEAD"
-    )
+class Archivo(NamedTuple):
+    """Un archivo del cambio; `anterior` y `similitud` solo si git detectó que se movió."""
+
+    estado: str
+    añadidas: int | None
+    borradas: int | None
+    ruta: str
+    anterior: str | None = None
+    similitud: int | None = None
+
+
+def _archivos(raiz: Path, base: str) -> list[Archivo]:
+    """Los archivos del cambio, con los movidos detectados (`-M`); cifras None en los binarios.
+
+    Con `-z` las rutas llegan tal cual y separadas por NUL. Un movido trae dos rutas, la
+    anterior y la nueva; en `--numstat` van tras un campo de ruta vacío.
+    """
+    _, numeros = veredicto.git(raiz, "diff", "-M", "-z", "--numstat", base, "HEAD")
     cifras: dict[str, tuple[int | None, int | None]] = {}
-    for fila in numeros.splitlines():
-        partes = fila.split("\t", 2)
-        if len(partes) == 3:
-            añadidas, borradas, ruta = partes
-            cifras[ruta] = (
-                None if añadidas == "-" else int(añadidas),
-                None if borradas == "-" else int(borradas),
-            )
+    campos = numeros.split("\0")
+    i = 0
+    while i < len(campos):
+        partes = campos[i].split("\t")
+        i += 1
+        if len(partes) != 3:
+            continue
+        añadidas, borradas, ruta = partes
+        if not ruta and i + 1 < len(campos):
+            ruta = campos[i + 1]
+            i += 2
+        cifras[ruta] = (
+            None if añadidas == "-" else int(añadidas),
+            None if borradas == "-" else int(borradas),
+        )
+    _, estados = veredicto.git(raiz, "diff", "-M", "-z", "--name-status", base, "HEAD")
+    campos = estados.split("\0")
     archivos = []
-    for fila in estados.splitlines():
-        partes = fila.split("\t", 1)
-        if len(partes) == 2:
-            estado, ruta = partes
-            añadidas, borradas = cifras.get(ruta, (None, None))
-            archivos.append((estado[:1], añadidas, borradas, ruta))
+    i = 0
+    while i + 1 < len(campos):
+        estado = campos[i]
+        if estado.startswith("R") and i + 2 < len(campos):
+            anterior, ruta, similitud = campos[i + 1], campos[i + 2], int(estado[1:] or 0)
+            i += 3
+        else:
+            anterior, ruta, similitud = None, campos[i + 1], None
+            i += 2
+        añadidas, borradas = cifras.get(ruta, (None, None))
+        archivos.append(Archivo(estado[:1], añadidas, borradas, ruta, anterior, similitud))
     return archivos
 
 
@@ -70,11 +96,13 @@ def _es_referencia(ruta: str, carpeta: str | None) -> bool:
 
 def _lista(archivos: list, carpeta: str | None) -> list[str]:
     filas = []
-    for estado, añadidas, borradas, ruta in archivos:
+    for estado, añadidas, borradas, ruta, anterior, similitud in archivos:
         cifras = "binario" if añadidas is None else f"+{añadidas} -{borradas}"
         marcas = ""
         if estado == "D":
             marcas += " [eliminado]"
+        if anterior is not None:
+            marcas += f" [movido desde {anterior}, similitud {similitud} %]"
         if _es_referencia(ruta, carpeta):
             marcas += " [referencia]"
         filas.append(f"{estado}  {cifras}  {ruta}{marcas}")
@@ -83,7 +111,7 @@ def _lista(archivos: list, carpeta: str | None) -> list[str]:
 
 def _agrupada(archivos: list) -> list[str]:
     grupos: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
-    for _, añadidas, borradas, ruta in archivos:
+    for _, añadidas, borradas, ruta, *_ in archivos:
         directorio = ruta.rsplit("/", 1)[0] + "/" if "/" in ruta else "./"
         grupo = grupos[directorio]
         grupo[0] += 1
@@ -103,6 +131,45 @@ def _carpeta_del_ticket(raiz: Path, rama: str) -> tuple[str | None, str | None]:
     if len(carpetas) != 1:
         return None, f"no hay exactamente una carpeta specs/{coincidencia.group(1)}-* del ticket"
     return f"specs/{carpetas[0].name}/", None
+
+
+def _diffs_de_movidos(raiz: Path, base: str, archivos: list, salida: str, umbral: int) -> str:
+    """`salida` con el diff de cada archivo movido con cambios, mientras quepa en `umbral`.
+
+    Un diff que no cabe deja un aviso con su nombre, solo si el aviso cabe. Los que no caben ni
+    así se cuentan en una sola línea final, la única que puede pasar del umbral.
+    """
+    sin_aviso = 0
+    for archivo in archivos:
+        if archivo.anterior is None or archivo.similitud == 100:
+            continue
+        titulo = f"Diff de {archivo.ruta} (movido desde {archivo.anterior})"
+        _, diff = veredicto.git(
+            raiz,
+            "-c",
+            "core.quotepath=false",
+            "diff",
+            "-M",
+            base,
+            "HEAD",
+            "--",
+            archivo.anterior,
+            archivo.ruta,
+        )
+        bloque = f"{titulo}:\n{diff}\n"
+        aviso = f"{titulo} omitido: no cabe en el umbral. Lee el archivo en su ruta nueva.\n"
+        if _bytes(salida + bloque) <= umbral:
+            salida += bloque
+        elif _bytes(salida + aviso) <= umbral:
+            salida += aviso
+        else:
+            sin_aviso += 1
+    if sin_aviso:
+        salida += (
+            f"Diffs de archivos movidos omitidos sin aviso propio: {sin_aviso}. No caben en el "
+            "umbral; lee en su ruta nueva los archivos marcados [movido desde …].\n"
+        )
+    return salida
 
 
 def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
@@ -154,9 +221,7 @@ def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
         ]
     sin_diff = cabecera + "\n" + "\n".join(lista)
     if not agrupada:
-        _, diff = veredicto.git(
-            raiz, "-c", "core.quotepath=false", "diff", "--no-renames", base, "HEAD"
-        )
+        _, diff = veredicto.git(raiz, "-c", "core.quotepath=false", "diff", "-M", base, "HEAD")
         completo = f"{sin_diff}\nDiff completo:\n{diff}\n"
         if _bytes(completo) <= umbral:
             return completo
@@ -164,7 +229,7 @@ def construir(raiz: Path, umbral: int = UMBRAL_SALIDA) -> str:
         f"Diff omitido: la salida superaría el umbral de {umbral} bytes. Lee los archivos de "
         "la lista con Read y Grep."
     )
-    return f"{sin_diff}\n{aviso}\n"
+    return _diffs_de_movidos(raiz, base, archivos, f"{sin_diff}\n{aviso}\n", umbral)
 
 
 def main() -> int:

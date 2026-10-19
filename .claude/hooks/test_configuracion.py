@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+from test_plugin_repositorio import acepta
 
 RAIZ = Path(__file__).resolve().parents[2]
 CONFIGURACION = json.loads((RAIZ / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -44,8 +45,22 @@ def entradas(evento: str) -> list[tuple[str, dict]]:
     return [(e["matcher"], h) for e in HOOKS[evento] for h in e["hooks"]]
 
 
+# #13 (R2, R5): la guarda de datos vive en el plugin y su matcher es una expresión anclada que
+# acepta las herramientas de publicación de cualquier servidor MCP.
+RUTA_GUARDA_DATOS = "${CLAUDE_PROJECT_DIR}/plugins/guardas-y-revision/hooks/guarda_datos.py"
+MATCHER_GUARDA_DATOS = (
+    "^(Write|Edit|NotebookEdit|Bash|PowerShell|mcp__.+__(add_issue_comment|update_issue_comment"
+    "|create_pull_request|update_pull_request|issue_write|add_reply_to_pull_request_comment"
+    "|pull_request_review_write|add_comment_to_pending_review))$"
+)
+
+
+def ruta(hook: dict) -> Path:
+    return Path(hook["args"][-1].replace("${CLAUDE_PROJECT_DIR}", str(RAIZ)))
+
+
 def script(hook: dict) -> str:
-    return Path(hook["args"][-1].replace("${CLAUDE_PROJECT_DIR}", str(RAIZ))).name
+    return ruta(hook).name
 
 
 # --- Hooks ----------------------------------------------------------------------------
@@ -58,8 +73,15 @@ def test_hay_cinco_guardas_previas_y_un_formato_posterior():
 
 @pytest.mark.parametrize("evento", ["PreToolUse", "PostToolUse"])
 def test_matchers_son_listas_de_nombres_exactos(evento):
-    for matcher, _ in entradas(evento):
+    for matcher, hook in entradas(evento):
+        if script(hook) == "guarda_datos.py":
+            continue  # expresión anclada (#13, R5): test_matcher_de_la_guarda_de_datos
         assert re.fullmatch(r"[A-Za-z0-9_|]+", matcher), matcher
+
+
+def test_matcher_de_la_guarda_de_datos_es_la_expresion_anclada():
+    matchers = [m for m, h in entradas("PreToolUse") if script(h) == "guarda_datos.py"]
+    assert matchers == [MATCHER_GUARDA_DATOS]
 
 
 def test_guardas_bloquean_si_fallan_con_timeout_de_10():
@@ -79,19 +101,22 @@ def test_forma_exec_con_uv_sin_proyecto(evento):
         assert hook["type"] == "command"
         assert hook["command"] == "uv"
         assert hook["args"][:-1] == ["run", "--no-project", "--python", "3.12", "--quiet"]
-        assert hook["args"][-1].startswith("${CLAUDE_PROJECT_DIR}/.claude/hooks/")
+        if script(hook) == "guarda_datos.py":
+            assert hook["args"][-1] == RUTA_GUARDA_DATOS
+        else:
+            assert hook["args"][-1].startswith("${CLAUDE_PROJECT_DIR}/.claude/hooks/")
 
 
 @pytest.mark.parametrize("evento", ["PreToolUse", "PostToolUse"])
 def test_cada_script_existe(evento):
     for _, hook in entradas(evento):
-        assert (RAIZ / ".claude" / "hooks" / script(hook)).is_file(), script(hook)
+        assert ruta(hook).is_file(), script(hook)
 
 
 def test_powershell_esta_en_los_matchers_de_respaldo():
-    por_script = {script(h): m.split("|") for m, h in entradas("PreToolUse")}
+    por_script = {script(h): m for m, h in entradas("PreToolUse")}
     for guarda in ("guarda_secretos.py", "guarda_datos.py", "guarda_spec_previa.py"):
-        assert "PowerShell" in por_script[guarda]
+        assert acepta(por_script[guarda], "PowerShell"), guarda
 
 
 # --- Denegaciones ---------------------------------------------------------------------

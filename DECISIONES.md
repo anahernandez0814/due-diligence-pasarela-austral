@@ -222,3 +222,29 @@ Lo pendiente fuera de alcance, y el detalle, están en `specs/011-interfaz-chat/
 - **Desviación D3, tiempo de la suite**: en Windows, `uv run pytest` puede pasar de 5 minutos (4:43 en frío, 5:55 y 6:12) por las guardas de `.claude/hooks/`, no por el producto: la aplicación (`uv run pytest src`) tarda unos 25 s y la e2e unos 80 s. Sugerencia: un repositorio git de prueba compartido por módulo, o pytest-xdist (1:40 con `-n auto`, aislando el test de tiempo de `test_guarda_pr.py`).
 
 Detalle, coste medido y lo pendiente en `specs/012-suite-siete-casos/plan.md`, `research.md` y `tasks.md`.
+
+## 14. Plugin reutilizable para otros equipos
+
+- **Plugin `guardas-y-revision`** (`plugins/guardas-y-revision/`) en el marketplace `piezas-reutilizables` (`.claude-plugin/marketplace.json`): la guarda de datos con forma real del #3 y versiones genéricas del subagente revisor y de su skill del #4. Ninguna pieza nombra este proyecto, y un test lo comprueba.
+- **La guarda tiene una sola fuente, dentro del plugin** (R2): un plugin instalado se copia a una caché y no llega a archivos de fuera, así que la guarda, el detector y lo que usaban de `comun` (`base_guarda.py`) se movieron al plugin. Este repositorio ejecuta ese mismo archivo desde `.claude/settings.json`.
+- **Archivo de compatibilidad** `.claude/hooks/guarda_datos.py`: sin lógica, ejecuta la guarda del plugin con `runpy` y, si no puede, sale con 2 (fallo cerrado). Sirve a las sesiones que conserven la ruta antigua. `settings.json` no lo registra.
+- **Claude Code 2.1.303 recarga `settings.json` en caliente**, observado al mover la guarda: un hook con `onFailure: block` que apunta a un archivo que todavía no carga bloquea `Bash`, `Write` y `Edit` de la sesión. Al mover o cambiar una guarda, el destino tiene que funcionar antes de cambiar la ruta.
+- **Convivencia, opción B** (R3): este repositorio registra la guarda y deshabilita el plugin con `enabledPlugins` a `false`.
+  - **Por qué**: Claude Code no deduplica el hook de un plugin con el de `settings.json`, y la opción A (usar el hook del plugin) dejaría sin protección un clon nuevo (principio II).
+  - **Instalado a nivel de usuario**, el `false` del proyecto gana y la guarda corre una vez.
+  - **Riesgo residual**: un `true` en `settings.local.json` lo duplicaría. Daría un mensaje doble, nunca menos protección.
+- **Cambios declarados en la guarda** (R5 y R10):
+  - el mensaje ya no cita el identificador ficticio del proyecto;
+  - el matcher es una expresión anclada que acepta las herramientas de publicación de cualquier servidor MCP, y la guarda revisa cualquier `mcp__…` que le llegue.
+- **Verificado con la CLI** (quickstart Q2–Q5, Haiku):
+  - la instalación sin interfaz en un repositorio temporal;
+  - el bloqueo de la guarda del plugin;
+  - la línea `!` y `allowed-tools` con `${CLAUDE_PLUGIN_ROOT}`, y el agente con prefijo en `agent:`;
+  - una sola ejecución de la guarda en un clon limpio de este repositorio.
+
+  El plugin instalado con `--scope local` cargó en `claude -p` sin aceptar la confianza de la carpeta.
+- **La revisión detecta los archivos movidos**, desde este ticket, en el contexto del repositorio y en el del plugin.
+  - **Por qué**: los dos scripts usaban `--no-renames`. Con el traslado de la guarda al plugin, sus tres archivos aparecían como eliminados, el revisor no podía leer lo que había antes y la revisión quedó con cobertura incompleta.
+  - **Cómo**: con `-M`, el movido aparece en su ruta nueva con la marca `[movido desde <ruta anterior>, similitud N %]`, y su diff va en el contexto si cabe en el umbral. El revisor y el auditor lo leen en la ruta nueva; la anterior no cuenta como archivo sin leer.
+- **Pendiente**: que la analista valore la sección del README siguiéndola en un repositorio nuevo (SC-006). Otros equipos reciben los cambios al subir `version` en `plugin.json`.
+- **Pendiente de la revisión del PR**: unificar lo que repiten `contexto_revision.py` del plugin y `preparar_revision.py` del repositorio, que ningún test mantiene iguales, y que las pruebas directas de `base_guarda.py` viajen con el plugin (hoy están en `.claude/hooks/test_plugin_repositorio.py`).

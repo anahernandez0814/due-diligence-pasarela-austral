@@ -1,10 +1,12 @@
-"""Detector de datos con forma real y credenciales (FR-005, FR-006).
+"""Detector de datos con forma real y credenciales.
 
 Funciones puras: no leen archivos ni el entorno. `buscar()` devuelve solo el tipo y la
 línea de cada hallazgo, nunca el valor. Las expresiones usan clases de caracteres, de
 modo que su propio texto no coincide con ellas.
 
-Contrato: specs/003-guardas-claude-code/contracts/detector-datos.md.
+Tipos: tarjeta (13 a 19 dígitos, prefijo 2-6 y Luhn válido), NIT (9 dígitos con el dígito
+de verificación de la DIAN), cédula (6 a 10 dígitos tras una palabra de contexto) y
+credenciales (tokens de GitHub, claves de Anthropic y de AWS, claves privadas PEM).
 """
 
 import re
@@ -13,7 +15,7 @@ Hallazgo = tuple[str, int]
 
 # --- Tarjeta: 13 a 19 dígitos, prefijo 2-6, separador opcional espacio o guion --------
 
-# (?<!\d[.,]): la parte decimal de un número no cuenta (contrato, revisión de la parada B).
+# (?<!\d[.,]): la parte decimal de un número no cuenta.
 _TARJETA = re.compile(r"(?<![\w])(?<!\d[ -])(?<!\d[.,])[2-6]\d(?:[ -]?\d){11,17}(?![\w])(?![ -]\d)")
 
 

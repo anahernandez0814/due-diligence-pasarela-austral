@@ -400,8 +400,8 @@ class Caso:
                 interrupcion = self._eventos.interrupcion
                 if interrupcion is None or tarea is None:
                     raise
-                # La cancelación es la de la interrupción: se deshace y se relanza el mismo objeto, que
-                # el chat entrega a Streamlit (una recarga solo se entrega una vez).
+                # La cancelación es la de la interrupción: se deshace y se relanza el mismo objeto,
+                # que el chat entrega a Streamlit (una recarga solo se entrega una vez).
                 tarea.uncancel()
                 self._interrumpido = True
                 self._terminar(

@@ -213,6 +213,11 @@ def test_la_categoria_es_el_sector_sin_canal_y_lo_desconocido_se_confirma_en_las
         assert "categoria_desconocida" in texto
         assert "catálogo" in texto
     assert "pide confirmación al analista" in INSTRUCCIONES_COORDINADOR
+    # #10, cuarta ronda: sin confirmación no hay espera (FR-015), así que se informa.
+    assert (
+        "Si el analista no la confirma, registra el informe con la categoría no determinada, sin "
+        "recomendar habilitar." in INSTRUCCIONES_COORDINADOR
+    )
 
 
 def test_el_coordinador_trata_de_usted_y_no_menciona_tickets_al_analista():
@@ -766,6 +771,27 @@ def test_los_turnos_del_coordinador_salen_del_mensaje_de_resultado():
     caso, _, _ = _caso([], fin=mensaje_de_resultado(num_turns=7))
     asyncio.run(caso.ejecutar(SOLICITUD))
     assert caso.turnos == 7
+
+
+def test_el_coste_y_los_turnos_del_coordinador_suman_todos_los_turnos_del_caso():
+    # #10, cuarta ronda: `total_cost_usd` y `num_turns` son del turno (R1); el caso los suma para
+    # que el coste total de la línea de comandos cuente todos los turnos.
+    fin = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=3,
+        session_id="sesion-de-prueba",
+        stop_reason="end_turn",
+        total_cost_usd=0.25,
+        terminal_reason="completed",
+    )
+    caso, _, _ = _caso([], fin=fin)
+    asyncio.run(caso.ejecutar(SOLICITUD))
+    assert (caso.coste_usd, caso.turnos) == (0.25, 3)
+    asyncio.run(caso.continuar("respuesta del analista"))
+    assert (caso.coste_usd, caso.turnos) == (0.5, 6)
 
 
 def test_las_instrucciones_explican_el_reintento_y_que_la_cobertura_la_calcula_el_sistema():

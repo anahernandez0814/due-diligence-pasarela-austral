@@ -576,6 +576,11 @@ MOTIVOS_SIN_CAUSA = {
     "conflicto_entre_fuentes": (
         "Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales."
     ),
+    # Cuarta ronda de la revisión previa: sin él, un caso con todo cubierto y los conflictos sin
+    # comparar (`sin_consulta`) daba una causa vacía, que la forma rechaza siempre (FR-009).
+    "conflictos_sin_comprobar": (
+        "Sin causa de escalamiento vigente: los conflictos entre fuentes no se pudieron comprobar."
+    ),
     # Precisión de la implementación (T035): sin él, un caso sin comercio identificado y sin los
     # otros cuatro motivos daría una causa vacía.
     "comercio_no_identificado": (
@@ -619,11 +624,13 @@ def causas_del_resumen(estado: EstadoCaso) -> list[str]:
     causas = causas_vigentes(estado.libro)
     if causas:
         return [texto for clave, texto in ETIQUETAS_CAUSA.items() if clave in causas]
+    conflictos = calcular_conflictos(estado).estado
     motivos = {
         "cobertura_incompleta": not calcular_cobertura(estado).completa,
         "categoria_no_determinada": not categoria_determinada(estado.libro),
         "mencion_en_noticias": menciones_en_noticias(estado),
-        "conflicto_entre_fuentes": calcular_conflictos(estado).estado == "con_conflictos",
+        "conflicto_entre_fuentes": conflictos == "con_conflictos",
+        "conflictos_sin_comprobar": conflictos not in ("sin_conflictos", "con_conflictos"),
         "comercio_no_identificado": estado.comercio is None,
     }
     return [MOTIVOS_SIN_CAUSA[clave] for clave, cumple in motivos.items() if cumple]

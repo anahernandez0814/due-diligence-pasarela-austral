@@ -115,6 +115,7 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 - **5, informe vigente con afirmaciones viejas**: decisión aceptada en el #9.
 - **6, el texto que pide el identificador lo redacta el modelo**: lo garantizado son las acciones (sin listas, sin escalamiento y sin informe). La spec no exige el texto.
 - **7, la acción recomendada no se contrasta**: es texto del coordinador para el oficial (FR-011).
+- **El sello durante la espera del registro** (`reglas.espera_exime_de_escalar`, `reglas.py:366-377`): exime de escalar en ese turno, como el alto riesgo (D3). Si el sello vino de un `PostToolUse` de listas que falló, una coincidencia pudo quedar sin registrar; se exige en el turno siguiente, y `habilitar` sigue imposible mientras tanto. Es coherente con FR-014 y FR-016 (sugerencia de la auditoría, cuarta ronda).
 
 **Decisiones de la implementación que no son desviaciones** (anotadas en las notas de las fases 6 a 8 de [tasks.md](tasks.md)). Ninguna contradice un FR, un escenario de la spec ni un principio:
 - **El quinto motivo sin causa** («el comercio no está identificado de forma unívoca»). Precisa FR-009, que pide decir por qué se lleva al oficial un caso sin causas; sin él, ese caso daba una causa vacía, que la propia forma rechaza. Los cuatro motivos de R5 se conservan.
@@ -131,6 +132,17 @@ Constitución v1.0.1. Resultado: **cumple, con las desviaciones justificadas D1 
 - **El test de FR-010 / US2-5** (bloqueante de la revisión de código): el resumen guardado del caso (g) lleva las dos fechas de constitución con su fuente.
 - **Corrección de criterio de la analista**: con el registro caído no hay espera de la categoría y el cierre exige el informe (I.5).
 - **D4** declarada; `resumen_sellado` solo con las claves del esquema; descripciones de `escalar_a_cumplimiento` con todos los casos; guía de datos «que dio el analista en sus mensajes»; `CasoSinSesion` como mensaje en la línea de comandos; limpieza de comentarios, código muerto y contrato; riesgo residual 10 de R13.
+
+**Tercera ronda** (commit `ecee137`, que corrige la revisión de `759405b`; fase 13 de [tasks.md](tasks.md)):
+- **I.5 con cualquier frente caído** (bloqueante de esa ronda): la espera de la categoría deja de existir si la fuente de **cualquier** frente no respondió (`cobertura.frente_caido`; `registro_caido` pasa a ser su caso del registro). El `Stop` exige el informe y, agotadas las devoluciones, marca `cierre_sin_informe`. Las esperas del identificador y del nombre no cambian con una fuente caída.
+- **El rechazo del informe en la espera del registro** ya no pide escalar si la espera exime de escalar (`hooks._sin_pedir_escalar`); con una coincidencia en listas lo sigue pidiendo.
+- **Un fallo del `PreToolUse` de `delegar_frente`** se atribuye al frente pedido (`hooks.frente_delegado`), y a listas solo si no se puede leer.
+- La descripción de `escalar_a_cumplimiento` dice qué se acepta durante esas esperas.
+
+**Cuarta ronda** (este commit, que corrige la revisión de `ecee137`; fase 14 de [tasks.md](tasks.md)):
+- **FR-014 y SC-004 cambian por decisión de la analista** (bloqueante de la revisión de código sobre `ecee137`): la tercera ronda llevó el código más allá de la spec, que solo descartaba la espera de la categoría con el registro caído. La analista mantiene el código, porque es lo que exigen la regla 5 del enunciado («si una fuente no responde, el informe se entrega») y el caso (f) (noticias caídas con el informe entregado). Se alinean la spec (FR-014, SC-004 y la decisión confirmada), el contrato `continuacion-y-cierre.md`, el data-model, R3 y `DECISIONES.md`. **No es una desviación**: tras este commit la spec dice lo mismo que el código, y el recorrido de SC-004 ya lo comprobaba con las listas, las noticias y la categoría caídas.
+- **El sexto motivo sin causa** («los conflictos entre fuentes no se pudieron comprobar»), cuando los conflictos no son `sin_conflictos` ni `con_conflictos`. Sin él, un caso con todo cubierto y los conflictos en `sin_consulta` daba una causa vacía y el resumen se rechazaba siempre (FR-003, FR-009). Precisa FR-009, como el quinto.
+- El coste y los turnos del coordinador se suman entre turnos; la excepción del caso sellado en la descripción de `escalar_a_cumplimiento`; la guía de `categoria_desconocida` dice que sin confirmación se registra el informe con la categoría no determinada; el riesgo del sello durante la espera del registro, en «Riesgos de R13 que no son desviaciones».
 
 ## Decisiones del plan
 

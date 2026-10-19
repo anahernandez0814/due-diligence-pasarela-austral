@@ -1328,6 +1328,75 @@ def test_cada_condicion_por_separado_quita_el_bajo_riesgo_comprobado(romper):
     assert bajo_riesgo_sin_hallazgos(estado) is False
 
 
+def _sin_consulta_del_registro(estado):
+    """El comercio identificado sin una consulta válida del registro que lo traiga: conflictos
+    `sin_consulta`, con la cobertura completa y el resto de la forma del caso (b)."""
+    estado.consultas[:] = [c for c in estado.consultas if c.frente is not Frente.REGISTRO]
+
+
+def _estado_sin_causas_del_recorrido(registro, categoria, caida):
+    """Un estado del recorrido de SC-004, sin causas de escalamiento."""
+    estado = _estado_del_registro(registro)
+    if categoria == "con_resultado":
+        estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
+    elif categoria == "bloqueada":
+        estado.categoria_bloqueada = True
+    if caida != "ninguna":
+        _fuente_caida_en(estado, Frente(caida))
+    return estado
+
+
+def _estado_sin_causas_del_caso_b(romper):
+    """El caso (b) completo con una condición rota (o ninguna), sin causas de escalamiento."""
+    estado = _bajo_riesgo_comprobado()
+    if romper is not None:
+        romper(estado)
+    return estado
+
+
+ESTADOS_SIN_CAUSAS = [
+    pytest.param(lambda r=r, c=c, f=f: _estado_sin_causas_del_recorrido(r, c, f), id=f"{r}-{c}-{f}")
+    for r in ESTADOS_DEL_REGISTRO
+    for c in ESTADOS_DE_LA_CATEGORIA
+    for f in FUENTES_CAIDAS
+] + [
+    pytest.param(lambda romper=romper: _estado_sin_causas_del_caso_b(romper), id=nombre)
+    for nombre, romper in (
+        ("caso_b", None),
+        ("caso_b-sin_consulta_del_registro", _sin_consulta_del_registro),
+        ("caso_b-mencion", _con_mencion),
+        ("caso_b-conflicto", _con_conflicto),
+        ("caso_b-noticias_caido", _noticias_caido),
+        ("caso_b-categoria_desconocida", _categoria_desconocida),
+        ("caso_b-registro_caido", _registro_caido_en),
+    )
+]
+
+
+@pytest.mark.parametrize("preparar", ESTADOS_SIN_CAUSAS)
+def test_si_el_escalamiento_sin_causas_se_admite_la_causa_del_resumen_no_esta_vacia(preparar):
+    # #10, cuarta ronda (FR-003, FR-009): el código pone la causa y el coordinador no la puede
+    # corregir, así que una causa vacía haría rechazar siempre un escalamiento que se admite. Antes
+    # fallaba con «caso_b-sin_consulta_del_registro» (los conflictos en `sin_consulta`).
+    from due_diligence.reglas import causas_del_resumen, evaluar_escalamiento
+
+    estado = preparar()
+    assert causas_vigentes(estado.libro) == frozenset()
+    if evaluar_escalamiento(estado):  # bajo riesgo sin hallazgos comprobado o espera del registro
+        return
+    assert causas_del_resumen(estado) != []
+
+
+def test_los_conflictos_sin_comprobar_son_un_motivo_sin_causa():
+    from due_diligence.conflictos import calcular_conflictos
+    from due_diligence.reglas import MOTIVOS_SIN_CAUSA, causas_del_resumen
+
+    estado = _bajo_riesgo_comprobado()
+    _sin_consulta_del_registro(estado)
+    assert calcular_conflictos(estado).estado == "sin_consulta"
+    assert causas_del_resumen(estado) == [MOTIVOS_SIN_CAUSA["conflictos_sin_comprobar"]]
+
+
 def test_el_escalamiento_de_otro_comercio_no_cubre_al_actual():
     clave_0004 = ("CO-AM-0004", "Almacén Mirador SAS", True)
     clave_0005 = ("CO-AM-0005", "Almacén Mirador Norte SAS", True)

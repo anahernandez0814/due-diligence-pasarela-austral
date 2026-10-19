@@ -137,7 +137,7 @@ completa en el ticket #14 con el mecanismo elegido para cada necesidad del enunc
 - **Esperas del analista** (R3, FR-014; decisión de la analista): el `Stop` solo deja terminar un turno sin escalar ni informar cuando el código **comprueba en el estado** que falta un dato del analista. No basta con el texto del modelo. Hay tres esperas:
   - `identificador`: varias coincidencias en el registro;
   - `nombre`: ninguna coincidencia;
-  - `categoria`: la última delegación de categoría la bloqueó I.3, no hay ningún resultado de categoría y el registro no está caído.
+  - `categoria`: la última delegación de categoría la bloqueó I.3, no hay ningún resultado de categoría y ningún frente está caído (con un frente caído se exige el informe, por la regla 5 y el caso f; decisión de la analista en la cuarta ronda de la revisión previa).
 
   Qué hacen:
   - Las del registro no gastan devoluciones y dejan el evento `espera_analista`.

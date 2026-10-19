@@ -275,10 +275,12 @@ def registrar_informe(
         "legal, por una categoría de alto riesgo o por un fallo de un hook de verificación. "
         "También se puede escalar un caso sin ninguna de esas causas si la cobertura está "
         "incompleta, la categoría no quedó determinada, hay menciones en noticias, hay conflictos "
-        "entre las fuentes registrales o el comercio no está identificado de forma unívoca; la "
-        "causa lo dice así, sin presentarlo como una coincidencia. Mientras se espera que el "
-        "analista dé el identificador o revise el nombre del comercio, solo se acepta el "
-        "escalamiento por una coincidencia en listas restrictivas. Una mención en noticias no es "
+        "entre las fuentes registrales, los conflictos entre fuentes no se pudieron comprobar o el "
+        "comercio no está identificado de forma unívoca; la causa lo dice así, sin presentarlo "
+        "como una coincidencia. Mientras se espera que el analista dé el identificador o revise "
+        "el nombre del comercio, solo se acepta el escalamiento por una coincidencia en listas "
+        "restrictivas o, si el caso quedó sellado por el fallo de un hook de verificación, el "
+        "escalamiento por ese fallo. Una mención en noticias no es "
         "una coincidencia en listas restrictivas. No comprueba que cada fuente se haya "
         "consultado ni decide si corresponde escalar (eso lo hace el sistema antes de llamarla), "
         "y no emite una recomendación de habilitación. Si falta un campo obligatorio o una "
@@ -296,7 +298,8 @@ def escalar_a_cumplimiento(
             "Texto o lista. Por qué se escala: coincidencia en listas, categoría de alto riesgo o "
             "fallo de un hook de verificación. Sin ninguna de esas causas, los motivos por los que "
             "se lleva al oficial: cobertura incompleta, categoría no determinada, menciones en "
-            "noticias, conflictos entre fuentes o comercio no identificado. Lo pone el sistema.",
+            "noticias, conflictos entre fuentes, conflictos sin comprobar o comercio no "
+            "identificado. Lo pone el sistema.",
             ["string", "array"],
         ),
     ] = None,

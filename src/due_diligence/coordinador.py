@@ -67,7 +67,8 @@ _REGLA_DATOS = (
     "(«suplementos dietarios», no «venta en línea de suplementos dietarios»). Si la herramienta "
     "de categoría devuelve categoria_desconocida, solo vuelve a delegar con un nombre del "
     "catálogo que aparezca en los mensajes del analista; si ninguno aparece, pide confirmación "
-    "al analista."
+    "al analista. Si el analista no la confirma, registra el informe con la categoría no "
+    "determinada, sin recomendar habilitar."
 )
 
 # Guía de la regla de negocio I.1 (listas solo con identificación unívoca). Es guía: la garantía es
@@ -224,9 +225,11 @@ class Caso:
             self.estado, self._eventos, ejecutor or EjecutorSDK(), self._opciones_subagente
         )
         self.respuesta = ""
-        self.coste_usd: float | None = None  # `total_cost_usd` del coordinador
+        # `total_cost_usd` del coordinador, sumado en todos los turnos del caso (#10).
+        self.coste_usd: float | None = None
         # `num_turns` del coordinador (#8, R2): para comprobar que los reintentos y las
-        # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. `None` sin `ResultMessage`.
+        # devoluciones del `Stop` caben en `MAX_TURNOS_SEGURIDAD`. Desde el #10, la suma de todos
+        # los turnos del caso. `None` sin `ResultMessage`.
         self.turnos: int | None = None
         # #10 (R1): la sesión del coordinador que deja cada `ResultMessage` (la que `continuar`
         # reanuda) y la clasificación de cada turno, en orden; `terminacion` es la del último.
@@ -344,8 +347,10 @@ class Caso:
                             self.respuesta = bloque.text
                 elif isinstance(mensaje_sdk, ResultMessage):
                     clasificacion = clasificar_resultado(mensaje_sdk)
-                    self.coste_usd = mensaje_sdk.total_cost_usd
-                    self.turnos = mensaje_sdk.num_turns
+                    # Se suman: `total_cost_usd` y `num_turns` son del turno, no del caso (R1).
+                    if mensaje_sdk.total_cost_usd is not None:
+                        self.coste_usd = (self.coste_usd or 0.0) + mensaje_sdk.total_cost_usd
+                    self.turnos = (self.turnos or 0) + mensaje_sdk.num_turns
                     self.session_id = mensaje_sdk.session_id or self.session_id
         except ResultError as error:
             # El SDK la lanza después del ResultMessage: solo se clasifica si no se vio antes.

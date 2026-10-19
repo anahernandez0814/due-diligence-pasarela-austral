@@ -291,7 +291,7 @@ def test_la_descripcion_del_escalamiento_dice_lo_que_pone_el_sistema_y_lo_que_no
         "las afirmaciones y la acción recomendada, quien escala",
         "No comprueba que cada fuente se haya consultado ni decide si corresponde escalar",
         "el oficial no tiene acceso a la conversación",
-        # Todos los casos en que se escala (principio IV): las tres causas y los cinco motivos sin
+        # Todos los casos en que se escala (principio IV): las tres causas y los seis motivos sin
         # causa, y que una mención en noticias no es una coincidencia en listas.
         "coincidencia en listas restrictivas, del comercio o de su representante legal",
         "categoría de alto riesgo",
@@ -300,11 +300,14 @@ def test_la_descripcion_del_escalamiento_dice_lo_que_pone_el_sistema_y_lo_que_no
         "la categoría no quedó determinada",
         "hay menciones en noticias",
         "hay conflictos entre las fuentes registrales",
+        "los conflictos entre fuentes no se pudieron comprobar",
         "el comercio no está identificado de forma unívoca",
         "Una mención en noticias no es una coincidencia en listas restrictivas",
-        # #10, D3: lo que no hace durante la espera del identificador o del nombre.
+        # #10, D3: lo que no hace durante la espera del identificador o del nombre, con la
+        # excepción del caso sellado (FR-016, FR-012).
         "Mientras se espera que el analista dé el identificador o revise el nombre del comercio, "
-        "solo se acepta el escalamiento por una coincidencia en listas restrictivas",
+        "solo se acepta el escalamiento por una coincidencia en listas restrictivas o, si el caso "
+        "quedó sellado por el fallo de un hook de verificación, el escalamiento por ese fallo",
     ):
         assert fragmento in descripcion, fragmento
 
@@ -320,6 +323,7 @@ def test_la_causa_del_escalamiento_nombra_todos_los_casos():
         "categoría no determinada",
         "menciones en noticias",
         "conflictos entre fuentes",
+        "conflictos sin comprobar",
         "comercio no identificado",
     ):
         assert fragmento in descripcion, fragmento

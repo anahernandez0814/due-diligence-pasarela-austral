@@ -499,6 +499,28 @@ La revisión de `/abrir-pr` del commit `8658d6c` dio **con bloqueantes**: uno de
 - [X] T072 Riesgo residual 10 de R13: no hay guarda `PreToolUse` sobre la categoría que consulta el subagente.
 - [X] T073 ruff y la suite completa en verde. Un commit. Resumen a la analista **antes** de relanzar `/abrir-pr`.
 
+## Fase 13: tercera ronda de la revisión previa
+
+La revisión de `/abrir-pr` del commit `759405b` dio **con bloqueantes**. Las correcciones entraron en el commit `ecee137`. Esta fase se anotó en la cuarta ronda, por la trazabilidad (principio IX): la tercera ronda no la había registrado.
+
+- [X] T074 I.5 con cualquier frente caído (bloqueante): `cobertura.frente_caido(estado, frente)`, y `registro_caido` pasa a ser su caso del registro. `reglas.espera_del_analista` descarta la espera de la categoría si **cualquier** frente está caído. El `Stop` exige el informe y, agotadas las devoluciones, marca `cierre_sin_informe`. Tests: `test_reglas.py` (el recorrido de SC-004 con `FUENTES_CAIDAS`, `test_si_una_fuente_cae_durante_la_espera_de_la_categoria_la_espera_desaparece` y `test_un_frente_que_respondio_no_quita_la_espera_de_la_categoria`) y `test_hooks.py::test_con_noticias_caidas_la_categoria_bloqueada_no_es_espera_y_el_cierre_exige_el_informe`. La spec no se actualizó en esta ronda: lo corrige la fase 14.
+- [X] T075 En la espera del identificador o del nombre, el rechazo del informe no pide escalar si la espera exime de escalar (`hooks._sin_pedir_escalar`); con una coincidencia en listas lo sigue pidiendo. Tests `test_en_la_espera_del_identificador_el_rechazo_del_informe_no_pide_escalar` y `test_en_la_espera_del_identificador_con_una_coincidencia_el_rechazo_pide_escalar`.
+- [X] T076 Un fallo del `PreToolUse` de `delegar_frente` se atribuye al frente pedido (`hooks.frente_delegado` y `frente_de` en `fallar_cerrado`), y a listas solo si no se puede leer. Test `test_un_fallo_del_hook_de_delegar_se_atribuye_al_frente_pedido`.
+- [X] T077 La descripción de `escalar_a_cumplimiento` dice qué se acepta durante esas esperas (`test_servidor.py`).
+- [X] T078 ruff y la suite completa en verde. Commit `ecee137`.
+
+## Fase 14: cuarta ronda de la revisión previa
+
+La revisión de `/abrir-pr` del commit `ecee137` dio **con bloqueantes**: uno de la revisión de código, de documentación; la auditoría, sin bloqueantes. **Decisión de la analista**: se mantiene el código de `ecee137` (cualquier frente caído descarta la espera de la categoría), porque es lo que exigen la regla 5 del enunciado y el caso (f). Se alinean los documentos con el código y se atienden las sugerencias baratas. Un commit nuevo, sin `--amend`.
+
+- [X] T079 Bloqueante: spec (FR-014, tercer punto; SC-004, con las listas, las noticias y la categoría caídas; la decisión confirmada), contrato `continuacion-y-cierre.md`, data-model, R3 y `DECISIONES.md` dicen «ningún frente caído». Tercera y cuarta ronda en el plan, con el motivo, sin desviación. Fases 13 y 14 en este archivo.
+- [X] T080 `reglas.causas_del_resumen`: el motivo `conflictos_sin_comprobar` cuando los conflictos no son `sin_conflictos` ni `con_conflictos` (revisión de código, `reglas.py:622`). Tests en `test_reglas.py`: `test_si_el_escalamiento_sin_causas_se_admite_la_causa_del_resumen_no_esta_vacia`, que recorre los estados de SC-004 y el caso (b) con cada condición rota, y `test_los_conflictos_sin_comprobar_son_un_motivo_sin_causa`. Mutación comprobada: sin el motivo, fallan los dos con el caso (b) sin consulta del registro. Cambia a sabiendas `test_hooks.py::test_sin_causas_la_causa_lleva_una_linea_por_motivo[comercio]`: sin comercio los conflictos quedan `sin_comercio` y salen las dos líneas. R5 en research con el sexto motivo; descripciones de `escalar_a_cumplimiento` y de `causa_escalamiento` con él (principio IV).
+- [X] T081 `Caso`: `coste_usd` y `turnos` se suman entre turnos (revisión de código, `coordinador.py:347`). Test `test_el_coste_y_los_turnos_del_coordinador_suman_todos_los_turnos_del_caso`, con dos turnos.
+- [X] T082 Descripción de `escalar_a_cumplimiento`: la excepción del caso sellado junto al «solo» (revisión de código, `servidor.py:280`, principio IV). Test de la descripción ajustado.
+- [X] T083 Guía `_REGLA_DATOS`: con `categoria_desconocida`, si el analista no la confirma, se registra el informe con la categoría no determinada, sin `habilitar` (revisión de código, `coordinador.py:62`). Test del texto en `test_coordinador.py`.
+- [X] T084 Plan, «Riesgos de R13 que no son desviaciones»: el sello durante la espera del registro exime de escalar en ese turno, y una coincidencia sin registrar se exige en el siguiente (auditoría, `reglas.py:366-377`).
+- [X] T085 ruff y la suite completa en verde. Un commit. Resumen a la analista **antes** de relanzar `/abrir-pr`. Van a la descripción del PR, sin cambios y con su razón: `escalamiento_cubre` con el comercio por defecto (`reglas.py:385`; ningún llamador lo omite), las duplicaciones de la fase 12, el test de dos turnos de US3-9, R13.10, D4 y la línea vacía del analista con un frente caído (#11).
+
 ## Para otros tickets (no se corrige en el #10)
 
 - **#12, simulación de noticias**: sin un resultado asignado, el `EjecutorSimulado` da a noticias la fuente por defecto `FUENTE` («Registro Mercantil Ficticio del Sur»); la real es «Diario Ficticio del Sur». Por eso el resumen simulado del caso (a) cita el registro como fuente de noticias. Solo afecta a la simulación: la pasarela real usa su fuente y FR-004 compara con la fuente que devolvió cada consulta (observación de la analista en la parada B).

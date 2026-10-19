@@ -2966,10 +2966,14 @@ def test_un_resumen_valido_sustituye_lo_del_codigo_y_deja_pendiente_el_escalamie
             ["Sin causa de escalamiento vigente: hay conflictos entre las fuentes registrales."],
         ),
         (
+            # Cuarta ronda: sin comercio, los conflictos quedan `sin_comercio`, así que tampoco se
+            # pudieron comprobar; las dos líneas son verdaderas.
             "comercio",
             [
+                "Sin causa de escalamiento vigente: los conflictos entre fuentes no se pudieron "
+                "comprobar.",
                 "Sin causa de escalamiento vigente: el comercio no está identificado de forma "
-                "unívoca."
+                "unívoca.",
             ],
         ),
         (

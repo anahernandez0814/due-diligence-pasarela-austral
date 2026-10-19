@@ -37,7 +37,7 @@ En este orden:
 | identificado | con resultado o sin delegar | no |
 | cualquier otro estado (sin delegar, en curso, D3 o identificado) | última delegación bloqueada por I.3 y sin resultado | sí (`categoria`) |
 
-La espera `categoria` vale con cualquier estado del registro salvo el caído. La tabla muestra la prioridad del motivo, no un orden de evaluación: con el registro en varias coincidencias, el motivo es el del identificador.
+La espera `categoria` vale con cualquier estado del registro salvo el caído, y solo si ningún frente está caído: con las listas, las noticias o la categoría caídas tampoco hay espera y se exige el informe (FR-015, regla 5 del enunciado, I.5). La tabla muestra la prioridad del motivo, no un orden de evaluación: con el registro en varias coincidencias, el motivo es el del identificador.
 
 ## Durante una espera
 

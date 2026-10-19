@@ -1238,3 +1238,119 @@ def test_las_afirmaciones_de_listas_van_una_por_autoridad_en_los_dos_modos():
     ) in _REGLA_AFIRMACIONES
     for demo in (False, True):
         assert _REGLA_AFIRMACIONES in instrucciones_coordinador(demo=demo)
+
+
+# ------------------------------- #12: la interrupción de la interfaz durante un hook (T014, R9)
+
+
+class Interrupcion(BaseException):
+    """Como `ScriptControlException` de Streamlit: hereda de `BaseException`, no de `Exception`."""
+
+
+def _coordinador_con_hook_suelto(escritas):
+    """Un `query()` que, como el SDK 0.2.168, ejecuta el `PreToolUse` en una tarea suelta.
+
+    - `query.py:380`: el hook corre en `spawn_task` (`loop.create_task`), no en la tarea del turno.
+    - `subprocess_cli.py:253`: la respuesta se escribe dentro de un `anyio.Lock()` sin
+      `fast_acquire`, cuyo `acquire` cede una vez; aquí también, para fijar el orden real.
+    - `query.close()` cancela las tareas en curso al cerrar: si el turno se cortara antes de que la
+      respuesta saliera, la decisión se perdería y el test lo vería.
+    """
+    caso_ref = {}
+
+    async def consulta(*, prompt, options=None):
+        import anyio
+
+        candado = anyio.Lock()
+        hook = caso_ref["caso"].hooks.coordinador()["PreToolUse"][0].hooks[0]
+        entrada = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "mcp__delegacion__delegar_frente",
+            "tool_input": {"frente": "listas"},
+            "tool_use_id": "t1",
+        }
+
+        async def manejar():
+            decision = await hook(entrada, "t1", {"signal": None})
+            async with candado:
+                escritas.append(decision)
+
+        tarea = asyncio.get_running_loop().create_task(manejar())
+        try:
+            await asyncio.sleep(60)  # el CLI seguiría trabajando: el turno no termina solo
+            yield AssistantMessage(content=[TextBlock("no debe llegar")], model="simulado")
+        finally:
+            tarea.cancel()
+
+    return consulta, caso_ref
+
+
+def _observador_que_interrumpe_en_bloqueos(evento):
+    if evento.regla is not None:
+        raise Interrupcion("Stop")
+
+
+def test_la_interrupcion_corta_el_turno_al_decidir_el_hook_y_la_denegacion_sale():
+    from due_diligence.reglas import MOTIVO_REGISTRO_PRIMERO
+
+    escritas = []
+    consulta, caso_ref = _coordinador_con_hook_suelto(escritas)
+    caso = Caso(
+        ejecutor=EjecutorSimulado(),
+        consulta=consulta,
+        observador=_observador_que_interrumpe_en_bloqueos,
+        interrupciones=(Interrupcion,),
+    )
+    caso_ref["caso"] = caso
+
+    async def probar():
+        async with asyncio.timeout(2):
+            await caso.ejecutar(SOLICITUD)
+
+    with pytest.raises(Interrupcion) as lanzada:
+        asyncio.run(probar())
+    # El mismo objeto que lanzó el observador: Streamlit entrega una recarga una sola vez.
+    assert lanzada.value is caso._eventos.interrupcion
+    (decision,) = escritas
+    especifica = decision["hookSpecificOutput"]
+    assert especifica["permissionDecision"] == "deny"
+    assert especifica["permissionDecisionReason"] == MOTIVO_REGISTRO_PRIMERO
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA
+    assert "interrumpido por la interfaz" in caso.terminacion.detalle
+    assert caso.interrumpido is True and caso.completo is False
+    assert caso.eventos()[-1].tipo == TIPO_TERMINACION
+
+
+def test_sin_interrupcion_una_cancelacion_externa_sigue_siendo_cancelacion():
+    consulta, caso_ref = _coordinador_con_hook_suelto([])
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=consulta, interrupciones=(Interrupcion,))
+    caso_ref["caso"] = caso
+
+    async def probar():
+        tarea = asyncio.create_task(caso.ejecutar(SOLICITUD))
+        await asyncio.sleep(0.05)
+        tarea.cancel()
+        await tarea
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(probar())
+    assert caso.interrumpido is False
+
+
+def test_un_caso_sin_turnos_no_esta_interrumpido():
+    assert Caso(ejecutor=EjecutorSimulado()).interrumpido is False
+
+
+def test_una_interrupcion_que_sale_de_la_consulta_tambien_marca_el_turno_interrumpido():
+    interrupcion = Interrupcion("Stop")
+
+    async def consulta(*, prompt, options=None):
+        raise interrupcion
+        yield  # pragma: no cover
+
+    caso = Caso(ejecutor=EjecutorSimulado(), consulta=consulta, interrupciones=(Interrupcion,))
+    with pytest.raises(Interrupcion) as lanzada:
+        asyncio.run(caso.ejecutar(SOLICITUD))
+    assert lanzada.value is interrupcion
+    assert caso.interrumpido is True
+    assert caso.terminacion.terminacion is Terminacion.ANOMALA

@@ -15,6 +15,7 @@ from due_diligence.estado import (
     derivar_comercio,
 )
 from due_diligence.eventos import (
+    DENTRO_DE_HOOK,
     TIPO_BLOQUEO_REGLA,
     TIPO_CASO_INICIADO,
     TIPO_CIERRE_IMPEDIDO,
@@ -614,3 +615,108 @@ def test_un_observador_que_lee_la_traza_no_bloquea():
     registro = RegistroEventos(observador=lambda e: leidos.append(len(registro.eventos())))
     _sin_bloqueo(lambda: registro.registrar(TIPO_CASO_INICIADO, None, "uno"))
     assert leidos == [1]
+
+
+# ------------------------------------- #12: la interrupción de la interfaz (T012, R9, FR-008)
+
+
+class Interrupcion(BaseException):
+    """Como `ScriptControlException` de Streamlit: hereda de `BaseException`, no de `Exception`."""
+
+
+def _registro_que_interrumpe(avisos, llamadas):
+    def observador(evento):
+        llamadas.append(evento.secuencia)
+        raise Interrupcion(f"interrupción {len(llamadas)}")
+
+    registro = RegistroEventos(observador=observador, interrupciones=(Interrupcion,))
+    registro.al_interrumpir = lambda: avisos.append("cancelar turno")
+    return registro
+
+
+def test_la_interrupcion_del_observador_se_guarda_y_registrar_devuelve_el_evento():
+    avisos, llamadas = [], []
+    registro = _registro_que_interrumpe(avisos, llamadas)
+    evento = registro.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "motivo", regla="I.1")
+    assert registro.eventos() == [evento]
+    assert isinstance(registro.interrupcion, Interrupcion)
+    assert str(registro.interrupcion) == "interrupción 1"
+    # Fuera de un hook se avisa en el momento, una sola vez.
+    assert avisos == ["cancelar turno"]
+
+
+def test_tras_la_interrupcion_el_observador_queda_apagado_y_se_conserva_la_primera():
+    avisos, llamadas = [], []
+    registro = _registro_que_interrumpe(avisos, llamadas)
+    primera = registro.registrar(TIPO_CASO_INICIADO, None, "uno")
+    guardada = registro.interrupcion
+    segunda = registro.registrar(TIPO_DELEGACION, Frente.REGISTRO, "dos")
+    assert registro.eventos() == [primera, segunda]
+    assert llamadas == [1], "el observador no debe volver a llamarse tras la interrupción"
+    assert registro.interrupcion is guardada
+    assert avisos == ["cancelar turno"]
+
+
+def test_dentro_de_un_hook_no_se_avisa_hasta_que_el_hook_llama_a_interrumpir():
+    avisos, llamadas = [], []
+    registro = _registro_que_interrumpe(avisos, llamadas)
+    token = DENTRO_DE_HOOK.set(True)
+    try:
+        registro.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "motivo", regla="I.1")
+    finally:
+        DENTRO_DE_HOOK.reset(token)
+    assert isinstance(registro.interrupcion, Interrupcion)
+    assert avisos == []
+    registro.interrumpir()
+    registro.interrumpir()
+    assert avisos == ["cancelar turno"]
+
+
+def test_interrumpir_sin_interrupcion_no_avisa_y_sin_aviso_espera_al_turno():
+    avisos = []
+    registro = RegistroEventos(interrupciones=(Interrupcion,))
+    registro.al_interrumpir = lambda: avisos.append("cancelar turno")
+    registro.interrumpir()
+    assert avisos == [], "sin interrupción guardada no hay nada que cortar"
+
+    # Una interrupción antes de que el turno ponga su aviso (por ejemplo, en `caso_iniciado`)
+    # queda guardada; el turno la avisa al poner el suyo.
+    def observador(evento):
+        raise Interrupcion("antes del turno")
+
+    registro = RegistroEventos(observador=observador, interrupciones=(Interrupcion,))
+    registro.registrar(TIPO_CASO_INICIADO, None, "uno")
+    assert isinstance(registro.interrupcion, Interrupcion)
+    registro.al_interrumpir = lambda: avisos.append("cancelar turno")
+    registro.interrumpir()
+    assert avisos == ["cancelar turno"]
+
+
+@pytest.mark.parametrize("excepcion", [asyncio.CancelledError, KeyboardInterrupt])
+def test_la_cancelacion_y_la_interrupcion_del_proceso_se_propagan(excepcion):
+    def observador(evento):
+        raise excepcion()
+
+    registro = RegistroEventos(observador=observador, interrupciones=(Interrupcion,))
+    with pytest.raises(excepcion):
+        registro.registrar(TIPO_CASO_INICIADO, None, "uno")
+    assert registro.interrupcion is None
+
+
+def test_con_interrupciones_declaradas_un_error_normal_del_observador_se_sigue_ignorando():
+    def observador(evento):
+        raise RuntimeError("fallo del observador")
+
+    registro = RegistroEventos(observador=observador, interrupciones=(Interrupcion,))
+    evento = registro.registrar(TIPO_CASO_INICIADO, None, "uno")
+    assert registro.eventos() == [evento]
+    assert registro.interrupcion is None
+
+
+def test_sin_interrupciones_declaradas_la_interrupcion_se_propaga_como_antes():
+    def observador(evento):
+        raise Interrupcion("sin declarar")
+
+    registro = RegistroEventos(observador=observador)
+    with pytest.raises(Interrupcion):
+        registro.registrar(TIPO_CASO_INICIADO, None, "uno")

@@ -17,7 +17,7 @@ from due_diligence import presentacion
 # ----------------------------------------------------------------- casos simulados para los tests
 
 
-def construir(guiones, resultados, num_turns=None, observador=None):
+def construir(guiones, resultados, num_turns=None, observador=None, interrupciones=()):
     """Un `Caso` real con subagentes simulados y un `CoordinadorSimulado` por turnos, sin ejecutar.
 
     Lo usan también los tests de la aplicación (`test_chat.py`) como fábrica de casos.
@@ -30,6 +30,7 @@ def construir(guiones, resultados, num_turns=None, observador=None):
         ejecutor=EjecutorSimulado(resultados=resultados),
         consulta=coordinador,
         observador=observador,
+        interrupciones=interrupciones,
     )
     coordinador.caso = caso
     return caso
@@ -559,3 +560,29 @@ def test_la_cobertura_muestra_los_codigos_de_error_conocidos_en_palabras(motivo,
 def test_cada_codigo_conocido_tiene_su_traduccion():
     for codigo, palabras in presentacion.ERRORES_EN_PALABRAS.items():
         assert codigo not in palabras and palabras == palabras.lower()
+
+
+# ------------------------------- #12: el mensaje tras un turno interrumpido (T015, R9, opción A)
+
+
+def _interrumpido(caso):
+    caso._interrumpido = True  # lo pone `Caso._turno` al cortar el turno (test_coordinador.py)
+    return caso
+
+
+@pytest.mark.parametrize("fabrica", [lambda: caso_d(1), caso_f, caso_a])
+def test_tras_un_turno_interrumpido_el_mensaje_abre_un_caso_nuevo_con_aviso(fabrica):
+    caso = _interrumpido(fabrica())
+    decision = presentacion.decidir_mensaje(caso, "CO-AM-0004")
+    assert decision == presentacion.DecisionMensaje(
+        presentacion.Decision.NUEVO, presentacion.AVISO_TURNO_INTERRUMPIDO
+    )
+    assert presentacion.AVISO_TURNO_INTERRUMPIDO == (
+        "El turno anterior se interrumpió; se inició un caso nuevo."
+    )
+
+
+def test_tras_un_turno_interrumpido_un_mensaje_vacio_sigue_la_regla_de_la_espera():
+    caso = _interrumpido(caso_d(1))
+    decision = presentacion.decidir_mensaje(caso, "  ")
+    assert decision.accion is presentacion.Decision.AVISO_ESPERA

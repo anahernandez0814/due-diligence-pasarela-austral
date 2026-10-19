@@ -49,6 +49,13 @@ COMPLETO, INCOMPLETO, ESPERANDO = "completo", "incompleto", "esperando"
 
 # Textos fijos de la conversación (R6). `MENSAJE_SIN_SESION` es el del #10, que `__main__` importa.
 AVISO_CASO_NUEVO = "Caso anterior cerrado; se inició un caso nuevo."
+# #12 (R9, opción A): tras un turno cortado con «Stop», el siguiente mensaje abre un caso nuevo y
+# nunca reanuda una sesión del coordinador que quedó a mitad de una herramienta.
+AVISO_TURNO_INTERRUMPIDO = "El turno anterior se interrumpió; se inició un caso nuevo."
+MENSAJE_TURNO_INTERRUMPIDO = (
+    "Turno interrumpido por el analista. El caso queda sin completar; el siguiente mensaje inicia "
+    "un caso nuevo."
+)
 # Dos oraciones, sin unir dos «dos puntos» seguidos: el motivo ya lleva los suyos (validación).
 AVISO_ESPERA = "El coordinador espera su respuesta. {motivo} El caso sigue sin completar."
 MENSAJE_FALLO_TURNO = (
@@ -319,6 +326,8 @@ def decidir_mensaje(caso: "Caso | None", texto: str) -> DecisionMensaje:
       de la analista: con D1 del #10, las coincidencias de un comercio anterior siguen siendo causas
       del caso, y un caso de prueba heredaría el escalamiento del anterior).
     - Con el caso incompleto o en espera: se continúa el mismo caso.
+    - #12 (R9, opción A): con el último turno interrumpido, caso nuevo con aviso, aunque esperara al
+      analista: la sesión del coordinador quedó cortada a mitad de una herramienta.
     """
     if not texto.strip():
         espera = caso.espera if caso is not None else None
@@ -327,6 +336,8 @@ def decidir_mensaje(caso: "Caso | None", texto: str) -> DecisionMensaje:
         return DecisionMensaje(Decision.IGNORAR)
     if caso is None:
         return DecisionMensaje(Decision.NUEVO)
+    if caso.interrumpido:
+        return DecisionMensaje(Decision.NUEVO, AVISO_TURNO_INTERRUMPIDO)
     if caso.completo:
         return DecisionMensaje(Decision.NUEVO, AVISO_CASO_NUEVO)
     return DecisionMensaje(Decision.CONTINUAR)

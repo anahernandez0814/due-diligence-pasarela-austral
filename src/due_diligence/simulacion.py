@@ -24,6 +24,8 @@ from servidor_mcp.informe import mensaje, mensaje_resumen, validar_informe, vali
 from servidor_mcp.normalizar import igual, igual_identificador, normalizar
 
 FUENTE = "Registro Mercantil Ficticio del Sur"
+# La fuente de las noticias simuladas (#12, R10): la de N-0001 y la de una búsqueda sin mención.
+FUENTE_NOTICIAS = "Diario Ficticio del Sur"
 FECHA = "2026-09-30"
 REPRESENTANTE = {"nombre": "Lucía Ferrer Montalvo", "identificador": "PE-0001"}
 
@@ -209,10 +211,11 @@ NOTICIA_N_0001 = {
 _MENCIONADO_EN_N_0001 = {"identificador": "CO-AM-0005", "nombre": "Almacén Mirador Norte SAS"}
 
 
-def respuesta_noticias(argumentos: Mapping[str, Any]) -> dict[str, Any] | None:
-    """La respuesta de noticias con N-0001 si se busca al comercio que menciona; si no, `None`.
+def respuesta_noticias(argumentos: Mapping[str, Any]) -> dict[str, Any]:
+    """La respuesta de noticias: N-0001 si se busca al comercio que menciona; si no, sin menciones.
 
-    Como la pasarela real: por identificador o por nombre completo normalizado, nunca parcial.
+    Como la pasarela real: por identificador o por nombre completo normalizado, nunca parcial. Las
+    dos con la fuente del diario (#12, R10), no la del registro mercantil.
     """
     identificador, nombre = argumentos.get("identificador"), argumentos.get("nombre")
     menciona = (
@@ -220,16 +223,16 @@ def respuesta_noticias(argumentos: Mapping[str, Any]) -> dict[str, Any] | None:
         and igual_identificador(identificador, _MENCIONADO_EN_N_0001["identificador"])
     ) or (isinstance(nombre, str) and igual(nombre, _MENCIONADO_EN_N_0001["nombre"]))
     if not menciona:
-        return None
+        return respuesta_del_contrato("sin_coincidencias", [], fuente=FUENTE_NOTICIAS)
     return {
         "resultado": "coincidencias",
         "hechos": [
             {
                 "contenido": dict(NOTICIA_N_0001),
-                "metadatos": {"fuente": "Diario Ficticio del Sur", "fecha": "2026-03-18"},
+                "metadatos": {"fuente": FUENTE_NOTICIAS, "fecha": "2026-03-18"},
             }
         ],
-        "metadatos": {"fuentes": ["Diario Ficticio del Sur"], "fecha": "2026-09-30"},
+        "metadatos": {"fuentes": [FUENTE_NOTICIAS], "fecha": FECHA},
     }
 
 
@@ -574,9 +577,7 @@ class PasarelaSimulada:
 
     def _noticias(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.consultas_a_fuentes.append(("noticias", dict(entrada)))
-        return respuesta_noticias(entrada) or respuesta_del_contrato(
-            "sin_coincidencias", [], [], fuente="Noticias Ficticias"
-        )
+        return respuesta_noticias(entrada)
 
     def _riesgo(self, entrada: dict[str, Any]) -> dict[str, Any]:
         self.consultas_a_fuentes.append(("riesgo", dict(entrada)))

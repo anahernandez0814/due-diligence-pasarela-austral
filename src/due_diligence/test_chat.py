@@ -40,9 +40,12 @@ class Fabrica:
     resultados: Any  # función sin argumentos: unos resultados nuevos para cada caso
     num_turns: list[int] | None = None
     casos: list[Any] = field(default_factory=list)
+    interrupciones: tuple[type[BaseException], ...] = ()
 
     def __call__(self, observador):
-        caso = construir(self.guiones, self.resultados(), self.num_turns, observador)
+        caso = construir(
+            self.guiones, self.resultados(), self.num_turns, observador, self.interrupciones
+        )
         self.casos.append(caso)
         return caso
 
@@ -280,3 +283,72 @@ def test_un_caso_nuevo_no_dibuja_el_historial_anterior_y_avisa_desde_el_principi
     ((usuario, asistente),) = _turnos(at)  # ningún turno del caso anterior
     assert _textos(usuario) == ["Otro comercio, por favor."]
     assert _textos(asistente)[0] == presentacion.AVISO_CASO_NUEVO
+
+
+# ------------------------------------- #12: la interrupción de Streamlit (T016, R9, opción A)
+
+
+def test_las_excepciones_de_control_de_streamlit_heredan_de_baseexception():
+    # Fija la ruta y la jerarquía en las que se apoya R9: si Streamlit las cambia, este test falla.
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        RerunException,
+        ScriptControlException,
+        StopException,
+    )
+
+    assert issubclass(StopException, ScriptControlException)
+    assert issubclass(RerunException, ScriptControlException)
+    assert issubclass(ScriptControlException, BaseException)
+    assert not issubclass(ScriptControlException, Exception)
+
+
+def test_el_chat_declara_la_interrupcion_de_streamlit_al_crear_el_caso():
+    from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
+
+    from due_diligence import chat
+
+    caso = chat._caso_real(None)
+    assert caso._eventos.interrupciones == (ScriptControlException,)
+
+
+def _fabrica_interrumpida():
+    from streamlit.runtime.scriptrunner_utils.exceptions import (
+        ScriptControlException,
+        StopException,
+    )
+
+    # El primer caso se corta con «Stop»; el segundo es el del caso (a), que termina.
+    guiones = iter([[[("lanzar", StopException())]], [GUION_A]])
+    fabrica = Fabrica([], resultados_a, interrupciones=(ScriptControlException,))
+    original = fabrica.__call__
+
+    def crear(observador):
+        fabrica.guiones = next(guiones)
+        return original(observador)
+
+    return fabrica, crear
+
+
+def test_un_turno_interrumpido_queda_en_el_historial_sin_pendiente():
+    fabrica, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    assert not at.exception
+    assert "pendiente" not in at.session_state
+    (historial,) = at.session_state["historial"]
+    assert historial.respuesta == presentacion.MENSAJE_TURNO_INTERRUMPIDO
+    (caso,) = fabrica.casos
+    assert caso.interrumpido and not caso.completo
+
+
+def test_tras_un_turno_interrumpido_el_siguiente_mensaje_abre_un_caso_nuevo_con_aviso():
+    fabrica, crear = _fabrica_interrumpida()
+    at = _enviar(_app(crear), SOLICITUD_A)
+    # Tras «Stop» el script quedó parado a mitad; la siguiente ejecución (la próxima interacción
+    # del analista) dibuja la entrada otra vez y no repite el turno interrumpido.
+    at = at.run()
+    assert len(fabrica.casos) == 1
+    at = _enviar(at, SOLICITUD_A)
+    assert len(fabrica.casos) == 2  # nunca se reanuda la sesión cortada
+    ((_, asistente),) = _turnos(at)  # el historial es el del caso nuevo
+    assert _textos(asistente)[0] == presentacion.AVISO_TURNO_INTERRUMPIDO
+    assert fabrica.casos[1].completo

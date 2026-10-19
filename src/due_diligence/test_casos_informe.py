@@ -24,6 +24,7 @@ from due_diligence.reglas import (
     MOTIVO_SIN_INFORME,
 )
 from due_diligence.simulacion import (
+    FUENTE_NOTICIAS,
     CoordinadorSimulado,
     EjecutorSimulado,
     comercio_alto_riesgo,
@@ -280,7 +281,11 @@ def test_caso_g_un_conflicto_inventado_por_el_coordinador_no_queda():
         "hallazgos": {
             "registro": [{"texto": "Figura activo.", "fuente": SUR, "fecha": "2026-09-30"}],
             "listas": [{"texto": "Sin coincidencias.", "fuente": LISTA, "fecha": "2026-09-30"}],
-            "noticias": [{"texto": "Sin menciones.", "fuente": SUR, "fecha": "2026-09-30"}],
+            # #12 (T022, R10): la fuente del diario; con la del registro solo pasaba porque las
+            # noticias simuladas llevaban, por error, la fuente del registro mercantil.
+            "noticias": [
+                {"texto": "Sin menciones.", "fuente": FUENTE_NOTICIAS, "fecha": "2026-09-30"}
+            ],
             "categoria": [{"texto": "Riesgo medio.", "fuente": CATALOGO, "fecha": "2026-09-30"}],
         },
         "conflictos": {

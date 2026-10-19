@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 import streamlit as st
+from streamlit.runtime.scriptrunner_utils.exceptions import ScriptControlException
 
 from due_diligence import configuracion, presentacion
 from due_diligence.coordinador import Caso, CasoSinSesion
@@ -32,7 +33,9 @@ ICONOS = {
 
 
 def _caso_real(observador: Callable[[Evento], None] | None) -> Caso:
-    return Caso(observador=observador)
+    # #12 (R9): «Stop» o una recarga durante el turno llegan como `ScriptControlException` desde
+    # el observador. El caso deja que el hook decida y corta el turno en cuanto devuelve.
+    return Caso(observador=observador, interrupciones=(ScriptControlException,))
 
 
 @dataclass(frozen=True)
@@ -104,6 +107,17 @@ def _ejecutar_turno(
             turno = caso.ejecutar(texto) if decision is Decision.NUEVO else caso.continuar(texto)
             try:
                 asyncio.run(turno)
+            except ScriptControlException:
+                # «Stop» o recarga (#12, R9): el turno queda en el historial como interrumpido y
+                # sin pendiente, para que la siguiente ejecución del script no lo repita ni vuelva
+                # a gastar; después se relanza para que Streamlit pare o recargue.
+                st.session_state["historial"].append(
+                    presentacion.resumen_del_turno(
+                        caso, numero, texto, aviso, presentacion.MENSAJE_TURNO_INTERRUMPIDO
+                    )
+                )
+                del st.session_state["pendiente"]
+                raise
             except CasoSinSesion:
                 respuesta = presentacion.MENSAJE_SIN_SESION
             except Exception as error:  # el `Caso` ya clasificó el turno como anómalo

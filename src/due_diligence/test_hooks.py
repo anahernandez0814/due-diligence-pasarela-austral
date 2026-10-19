@@ -3580,6 +3580,30 @@ def test_una_interrupcion_desde_el_cuerpo_del_hook_falla_cerrado_sin_sellar(tipo
     assert estado.libro.fallo_de_hook is None and eventos.eventos() == []
 
 
+def test_con_la_interrupcion_del_observador_un_hook_que_falla_devuelve_la_denegacion_generica():
+    # US3-2 (FR-008): el observador lanza la interrupción al registrar un evento y después el
+    # cuerpo del hook falla por un error propio. Sale la denegación genérica, como sin «Stop».
+    estado = EstadoCaso("solicitud")
+    avisos = []
+    eventos = _eventos_que_interrumpen(avisos)
+
+    async def registra_y_falla(entrada, tool_use_id, contexto):
+        eventos.registrar(TIPO_BLOQUEO_REGLA, Frente.LISTAS, "Bloqueo antes del fallo.", "I.1")
+        raise ValueError(TEXTO_INTERNO)
+
+    salida = asyncio.run(_envuelto("PreToolUse", registra_y_falla, estado, eventos)({}, "t1", None))
+    assert salida == denegar(modulo_hooks.MOTIVO_FALLO_DE_HOOK)
+    # El fallo se registra como siempre: sello y evento, sin el texto interno.
+    assert estado.libro.fallo_de_hook == "PreToolUse: ValueError"
+    bloqueo, fallo = eventos.eventos()
+    assert bloqueo.tipo == TIPO_BLOQUEO_REGLA
+    assert fallo.tipo == TIPO_FALLO_DE_HOOK and fallo.frente is Frente.LISTAS
+    assert TEXTO_INTERNO not in fallo.detalle
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    # Se avisa una vez y después de decidir: con el fallo ya en la traza, no al registrar el bloqueo.
+    assert avisos == [2]
+
+
 def test_sin_interrupciones_declaradas_la_del_cuerpo_del_hook_se_propaga():
     estado, eventos, _ = _caso()
 

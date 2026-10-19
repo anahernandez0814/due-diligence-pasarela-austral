@@ -530,9 +530,21 @@ def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEvent
     escalamiento con los textos fijos de `resumen_sellado`; si la entrada no es un objeto, la deja
     pasar sin cambios y la pasarela la rechaza por su cuenta. Desde el #10 el hook sí deniega en
     los casos que comprueba (R5): esos no son excepciones.
+
+    #12 (R9): como `fallar_cerrado`, marca `DENTRO_DE_HOOK` mientras corre y avisa de la
+    interrupción (`eventos.interrumpir`) al devolver su decisión, para que «Stop» no corte el turno
+    antes de que el escalamiento salga.
     """
 
     async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
+        token = DENTRO_DE_HOOK.set(True)
+        try:
+            return await _decidir(entrada, tool_use_id, contexto)
+        finally:
+            DENTRO_DE_HOOK.reset(token)
+            eventos.interrumpir()
+
+    async def _decidir(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
         try:
             return await hook(entrada, tool_use_id, contexto)
         except Exception as error:

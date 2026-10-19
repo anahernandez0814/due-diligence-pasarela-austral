@@ -3600,7 +3600,7 @@ def test_con_la_interrupcion_del_observador_un_hook_que_falla_devuelve_la_denega
     assert fallo.tipo == TIPO_FALLO_DE_HOOK and fallo.frente is Frente.LISTAS
     assert TEXTO_INTERNO not in fallo.detalle
     assert isinstance(eventos.interrupcion, Interrupcion)
-    # Se avisa una vez y después de decidir: con el fallo ya en la traza, no al registrar el bloqueo.
+    # Una sola vez y después de decidir: con el fallo ya en la traza, no al registrar el bloqueo.
     assert avisos == [2]
 
 
@@ -3639,3 +3639,24 @@ def test_fuera_de_la_interrupcion_el_hook_no_marca_que_esta_dentro():
 
     asyncio.run(_envuelto("PreToolUse", mira, estado, eventos)({}, "t1", None))
     assert vistos == [True] and DENTRO_DE_HOOK.get() is False
+
+
+def test_con_la_interrupcion_el_escalamiento_sale_igual_y_avisa_al_decidir():
+    # Revisión de a7f853e: `degradar_escalamiento` marca `DENTRO_DE_HOOK` y aplaza el aviso, como
+    # `fallar_cerrado`. Sin eso, «Stop» al registrar la primera sustitución avisaría antes de que
+    # el escalamiento saliera, y el SDK podría cancelar la tarea suelta del hook.
+    entrada = _escalamiento()
+    del entrada["comercio"]
+    estado, eventos, hooks = _caso_con_comercio()
+    sin_interrupcion = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+
+    avisos = []
+    estado, _, _ = _caso_con_comercio()
+    eventos = _eventos_que_interrumpen(avisos)
+    hooks = HooksDelCaso(estado, eventos)
+    salida = _ejecutar(_hook_del_escalamiento(hooks), _pre(ESCALAR, entrada))
+    assert not _es_denegacion(salida) and salida == sin_interrupcion
+    assert len(eventos.eventos()) == 2
+    assert isinstance(eventos.interrupcion, Interrupcion)
+    # Una sola vez y al devolver la decisión, con las dos sustituciones ya en la traza.
+    assert avisos == [2] and estado.libro.fallo_de_hook is None

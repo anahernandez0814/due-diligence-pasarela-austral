@@ -2224,6 +2224,35 @@ def test_con_el_registro_caido_la_categoria_bloqueada_no_es_espera_y_se_exige_el
     assert _eventos_de(eventos, TIPO_ESPERA_ANALISTA) == []
 
 
+def _noticias_caidas_en_el_estado(estado):
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "caída")
+    estado.errores[Frente.NOTICIAS] = {
+        "causa": "error_de_fuente",
+        "reintentable": True,
+        "obtenido": {"errores": [{"tipo": "servicio_no_disponible"}]},
+    }
+
+
+def test_con_noticias_caidas_la_categoria_bloqueada_no_es_espera_y_el_cierre_exige_el_informe():
+    # Bloqueante I.5 de la tercera ronda del #10: con el comercio identificado, una fuente que no
+    # respondió y la categoría bloqueada sin resultado, el `Stop` pide el informe y, agotadas las
+    # devoluciones, el caso queda con `cierre_sin_informe` (nunca termina en silencio).
+    from due_diligence.eventos import TIPO_ESPERA_ANALISTA
+
+    estado, eventos, hooks = _caso_con_comercio()
+    _noticias_caidas_en_el_estado(estado)
+    estado.categoria_bloqueada = True
+    for _ in range(MAX_CIERRES_IMPEDIDOS):
+        salida = _ejecutar(_stop(hooks), _fin_de_turno(activo=True))
+        assert _es_bloqueo(salida) and salida["reason"] == MOTIVO_SIN_INFORME
+    assert estado.cierre_sin_informe is False
+    assert _ejecutar(_stop(hooks), _fin_de_turno(activo=True)) == permitir()
+    assert estado.cierre_sin_informe is True and estado.cierre_sin_escalar is False
+    assert eventos.eventos()[-1].tipo == TIPO_CIERRE_SIN_INFORME
+    assert _eventos_de(eventos, TIPO_ESPERA_ANALISTA) == []
+
+
 # ------------------------------------------- #9: informe mínimo tras un fallo de hook (US4, R9)
 
 NO_CALCULADOS_ENTRADA = {
@@ -2582,6 +2611,46 @@ def test_el_informe_se_rechaza_mientras_se_espera_el_identificador_o_el_nombre(p
     assert estado.informes_pendientes == {}
 
 
+@pytest.mark.parametrize(
+    ("riesgo", "recomendacion"),
+    [("alto", "no_habilitar"), ("alto", "decide_cumplimiento"), (None, "decide_cumplimiento")],
+)
+def test_en_la_espera_del_identificador_el_rechazo_del_informe_no_pide_escalar(
+    riesgo, recomendacion
+):
+    # Sugerencia de la tercera ronda del #10: durante la espera el escalamiento también se rechaza
+    # (D3), así que el rechazo del informe no lo pide; solo pide el identificador.
+    from due_diligence.reglas import MOTIVO_INFORME_ESPERA_IDENTIFICADOR
+
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    if riesgo:
+        estado.libro.consultas_riesgo.append(ConsultaRiesgo("apuestas", riesgo))
+    entrada = _informe_del_caso(estado, recomendacion)
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _rechazo(salida)["motivos"] == [
+        {"regla": "V", "texto": MOTIVO_INFORME_ESPERA_IDENTIFICADOR}
+    ]
+
+
+def test_en_la_espera_del_identificador_con_una_coincidencia_el_rechazo_pide_escalar():
+    # Con una coincidencia en listas (de un comercio anterior, D1) la espera no exime de escalar:
+    # el rechazo pide el escalamiento además del identificador.
+    from due_diligence.reglas import MOTIVO_INFORME_ESPERA_IDENTIFICADOR
+
+    estado, _, hooks = _caso()
+    estado.comercio_pedido = {"identificador": None, "nombre": "Almacén Mirador"}
+    _registro_con_varias_coincidencias(estado)
+    estado.libro.coincidencias.append(Coincidencia("comercio", "L", "F", "2026-09-30"))
+    entrada = _informe_del_caso(estado, "no_habilitar")
+    salida = _ejecutar(_hook_del_informe(hooks), _pre(INFORME, entrada))
+    assert _rechazo(salida)["motivos"] == [
+        {"regla": "I.2", "texto": motivo_de_escalar({"coincidencia_comercio"})},
+        {"regla": "V", "texto": MOTIVO_INFORME_ESPERA_IDENTIFICADOR},
+    ]
+
+
 def test_en_la_espera_de_la_categoria_el_informe_sigue_las_reglas_de_siempre():
     # Ni la espera lo rechaza ni lo deja pasar todo: un informe válido se acepta como siempre y
     # `habilitar` con una coincidencia se rechaza con I.2, como siempre.
@@ -2653,6 +2722,35 @@ def test_la_categoria_dada_en_un_mensaje_posterior_se_permite():
     assert _es_denegacion(_delegar(hooks, {"frente": "categoria", "categoria": "talleres"}))
     estado.mensajes.append("Es de talleres.")
     assert _delegar(hooks, {"frente": "categoria", "categoria": "talleres"}) == permitir()
+
+
+@pytest.mark.parametrize(
+    ("argumentos", "frente"),
+    [
+        ({"frente": "categoria", "categoria": "talleres"}, Frente.CATEGORIA),
+        ({"frente": " Noticias "}, Frente.NOTICIAS),
+        ({"frente": "listas"}, Frente.LISTAS),
+        # Sin un frente legible el fallo va a listas, como antes del #10.
+        ({"frente": "otro"}, Frente.LISTAS),
+        ({"frente": 3}, Frente.LISTAS),
+    ],
+)
+def test_un_fallo_del_hook_de_delegar_se_atribuye_al_frente_pedido(argumentos, frente):
+    # Sugerencia de la tercera ronda del #10 (principio VI): desde el #10 el hook también comprueba
+    # la categoría, y la traza no debe atribuir a listas un fallo de esa comprobación.
+    from due_diligence.hooks import MOTIVO_FALLO_DE_HOOK
+
+    estado, eventos, hooks = _caso()
+
+    async def lanza(entrada, tool_use_id, contexto):
+        raise RuntimeError("detalle interno")
+
+    hooks._delegar_previo = lanza
+    salida = _delegar(hooks, argumentos)
+    assert _es_denegacion(salida) and _motivo(salida) == MOTIVO_FALLO_DE_HOOK
+    (evento,) = _eventos_de(eventos, TIPO_FALLO_DE_HOOK)
+    assert evento.frente is frente
+    assert estado.libro.fallo_de_hook == "PreToolUse: RuntimeError"
 
 
 def test_una_delegacion_de_categoria_sin_categoria_no_la_bloquea_el_hook():

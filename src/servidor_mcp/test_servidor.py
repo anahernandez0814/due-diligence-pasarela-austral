@@ -302,6 +302,9 @@ def test_la_descripcion_del_escalamiento_dice_lo_que_pone_el_sistema_y_lo_que_no
         "hay conflictos entre las fuentes registrales",
         "el comercio no está identificado de forma unívoca",
         "Una mención en noticias no es una coincidencia en listas restrictivas",
+        # #10, D3: lo que no hace durante la espera del identificador o del nombre.
+        "Mientras se espera que el analista dé el identificador o revise el nombre del comercio, "
+        "solo se acepta el escalamiento por una coincidencia en listas restrictivas",
     ):
         assert fragmento in descripcion, fragmento
 

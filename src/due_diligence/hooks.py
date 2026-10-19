@@ -71,6 +71,7 @@ from due_diligence.libro import (
 from due_diligence.reglas import (
     ETIQUETAS_CAUSA,
     MOTIVO_CATEGORIA_NO_DEL_ANALISTA,
+    MOTIVO_DECIDE_SIN_ESCALAR,
     MOTIVO_SIN_COMERCIO_ESCALAMIENTO,
     REGLA_ESPERA,
     Rechazo,
@@ -398,12 +399,39 @@ def _lo_que_falta(estado: EstadoCaso) -> tuple[bool, bool, str | None]:
     return falta_escalar, falta_informe, regla
 
 
+def frente_delegado(entrada: Mapping[str, Any]) -> Frente | None:
+    """El frente que pide una entrada de `delegar_frente`, o `None` si no se puede leer (#10)."""
+    argumentos = entrada.get("tool_input")
+    valor = argumentos.get("frente") if isinstance(argumentos, Mapping) else None
+    if not isinstance(valor, str):
+        return None
+    try:
+        return Frente(valor.strip().casefold())
+    except ValueError:
+        return None
+
+
+def _frente_del_fallo(
+    entrada: Any,
+    frente: Frente | None,
+    frente_de: Callable[[Mapping[str, Any]], Frente | None] | None,
+) -> Frente | None:
+    """El frente al que se atribuye un fallo: el de la entrada si se puede leer; si no, `frente`."""
+    if frente_de is None or not isinstance(entrada, Mapping):
+        return frente
+    try:
+        return frente_de(entrada) or frente
+    except Exception:
+        return frente
+
+
 def fallar_cerrado(
     hook: Hook,
     tipo: str,
     estado: EstadoCaso,
     eventos: RegistroEventos,
     frente: Frente | None = None,
+    frente_de: Callable[[Mapping[str, Any]], Frente | None] | None = None,
 ) -> Hook:
     """Envuelve un hook para que un fallo no deje pasar la acción (FR-012, R2).
 
@@ -413,14 +441,17 @@ def fallar_cerrado(
     - `PostToolUse` y `PostToolUseFailure`: no pueden impedir nada; sellan el libro y los
       `PreToolUse` de las reglas deniegan mientras el sello exista.
 
-    Atrapa `Exception`, no `BaseException`: una cancelación del frente se propaga.
+    El evento del fallo va con `frente` o, si se da `frente_de`, con el frente que lea de la
+    entrada (#10: el de la delegación pedida), y con `frente` si no lo puede leer. Atrapa
+    `Exception`, no `BaseException`: una cancelación del frente se propaga.
     """
 
     async def envuelto(entrada: dict[str, Any], tool_use_id: str | None, contexto: Any):
         try:
             return await hook(entrada, tool_use_id, contexto)
         except Exception as error:
-            _registrar_fallo(tipo, error, estado, eventos, frente)
+            atribuido = _frente_del_fallo(entrada, frente, frente_de)
+            _registrar_fallo(tipo, error, estado, eventos, atribuido)
             if tipo == "PreToolUse":
                 return denegar(MOTIVO_FALLO_DE_HOOK)
             if tipo == "Stop":
@@ -503,6 +534,20 @@ def degradar_escalamiento(hook: Hook, estado: EstadoCaso, eventos: RegistroEvent
     return envuelto
 
 
+def _sin_pedir_escalar(estado: EstadoCaso, rechazos: list[Rechazo]) -> list[Rechazo]:
+    """Los rechazos del informe en la espera del registro, sin pedir escalar si no se puede (#10).
+
+    Si la espera exime de escalar (`espera_exime_de_escalar`, D3), el escalamiento también se
+    rechaza mientras dure, así que el rechazo del informe no lo pide. Con una coincidencia en
+    listas sí exime de esperar (D1) y se sigue pidiendo.
+    """
+    espera = espera_del_analista(estado)
+    if espera is None or not espera_exime_de_escalar(estado.libro, espera):
+        return rechazos
+    piden_escalar = {motivo_de_escalar(causas_vigentes(estado.libro)), MOTIVO_DECIDE_SIN_ESCALAR}
+    return [r for r in rechazos if r.texto not in piden_escalar]
+
+
 # --------------------------------------------------------------------------- hooks del caso
 
 
@@ -522,9 +567,14 @@ class HooksDelCaso:
     # -------------------------------------------------------------- construcción
 
     def _matcher(
-        self, herramienta: str | None, hook: Hook, tipo: str, frente: Frente | None
+        self,
+        herramienta: str | None,
+        hook: Hook,
+        tipo: str,
+        frente: Frente | None,
+        frente_de: Callable[[Mapping[str, Any]], Frente | None] | None = None,
     ) -> HookMatcher:
-        envuelto = fallar_cerrado(hook, tipo, self.estado, self.eventos, frente)
+        envuelto = fallar_cerrado(hook, tipo, self.estado, self.eventos, frente, frente_de)
         return HookMatcher(matcher=herramienta, hooks=[envuelto])
 
     def subagente(self, frente: Frente) -> dict[str, list[HookMatcher]]:
@@ -553,8 +603,14 @@ class HooksDelCaso:
         """Los hooks del coordinador: delegar, informe y escalamiento."""
         return {
             "PreToolUse": [
+                # Comprueba listas (I.1) y, desde el #10, la categoría (FR-020): un fallo va al
+                # frente pedido, y a listas solo si no se puede leer.
                 self._matcher(
-                    HERRAMIENTA_DELEGAR_COMPLETA, self._delegar_previo, "PreToolUse", Frente.LISTAS
+                    HERRAMIENTA_DELEGAR_COMPLETA,
+                    self._delegar_previo,
+                    "PreToolUse",
+                    Frente.LISTAS,
+                    frente_delegado,
                 ),
                 self._matcher(HERRAMIENTA_INFORME, self._informe_previo, "PreToolUse", None),
                 # Sin `fallar_cerrado`: una excepción nunca deniega el escalamiento (#8, R6); los
@@ -687,6 +743,12 @@ class HooksDelCaso:
         o el sello), se exige el escalamiento como en cualquier cierre. Las del registro eximen
         también del alto riesgo (D3), pero no de una coincidencia en listas de un comercio anterior
         (D1): esa se exige igual (`espera_exime_de_escalar`).
+
+        Con la fuente de cualquier frente caída no hay espera de la categoría (I.5): el `Stop`
+        exige el informe que declara el frente sin cubrir y, agotadas las devoluciones, el caso
+        queda con `cierre_sin_informe`. Las esperas del identificador y del nombre no cambian con
+        una fuente caída: en ellas el informe se rechaza (FR-016) y ninguna fuente puede hablar de
+        un comercio sin identificar (FR-027).
         """
         espera = espera_del_analista(self.estado)
         falta_escalar, falta_informe = falta_para_cerrar(self.estado)
@@ -842,6 +904,7 @@ class HooksDelCaso:
         # sello no aplica: el informe mínimo solo exige escalar antes, como en el #9.
         en_espera = None if sellado else motivo_del_informe_en_espera(self.estado)
         if en_espera is not None:
+            rechazos = _sin_pedir_escalar(self.estado, rechazos)
             rechazos.append(en_espera)
         if not isinstance(argumentos, Mapping):  # las reglas ya lo rechazan
             return self._denegar_informe(

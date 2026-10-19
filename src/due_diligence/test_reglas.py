@@ -1015,6 +1015,20 @@ def test_el_motivo_de_la_categoria_no_repite_la_categoria_ni_el_comercio():
 
 ESTADOS_DEL_REGISTRO = ("sin_delegar", "en_curso", "varias", "ninguna", "identificado", "caido")
 ESTADOS_DE_LA_CATEGORIA = ("con_resultado", "sin_delegar", "bloqueada")
+# Fuente caída en un frente que no es el registro (el registro caído es un estado del registro).
+FUENTES_CAIDAS = ("ninguna", "listas", "noticias", "categoria")
+
+
+def _fuente_caida_en(estado, frente):
+    """La fuente del frente no respondió: `error_de_fuente` con un error real, reintentable."""
+    estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+    estado.cambiar_situacion(frente, Situacion.NO_TERMINADO, "caída")
+    estado.errores[frente] = {
+        "causa": "error_de_fuente",
+        "reintentable": True,
+        "obtenido": {"errores": [{"tipo": "servicio_no_disponible"}]},
+    }
+    return estado
 
 
 def _estado_del_registro(nombre):
@@ -1031,10 +1045,13 @@ def _estado_del_registro(nombre):
     return _registro_caido()
 
 
+@pytest.mark.parametrize("caida", FUENTES_CAIDAS)
 @pytest.mark.parametrize("con_causas", [False, True])
 @pytest.mark.parametrize("categoria", ESTADOS_DE_LA_CATEGORIA)
 @pytest.mark.parametrize("registro", ESTADOS_DEL_REGISTRO)
-def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria, con_causas):
+def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(
+    registro, categoria, con_causas, caida
+):
     from due_diligence.reglas import espera_del_analista
 
     estado = _estado_del_registro(registro)
@@ -1042,6 +1059,8 @@ def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria
         estado.libro.consultas_riesgo.append(ConsultaRiesgo("talleres", "bajo"))
     elif categoria == "bloqueada":
         estado.categoria_bloqueada = True
+    if caida != "ninguna":
+        _fuente_caida_en(estado, Frente(caida))
     # `con_causas` no cambia ninguna aserción a propósito: la espera solo depende del registro y de
     # la categoría, nunca de las causas. Lo que las causas cambian es si el cierre exime de escalar
     # (`espera_exime_de_escalar`), y eso lo prueban los tests del `Stop` en `test_hooks.py`
@@ -1053,11 +1072,55 @@ def test_sc004_la_espera_solo_existe_en_las_tres_situaciones(registro, categoria
         assert espera.clase == "identificador"
     elif registro == "ninguna":
         assert espera.clase == "nombre"
-    elif categoria == "bloqueada" and registro != "caido":
-        # Con el registro caído no hay espera de la categoría: se exige el informe (I.5).
+    elif categoria == "bloqueada" and registro != "caido" and caida == "ninguna":
+        # Con la fuente de cualquier frente caída, el registro también, no hay espera de la
+        # categoría: se exige el informe que declara el frente sin cubrir (I.5). Las esperas del
+        # registro de arriba no cambian con una fuente caída.
         assert espera.clase == "categoria"
     else:
         assert espera is None
+
+
+def test_si_una_fuente_cae_durante_la_espera_de_la_categoria_la_espera_desaparece():
+    # «¿Y si pasa mientras se espera?» (I.5): la espera de la categoría con el resto cubierto sigue
+    # siendo espera; si después cae noticias (el coordinador vuelve a delegarla y no responde), ya
+    # no lo es y el cierre exige el informe con la cobertura incompleta declarada.
+    from due_diligence.reglas import MOTIVO_ESPERA_CATEGORIA, Espera, espera_del_analista
+
+    estado = _con_categoria_bloqueada(_con_comercio())
+    for frente in (Frente.LISTAS, Frente.NOTICIAS):
+        estado.cambiar_situacion(frente, Situacion.EN_CURSO)
+        estado.cambiar_situacion(frente, Situacion.TERMINADO)
+    assert espera_del_analista(estado) == Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "caída")
+    estado.errores[Frente.NOTICIAS] = {
+        "causa": "error_de_fuente",
+        "reintentable": True,
+        "obtenido": {"errores": [{"tipo": "servicio_no_disponible"}]},
+    }
+    assert espera_del_analista(estado) is None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        {"causa": "error_de_fuente", "obtenido": {"errores": [{"tipo": "entrada_invalida"}]}},
+        {"causa": "consulta_incompleta"},
+    ],
+)
+def test_un_frente_que_respondio_no_quita_la_espera_de_la_categoria(error):
+    # La misma lectura que `registro_caido`: con una entrada inválida o una consulta incompleta la
+    # fuente respondió, así que la espera de la categoría sigue.
+    from due_diligence.cobertura import frente_caido
+    from due_diligence.reglas import espera_del_analista
+
+    estado = _con_categoria_bloqueada(_con_comercio())
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.EN_CURSO)
+    estado.cambiar_situacion(Frente.NOTICIAS, Situacion.NO_TERMINADO, "no terminó")
+    estado.errores[Frente.NOTICIAS] = {**error, "reintentable": False}
+    assert frente_caido(estado, Frente.NOTICIAS) is False
+    assert espera_del_analista(estado).clase == "categoria"
 
 
 def _contradictoria():

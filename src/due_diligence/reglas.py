@@ -188,15 +188,18 @@ def espera_del_analista(estado: EstadoCaso) -> Espera | None:
     - `identificador`: el registro terminó con varias coincidencias.
     - `nombre`: el registro terminó sin ninguna coincidencia.
     - `categoria`: la última delegación de categoría la bloqueó FR-020 y el caso no tiene ningún
-      resultado de categoría. Vale con cualquier estado del registro salvo el caído: con el
-      registro caído se exige el informe, con la categoría no determinada (I.5).
+      resultado de categoría. No lo es si la fuente de **cualquier** frente no respondió
+      (`frente_caido`): entonces se exige el informe que declara el frente sin cubrir, con la
+      categoría no determinada (I.5). Esperar al analista dejaría terminar el caso sin informe.
 
-    Las del registro prevalecen. Ninguna otra situación es una espera: ni el registro caído, que
-    exige reintentar o informar, ni las fuentes que difieren en el nombre o el representante (D3
-    del #9, `contradictoria`). Es pura: no escribe nada.
+    Las del registro prevalecen y no cambian con una fuente caída: durante ellas el informe se
+    rechaza (FR-016) y ninguna fuente puede hablar de un comercio sin identificar (FR-027), así
+    que no hay informe que exigir hasta que responda el analista. Ninguna otra situación es una
+    espera: ni el registro caído, que exige reintentar o informar, ni las fuentes que difieren en
+    el nombre o el representante (D3 del #9, `contradictoria`). Es pura: no escribe nada.
     """
     # Importación diferida: `cobertura.py` importa este módulo.
-    from due_diligence.cobertura import registro_caido
+    from due_diligence.cobertura import frente_caido
 
     clase = estado.clase_identificacion
     if clase == "varias":
@@ -206,7 +209,7 @@ def espera_del_analista(estado: EstadoCaso) -> Espera | None:
     if (
         estado.categoria_bloqueada
         and not estado.libro.consultas_riesgo
-        and not registro_caido(estado)
+        and not any(frente_caido(estado, f) for f in Frente)
     ):
         return Espera("categoria", MOTIVO_ESPERA_CATEGORIA)
     return None
